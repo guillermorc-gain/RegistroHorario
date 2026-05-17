@@ -1,4 +1,4 @@
-const CACHE_NAME = 'horas-v19';
+const CACHE_NAME = 'horas-v20';
 const BASE_PATH = '/';
 
 // These files are always fetched from network (never stale)
