@@ -25,7 +25,7 @@ const app = {
     _historialMap: {},
     _historialFull: {},
 
-    // ── INIT ─────────────────────────────────────────────────────
+    // ── INIT ─────────────────────────────────────────────
 
     async init() {
         const { createClient } = window.supabase;
@@ -104,7 +104,7 @@ const app = {
         if (lastInicio && lastFin) this.calcularHorasPorTiempo();
     },
 
-    // ── NIGHT HOURS AUTO-CALC ─────────────────────────────────────
+    // ── NIGHT HOURS AUTO-CALC ───────────────────────────────────
 
     _calcHorasNocturnas(inicio, fin) {
         if (!inicio || !fin) return 0;
@@ -151,7 +151,7 @@ const app = {
         }
     },
 
-    // ── PROFILE / AVATAR ─────────────────────────────────────────
+    // ── PROFILE / AVATAR ───────────────────────────────────
 
     actualizarBotonesPerfil() {
         const btn = document.getElementById('profileBtn');
@@ -280,7 +280,7 @@ const app = {
         alert('✅ Perfil guardado');
     },
 
-    // ── AUTH ──────────────────────────────────────────────────────
+    // ── AUTH ────────────────────────────────────────────
 
     establecerFechaHoy() {
         const hoy = new Date();
@@ -389,7 +389,7 @@ const app = {
         btn.closest('.ops-section').classList.toggle('open');
     },
 
-    // ── HOURS DATA ────────────────────────────────────────────────
+    // ── HOURS DATA ────────────────────────────────────────────
 
     async cargarDatos() {
         if (!this.usuarioActual) return;
@@ -626,7 +626,7 @@ const app = {
         else document.getElementById('horasInput').value = '';
     },
 
-    // ── HISTORIAL MODAL ───────────────────────────────────────────
+    // ── HISTORIAL MODAL ────────────────────────────────────────
 
     mostrarHistorialModal() {
         document.getElementById('historialModal').classList.add('show');
@@ -675,7 +675,7 @@ const app = {
         });
     },
 
-    // ── MONTHLY STATS ─────────────────────────────────────────────
+    // ── MONTHLY STATS ───────────────────────────────────────────
 
     _calcMesStats(historial, año, mes) {
         const entries = Object.values(historial).filter(r => {
@@ -706,7 +706,7 @@ const app = {
         return meses;
     },
 
-    // ── UI ────────────────────────────────────────────────────────
+    // ── UI ────────────────────────────────────────────────
 
     actualizarUI(datos) {
         const horas     = parseFloat(datos.horasTrabajadas) || 0;
@@ -760,7 +760,7 @@ const app = {
         }).join('');
     },
 
-    // ── SETTINGS ──────────────────────────────────────────────────
+    // ── SETTINGS ────────────────────────────────────────────
 
     revisarSuma() {
         const t = parseFloat(document.getElementById('horasTrabajadas').textContent);
@@ -840,7 +840,7 @@ const app = {
 
     cerrarModal() { document.getElementById('modal').classList.remove('show'); this.modalCallback = null; },
     async confirmarModal() { if (this.modalCallback) await this.modalCallback(); this.cerrarModal(); },
-    confirmarBorrarCuenta() { this.mostrarModal('⚠️ Borrar Cuenta','¿Estás seguro? Esta acción no se puede deshacer.',this.borrarCuenta.bind(this)); },
+    confirmarBorrarCuenta() { this.mostrarModal('⚠️ Borrar datos','Se eliminarán todos tus registros y se cerrará la sesión. La cuenta de acceso permanece activa.',this.borrarCuenta.bind(this)); },
 
     async borrarCuenta() {
         if (!this.usuarioActual) return;
@@ -865,7 +865,7 @@ const app = {
         this.mostrarAuth();
     },
 
-    // ── GPS / LOCATIONS ───────────────────────────────────────────
+    // ── GPS / LOCATIONS ────────────────────────────────────────
 
     _getWorkLocations() { return JSON.parse(localStorage.getItem('workLocations') || '[]'); },
     _saveWorkLocations(locs) { localStorage.setItem('workLocations', JSON.stringify(locs)); },
@@ -1007,7 +1007,7 @@ const app = {
         document.getElementById('horasInput').focus();
     },
 
-    // ── BACKUP ────────────────────────────────────────────────────
+    // ── BACKUP ────────────────────────────────────────────
 
     async exportarDatos() {
         if (!this.usuarioActual) return;
@@ -1102,11 +1102,11 @@ const app = {
     }
 };
 
-// ── BOOTSTRAP ─────────────────────────────────────────────────────
+// ── BOOTSTRAP ─────────────────────────────────────────────────
 
 let _swCheck = setInterval(() => { if (window.supabase) { clearInterval(_swCheck); app.init(); } }, 100);
 
-// ── PWA ───────────────────────────────────────────────────────────
+// ── PWA ───────────────────────────────────────────────────
 
 window._deferredPrompt = null;
 const _isIOS        = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
