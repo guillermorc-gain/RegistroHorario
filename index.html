@@ -16,7 +16,7 @@
         html,body{height:100%;width:100%;}
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);}
         body.dark{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);}
-        .container{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:500px;height:100%;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:#f0f2f7;display:flex;flex-direction:column;overflow:hidden;}
+        .container{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:500px;height:100%;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:white;display:flex;flex-direction:column;overflow:hidden;}
         .container.dark{background:#111827;color:#e0e0e0;}
 
         /* ── AUTH ── */
@@ -509,7 +509,7 @@
                 <div class="ops-body">
                     <button class="ops-btn primary-blue" onclick="app.cerrarSesion()">🚪 Cerrar Sesión <span class="ops-arrow">›</span></button>
                     <button class="ops-btn danger" onclick="app.confirmarResetear()">🔄 Resetear Contador <span class="ops-arrow">›</span></button>
-                    <button class="ops-btn danger" onclick="app.confirmarBorrarCuenta()">🗑️ Borrar Cuenta <span class="ops-arrow">›</span></button>
+                    <button class="ops-btn danger" onclick="app.confirmarBorrarCuenta()">🗑️ Borrar datos y cerrar sesión <span class="ops-arrow">›</span></button>
                 </div>
             </div>
 

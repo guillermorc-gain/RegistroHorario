@@ -840,7 +840,7 @@ const app = {
 
     cerrarModal() { document.getElementById('modal').classList.remove('show'); this.modalCallback = null; },
     async confirmarModal() { if (this.modalCallback) await this.modalCallback(); this.cerrarModal(); },
-    confirmarBorrarCuenta() { this.mostrarModal('⚠️ Borrar Cuenta','¿Estás seguro? Esta acción no se puede deshacer.',this.borrarCuenta.bind(this)); },
+    confirmarBorrarCuenta() { this.mostrarModal('⚠️ Borrar datos','Se eliminarán todos tus registros y se cerrará la sesión. La cuenta de acceso permanece activa.',this.borrarCuenta.bind(this)); },
 
     async borrarCuenta() {
         if (!this.usuarioActual) return;
