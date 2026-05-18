@@ -1,3 +1,4 @@
+(function(){var t=localStorage.getItem('tema');if(t&&t!=='azul')document.body.classList.add('theme-'+t);})();
 'use strict';
 
 const SUPABASE_URL = 'https://iwgukzkcuduhjssjthig.supabase.co';
@@ -8,7 +9,7 @@ const HORAS_ANUALES = 777;
 const NOCHE_INICIO_MIN = 21 * 60; // 1260
 const NOCHE_FIN_MIN    = 6  * 60; //  360 (next day → expressed as 1440+360=1800 in absolute)
 
-const AVATAR_EMOJIS = ['🚌','⭐','🔥','⚡','🌊','🎯','🚀','🦋','🎨','🌈'];
+const AVATAR_EMOJIS = ['🚌','⭐','🔥','⚡','🌊','🎯','🚀','🦸','🎨','🌈'];
 const AVATAR_BG     = ['#667eea','#e74c3c','#f39c12','#27ae60','#3498db','#9b59b6','#1abc9c','#e67e22','#764ba2','#e91e63'];
 
 const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -22,10 +23,11 @@ const app = {
     modalCallback: null,
     editingId: null,
     prActivo: false,
+    tema: localStorage.getItem('tema') || 'azul',
     _historialMap: {},
     _historialFull: {},
 
-    // ── INIT ─────────────────────────────────────────────
+    // ── INIT ──────────────────────────────────────────────────
 
     async init() {
         const { createClient } = window.supabase;
@@ -61,6 +63,14 @@ const app = {
             this.darkMode = !!meta.dark_mode;
             localStorage.setItem('darkMode', this.darkMode);
             this.darkMode ? this.aplicarDarkMode() : this.removerDarkMode();
+        }
+        if (meta.tema) {
+            this.tema = meta.tema;
+            localStorage.setItem('tema', meta.tema);
+            this.aplicarTema(meta.tema);
+        }
+        if (meta.work_locations) {
+            localStorage.setItem('workLocations', JSON.stringify(meta.work_locations));
         }
         this.mostrarApp();
         this.cargarDatos();
@@ -104,7 +114,7 @@ const app = {
         if (lastInicio && lastFin) this.calcularHorasPorTiempo();
     },
 
-    // ── NIGHT HOURS AUTO-CALC ───────────────────────────────────
+    // ── NIGHT HOURS AUTO-CALC ───────────────────────────────────────────────
 
     _calcHorasNocturnas(inicio, fin) {
         if (!inicio || !fin) return 0;
@@ -151,14 +161,14 @@ const app = {
         }
     },
 
-    // ── PROFILE / AVATAR ───────────────────────────────────
+    // ── PROFILE / AVATAR ─────────────────────────────────────────────
 
     actualizarBotonesPerfil() {
         const btn = document.getElementById('profileBtn');
         if (!btn) return;
         const photo = localStorage.getItem('avatarPhoto');
         const emoji = localStorage.getItem('avatarEmoji');
-        const bg    = localStorage.getItem('avatarBg') || '#667eea';
+        const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         btn.style.cssText = '';
         if (photo) {
             btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
@@ -244,7 +254,7 @@ const app = {
         if (!el) return;
         const photo = localStorage.getItem('avatarPhoto');
         const emoji = localStorage.getItem('avatarEmoji');
-        const bg    = localStorage.getItem('avatarBg') || '#667eea';
+        const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         if (photo) {
             el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
             el.style.background = 'transparent';
@@ -274,13 +284,13 @@ const app = {
         if (username) updateData.username = username;
         const emoji = localStorage.getItem('avatarEmoji');
         const bg    = localStorage.getItem('avatarBg');
-        if (emoji) { updateData.avatar_emoji = emoji; updateData.avatar_bg = bg || '#667eea'; }
+        if (emoji) { updateData.avatar_emoji = emoji; updateData.avatar_bg = bg || '#1565C0'; }
         this.supabase.auth.updateUser({ data: updateData }).catch(() => {});
 
         alert('✅ Perfil guardado');
     },
 
-    // ── AUTH ────────────────────────────────────────────
+    // ── AUTH ──────────────────────────────────────────────
 
     establecerFechaHoy() {
         const hoy = new Date();
@@ -327,6 +337,8 @@ const app = {
         if (error) {
             const msg = error.message.includes('Email not confirmed')
                 ? '📧 Confirma tu email primero. Revisa tu bandeja de entrada.'
+                : (error.message.includes('Invalid login credentials') || error.message.includes('invalid_credentials'))
+                ? '❌ Correo o contraseña incorrectos.'
                 : '❌ ' + error.message;
             this.mostrarMensaje(msg, 'error');
         }
@@ -383,13 +395,14 @@ const app = {
         this.actualizarEstadoGPS();
         this._renderWorkLocations();
         this._actualizarAvatarPreview();
+        this._actualizarTemaUI();
     },
 
     toggleSection(btn) {
         btn.closest('.ops-section').classList.toggle('open');
     },
 
-    // ── HOURS DATA ────────────────────────────────────────────
+    // ── HOURS DATA ─────────────────────────────────────────────────
 
     async cargarDatos() {
         if (!this.usuarioActual) return;
@@ -626,7 +639,7 @@ const app = {
         else document.getElementById('horasInput').value = '';
     },
 
-    // ── HISTORIAL MODAL ────────────────────────────────────────
+    // ── HISTORIAL MODAL ──────────────────────────────────────────────
 
     mostrarHistorialModal() {
         document.getElementById('historialModal').classList.add('show');
@@ -657,7 +670,7 @@ const app = {
                     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                         <span style="color:#7f8c8d;font-weight:700;font-size:12px;">${reg.fecha}</span>
                         ${horario}
-                        <span style="background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:3px 9px;border-radius:20px;font-weight:700;font-size:10px;">${reg.horas}h</span>
+                        <span style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;padding:3px 9px;border-radius:20px;font-weight:700;font-size:10px;">${reg.horas}h</span>
                         ${prBadge}
                     </div>
                     ${nocheStr}
@@ -675,7 +688,7 @@ const app = {
         });
     },
 
-    // ── MONTHLY STATS ───────────────────────────────────────────
+    // ── MONTHLY STATS ───────────────────────────────────────────────────
 
     _calcMesStats(historial, año, mes) {
         const entries = Object.values(historial).filter(r => {
@@ -706,7 +719,7 @@ const app = {
         return meses;
     },
 
-    // ── UI ────────────────────────────────────────────────
+    // ── UI ──────────────────────────────────────────────────────
 
     actualizarUI(datos) {
         const horas     = parseFloat(datos.horasTrabajadas) || 0;
@@ -760,7 +773,7 @@ const app = {
         }).join('');
     },
 
-    // ── SETTINGS ────────────────────────────────────────────
+    // ── SETTINGS ──────────────────────────────────────────────
 
     revisarSuma() {
         const t = parseFloat(document.getElementById('horasTrabajadas').textContent);
@@ -796,6 +809,28 @@ const app = {
          '#editModalContent','#historialModalContent','#avatarModalContent']
             .forEach(s => { const e = document.querySelector(s); if(e) e.classList.remove('dark'); });
         document.querySelector('.container')?.classList.remove('dark');
+    },
+
+    seleccionarTema(tema) {
+        this.tema = tema;
+        localStorage.setItem('tema', tema);
+        this.aplicarTema(tema);
+        this._actualizarTemaUI();
+        if (this.usuarioActual) {
+            this.supabase.auth.updateUser({ data: { tema } }).catch(() => {});
+        }
+    },
+
+    aplicarTema(tema) {
+        document.body.classList.remove('theme-verde','theme-fuego','theme-acero','theme-rojo');
+        if (tema && tema !== 'azul') document.body.classList.add('theme-' + tema);
+    },
+
+    _actualizarTemaUI() {
+        ['azul','verde','fuego','acero','rojo'].forEach(t => {
+            const dot = document.getElementById('dot-' + t);
+            if (dot) dot.classList.toggle('active', t === this.tema);
+        });
     },
 
     guardarPrecioNoche() {
@@ -865,10 +900,15 @@ const app = {
         this.mostrarAuth();
     },
 
-    // ── GPS / LOCATIONS ────────────────────────────────────────
+    // ── GPS / LOCATIONS ─────────────────────────────────────────────
 
     _getWorkLocations() { return JSON.parse(localStorage.getItem('workLocations') || '[]'); },
     _saveWorkLocations(locs) { localStorage.setItem('workLocations', JSON.stringify(locs)); },
+    _saveWorkLocationsToSupabase(locs) {
+        if (this.usuarioActual) {
+            this.supabase.auth.updateUser({ data: { work_locations: locs } }).catch(() => {});
+        }
+    },
 
     async guardarUbicacionTrabajo() {
         const name = prompt('Nombre de esta ubicación (ej: EMT Madrid, Depósito):');
@@ -882,6 +922,7 @@ const app = {
                 const locs = this._getWorkLocations();
                 locs.push({ name: name.trim(), lat: pos.coords.latitude, lng: pos.coords.longitude });
                 this._saveWorkLocations(locs);
+                this._saveWorkLocationsToSupabase(locs);
                 this.actualizarEstadoGPS();
                 this._renderWorkLocations();
                 alert(`✅ "${name.trim()}" guardada. Recibirás notificación al llegar.`);
@@ -895,6 +936,7 @@ const app = {
         if (!confirm(`¿Eliminar "${locs[index].name}"?`)) return;
         locs.splice(index, 1);
         this._saveWorkLocations(locs);
+        this._saveWorkLocationsToSupabase(locs);
         if (locs.length === 0) document.getElementById('workBanner').classList.remove('show');
         this.actualizarEstadoGPS();
         this._renderWorkLocations();
@@ -920,6 +962,7 @@ const app = {
 
         locs[index] = loc;
         this._saveWorkLocations(locs);
+        this._saveWorkLocationsToSupabase(locs);
         this.actualizarEstadoGPS();
         this._renderWorkLocations();
     },
@@ -942,12 +985,12 @@ const app = {
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
                     <span style="font-size:13px;font-weight:700;color:${isDark?'#e0e0e0':'#2c3e50'};">📍 ${loc.name}</span>
                     <div style="display:flex;gap:6px;">
-                        <button onclick="app.editarUbicacion(${i})" style="background:#667eea;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600;">✏️ Editar</button>
+                        <button onclick="app.editarUbicacion(${i})" style="background:var(--ac);color:white;border:none;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600;">✏️ Editar</button>
                         <button onclick="app.borrarUbicacion(${i})" style="background:#e74c3c;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600;">🗑️</button>
                     </div>
                 </div>
                 <div style="font-size:11px;color:#7f8c8d;margin-bottom:4px;">🌐 ${latStr}, ${lngStr}</div>
-                <a href="${mapUrl}" target="_blank" rel="noopener" style="font-size:11px;color:#667eea;text-decoration:none;font-weight:600;">📌 Ver en Google Maps →</a>
+                <a href="${mapUrl}" target="_blank" rel="noopener" style="font-size:11px;color:var(--ac);text-decoration:none;font-weight:600;">📌 Ver en Google Maps →</a>
             </div>`;
         }).join('');
     },
@@ -983,7 +1026,7 @@ const app = {
             const reg = await navigator.serviceWorker.ready;
             reg.showNotification('📍 Horas EMT', {
                 body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
-                icon: '/icons/icon-192.png', badge: '/icons/icon-192.png',
+                icon: '/icons/icon-192.png', badge: '/icons/badge.svg',
                 tag: 'trabajo-cercano', requireInteraction: true,
                 actions: [{ action: 'abrir', title: 'Abrir app' }]
             });
@@ -1007,7 +1050,7 @@ const app = {
         document.getElementById('horasInput').focus();
     },
 
-    // ── BACKUP ────────────────────────────────────────────
+    // ── BACKUP ───────────────────────────────────────────────
 
     async exportarDatos() {
         if (!this.usuarioActual) return;
@@ -1102,11 +1145,11 @@ const app = {
     }
 };
 
-// ── BOOTSTRAP ─────────────────────────────────────────────────
+// ── BOOTSTRAP ─────────────────────────────────────────────────────────
 
 let _swCheck = setInterval(() => { if (window.supabase) { clearInterval(_swCheck); app.init(); } }, 100);
 
-// ── PWA ───────────────────────────────────────────────────
+// ── PWA ───────────────────────────────────────────────
 
 window._deferredPrompt = null;
 const _isIOS        = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
