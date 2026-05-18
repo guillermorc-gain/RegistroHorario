@@ -1,4 +1,4 @@
-const CACHE_NAME = 'horas-v20';
+const CACHE_NAME = 'horas-v21';
 const BASE_PATH = '/';
 
 // These files are always fetched from network (never stale)
@@ -13,7 +13,8 @@ const urlsToCache = [
   BASE_PATH + 'manifest.json',
   BASE_PATH + 'icons/icon-192.png',
   BASE_PATH + 'icons/icon-512.png',
-  BASE_PATH + 'icons/icon.svg'
+  BASE_PATH + 'icons/icon.svg',
+  BASE_PATH + 'icons/badge.svg'
 ];
 
 self.addEventListener('install', event => {
