@@ -162,7 +162,7 @@ const app = {
         const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         btn.style.cssText = '';
         if (photo) {
-            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` ;
             btn.style.background = 'transparent'; btn.style.padding = '0'; btn.style.overflow = 'hidden';
         } else if (emoji) {
             btn.textContent = emoji; btn.style.background = bg; btn.style.fontSize = '20px'; btn.style.color = 'white';
@@ -231,7 +231,7 @@ const app = {
         const emoji = localStorage.getItem('avatarEmoji');
         const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         if (photo) {
-            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` ;
             el.style.background = 'transparent';
         } else if (emoji) {
             el.textContent = emoji; el.style.background = bg; el.style.color = '';
@@ -291,6 +291,7 @@ const app = {
     },
 
     async login() {
+        if (!this.supabase) { this.mostrarMensaje('❌ Error de conexión. Recarga la página.', 'error'); return; }
         let input = document.getElementById('loginEmail').value.trim();
         const password = document.getElementById('loginPassword').value;
         if (!input || !password) { this.mostrarMensaje('❌ Completa todos los campos', 'error'); return; }
@@ -301,17 +302,21 @@ const app = {
             else { this.mostrarMensaje('❌ Usuario no encontrado. Usa tu correo la primera vez.', 'error'); return; }
         }
         this.mostrarMensaje('⏳ Entrando...', 'success');
-        const { error } = await this.supabase.auth.signInWithPassword({ email, password });
-        if (error) {
-            const msg = error.message.includes('Email not confirmed')
-                ? '📧 Confirma tu email primero. Revisa tu bandeja de entrada.'
-                : (error.message.includes('Invalid login credentials') || error.message.includes('invalid_credentials'))
-                ? '❌ Correo o contraseña incorrectos.'
-                : '❌ ' + error.message;
-            this.mostrarMensaje(msg, 'error');
-        } else {
-            document.getElementById('loginEmail').value = '';
-            document.getElementById('loginPassword').value = '';
+        try {
+            const { error } = await this.supabase.auth.signInWithPassword({ email, password });
+            if (error) {
+                const msg = error.message.includes('Email not confirmed')
+                    ? '📧 Confirma tu email primero. Revisa tu bandeja de entrada.'
+                    : (error.message.includes('Invalid login credentials') || error.message.includes('invalid_credentials'))
+                    ? '❌ Correo o contraseña incorrectos.'
+                    : '❌ ' + error.message;
+                this.mostrarMensaje(msg, 'error');
+            } else {
+                document.getElementById('loginEmail').value = '';
+                document.getElementById('loginPassword').value = '';
+            }
+        } catch(e) {
+            this.mostrarMensaje('❌ Error al conectar: ' + e.message, 'error');
         }
     },
 
@@ -1065,7 +1070,15 @@ const app = {
     }
 };
 
-let _swCheck = setInterval(() => { if (window.supabase) { clearInterval(_swCheck); app.init(); } }, 100);
+let _swCheckCount = 0;
+let _swCheck = setInterval(() => {
+    if (window.supabase) { clearInterval(_swCheck); app.init(); return; }
+    if (++_swCheckCount > 100) {
+        clearInterval(_swCheck);
+        const el = document.getElementById('authError');
+        if (el) { el.textContent = '❌ Error de red. Comprueba tu conexión y recarga.'; el.classList.add('show'); }
+    }
+}, 100);
 
 window._deferredPrompt = null;
 const _isIOS        = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
