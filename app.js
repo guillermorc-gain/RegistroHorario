@@ -88,9 +88,12 @@ const app = {
     },
 
     async setupAuth() {
-        this.supabase.auth.onAuthStateChange((event, session) => {
+        this.supabase.auth.onAuthStateChange(async (event, session) => {
             if (session) {
-                this._aplicarSesion(session.user);
+                // getUser() fetches fresh server-side metadata so settings saved
+                // on another device (locations, theme…) are always current.
+                const { data } = await this.supabase.auth.getUser().catch(() => ({ data: {} }));
+                this._aplicarSesion(data?.user || session.user);
             } else if (event === 'SIGNED_OUT') {
                 this.usuarioActual = null;
                 this.mostrarAuth();
