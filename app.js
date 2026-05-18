@@ -6,8 +6,8 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const HORAS_ANUALES = 777;
 
 // Night hours window: 21:00 – 06:00
-const NOCHE_INICIO_MIN = 21 * 60; // 1260
-const NOCHE_FIN_MIN    = 6  * 60; //  360 (next day → expressed as 1440+360=1800 in absolute)
+const NOCHE_INICIO_MIN = 21 * 60;
+const NOCHE_FIN_MIN    = 6  * 60;
 
 const AVATAR_EMOJIS = ['🚌','⭐','🔥','⚡','🌊','🎯','🚀','🦸','🎨','🌈'];
 const AVATAR_BG     = ['#667eea','#e74c3c','#f39c12','#27ae60','#3498db','#9b59b6','#1abc9c','#e67e22','#764ba2','#e91e63'];
@@ -26,8 +26,6 @@ const app = {
     tema: localStorage.getItem('tema') || 'azul',
     _historialMap: {},
     _historialFull: {},
-
-    // ── INIT ──────────────────────────────────────────────────
 
     async init() {
         const { createClient } = window.supabase;
@@ -58,7 +56,6 @@ const app = {
         }
         if (meta.avatar_emoji) localStorage.setItem('avatarEmoji', meta.avatar_emoji);
         if (meta.avatar_bg)    localStorage.setItem('avatarBg', meta.avatar_bg);
-        // Restore dark mode from Supabase so it survives device changes / PWA reinstalls
         if (meta.dark_mode !== undefined) {
             this.darkMode = !!meta.dark_mode;
             localStorage.setItem('darkMode', this.darkMode);
@@ -75,7 +72,6 @@ const app = {
         this.mostrarApp();
         this.cargarDatos();
         this.actualizarBotonesPerfil();
-        // Recalculate after screen is shown, in case saved times are already loaded
         setTimeout(() => this._autoRellenarFormulario(), 50);
     },
 
@@ -117,8 +113,6 @@ const app = {
         if (lastInicio && lastFin) this.calcularHorasPorTiempo();
     },
 
-    // ── NIGHT HOURS AUTO-CALC ───────────────────────────────────────────────
-
     _calcHorasNocturnas(inicio, fin) {
         if (!inicio || !fin) return 0;
         const [h1, m1] = inicio.split(':').map(Number);
@@ -126,7 +120,6 @@ const app = {
         let a = h1 * 60 + m1;
         let b = h2 * 60 + m2;
         if (b <= a) b += 1440;
-        // Windows: 21:00-24:00 and 00:00-06:00 (next day in absolute mins)
         const windows = [[1260, 1440], [1440, 1800]];
         let mins = 0;
         windows.forEach(([ws, we]) => {
@@ -145,16 +138,13 @@ const app = {
         if (mins < 0) mins += 1440;
         const horas = Math.round(mins / 60 * 2) / 2;
         if (horas > 0) document.getElementById('horasInput').value = horas;
-
         const nocturnas = this._calcHorasNocturnas(inicio, fin);
         const nocheExtra = document.getElementById('nocheExtra');
         if (nocturnas > 0) {
             document.getElementById('nocheToggle').checked = true;
             nocheExtra.classList.add('visible');
             document.getElementById('horasNocturnas').value = nocturnas;
-            if (this.precioNocheDefault > 0) {
-                document.getElementById('precioNoche').value = this.precioNocheDefault;
-            }
+            if (this.precioNocheDefault > 0) document.getElementById('precioNoche').value = this.precioNocheDefault;
             this.calcularExtra();
         } else {
             document.getElementById('nocheToggle').checked = false;
@@ -163,8 +153,6 @@ const app = {
             document.getElementById('nocheResumen').textContent = '';
         }
     },
-
-    // ── PROFILE / AVATAR ─────────────────────────────────────────────
 
     actualizarBotonesPerfil() {
         const btn = document.getElementById('profileBtn');
@@ -175,23 +163,16 @@ const app = {
         btn.style.cssText = '';
         if (photo) {
             btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
-            btn.style.background = 'transparent';
-            btn.style.padding = '0';
-            btn.style.overflow = 'hidden';
+            btn.style.background = 'transparent'; btn.style.padding = '0'; btn.style.overflow = 'hidden';
         } else if (emoji) {
-            btn.textContent = emoji;
-            btn.style.background = bg;
-            btn.style.fontSize = '20px';
-            btn.style.color = 'white';
+            btn.textContent = emoji; btn.style.background = bg; btn.style.fontSize = '20px'; btn.style.color = 'white';
         } else {
             const email = this.usuarioActual?.email || '';
             const name  = localStorage.getItem('displayName') || email;
-            const initial = name.charAt(0).toUpperCase();
             const palette = ['#667eea','#764ba2','#e74c3c','#27ae60','#f39c12','#3498db'];
-            btn.textContent = initial;
+            btn.textContent = name.charAt(0).toUpperCase();
             btn.style.background = palette[email.charCodeAt(0) % palette.length];
-            btn.style.color = 'white';
-            btn.style.fontSize = '16px';
+            btn.style.color = 'white'; btn.style.fontSize = '16px';
         }
     },
 
@@ -201,24 +182,17 @@ const app = {
         grid.innerHTML = '';
         AVATAR_EMOJIS.forEach((emoji, i) => {
             const btn = document.createElement('button');
-            btn.className = 'avatar-option';
-            btn.textContent = emoji;
-            btn.style.background = AVATAR_BG[i];
+            btn.className = 'avatar-option'; btn.textContent = emoji; btn.style.background = AVATAR_BG[i];
             btn.addEventListener('click', () => this._seleccionarEmojiAvatar(emoji, AVATAR_BG[i]));
             grid.appendChild(btn);
         });
     },
 
     _seleccionarEmojiAvatar(emoji, bg) {
-        localStorage.setItem('avatarEmoji', emoji);
-        localStorage.setItem('avatarBg', bg);
-        localStorage.removeItem('avatarPhoto');
+        localStorage.setItem('avatarEmoji', emoji); localStorage.setItem('avatarBg', bg); localStorage.removeItem('avatarPhoto');
         document.getElementById('avatarPickerModal').classList.remove('show');
-        this.actualizarBotonesPerfil();
-        this._actualizarAvatarPreview();
-        if (this.usuarioActual) {
-            this.supabase.auth.updateUser({ data: { avatar_emoji: emoji, avatar_bg: bg } }).catch(() => {});
-        }
+        this.actualizarBotonesPerfil(); this._actualizarAvatarPreview();
+        if (this.usuarioActual) this.supabase.auth.updateUser({ data: { avatar_emoji: emoji, avatar_bg: bg } }).catch(() => {});
     },
 
     mostrarAvatarPicker() {
@@ -230,8 +204,7 @@ const app = {
         const input = document.createElement('input');
         input.type = 'file'; input.accept = 'image/*';
         input.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+            const file = e.target.files[0]; if (!file) return;
             const reader = new FileReader();
             reader.onload = (ev) => {
                 const img = new Image();
@@ -242,8 +215,7 @@ const app = {
                     localStorage.setItem('avatarPhoto', canvas.toDataURL('image/jpeg', 0.85));
                     localStorage.removeItem('avatarEmoji');
                     document.getElementById('avatarPickerModal').classList.remove('show');
-                    this.actualizarBotonesPerfil();
-                    this._actualizarAvatarPreview();
+                    this.actualizarBotonesPerfil(); this._actualizarAvatarPreview();
                 };
                 img.src = ev.target.result;
             };
@@ -268,32 +240,26 @@ const app = {
             const name  = localStorage.getItem('displayName') || email;
             const palette = ['#667eea','#764ba2','#e74c3c','#27ae60','#f39c12','#3498db'];
             el.textContent = name.charAt(0).toUpperCase();
-            el.style.background = palette[email.charCodeAt(0) % palette.length];
-            el.style.color = 'white';
+            el.style.background = palette[email.charCodeAt(0) % palette.length]; el.style.color = 'white';
         }
     },
 
     async guardarPerfil() {
         if (!this.usuarioActual) return;
         const username = document.getElementById('usernameInput').value.trim().toLowerCase();
-
         if (username) {
             localStorage.setItem('username', username);
             localStorage.setItem('u2e_' + username, this.usuarioActual.email);
         }
         this.actualizarBotonesPerfil();
-
         const updateData = {};
         if (username) updateData.username = username;
         const emoji = localStorage.getItem('avatarEmoji');
         const bg    = localStorage.getItem('avatarBg');
         if (emoji) { updateData.avatar_emoji = emoji; updateData.avatar_bg = bg || '#1565C0'; }
         this.supabase.auth.updateUser({ data: updateData }).catch(() => {});
-
         alert('✅ Perfil guardado');
     },
-
-    // ── AUTH ──────────────────────────────────────────────
 
     establecerFechaHoy() {
         const hoy = new Date();
@@ -306,8 +272,7 @@ const app = {
 
     actualizarFecha() {
         const opts = { weekday: 'long', day: 'numeric', month: 'long' };
-        document.getElementById('fechaHoy').textContent =
-            new Date().toLocaleDateString('es-ES', opts);
+        document.getElementById('fechaHoy').textContent = new Date().toLocaleDateString('es-ES', opts);
     },
 
     toggleAuth() {
@@ -344,8 +309,10 @@ const app = {
                 ? '❌ Correo o contraseña incorrectos.'
                 : '❌ ' + error.message;
             this.mostrarMensaje(msg, 'error');
+        } else {
+            document.getElementById('loginEmail').value = '';
+            document.getElementById('loginPassword').value = '';
         }
-        else { document.getElementById('loginEmail').value = ''; document.getElementById('loginPassword').value = ''; }
     },
 
     async register() {
@@ -401,11 +368,7 @@ const app = {
         this._actualizarTemaUI();
     },
 
-    toggleSection(btn) {
-        btn.closest('.ops-section').classList.toggle('open');
-    },
-
-    // ── HOURS DATA ─────────────────────────────────────────────────
+    toggleSection(btn) { btn.closest('.ops-section').classList.toggle('open'); },
 
     async cargarDatos() {
         if (!this.usuarioActual) return;
@@ -416,7 +379,6 @@ const app = {
             this.mostrarMensaje('⚠️ Error al cargar datos: ' + error.message, 'error');
         }
         const raw = rows && rows.length > 0 ? rows[0] : null;
-        // PostgREST returns PostgreSQL numeric columns as strings — normalise to number
         const data = raw ? { ...raw, horasTrabajadas: parseFloat(raw.horasTrabajadas) || 0 } : null;
         this.actualizarUI(data || { horasTrabajadas: 0, historial: {} });
         this.verificarUbicacion();
@@ -427,7 +389,6 @@ const app = {
         const horas = parseFloat(document.getElementById('horasInput').value);
         const fecha = document.getElementById('fechaInput').value;
         if (!fecha || isNaN(horas) || horas <= 0) { alert('❌ Introduce fecha y horas válidas'); return; }
-
         const horaInicio     = document.getElementById('horaInicio').value;
         const horaFin        = document.getElementById('horaFin').value;
         const esNoche        = document.getElementById('nocheToggle').checked;
@@ -436,7 +397,6 @@ const app = {
         const precioNoche    = esNoche ? (parseFloat(document.getElementById('precioNoche').value) || 0) : 0;
         const extraNoche     = Math.round(horasNocturnas * precioNoche * 100) / 100;
         if (esNoche && horasNocturnas > horas) { alert('❌ Las horas nocturnas no pueden superar las horas totales'); return; }
-
         const { data: _rows } = await this.supabase
             .from('horas_trabajo').select('*').eq('user_id', this.usuarioActual.id).limit(1);
         const actual = _rows?.[0] ?? null;
@@ -444,16 +404,13 @@ const app = {
             ? { ...actual, horasTrabajadas: parseFloat(actual.horasTrabajadas) || 0 }
             : { horasTrabajadas: 0, historial: {} };
         if (!datos.historial) datos.historial = {};
-
         if (this.editingId && datos.historial[this.editingId]) {
             datos.horasTrabajadas = Math.round((datos.horasTrabajadas - datos.historial[this.editingId].horas) * 10) / 10;
             delete datos.historial[this.editingId];
         }
-
         if (datos.horasTrabajadas + horas > this.horasAnualesCustom) {
             alert(`❌ Solo tienes ${(this.horasAnualesCustom - datos.horasTrabajadas).toFixed(1)}h disponibles`); return;
         }
-
         datos.horasTrabajadas = Math.round((datos.horasTrabajadas + horas) * 10) / 10;
         const fechaFormato = new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
         const registroId   = fecha.replace(/-/g, '');
@@ -464,13 +421,11 @@ const app = {
             ...(esNoche && horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
             ...(esPR ? { pr: true } : {})
         };
-
         if (actual) {
             await this.supabase.from('horas_trabajo').update(datos).eq('user_id', this.usuarioActual.id);
         } else {
             await this.supabase.from('horas_trabajo').insert([{ user_id: this.usuarioActual.id, ...datos }]);
         }
-
         if (horaInicio) localStorage.setItem('lastHoraInicio', horaInicio);
         const horaFinVal = document.getElementById('horaFin').value;
         if (horaFinVal) localStorage.setItem('lastHoraFin', horaFinVal);
@@ -487,9 +442,7 @@ const app = {
         const horasN    = parseFloat(document.getElementById('editModalNocturnas').value) || 0;
         const precioN   = parseFloat(document.getElementById('editModalPrecioN').value) || 0;
         const esPR      = document.getElementById('editModalPR').checked;
-
         if (!fecha || isNaN(horas) || horas <= 0) { alert('❌ Introduce fecha y horas válidas'); return; }
-
         const { data: _rows } = await this.supabase
             .from('horas_trabajo').select('*').eq('user_id', this.usuarioActual.id).limit(1);
         const actual = _rows?.[0] ?? null;
@@ -497,12 +450,10 @@ const app = {
             ? { ...actual, horasTrabajadas: parseFloat(actual.horasTrabajadas) || 0 }
             : { horasTrabajadas: 0, historial: {} };
         if (!datos.historial) datos.historial = {};
-
         if (datos.historial[this.editingId]) {
             datos.horasTrabajadas = Math.round((datos.horasTrabajadas - datos.historial[this.editingId].horas) * 10) / 10;
             delete datos.historial[this.editingId];
         }
-
         datos.horasTrabajadas = Math.round((datos.horasTrabajadas + horas) * 10) / 10;
         const fechaFormato = new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
         const registroId   = fecha.replace(/-/g, '');
@@ -513,7 +464,6 @@ const app = {
             ...(horasN > 0 ? { horasNocturnas: horasN, precioNoche: precioN, extraNoche: Math.round(horasN * precioN * 100) / 100 } : {}),
             ...(esPR ? { pr: true } : {})
         };
-
         await this.supabase.from('horas_trabajo').update(datos).eq('user_id', this.usuarioActual.id);
         this.editingId = null;
         document.getElementById('editModal').classList.remove('show');
@@ -538,10 +488,7 @@ const app = {
         if (this.darkMode) document.getElementById('editModalContent').classList.add('dark');
     },
 
-    cancelarEdicion() {
-        this.editingId = null;
-        this.limpiarInput();
-    },
+    cancelarEdicion() { this.editingId = null; this.limpiarInput(); },
 
     async borrarRegistro(id) {
         if (!this.usuarioActual) return;
@@ -555,9 +502,7 @@ const app = {
             await this.supabase.from('horas_trabajo').update(data).eq('user_id', this.usuarioActual.id);
             this.actualizarUI(data);
             if (this.editingId === id) this.editingId = null;
-            if (document.getElementById('historialModal').classList.contains('show')) {
-                this._renderHistorialModal();
-            }
+            if (document.getElementById('historialModal').classList.contains('show')) this._renderHistorialModal();
         }
     },
 
@@ -576,21 +521,20 @@ const app = {
     toggleNoche() {
         const on = document.getElementById('nocheToggle').checked;
         document.getElementById('nocheExtra').classList.toggle('visible', on);
-        if (on && this.precioNocheDefault > 0 && !document.getElementById('precioNoche').value) {
+        if (on && this.precioNocheDefault > 0 && !document.getElementById('precioNoche').value)
             document.getElementById('precioNoche').value = this.precioNocheDefault;
-        }
         if (!on) { document.getElementById('nocheResumen').textContent = ''; document.getElementById('horasNocturnas').value = ''; }
     },
 
     calcularExtra() {
-        const hN     = parseFloat(document.getElementById('horasNocturnas').value) || 0;
+        const hN = parseFloat(document.getElementById('horasNocturnas').value) || 0;
         const precio = parseFloat(document.getElementById('precioNoche').value) || 0;
         document.getElementById('nocheResumen').textContent =
             (hN > 0 && precio > 0) ? `Extra: ${hN}h × ${precio}€ = ${(hN * precio).toFixed(2)}€` : '';
     },
 
     calcularExtraModal() {
-        const hN     = parseFloat(document.getElementById('editModalNocturnas').value) || 0;
+        const hN = parseFloat(document.getElementById('editModalNocturnas').value) || 0;
         const precio = parseFloat(document.getElementById('editModalPrecioN').value) || 0;
         document.getElementById('editModalExtraLabel').textContent =
             (hN > 0 && precio > 0) ? `+${(hN * precio).toFixed(2)}€ extra nocturno` : '';
@@ -608,21 +552,13 @@ const app = {
         if (horas > 0) document.getElementById('editModalHoras').value = horas;
         const nocturnas = this._calcHorasNocturnas(inicio, fin);
         document.getElementById('editModalNocturnas').value = nocturnas || '';
-        if (nocturnas > 0 && this.precioNocheDefault > 0 && !document.getElementById('editModalPrecioN').value) {
+        if (nocturnas > 0 && this.precioNocheDefault > 0 && !document.getElementById('editModalPrecioN').value)
             document.getElementById('editModalPrecioN').value = this.precioNocheDefault;
-        }
         this.calcularExtraModal();
     },
 
-    guardarUltimaHoraInicio() {
-        const val = document.getElementById('horaInicio').value;
-        if (val) localStorage.setItem('lastHoraInicio', val);
-    },
-
-    guardarUltimaHoraFin() {
-        const val = document.getElementById('horaFin').value;
-        if (val) localStorage.setItem('lastHoraFin', val);
-    },
+    guardarUltimaHoraInicio() { const val = document.getElementById('horaInicio').value; if (val) localStorage.setItem('lastHoraInicio', val); },
+    guardarUltimaHoraFin()    { const val = document.getElementById('horaFin').value;    if (val) localStorage.setItem('lastHoraFin', val); },
 
     limpiarInput() {
         this.establecerFechaHoy();
@@ -642,8 +578,6 @@ const app = {
         else document.getElementById('horasInput').value = '';
     },
 
-    // ── HISTORIAL MODAL ──────────────────────────────────────────────
-
     mostrarHistorialModal() {
         document.getElementById('historialModal').classList.add('show');
         if (this.darkMode) document.getElementById('historialModalContent').classList.add('dark');
@@ -662,11 +596,9 @@ const app = {
             const li = document.createElement('li');
             li.style.cssText = 'padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #efefef;gap:8px;';
             const nocheStr = reg.horasNocturnas
-                ? `<div style="font-size:10px;color:#856404;font-weight:600;">🌙 ${reg.horasNocturnas}h noct. · +${(reg.extraNoche||0).toFixed(2)}€</div>`
-                : '';
+                ? `<div style="font-size:10px;color:#856404;font-weight:600;">🌙 ${reg.horasNocturnas}h noct. · +${(reg.extraNoche||0).toFixed(2)}€</div>` : '';
             const horario = (reg.horaInicio && reg.horaFin)
-                ? `<span style="color:#95a5a6;font-size:10px;font-style:italic;">${reg.horaInicio}–${reg.horaFin}</span>`
-                : '';
+                ? `<span style="color:#95a5a6;font-size:10px;font-style:italic;">${reg.horaInicio}–${reg.horaFin}</span>` : '';
             const prBadge = reg.pr ? `<span class="pr-badge">PR</span>` : '';
             li.innerHTML = `
                 <div style="flex:1;min-width:0;">
@@ -690,8 +622,6 @@ const app = {
             list.appendChild(li);
         });
     },
-
-    // ── MONTHLY STATS ───────────────────────────────────────────────────
 
     _calcMesStats(historial, año, mes) {
         const entries = Object.values(historial).filter(r => {
@@ -722,27 +652,22 @@ const app = {
         return meses;
     },
 
-    // ── UI ──────────────────────────────────────────────────────
-
     actualizarUI(datos) {
         const horas     = parseFloat(datos.horasTrabajadas) || 0;
         const restantes = Math.max(0, this.horasAnualesCustom - horas);
         const pct       = (horas / this.horasAnualesCustom) * 100;
         this._historialFull = datos.historial || {};
-
         document.getElementById('horasTrabajadas').textContent = horas.toFixed(1);
         document.getElementById('horasRestantes').textContent  = restantes.toFixed(1);
         document.getElementById('porcentaje').textContent = Math.min(Math.round(pct), 100);
-        document.getElementById('progressFill').style.width    = Math.min(pct, 100) + '%';
+        document.getElementById('progressFill').style.width = Math.min(pct, 100) + '%';
         if (pct >= 100) document.getElementById('progressFill').style.background = 'linear-gradient(90deg,#27ae60,#229954)';
-
         const ahora = new Date();
         const mesStats = this._calcMesStats(this._historialFull, ahora.getFullYear(), ahora.getMonth() + 1);
         const elMesH = document.getElementById('statMesHoras');
         const elMesN = document.getElementById('statMesNoche');
         if (elMesH) elMesH.textContent = mesStats.horas.toFixed(1);
         if (elMesN) elMesN.textContent = mesStats.nocturnas.toFixed(1);
-
         this._renderMensual(this._historialFull);
         this.actualizarHistorial(datos.historial || {});
     },
@@ -776,26 +701,19 @@ const app = {
         }).join('');
     },
 
-    // ── SETTINGS ──────────────────────────────────────────────
-
     revisarSuma() {
         const t = parseFloat(document.getElementById('horasTrabajadas').textContent);
         const r = parseFloat(document.getElementById('horasRestantes').textContent);
         const s = t + r;
-        if (Math.abs(s - this.horasAnualesCustom) < 0.1) {
-            alert(`✅ Suma correcta!\n\nTrabajadas: ${t}h\nRestantes: ${r}h`);
-        } else {
-            alert(`❌ Error!\n\nTrabajadas: ${t}h\nRestantes: ${r}h\nTotal: ${s}h\nEsperado: ${this.horasAnualesCustom}h`);
-        }
+        if (Math.abs(s - this.horasAnualesCustom) < 0.1) alert(`✅ Suma correcta!\n\nTrabajadas: ${t}h\nRestantes: ${r}h`);
+        else alert(`❌ Error!\n\nTrabajadas: ${t}h\nRestantes: ${r}h\nTotal: ${s}h\nEsperado: ${this.horasAnualesCustom}h`);
     },
 
     toggleDarkMode() {
         this.darkMode = !this.darkMode;
         localStorage.setItem('darkMode', this.darkMode);
         this.darkMode ? this.aplicarDarkMode() : this.removerDarkMode();
-        if (this.usuarioActual) {
-            this.supabase.auth.updateUser({ data: { dark_mode: this.darkMode } }).catch(() => {});
-        }
+        if (this.usuarioActual) this.supabase.auth.updateUser({ data: { dark_mode: this.darkMode } }).catch(() => {});
     },
 
     aplicarDarkMode() {
@@ -819,9 +737,7 @@ const app = {
         localStorage.setItem('tema', tema);
         this.aplicarTema(tema);
         this._actualizarTemaUI();
-        if (this.usuarioActual) {
-            this.supabase.auth.updateUser({ data: { tema } }).catch(() => {});
-        }
+        if (this.usuarioActual) this.supabase.auth.updateUser({ data: { tema } }).catch(() => {});
     },
 
     aplicarTema(tema) {
@@ -903,23 +819,19 @@ const app = {
         this.mostrarAuth();
     },
 
-    // ── GPS / LOCATIONS ─────────────────────────────────────────────
-
     _getWorkLocations() { return JSON.parse(localStorage.getItem('workLocations') || '[]'); },
     _saveWorkLocations(locs) { localStorage.setItem('workLocations', JSON.stringify(locs)); },
     _saveWorkLocationsToSupabase(locs) {
-        if (this.usuarioActual) {
+        if (this.usuarioActual)
             this.supabase.auth.updateUser({ data: { work_locations: locs } }).catch(() => {});
-        }
     },
 
     async guardarUbicacionTrabajo() {
         const name = prompt('Nombre de esta ubicación (ej: EMT Madrid, Depósito):');
         if (!name) return;
         if (!navigator.geolocation) { alert('❌ Tu dispositivo no soporta geolocalización'); return; }
-        if ('Notification' in window && Notification.permission === 'default') {
+        if ('Notification' in window && Notification.permission === 'default')
             await Notification.requestPermission();
-        }
         navigator.geolocation.getCurrentPosition(
             (pos) => {
                 const locs = this._getWorkLocations();
@@ -952,7 +864,6 @@ const app = {
         if (nuevoNombre === null) return;
         if (!nuevoNombre.trim()) { alert('❌ El nombre no puede estar vacío'); return; }
         loc.name = nuevoNombre.trim();
-
         const actualizarGPS = confirm('¿Actualizar también las coordenadas GPS a tu posición actual?');
         if (actualizarGPS) {
             await new Promise((resolve) => {
@@ -962,7 +873,6 @@ const app = {
                 );
             });
         }
-
         locs[index] = loc;
         this._saveWorkLocations(locs);
         this._saveWorkLocationsToSupabase(locs);
@@ -1038,6 +948,25 @@ const app = {
         }
     },
 
+    async probarNotificacion() {
+        if (!('Notification' in window)) { alert('❌ Tu navegador no soporta notificaciones'); return; }
+        if (Notification.permission === 'default') {
+            const perm = await Notification.requestPermission();
+            if (perm !== 'granted') { alert('❌ Permiso de notificación denegado'); return; }
+        }
+        if (Notification.permission === 'denied') { alert('❌ Las notificaciones están bloqueadas. Actiévalas en los ajustes del navegador.'); return; }
+        try {
+            const reg = await navigator.serviceWorker.ready;
+            await reg.showNotification('🔔 Horas EMT — prueba', {
+                body: 'Las notificaciones funcionan correctamente.',
+                icon: '/icons/icon-192.png', badge: '/icons/badge.svg',
+                tag: 'test-notif'
+            });
+        } catch(_) {
+            new Notification('🔔 Horas EMT — prueba', { body: 'Las notificaciones funcionan correctamente.', icon: '/icons/icon-192.png' });
+        }
+    },
+
     calcularDistancia(lat1, lng1, lat2, lng2) {
         const R = 6371000;
         const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -1053,8 +982,6 @@ const app = {
         document.getElementById('horasInput').focus();
     },
 
-    // ── BACKUP ───────────────────────────────────────────────
-
     async exportarDatos() {
         if (!this.usuarioActual) return;
         const { data: rows } = await this.supabase.from('horas_trabajo').select('*').eq('user_id', this.usuarioActual.id).limit(1);
@@ -1066,21 +993,14 @@ const app = {
         const filename = `horas-emt-${new Date().toISOString().slice(0,10)}.json`;
         const blob = new Blob([json], { type: 'application/json' });
         const file = new File([blob], filename, { type: 'application/json' });
-
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-            try {
-                await navigator.share({ title: 'Copia Horas EMT', files: [file] });
-                return;
-            } catch(e) { if (e.name === 'AbortError') return; }
+            try { await navigator.share({ title: 'Copia Horas EMT', files: [file] }); return; }
+            catch(e) { if (e.name === 'AbortError') return; }
         }
-
         if (navigator.share) {
-            try {
-                await navigator.share({ title: 'Copia Horas EMT', text: json });
-                return;
-            } catch(e) { if (e.name === 'AbortError') return; }
+            try { await navigator.share({ title: 'Copia Horas EMT', text: json }); return; }
+            catch(e) { if (e.name === 'AbortError') return; }
         }
-
         try {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -1089,7 +1009,6 @@ const app = {
             setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
             return;
         } catch(_) {}
-
         this._mostrarExportTexto(json);
     },
 
@@ -1120,8 +1039,7 @@ const app = {
     async importarDatos() {
         if (!this.usuarioActual) return;
         const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json,application/json';
+        input.type = 'file'; input.accept = '.json,application/json';
         input.style.cssText = 'position:fixed;top:-100px;left:-100px;opacity:0;';
         document.body.appendChild(input);
         input.addEventListener('change', async (e) => {
@@ -1135,8 +1053,7 @@ const app = {
                 else Object.assign(historialObj, datos.historial);
                 const restored = { horasTrabajadas: datos.horasTrabajadas, historial: historialObj };
                 const { error } = await this.supabase.from('horas_trabajo').upsert(
-                    { user_id: this.usuarioActual.id, ...restored },
-                    { onConflict: 'user_id' }
+                    { user_id: this.usuarioActual.id, ...restored }, { onConflict: 'user_id' }
                 );
                 if (error) { alert('❌ Error al guardar en la nube: ' + error.message); return; }
                 if (datos.horasAnuales) { this.horasAnualesCustom = datos.horasAnuales; localStorage.setItem('horasAnuales', datos.horasAnuales); }
@@ -1148,11 +1065,7 @@ const app = {
     }
 };
 
-// ── BOOTSTRAP ─────────────────────────────────────────────────────────
-
 let _swCheck = setInterval(() => { if (window.supabase) { clearInterval(_swCheck); app.init(); } }, 100);
-
-// ── PWA ───────────────────────────────────────────────
 
 window._deferredPrompt = null;
 const _isIOS        = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
