@@ -48,29 +48,49 @@ const app = {
 
     _initGoogleAuth() {
         const hint = localStorage.getItem('gUserEmail') || '';
+        this._pendingTokenResolve = null;
+
+        // El callback se fija permanentemente para soportar tanto popup como redirect.
+        // Si GIS usa redirect, al recargar la página llama al callback con el token;
+        // si usa popup, lo llama cuando el popup se cierra.
         this.tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: GOOGLE_CLIENT_ID,
             scope: DRIVE_SCOPE,
             hint,
-            callback: ''
+            callback: (response) => {
+                if (this._pendingTokenResolve) {
+                    const resolve = this._pendingTokenResolve;
+                    this._pendingTokenResolve = null;
+                    resolve(response);
+                } else if (!response.error && response.access_token) {
+                    // Recarga tras redirect: token recibido sin resolver promesa
+                    this._saveToken(response);
+                    this._loadUserAndStart();
+                }
+            },
+            error_callback: (err) => {
+                if (this._pendingTokenResolve) {
+                    const resolve = this._pendingTokenResolve;
+                    this._pendingTokenResolve = null;
+                    resolve({ error: err.type || 'unknown' });
+                }
+            }
         });
+
         if (this.accessToken && Date.now() < this.tokenExpiry) {
             this._loadUserAndStart();
+        } else if (hint) {
+            this._silentRefresh().then(ok => {
+                if (ok) this._loadUserAndStart(); else this.mostrarAuth();
+            });
         } else {
-            // Token expired but we have a hint — try silent refresh before showing login
-            if (hint) {
-                this._silentRefresh().then(ok => {
-                    if (ok) this._loadUserAndStart(); else this.mostrarAuth();
-                });
-            } else {
-                this.mostrarAuth();
-            }
+            this.mostrarAuth();
         }
     },
 
     async _requestToken(prompt) {
         return new Promise(resolve => {
-            this.tokenClient.callback = resolve;
+            this._pendingTokenResolve = resolve;
             this.tokenClient.requestAccessToken({ prompt: prompt ?? '' });
         });
     },
