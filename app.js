@@ -2,7 +2,7 @@
 'use strict';
 
 const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.googleusercontent.com';
-const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata';
+const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata profile email';
 const DRIVE_FILE_NAME  = 'horas-emt.json';
 const HORAS_ANUALES    = 777;
 
