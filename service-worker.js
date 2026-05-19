@@ -1,12 +1,10 @@
-const CACHE_NAME = 'horas-v21';
-const BASE_PATH = '/';
+const CACHE_NAME = 'horas-v22';
+// Detect base path dynamically so this works on GitHub Pages subdirectories
+// e.g. /Registro-horario-emt/ instead of just /
+const BASE_PATH = self.location.pathname.replace('service-worker.js', '');
 
 // These files are always fetched from network (never stale)
-const NETWORK_FIRST = [
-  BASE_PATH,
-  BASE_PATH + 'index.html',
-  BASE_PATH + 'app.js',
-];
+const NETWORK_FIRST_FILES = ['', 'index.html', 'app.js'];
 
 // These are cached and served from cache (change rarely)
 const urlsToCache = [
@@ -26,9 +24,10 @@ self.addEventListener('install', event => {
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(names =>
-      Promise.all(names.map(name => name !== CACHE_NAME && caches.delete(name)))
-    )
+    caches.keys()
+      .then(names => Promise.all(names.map(name => name !== CACHE_NAME && caches.delete(name))))
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then(clients => clients.forEach(c => c.postMessage({ type: 'SW_UPDATED' })))
   );
   self.clients.claim();
 });
@@ -41,7 +40,8 @@ self.addEventListener('fetch', event => {
   // correctly and we never accidentally return index.html for an API call.
   if (url.origin !== self.location.origin || event.request.method !== 'GET') return;
 
-  const isNetworkFirst = NETWORK_FIRST.some(p => url.pathname === p);
+  const filename = url.pathname.split('/').pop() || 'index.html';
+  const isNetworkFirst = NETWORK_FIRST_FILES.includes(filename);
 
   if (isNetworkFirst) {
     // Bypass HTTP cache so we always get the latest version of app.js / index.html
@@ -65,7 +65,7 @@ self.addEventListener('notificationclick', event => {
       for (const client of list) {
         if ('focus' in client) return client.focus();
       }
-      if (clients.openWindow) return clients.openWindow('/');
+      if (clients.openWindow) return clients.openWindow(BASE_PATH);
     })
   );
 });
