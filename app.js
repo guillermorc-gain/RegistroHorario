@@ -291,15 +291,15 @@ const app = {
     },
 
     async login() {
-        if (!this.supabase) { this.mostrarMensaje('❌ Error de conexión. Recarga la página.', 'error'); return; }
+        if (!this.supabase) { alert('❌ Error de conexión. Recarga la página.'); return; }
         let input = document.getElementById('loginEmail').value.trim();
         const password = document.getElementById('loginPassword').value;
-        if (!input || !password) { this.mostrarMensaje('❌ Completa todos los campos', 'error'); return; }
+        if (!input || !password) { alert('❌ Completa todos los campos'); return; }
         let email = input;
         if (!input.includes('@')) {
             const saved = localStorage.getItem('u2e_' + input.toLowerCase());
             if (saved) { email = saved; }
-            else { this.mostrarMensaje('❌ Usuario no encontrado. Usa tu correo la primera vez.', 'error'); return; }
+            else { alert('❌ Usuario no encontrado. Usa tu correo completo la primera vez.'); return; }
         }
         this.mostrarMensaje('⏳ Entrando...', 'success');
         try {
@@ -310,13 +310,13 @@ const app = {
                     : (error.message.includes('Invalid login credentials') || error.message.includes('invalid_credentials'))
                     ? '❌ Correo o contraseña incorrectos.'
                     : '❌ ' + error.message;
-                this.mostrarMensaje(msg, 'error');
+                alert(msg);
             } else {
                 document.getElementById('loginEmail').value = '';
                 document.getElementById('loginPassword').value = '';
             }
         } catch(e) {
-            this.mostrarMensaje('❌ Error al conectar: ' + e.message, 'error');
+            alert('❌ Error al conectar: ' + e.message);
         }
     },
 
