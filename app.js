@@ -14,7 +14,6 @@ const AVATAR_BG     = ['#667eea','#e74c3c','#f39c12','#27ae60','#3498db','#9b59b
 const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
 const app = {
-    tokenClient: null,
     accessToken: localStorage.getItem('gAccessToken') || null,
     tokenExpiry: parseInt(localStorage.getItem('gTokenExpiry') || '0'),
     driveFileId: localStorage.getItem('driveFileId') || null,
@@ -47,79 +46,35 @@ const app = {
     },
 
     _initGoogleAuth() {
-        const hint = localStorage.getItem('gUserEmail') || '';
-        this._pendingTokenResolve = null;
-
-        // El callback se fija permanentemente para soportar tanto popup como redirect.
-        // Si GIS usa redirect, al recargar la página llama al callback con el token;
-        // si usa popup, lo llama cuando el popup se cierra.
-        this.tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: GOOGLE_CLIENT_ID,
-            scope: DRIVE_SCOPE,
-            hint,
-            callback: (response) => {
-                if (this._pendingTokenResolve) {
-                    const resolve = this._pendingTokenResolve;
-                    this._pendingTokenResolve = null;
-                    resolve(response);
-                } else if (!response.error && response.access_token) {
-                    // Recarga tras redirect: token recibido sin resolver promesa
-                    this._saveToken(response);
-                    this._loadUserAndStart();
-                }
-            },
-            error_callback: (err) => {
-                if (this._pendingTokenResolve) {
-                    const resolve = this._pendingTokenResolve;
-                    this._pendingTokenResolve = null;
-                    resolve({ error: err.type || 'unknown' });
-                }
+        if (window.location.hash.includes('access_token')) {
+            const params = new URLSearchParams(window.location.hash.slice(1));
+            const token = params.get('access_token');
+            const expiresIn = parseInt(params.get('expires_in') || '3600');
+            if (token) {
+                history.replaceState(null, '', window.location.pathname);
+                this.driveFileId = null;
+                localStorage.removeItem('driveFileId');
+                this._saveToken({ access_token: token, expires_in: expiresIn });
+                this._loadUserAndStart();
+                return;
             }
-        });
-
+        }
         if (this.accessToken && Date.now() < this.tokenExpiry) {
             this._loadUserAndStart();
-        } else if (hint) {
-            this._silentRefresh().then(ok => {
-                if (ok) this._loadUserAndStart(); else this.mostrarAuth();
-            });
         } else {
             this.mostrarAuth();
         }
     },
 
-    async _requestToken(prompt) {
-        return new Promise(resolve => {
-            this._pendingTokenResolve = resolve;
-            this.tokenClient.requestAccessToken({ prompt: prompt ?? '' });
-        });
-    },
-
-    async _silentRefresh() {
-        try {
-            const response = await this._requestToken('');
-            if (response.error || !response.access_token) return false;
-            this._saveToken(response);
-            return true;
-        } catch(_) { return false; }
-    },
-
     async _ensureToken() {
-        if (this.accessToken && Date.now() < this.tokenExpiry) return true;
-        return this._silentRefresh();
+        return !!(this.accessToken && Date.now() < this.tokenExpiry);
     },
 
     _saveToken(response) {
         this.accessToken = response.access_token;
-        this.tokenExpiry = Date.now() + (response.expires_in - 60) * 1000;
+        this.tokenExpiry = Date.now() + (parseInt(response.expires_in) - 60) * 1000;
         localStorage.setItem('gAccessToken', this.accessToken);
         localStorage.setItem('gTokenExpiry', this.tokenExpiry);
-        // Renovar automáticamente 5 min antes de que expire
-        clearTimeout(this._tokenRefreshTimer);
-        const msHastaRefresh = this.tokenExpiry - Date.now() - 5 * 60 * 1000;
-        if (msHastaRefresh > 0) {
-            this._tokenRefreshTimer = setTimeout(() => this._silentRefresh(), msHastaRefresh);
-        }
     },
 
     async _loadUserAndStart() {
@@ -142,17 +97,15 @@ const app = {
         }
     },
 
-    async login() {
-        this.mostrarMensaje('⏳ Conectando con Google...', 'success');
-        const response = await this._requestToken('select_account');
-        if (response.error || !response.access_token) {
-            this.mostrarMensaje('❌ No se pudo iniciar sesión', 'error');
-            return;
-        }
-        this._saveToken(response);
-        this.driveFileId = null;
-        localStorage.removeItem('driveFileId');
-        await this._loadUserAndStart();
+    login() {
+        const params = new URLSearchParams({
+            client_id: GOOGLE_CLIENT_ID,
+            redirect_uri: window.location.origin,
+            response_type: 'token',
+            scope: DRIVE_SCOPE,
+            prompt: 'select_account'
+        });
+        window.location.assign('https://accounts.google.com/o/oauth2/v2/auth?' + params);
     },
 
     _autoRellenarFormulario() {
@@ -444,8 +397,9 @@ const app = {
     // ── Auth / UI ──────────────────────────────────────────────────────────────
 
     async cerrarSesion() {
-        clearTimeout(this._tokenRefreshTimer);
-        if (this.accessToken) google.accounts.oauth2.revoke(this.accessToken, () => {});
+        if (this.accessToken) {
+            fetch('https://oauth2.googleapis.com/revoke?token=' + this.accessToken, { method: 'POST' }).catch(() => {});
+        }
         this.accessToken  = null;
         this.tokenExpiry  = 0;
         this.usuarioActual = null;
@@ -1128,16 +1082,7 @@ const app = {
     }
 };
 
-// Esperar a que cargue la librería de Google Identity Services
-let _swCheckCount = 0;
-let _swCheck = setInterval(() => {
-    if (window.google && window.google.accounts) { clearInterval(_swCheck); app.init(); return; }
-    if (++_swCheckCount > 150) {
-        clearInterval(_swCheck);
-        const el = document.getElementById('authError');
-        if (el) { el.textContent = '❌ Error de red. Comprueba tu conexión y recarga.'; el.classList.add('show'); }
-    }
-}, 100);
+app.init();
 
 window._deferredPrompt = null;
 const _isIOS        = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
