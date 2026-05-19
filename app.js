@@ -46,16 +46,23 @@ const app = {
     },
 
     _initGoogleAuth() {
-        if (window.location.hash.includes('access_token')) {
-            const params = new URLSearchParams(window.location.hash.slice(1));
+        const hash = window.location.hash;
+        if (hash.length > 1) {
+            const params = new URLSearchParams(hash.slice(1));
             const token = params.get('access_token');
-            const expiresIn = parseInt(params.get('expires_in') || '3600');
+            const error = params.get('error');
+            history.replaceState(null, '', window.location.pathname);
             if (token) {
-                history.replaceState(null, '', window.location.pathname);
+                const expiresIn = parseInt(params.get('expires_in') || '3600');
                 this.driveFileId = null;
                 localStorage.removeItem('driveFileId');
                 this._saveToken({ access_token: token, expires_in: expiresIn });
                 this._loadUserAndStart();
+                return;
+            }
+            if (error) {
+                this.mostrarAuth();
+                this.mostrarMensaje('Error Google: ' + error, 'error');
                 return;
             }
         }
@@ -80,26 +87,28 @@ const app = {
     async _loadUserAndStart() {
         try {
             const ok = await this._ensureToken();
-            if (!ok) { this.mostrarAuth(); return; }
+            if (!ok) { this.mostrarAuth(); this.mostrarMensaje('Sesión expirada, vuelve a entrar', 'error'); return; }
             const resp = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
                 headers: { Authorization: `Bearer ${this.accessToken}` }
             });
-            if (!resp.ok) { this.mostrarAuth(); return; }
+            if (!resp.ok) { this.mostrarAuth(); this.mostrarMensaje('Error al obtener perfil: ' + resp.status, 'error'); return; }
             this.usuarioActual = await resp.json();
             localStorage.setItem('gUserEmail', this.usuarioActual.email);
             this.mostrarApp();
             this.actualizarBotonesPerfil();
             setTimeout(() => this._autoRellenarFormulario(), 50);
             this.cargarDatos();
-        } catch(_) {
+        } catch(e) {
             this.mostrarAuth();
+            this.mostrarMensaje('Error de red: ' + e.message, 'error');
         }
     },
 
     login() {
+        const redirectUri = window.location.origin + '/';
         const params = new URLSearchParams({
             client_id: GOOGLE_CLIENT_ID,
-            redirect_uri: window.location.origin,
+            redirect_uri: redirectUri,
             response_type: 'token',
             scope: DRIVE_SCOPE,
             prompt: 'select_account'
@@ -415,7 +424,7 @@ const app = {
         const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         btn.style.cssText = '';
         if (photo) {
-            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` ;
             btn.style.background = 'transparent'; btn.style.padding = '0'; btn.style.overflow = 'hidden';
         } else if (emoji) {
             btn.textContent = emoji; btn.style.background = bg; btn.style.fontSize = '20px'; btn.style.color = 'white';
@@ -483,7 +492,7 @@ const app = {
         const emoji = localStorage.getItem('avatarEmoji');
         const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         if (photo) {
-            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` ;
             el.style.background = 'transparent';
         } else if (emoji) {
             el.textContent = emoji; el.style.background = bg; el.style.color = '';
@@ -1112,4 +1121,3 @@ app.instalarApp = async function() {
 app.ocultarInstallBanner = function() { const b = document.getElementById('installBanner'); if (b) b.classList.remove('show'); };
 
 if (_isIOS && !_isStandalone) setTimeout(() => _showInstallBanner(true), 3000);
-if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));
