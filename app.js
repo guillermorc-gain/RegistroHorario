@@ -303,7 +303,13 @@ const app = {
         }
         this.mostrarMensaje('⏳ Entrando...', 'success');
         try {
-            const { error } = await this.supabase.auth.signInWithPassword({ email, password });
+            const timeout = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Tiempo de espera agotado. Comprueba tu conexión o reactiva el proyecto en supabase.com')), 10000)
+            );
+            const { error } = await Promise.race([
+                this.supabase.auth.signInWithPassword({ email, password }),
+                timeout
+            ]);
             if (error) {
                 const msg = error.message.includes('Email not confirmed')
                     ? '📧 Confirma tu email primero. Revisa tu bandeja de entrada.'
@@ -316,7 +322,7 @@ const app = {
                 document.getElementById('loginPassword').value = '';
             }
         } catch(e) {
-            alert('❌ Error al conectar: ' + e.message);
+            alert('❌ Error: ' + e.message);
         }
     },
 
