@@ -46,16 +46,23 @@ const app = {
     },
 
     _initGoogleAuth() {
-        if (window.location.hash.includes('access_token')) {
-            const params = new URLSearchParams(window.location.hash.slice(1));
+        const hash = window.location.hash;
+        if (hash.length > 1) {
+            const params = new URLSearchParams(hash.slice(1));
             const token = params.get('access_token');
-            const expiresIn = parseInt(params.get('expires_in') || '3600');
+            const error = params.get('error');
+            history.replaceState(null, '', window.location.pathname);
             if (token) {
-                history.replaceState(null, '', window.location.pathname);
+                const expiresIn = parseInt(params.get('expires_in') || '3600');
                 this.driveFileId = null;
                 localStorage.removeItem('driveFileId');
                 this._saveToken({ access_token: token, expires_in: expiresIn });
                 this._loadUserAndStart();
+                return;
+            }
+            if (error) {
+                this.mostrarAuth();
+                this.mostrarMensaje('Error Google: ' + error, 'error');
                 return;
             }
         }
@@ -80,27 +87,28 @@ const app = {
     async _loadUserAndStart() {
         try {
             const ok = await this._ensureToken();
-            if (!ok) { this.mostrarAuth(); return; }
+            if (!ok) { this.mostrarAuth(); this.mostrarMensaje('Sesión expirada, vuelve a entrar', 'error'); return; }
             const resp = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
                 headers: { Authorization: `Bearer ${this.accessToken}` }
             });
-            if (!resp.ok) { this.mostrarAuth(); return; }
+            if (!resp.ok) { this.mostrarAuth(); this.mostrarMensaje('Error al obtener perfil: ' + resp.status, 'error'); return; }
             this.usuarioActual = await resp.json();
-            // Guardar email como hint para renovaciones silenciosas futuras
             localStorage.setItem('gUserEmail', this.usuarioActual.email);
             this.mostrarApp();
             this.actualizarBotonesPerfil();
             setTimeout(() => this._autoRellenarFormulario(), 50);
             this.cargarDatos();
-        } catch(_) {
+        } catch(e) {
             this.mostrarAuth();
+            this.mostrarMensaje('Error de red: ' + e.message, 'error');
         }
     },
 
     login() {
+        const redirectUri = window.location.origin + '/';
         const params = new URLSearchParams({
             client_id: GOOGLE_CLIENT_ID,
-            redirect_uri: window.location.origin,
+            redirect_uri: redirectUri,
             response_type: 'token',
             scope: DRIVE_SCOPE,
             prompt: 'select_account'
@@ -130,7 +138,7 @@ const app = {
         if (lastInicio && lastFin) this.calcularHorasPorTiempo();
     },
 
-    // ── Drive API helpers ──────────────────────────────────────────────────────
+    // ── Drive API helpers ─────────────────────────────────────────────
 
     async _driveGet(url) {
         if (!await this._ensureToken()) throw new Error('Sin autenticación');
@@ -165,10 +173,7 @@ const app = {
         const resp = await this._driveGet(
             `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
         );
-        if (!resp.ok) {
-            if (resp.status === 404) { this.driveFileId = null; localStorage.removeItem('driveFileId'); }
-            return null;
-        }
+        if (!resp.ok) return null;
         return resp.json();
     },
 
@@ -204,7 +209,7 @@ const app = {
         }
     },
 
-    // ── Data operations ────────────────────────────────────────────────────────
+    // ── Data operations ────────────────────────────────────────────
 
     async cargarDatos() {
         if (!this.usuarioActual) return;
@@ -394,7 +399,7 @@ const app = {
         input.click();
     },
 
-    // ── Auth / UI ──────────────────────────────────────────────────────────────
+    // ── Auth / UI ────────────────────────────────────────────────
 
     async cerrarSesion() {
         if (this.accessToken) {
@@ -419,7 +424,7 @@ const app = {
         const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         btn.style.cssText = '';
         if (photo) {
-            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` ;
             btn.style.background = 'transparent'; btn.style.padding = '0'; btn.style.overflow = 'hidden';
         } else if (emoji) {
             btn.textContent = emoji; btn.style.background = bg; btn.style.fontSize = '20px'; btn.style.color = 'white';
@@ -487,7 +492,7 @@ const app = {
         const emoji = localStorage.getItem('avatarEmoji');
         const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         if (photo) {
-            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` ;
             el.style.background = 'transparent';
         } else if (emoji) {
             el.textContent = emoji; el.style.background = bg; el.style.color = '';
@@ -553,7 +558,7 @@ const app = {
 
     toggleSection(btn) { btn.closest('.ops-section').classList.toggle('open'); },
 
-    // ── Cálculos de tiempo ─────────────────────────────────────────────────────
+    // ── Cálculos de tiempo ─────────────────────────────────────────────
 
     _calcHorasNocturnas(inicio, fin) {
         if (!inicio || !fin) return 0;
@@ -670,7 +675,7 @@ const app = {
 
     cancelarEdicion() { this.editingId = null; this.limpiarInput(); },
 
-    // ── UI de datos ────────────────────────────────────────────────────────────
+    // ── UI de datos ──────────────────────────────────────────────────
 
     mostrarHistorialModal() {
         document.getElementById('historialModal').classList.add('show');
@@ -706,7 +711,7 @@ const app = {
                 </div>
                 <div style="display:flex;gap:5px;flex-shrink:0;">
                     <button class="hm-edit" style="background:#3498db;color:white;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;border:none;font-weight:600;">✏️</button>
-                    <button class="hm-del"  style="background:#e74c3c;color:white;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;border:none;font-weight:600;">✕</button>
+                    <button class="hm-del"  style="background:#e74c3c;color:white;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;border:none;font-weight:600;">×</button>
                 </div>`;
             li.querySelector('.hm-edit').addEventListener('click', () => {
                 document.getElementById('historialModal').classList.remove('show');
@@ -813,7 +818,7 @@ const app = {
         }).join('');
     },
 
-    // ── Opciones ───────────────────────────────────────────────────────────────
+    // ── Opciones ─────────────────────────────────────────────────────
 
     revisarSuma() {
         const t = parseFloat(document.getElementById('horasTrabajadas').textContent);
@@ -899,7 +904,7 @@ const app = {
         this.mostrarModal('⚠️ Borrar datos', 'Se eliminarán todos tus registros de Drive y se cerrará la sesión.', this.borrarCuenta.bind(this));
     },
 
-    // ── GPS / Ubicación ────────────────────────────────────────────────────────
+    // ── GPS / Ubicación ──────────────────────────────────────────────
 
     _getWorkLocations() { return JSON.parse(localStorage.getItem('workLocations') || '[]'); },
     _saveWorkLocations(locs) { localStorage.setItem('workLocations', JSON.stringify(locs)); },
@@ -1091,7 +1096,7 @@ const _isStandalone = window.navigator.standalone === true || window.matchMedia(
 function _showInstallBanner(ios) {
     if (_isStandalone) return;
     const banner = document.getElementById('installBanner');
-    document.getElementById('installBannerMsg').textContent = ios ? 'Toca Compartir ↑ → "Añadir a inicio"' : 'Instala la app para acceso rápido';
+    document.getElementById('installBannerMsg').textContent = ios ? 'Toca Compartir ↑ → "Ñadir a inicio"' : 'Instala la app para acceso rápido';
     const bannerBtn = document.getElementById('installBannerBtn');
     if (bannerBtn) bannerBtn.style.display = ios ? 'none' : '';
     if (banner) banner.classList.add('show');
@@ -1107,7 +1112,7 @@ window.addEventListener('appinstalled', () => {
 });
 
 app.instalarApp = async function() {
-    if (!window._deferredPrompt) { alert(_isIOS ? 'En Safari:\n1. Toca Compartir (□↑)\n2. "Añadir a pantalla de inicio"\n3. Pulsa "Añadir"' : 'Usa el menú del navegador → "Instalar app".'); return; }
+    if (!window._deferredPrompt) { alert(_isIOS ? 'En Safari:\n1. Toca Compartir (□↑)\n2. "Ñadir a pantalla de inicio"\n3. Pulsa "Ñadir"' : 'Usa el menú del navegador → "Instalar app".'); return; }
     window._deferredPrompt.prompt();
     const { outcome } = await window._deferredPrompt.userChoice;
     if (outcome === 'accepted') { const banner = document.getElementById('installBanner'); if (banner) banner.classList.remove('show'); const sec = document.getElementById('installSection'); if (sec) sec.style.display = 'none'; }
@@ -1116,4 +1121,3 @@ app.instalarApp = async function() {
 app.ocultarInstallBanner = function() { const b = document.getElementById('installBanner'); if (b) b.classList.remove('show'); };
 
 if (_isIOS && !_isStandalone) setTimeout(() => _showInstallBanner(true), 3000);
-if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));
