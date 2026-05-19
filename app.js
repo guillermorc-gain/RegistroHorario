@@ -47,15 +47,24 @@ const app = {
     },
 
     _initGoogleAuth() {
+        const hint = localStorage.getItem('gUserEmail') || '';
         this.tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: GOOGLE_CLIENT_ID,
             scope: DRIVE_SCOPE,
+            hint,
             callback: ''
         });
         if (this.accessToken && Date.now() < this.tokenExpiry) {
             this._loadUserAndStart();
         } else {
-            this.mostrarAuth();
+            // Token expired but we have a hint — try silent refresh before showing login
+            if (hint) {
+                this._silentRefresh().then(ok => {
+                    if (ok) this._loadUserAndStart(); else this.mostrarAuth();
+                });
+            } else {
+                this.mostrarAuth();
+            }
         }
     },
 
@@ -66,12 +75,18 @@ const app = {
         });
     },
 
+    async _silentRefresh() {
+        try {
+            const response = await this._requestToken('');
+            if (response.error || !response.access_token) return false;
+            this._saveToken(response);
+            return true;
+        } catch(_) { return false; }
+    },
+
     async _ensureToken() {
         if (this.accessToken && Date.now() < this.tokenExpiry) return true;
-        const response = await this._requestToken('');
-        if (response.error || !response.access_token) return false;
-        this._saveToken(response);
-        return true;
+        return this._silentRefresh();
     },
 
     _saveToken(response) {
@@ -79,6 +94,12 @@ const app = {
         this.tokenExpiry = Date.now() + (response.expires_in - 60) * 1000;
         localStorage.setItem('gAccessToken', this.accessToken);
         localStorage.setItem('gTokenExpiry', this.tokenExpiry);
+        // Renovar automáticamente 5 min antes de que expire
+        clearTimeout(this._tokenRefreshTimer);
+        const msHastaRefresh = this.tokenExpiry - Date.now() - 5 * 60 * 1000;
+        if (msHastaRefresh > 0) {
+            this._tokenRefreshTimer = setTimeout(() => this._silentRefresh(), msHastaRefresh);
+        }
     },
 
     async _loadUserAndStart() {
@@ -90,6 +111,8 @@ const app = {
             });
             if (!resp.ok) { this.mostrarAuth(); return; }
             this.usuarioActual = await resp.json();
+            // Guardar email como hint para renovaciones silenciosas futuras
+            localStorage.setItem('gUserEmail', this.usuarioActual.email);
             this.mostrarApp();
             this.actualizarBotonesPerfil();
             setTimeout(() => this._autoRellenarFormulario(), 50);
@@ -401,12 +424,16 @@ const app = {
     // ── Auth / UI ──────────────────────────────────────────────────────────────
 
     async cerrarSesion() {
+        clearTimeout(this._tokenRefreshTimer);
         if (this.accessToken) google.accounts.oauth2.revoke(this.accessToken, () => {});
         this.accessToken  = null;
         this.tokenExpiry  = 0;
         this.usuarioActual = null;
         localStorage.removeItem('gAccessToken');
         localStorage.removeItem('gTokenExpiry');
+        localStorage.removeItem('gUserEmail');
+        localStorage.removeItem('driveFileId');
+        this.driveFileId = null;
         this.mostrarAuth();
     },
 
