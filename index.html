@@ -275,19 +275,11 @@
         <div id="authError" class="msg error"></div>
         <div id="authSuccess" class="msg success"></div>
         <div class="auth-form" id="loginForm">
-            <h2 style="color:#2c3e50;text-align:center;font-size:14px;margin-bottom:6px;">Iniciar Sesión</h2>
-            <input type="text" id="loginEmail" placeholder="Correo o nombre de usuario" autocapitalize="none" autocorrect="off">
-            <input type="password" id="loginPassword" placeholder="Contraseña">
-            <button type="button" onclick="app.login()">Iniciar Sesión</button>
-            <div class="auth-toggle">¿Sin cuenta? <a onclick="app.toggleAuth()">Regístrate</a></div>
-        </div>
-        <div class="auth-form" id="registerForm" style="display:none;">
-            <h2 style="color:#2c3e50;text-align:center;font-size:14px;margin-bottom:6px;">Registrarse</h2>
-            <input type="email" id="registerEmail" placeholder="Correo">
-            <input type="password" id="registerPassword" placeholder="Contraseña (mín. 6)">
-            <input type="password" id="registerPassword2" placeholder="Confirmar contraseña">
-            <button type="button" onclick="app.register()">Crear Cuenta</button>
-            <div class="auth-toggle">¿Ya tienes cuenta? <a onclick="app.toggleAuth()">Inicia sesión</a></div>
+            <p style="color:#7f8c8d;font-size:13px;text-align:center;margin-bottom:8px;">Tus datos se guardan en tu Google Drive</p>
+            <button type="button" onclick="app.login()" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:13px;background:white;color:#3c4043;border:1.5px solid #dadce0;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;width:100%;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+                Continuar con Google
+            </button>
         </div>
     </div>
 
@@ -428,14 +420,11 @@
                         <button onclick="app.mostrarAvatarPicker()" style="padding:8px 14px;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Cambiar avatar</button>
                     </div>
                     <div class="ops-field">
-                        <span class="ops-field-label">Nombre de usuario</span>
-                        <input type="text" class="ops-input" id="usernameInput" placeholder="ej: guillermo" autocapitalize="none">
-                        <span class="ops-field-sub">Podrás iniciar sesión con este nombre en lugar del correo</span>
-                        <span class="ops-field-label">Correo</span>
-                        <div id="perfilEmail" style="font-size:13px;color:#7f8c8d;padding:3px 0;"></div>
-                        <div style="padding-top:8px;display:flex;gap:8px;">
-                            <button class="btn-main" onclick="app.guardarPerfil()" style="flex:1;">Guardar</button>
-                            <button class="btn-main" onclick="app.cambiarPassword()" style="flex:1;background:linear-gradient(135deg,#636e72,#2d3436);">🔒 Contraseña</button>
+                        <span class="ops-field-label">Cuenta Google</span>
+                        <div id="perfilNombre" style="font-size:14px;font-weight:600;color:#2c3e50;padding:2px 0;"></div>
+                        <div id="perfilEmail" style="font-size:12px;color:#7f8c8d;padding:2px 0;"></div>
+                        <div style="padding-top:10px;">
+                            <button class="btn-main" onclick="app.cerrarSesion()" style="background:linear-gradient(135deg,#e74c3c,#c0392b);width:100%;">🚪 Cerrar sesión de Google</button>
                         </div>
                     </div>
                 </div>
@@ -612,7 +601,7 @@
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://accounts.google.com/gsi/client" async></script>
 <script src="app.js"></script>
 </body>
 </html>
