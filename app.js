@@ -1,21 +1,23 @@
 (function(){var t=localStorage.getItem('tema');if(t&&t!=='azul')document.body.classList.add('theme-'+t);})();
 'use strict';
 
-const SUPABASE_URL = 'https://iwgukzkcuduhjssjthig.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml3Z3VremtjdWR1aGpzc2p0aGlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5MTgyMDYsImV4cCI6MjA5NDQ5NDIwNn0.oiZSPYMTNmtnTHt6Nv2YCVyGOhh9lyOGQWzQrehhy_w';
-const HORAS_ANUALES = 777;
+const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.googleusercontent.com';
+const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata';
+const DRIVE_FILE_NAME  = 'horas-emt.json';
+const HORAS_ANUALES    = 777;
 
-// Night hours window: 21:00 – 06:00
 const NOCHE_INICIO_MIN = 21 * 60;
 const NOCHE_FIN_MIN    = 6  * 60;
 
 const AVATAR_EMOJIS = ['🚌','⭐','🔥','⚡','🌊','🎯','🚀','🦸','🎨','🌈'];
 const AVATAR_BG     = ['#667eea','#e74c3c','#f39c12','#27ae60','#3498db','#9b59b6','#1abc9c','#e67e22','#764ba2','#e91e63'];
-
 const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
 const app = {
-    supabase: null,
+    tokenClient: null,
+    accessToken: localStorage.getItem('gAccessToken') || null,
+    tokenExpiry: parseInt(localStorage.getItem('gTokenExpiry') || '0'),
+    driveFileId: localStorage.getItem('driveFileId') || null,
     usuarioActual: null,
     darkMode: localStorage.getItem('darkMode') === 'true',
     horasAnualesCustom: parseFloat(localStorage.getItem('horasAnuales')) || HORAS_ANUALES,
@@ -28,13 +30,11 @@ const app = {
     _historialFull: {},
 
     async init() {
-        const { createClient } = window.supabase;
-        this.supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
         this._migrarUbicacionAntigua();
-        await this.setupAuth();
         this.setupUI();
         if (this.darkMode) this.aplicarDarkMode();
         this._buildAvatarGrid();
+        this._initGoogleAuth();
     },
 
     _migrarUbicacionAntigua() {
@@ -46,33 +46,93 @@ const app = {
         }
     },
 
-    _aplicarSesion(user) {
-        this.usuarioActual = user;
-        const meta = user.user_metadata || {};
-        if (meta.display_name) localStorage.setItem('displayName', meta.display_name);
-        if (meta.username) {
-            localStorage.setItem('username', meta.username);
-            localStorage.setItem('u2e_' + meta.username.toLowerCase(), user.email);
+    _initGoogleAuth() {
+        const hint = localStorage.getItem('gUserEmail') || '';
+        this.tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: DRIVE_SCOPE,
+            hint,
+            callback: ''
+        });
+        if (this.accessToken && Date.now() < this.tokenExpiry) {
+            this._loadUserAndStart();
+        } else {
+            // Token expired but we have a hint — try silent refresh before showing login
+            if (hint) {
+                this._silentRefresh().then(ok => {
+                    if (ok) this._loadUserAndStart(); else this.mostrarAuth();
+                });
+            } else {
+                this.mostrarAuth();
+            }
         }
-        if (meta.avatar_emoji) localStorage.setItem('avatarEmoji', meta.avatar_emoji);
-        if (meta.avatar_bg)    localStorage.setItem('avatarBg', meta.avatar_bg);
-        if (meta.dark_mode !== undefined) {
-            this.darkMode = !!meta.dark_mode;
-            localStorage.setItem('darkMode', this.darkMode);
-            this.darkMode ? this.aplicarDarkMode() : this.removerDarkMode();
+    },
+
+    async _requestToken(prompt) {
+        return new Promise(resolve => {
+            this.tokenClient.callback = resolve;
+            this.tokenClient.requestAccessToken({ prompt: prompt ?? '' });
+        });
+    },
+
+    async _silentRefresh() {
+        try {
+            const response = await this._requestToken('');
+            if (response.error || !response.access_token) return false;
+            this._saveToken(response);
+            return true;
+        } catch(_) { return false; }
+    },
+
+    async _ensureToken() {
+        if (this.accessToken && Date.now() < this.tokenExpiry) return true;
+        return this._silentRefresh();
+    },
+
+    _saveToken(response) {
+        this.accessToken = response.access_token;
+        this.tokenExpiry = Date.now() + (response.expires_in - 60) * 1000;
+        localStorage.setItem('gAccessToken', this.accessToken);
+        localStorage.setItem('gTokenExpiry', this.tokenExpiry);
+        // Renovar automáticamente 5 min antes de que expire
+        clearTimeout(this._tokenRefreshTimer);
+        const msHastaRefresh = this.tokenExpiry - Date.now() - 5 * 60 * 1000;
+        if (msHastaRefresh > 0) {
+            this._tokenRefreshTimer = setTimeout(() => this._silentRefresh(), msHastaRefresh);
         }
-        if (meta.tema) {
-            this.tema = meta.tema;
-            localStorage.setItem('tema', meta.tema);
-            this.aplicarTema(meta.tema);
+    },
+
+    async _loadUserAndStart() {
+        try {
+            const ok = await this._ensureToken();
+            if (!ok) { this.mostrarAuth(); return; }
+            const resp = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                headers: { Authorization: `Bearer ${this.accessToken}` }
+            });
+            if (!resp.ok) { this.mostrarAuth(); return; }
+            this.usuarioActual = await resp.json();
+            // Guardar email como hint para renovaciones silenciosas futuras
+            localStorage.setItem('gUserEmail', this.usuarioActual.email);
+            this.mostrarApp();
+            this.actualizarBotonesPerfil();
+            setTimeout(() => this._autoRellenarFormulario(), 50);
+            this.cargarDatos();
+        } catch(_) {
+            this.mostrarAuth();
         }
-        if (meta.work_locations) {
-            localStorage.setItem('workLocations', JSON.stringify(meta.work_locations));
+    },
+
+    async login() {
+        this.mostrarMensaje('⏳ Conectando con Google...', 'success');
+        const response = await this._requestToken('select_account');
+        if (response.error || !response.access_token) {
+            this.mostrarMensaje('❌ No se pudo iniciar sesión', 'error');
+            return;
         }
-        this.mostrarApp();
-        this.cargarDatos();
-        this.actualizarBotonesPerfil();
-        setTimeout(() => this._autoRellenarFormulario(), 50);
+        this._saveToken(response);
+        this.driveFileId = null;
+        localStorage.removeItem('driveFileId');
+        await this._loadUserAndStart();
     },
 
     _autoRellenarFormulario() {
@@ -81,22 +141,6 @@ const app = {
         if (inicio) document.getElementById('horaInicio').value = inicio;
         if (fin)    document.getElementById('horaFin').value    = fin;
         if (inicio && fin) this.calcularHorasPorTiempo();
-    },
-
-    async setupAuth() {
-        this.supabase.auth.onAuthStateChange(async (event, session) => {
-            if (session) {
-                // getUser() fetches fresh server-side metadata so settings saved
-                // on another device (locations, theme…) are always current.
-                const { data } = await this.supabase.auth.getUser().catch(() => ({ data: {} }));
-                this._aplicarSesion(data?.user || session.user);
-            } else if (event === 'SIGNED_OUT') {
-                this.usuarioActual = null;
-                this.mostrarAuth();
-            } else if (event === 'INITIAL_SESSION') {
-                if (!this.usuarioActual) this.mostrarAuth();
-            }
-        });
     },
 
     setupUI() {
@@ -112,6 +156,430 @@ const app = {
         if (lastFin) document.getElementById('horaFin').value = lastFin;
         if (lastInicio && lastFin) this.calcularHorasPorTiempo();
     },
+
+    // ── Drive API helpers ──────────────────────────────────────────────────────
+
+    async _driveGet(url) {
+        if (!await this._ensureToken()) throw new Error('Sin autenticación');
+        return fetch(url, { headers: { Authorization: `Bearer ${this.accessToken}` } });
+    },
+
+    async _drivePatch(url, body) {
+        if (!await this._ensureToken()) throw new Error('Sin autenticación');
+        return fetch(url, {
+            method: 'PATCH',
+            headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
+            body: typeof body === 'string' ? body : JSON.stringify(body)
+        });
+    },
+
+    async _getDriveFileId() {
+        if (this.driveFileId) return this.driveFileId;
+        const resp = await this._driveGet(
+            `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D'${DRIVE_FILE_NAME}'&fields=files(id)`
+        );
+        const data = await resp.json();
+        if (data.files && data.files.length > 0) {
+            this.driveFileId = data.files[0].id;
+            localStorage.setItem('driveFileId', this.driveFileId);
+        }
+        return this.driveFileId;
+    },
+
+    async _readDriveFile() {
+        const fileId = await this._getDriveFileId();
+        if (!fileId) return null;
+        const resp = await this._driveGet(
+            `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
+        );
+        if (!resp.ok) {
+            if (resp.status === 404) { this.driveFileId = null; localStorage.removeItem('driveFileId'); }
+            return null;
+        }
+        return resp.json();
+    },
+
+    async _writeDriveFile(data) {
+        if (!await this._ensureToken()) throw new Error('Sin autenticación');
+        const json    = JSON.stringify(data);
+        const fileId  = await this._getDriveFileId();
+
+        if (!fileId) {
+            const boundary = '-------314159265358979323846';
+            const meta     = JSON.stringify({ name: DRIVE_FILE_NAME, parents: ['appDataFolder'] });
+            const body     = `\r\n--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${json}\r\n--${boundary}--`;
+            const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${this.accessToken}`,
+                    'Content-Type': `multipart/related; boundary=${boundary}`
+                },
+                body
+            });
+            const result = await resp.json();
+            this.driveFileId = result.id;
+            localStorage.setItem('driveFileId', result.id);
+        } else {
+            await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+                method: 'PATCH',
+                headers: {
+                    Authorization: `Bearer ${this.accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: json
+            });
+        }
+    },
+
+    // ── Data operations ────────────────────────────────────────────────────────
+
+    async cargarDatos() {
+        if (!this.usuarioActual) return;
+        try {
+            const data = await this._readDriveFile();
+            this.actualizarUI(data || { horasTrabajadas: 0, historial: {} });
+            this.verificarUbicacion();
+        } catch(e) {
+            console.error('Error cargando datos:', e);
+            this.actualizarUI({ horasTrabajadas: 0, historial: {} });
+        }
+    },
+
+    async registrarHoras() {
+        if (!this.usuarioActual) return;
+        const horas = parseFloat(document.getElementById('horasInput').value);
+        const fecha = document.getElementById('fechaInput').value;
+        if (!fecha || isNaN(horas) || horas <= 0) { alert('❌ Introduce fecha y horas válidas'); return; }
+        const horaInicio     = document.getElementById('horaInicio').value;
+        const horaFin        = document.getElementById('horaFin').value;
+        const esNoche        = document.getElementById('nocheToggle').checked;
+        const esPR           = this.prActivo;
+        const horasNocturnas = esNoche ? (parseFloat(document.getElementById('horasNocturnas').value) || 0) : 0;
+        const precioNoche    = esNoche ? (parseFloat(document.getElementById('precioNoche').value) || 0) : 0;
+        const extraNoche     = Math.round(horasNocturnas * precioNoche * 100) / 100;
+        if (esNoche && horasNocturnas > horas) { alert('❌ Las horas nocturnas no pueden superar las horas totales'); return; }
+
+        const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
+        datos.horasTrabajadas = parseFloat(datos.horasTrabajadas) || 0;
+        if (!datos.historial) datos.historial = {};
+
+        if (this.editingId && datos.historial[this.editingId]) {
+            datos.horasTrabajadas = Math.round((datos.horasTrabajadas - datos.historial[this.editingId].horas) * 10) / 10;
+            delete datos.historial[this.editingId];
+        }
+        if (datos.horasTrabajadas + horas > this.horasAnualesCustom) {
+            alert(`❌ Solo tienes ${(this.horasAnualesCustom - datos.horasTrabajadas).toFixed(1)}h disponibles`); return;
+        }
+        datos.horasTrabajadas = Math.round((datos.horasTrabajadas + horas) * 10) / 10;
+        const fechaFormato = new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const registroId   = fecha.replace(/-/g, '');
+        datos.historial[registroId] = {
+            fecha: fechaFormato, horas,
+            timestamp: new Date(fecha + 'T12:00:00').getTime(),
+            ...(horaInicio && horaFin ? { horaInicio, horaFin } : {}),
+            ...(esNoche && horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
+            ...(esPR ? { pr: true } : {})
+        };
+
+        await this._writeDriveFile(datos);
+        if (horaInicio) localStorage.setItem('lastHoraInicio', horaInicio);
+        const horaFinVal = document.getElementById('horaFin').value;
+        if (horaFinVal) localStorage.setItem('lastHoraFin', horaFinVal);
+        this.actualizarUI(datos);
+        this.cancelarEdicion();
+    },
+
+    async _guardarDesdeModal() {
+        if (!this.usuarioActual || !this.editingId) return;
+        const fecha     = document.getElementById('editModalFecha').value;
+        const horas     = parseFloat(document.getElementById('editModalHoras').value);
+        const horaInicio= document.getElementById('editModalInicio').value;
+        const horaFin   = document.getElementById('editModalFin').value;
+        const horasN    = parseFloat(document.getElementById('editModalNocturnas').value) || 0;
+        const precioN   = parseFloat(document.getElementById('editModalPrecioN').value) || 0;
+        const esPR      = document.getElementById('editModalPR').checked;
+        if (!fecha || isNaN(horas) || horas <= 0) { alert('❌ Introduce fecha y horas válidas'); return; }
+
+        const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
+        datos.horasTrabajadas = parseFloat(datos.horasTrabajadas) || 0;
+        if (!datos.historial) datos.historial = {};
+
+        if (datos.historial[this.editingId]) {
+            datos.horasTrabajadas = Math.round((datos.horasTrabajadas - datos.historial[this.editingId].horas) * 10) / 10;
+            delete datos.historial[this.editingId];
+        }
+        datos.horasTrabajadas = Math.round((datos.horasTrabajadas + horas) * 10) / 10;
+        const fechaFormato = new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const registroId   = fecha.replace(/-/g, '');
+        datos.historial[registroId] = {
+            fecha: fechaFormato, horas,
+            timestamp: new Date(fecha + 'T12:00:00').getTime(),
+            ...(horaInicio && horaFin ? { horaInicio, horaFin } : {}),
+            ...(horasN > 0 ? { horasNocturnas: horasN, precioNoche: precioN, extraNoche: Math.round(horasN * precioN * 100) / 100 } : {}),
+            ...(esPR ? { pr: true } : {})
+        };
+
+        await this._writeDriveFile(datos);
+        this.editingId = null;
+        document.getElementById('editModal').classList.remove('show');
+        this.actualizarUI(datos);
+    },
+
+    async borrarRegistro(id) {
+        if (!this.usuarioActual) return;
+        if (!confirm('¿Borrar este registro?')) return;
+        const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
+        if (datos.historial && datos.historial[id]) {
+            datos.horasTrabajadas = Math.round((datos.horasTrabajadas - datos.historial[id].horas) * 10) / 10;
+            delete datos.historial[id];
+            await this._writeDriveFile(datos);
+            this.actualizarUI(datos);
+            if (this.editingId === id) this.editingId = null;
+            if (document.getElementById('historialModal').classList.contains('show')) this._renderHistorialModal();
+        }
+    },
+
+    async resetearContador() {
+        if (!this.usuarioActual) return;
+        const datos = { horasTrabajadas: 0, historial: {} };
+        await this._writeDriveFile(datos);
+        this.actualizarUI(datos);
+        alert('✅ Contador reseteado a 0');
+    },
+
+    async borrarCuenta() {
+        if (!this.usuarioActual) return;
+        const fileId = await this._getDriveFileId();
+        if (fileId) {
+            await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${this.accessToken}` }
+            }).catch(() => {});
+        }
+        this.driveFileId = null;
+        localStorage.removeItem('driveFileId');
+        await this.cerrarSesion();
+    },
+
+    async exportarDatos() {
+        if (!this.usuarioActual) return;
+        const data = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
+        const historial = Object.entries(data.historial || {})
+            .sort((a, b) => a[1].timestamp - b[1].timestamp)
+            .map(([id, reg]) => ({ id, ...reg }));
+        const json = JSON.stringify({
+            exportado: new Date().toISOString(),
+            usuario: this.usuarioActual.email,
+            horasAnuales: this.horasAnualesCustom,
+            horasTrabajadas: data.horasTrabajadas || 0,
+            historial
+        }, null, 2);
+        const filename = `horas-emt-${new Date().toISOString().slice(0,10)}.json`;
+        const blob = new Blob([json], { type: 'application/json' });
+        const file = new File([blob], filename, { type: 'application/json' });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            try { await navigator.share({ title: 'Copia Horas EMT', files: [file] }); return; }
+            catch(e) { if (e.name === 'AbortError') return; }
+        }
+        if (navigator.share) {
+            try { await navigator.share({ title: 'Copia Horas EMT', text: json }); return; }
+            catch(e) { if (e.name === 'AbortError') return; }
+        }
+        try {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = filename;
+            document.body.appendChild(a); a.click();
+            setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+            return;
+        } catch(_) {}
+        this._mostrarExportTexto(json);
+    },
+
+    async importarDatos() {
+        if (!this.usuarioActual) return;
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = '.json,application/json';
+        input.style.cssText = 'position:fixed;top:-100px;left:-100px;opacity:0;';
+        document.body.appendChild(input);
+        input.addEventListener('change', async (e) => {
+            document.body.removeChild(input);
+            const file = e.target.files[0]; if (!file) return;
+            try {
+                const datos = JSON.parse(await file.text());
+                if (datos.horasTrabajadas === undefined || !datos.historial) { alert('❌ Archivo no válido.'); return; }
+                const historialObj = {};
+                if (Array.isArray(datos.historial)) datos.historial.forEach(({ id, ...rest }) => { historialObj[id] = rest; });
+                else Object.assign(historialObj, datos.historial);
+                const restored = { horasTrabajadas: datos.horasTrabajadas, historial: historialObj };
+                await this._writeDriveFile(restored);
+                if (datos.horasAnuales) { this.horasAnualesCustom = datos.horasAnuales; localStorage.setItem('horasAnuales', datos.horasAnuales); }
+                this.actualizarUI(restored);
+                alert('✅ Copia restaurada correctamente');
+            } catch(err) { alert('❌ Error al leer el archivo: ' + err.message); }
+        });
+        input.click();
+    },
+
+    // ── Auth / UI ──────────────────────────────────────────────────────────────
+
+    async cerrarSesion() {
+        clearTimeout(this._tokenRefreshTimer);
+        if (this.accessToken) google.accounts.oauth2.revoke(this.accessToken, () => {});
+        this.accessToken  = null;
+        this.tokenExpiry  = 0;
+        this.usuarioActual = null;
+        localStorage.removeItem('gAccessToken');
+        localStorage.removeItem('gTokenExpiry');
+        localStorage.removeItem('gUserEmail');
+        localStorage.removeItem('driveFileId');
+        this.driveFileId = null;
+        this.mostrarAuth();
+    },
+
+    actualizarBotonesPerfil() {
+        const btn = document.getElementById('profileBtn');
+        if (!btn) return;
+        const photo = localStorage.getItem('avatarPhoto');
+        const emoji = localStorage.getItem('avatarEmoji');
+        const bg    = localStorage.getItem('avatarBg') || '#1565C0';
+        btn.style.cssText = '';
+        if (photo) {
+            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+            btn.style.background = 'transparent'; btn.style.padding = '0'; btn.style.overflow = 'hidden';
+        } else if (emoji) {
+            btn.textContent = emoji; btn.style.background = bg; btn.style.fontSize = '20px'; btn.style.color = 'white';
+        } else {
+            const email   = this.usuarioActual?.email || '';
+            const name    = this.usuarioActual?.name  || email;
+            const palette = ['#667eea','#764ba2','#e74c3c','#27ae60','#f39c12','#3498db'];
+            btn.textContent = name.charAt(0).toUpperCase();
+            btn.style.background = palette[email.charCodeAt(0) % palette.length];
+            btn.style.color = 'white'; btn.style.fontSize = '16px';
+        }
+    },
+
+    _buildAvatarGrid() {
+        const grid = document.getElementById('avatarGrid');
+        if (!grid) return;
+        grid.innerHTML = '';
+        AVATAR_EMOJIS.forEach((emoji, i) => {
+            const btn = document.createElement('button');
+            btn.className = 'avatar-option'; btn.textContent = emoji; btn.style.background = AVATAR_BG[i];
+            btn.addEventListener('click', () => this._seleccionarEmojiAvatar(emoji, AVATAR_BG[i]));
+            grid.appendChild(btn);
+        });
+    },
+
+    _seleccionarEmojiAvatar(emoji, bg) {
+        localStorage.setItem('avatarEmoji', emoji); localStorage.setItem('avatarBg', bg); localStorage.removeItem('avatarPhoto');
+        document.getElementById('avatarPickerModal').classList.remove('show');
+        this.actualizarBotonesPerfil(); this._actualizarAvatarPreview();
+    },
+
+    mostrarAvatarPicker() {
+        document.getElementById('avatarPickerModal').classList.add('show');
+        if (this.darkMode) document.getElementById('avatarModalContent').classList.add('dark');
+    },
+
+    subirFotoPerfil() {
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = 'image/*';
+        input.onchange = (e) => {
+            const file = e.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 80; canvas.height = 80;
+                    canvas.getContext('2d').drawImage(img, 0, 0, 80, 80);
+                    localStorage.setItem('avatarPhoto', canvas.toDataURL('image/jpeg', 0.85));
+                    localStorage.removeItem('avatarEmoji');
+                    document.getElementById('avatarPickerModal').classList.remove('show');
+                    this.actualizarBotonesPerfil(); this._actualizarAvatarPreview();
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+        input.click();
+    },
+
+    _actualizarAvatarPreview() {
+        const el = document.getElementById('profileAvatarPreview');
+        if (!el) return;
+        const photo = localStorage.getItem('avatarPhoto');
+        const emoji = localStorage.getItem('avatarEmoji');
+        const bg    = localStorage.getItem('avatarBg') || '#1565C0';
+        if (photo) {
+            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+            el.style.background = 'transparent';
+        } else if (emoji) {
+            el.textContent = emoji; el.style.background = bg; el.style.color = '';
+        } else {
+            const email   = this.usuarioActual?.email || '';
+            const name    = this.usuarioActual?.name  || email;
+            const palette = ['#667eea','#764ba2','#e74c3c','#27ae60','#f39c12','#3498db'];
+            el.textContent = name.charAt(0).toUpperCase();
+            el.style.background = palette[email.charCodeAt(0) % palette.length]; el.style.color = 'white';
+        }
+    },
+
+    guardarPerfil() {
+        this.actualizarBotonesPerfil();
+        alert('✅ Perfil guardado');
+    },
+
+    establecerFechaHoy() {
+        const hoy = new Date();
+        const y = hoy.getFullYear();
+        const m = String(hoy.getMonth() + 1).padStart(2, '0');
+        const d = String(hoy.getDate()).padStart(2, '0');
+        document.getElementById('fechaInput').value = `${y}-${m}-${d}`;
+        document.getElementById('fechaInput').max   = `${y}-${m}-${d}`;
+    },
+
+    actualizarFecha() {
+        const opts = { weekday: 'long', day: 'numeric', month: 'long' };
+        document.getElementById('fechaHoy').textContent = new Date().toLocaleDateString('es-ES', opts);
+    },
+
+    mostrarMensaje(msg, tipo) {
+        const el = document.getElementById('auth' + (tipo === 'error' ? 'Error' : 'Success'));
+        el.textContent = msg; el.classList.add('show');
+        setTimeout(() => el.classList.remove('show'), 5000);
+    },
+
+    mostrarAuth() {
+        document.getElementById('authScreen').classList.remove('hidden');
+        document.getElementById('appScreen').classList.remove('active');
+        document.getElementById('optionsScreen').classList.remove('active');
+    },
+
+    mostrarApp() {
+        document.getElementById('authScreen').classList.add('hidden');
+        document.getElementById('appScreen').classList.add('active');
+        document.getElementById('optionsScreen').classList.remove('active');
+    },
+
+    mostrarOpciones() {
+        document.getElementById('authScreen').classList.add('hidden');
+        document.getElementById('appScreen').classList.remove('active');
+        document.getElementById('optionsScreen').classList.add('active');
+        document.getElementById('darkModeToggle').checked = this.darkMode;
+        document.getElementById('horasAnualesDisplay').textContent = this.horasAnualesCustom + 'h';
+        document.getElementById('perfilEmail').textContent = this.usuarioActual?.email || '';
+        document.getElementById('perfilNombre').textContent = this.usuarioActual?.name || '';
+        this.actualizarEstadoGPS();
+        this._renderWorkLocations();
+        this._actualizarAvatarPreview();
+        this._actualizarTemaUI();
+    },
+
+    toggleSection(btn) { btn.closest('.ops-section').classList.toggle('open'); },
+
+    // ── Cálculos de tiempo ─────────────────────────────────────────────────────
 
     _calcHorasNocturnas(inicio, fin) {
         if (!inicio || !fin) return 0;
@@ -151,369 +619,6 @@ const app = {
             nocheExtra.classList.remove('visible');
             document.getElementById('horasNocturnas').value = '';
             document.getElementById('nocheResumen').textContent = '';
-        }
-    },
-
-    actualizarBotonesPerfil() {
-        const btn = document.getElementById('profileBtn');
-        if (!btn) return;
-        const photo = localStorage.getItem('avatarPhoto');
-        const emoji = localStorage.getItem('avatarEmoji');
-        const bg    = localStorage.getItem('avatarBg') || '#1565C0';
-        btn.style.cssText = '';
-        if (photo) {
-            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` ;
-            btn.style.background = 'transparent'; btn.style.padding = '0'; btn.style.overflow = 'hidden';
-        } else if (emoji) {
-            btn.textContent = emoji; btn.style.background = bg; btn.style.fontSize = '20px'; btn.style.color = 'white';
-        } else {
-            const email = this.usuarioActual?.email || '';
-            const name  = localStorage.getItem('displayName') || email;
-            const palette = ['#667eea','#764ba2','#e74c3c','#27ae60','#f39c12','#3498db'];
-            btn.textContent = name.charAt(0).toUpperCase();
-            btn.style.background = palette[email.charCodeAt(0) % palette.length];
-            btn.style.color = 'white'; btn.style.fontSize = '16px';
-        }
-    },
-
-    _buildAvatarGrid() {
-        const grid = document.getElementById('avatarGrid');
-        if (!grid) return;
-        grid.innerHTML = '';
-        AVATAR_EMOJIS.forEach((emoji, i) => {
-            const btn = document.createElement('button');
-            btn.className = 'avatar-option'; btn.textContent = emoji; btn.style.background = AVATAR_BG[i];
-            btn.addEventListener('click', () => this._seleccionarEmojiAvatar(emoji, AVATAR_BG[i]));
-            grid.appendChild(btn);
-        });
-    },
-
-    _seleccionarEmojiAvatar(emoji, bg) {
-        localStorage.setItem('avatarEmoji', emoji); localStorage.setItem('avatarBg', bg); localStorage.removeItem('avatarPhoto');
-        document.getElementById('avatarPickerModal').classList.remove('show');
-        this.actualizarBotonesPerfil(); this._actualizarAvatarPreview();
-        if (this.usuarioActual) this.supabase.auth.updateUser({ data: { avatar_emoji: emoji, avatar_bg: bg } }).catch(() => {});
-    },
-
-    mostrarAvatarPicker() {
-        document.getElementById('avatarPickerModal').classList.add('show');
-        if (this.darkMode) document.getElementById('avatarModalContent').classList.add('dark');
-    },
-
-    subirFotoPerfil() {
-        const input = document.createElement('input');
-        input.type = 'file'; input.accept = 'image/*';
-        input.onchange = (e) => {
-            const file = e.target.files[0]; if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = 80; canvas.height = 80;
-                    canvas.getContext('2d').drawImage(img, 0, 0, 80, 80);
-                    localStorage.setItem('avatarPhoto', canvas.toDataURL('image/jpeg', 0.85));
-                    localStorage.removeItem('avatarEmoji');
-                    document.getElementById('avatarPickerModal').classList.remove('show');
-                    this.actualizarBotonesPerfil(); this._actualizarAvatarPreview();
-                };
-                img.src = ev.target.result;
-            };
-            reader.readAsDataURL(file);
-        };
-        input.click();
-    },
-
-    _actualizarAvatarPreview() {
-        const el = document.getElementById('profileAvatarPreview');
-        if (!el) return;
-        const photo = localStorage.getItem('avatarPhoto');
-        const emoji = localStorage.getItem('avatarEmoji');
-        const bg    = localStorage.getItem('avatarBg') || '#1565C0';
-        if (photo) {
-            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` ;
-            el.style.background = 'transparent';
-        } else if (emoji) {
-            el.textContent = emoji; el.style.background = bg; el.style.color = '';
-        } else {
-            const email = this.usuarioActual?.email || '';
-            const name  = localStorage.getItem('displayName') || email;
-            const palette = ['#667eea','#764ba2','#e74c3c','#27ae60','#f39c12','#3498db'];
-            el.textContent = name.charAt(0).toUpperCase();
-            el.style.background = palette[email.charCodeAt(0) % palette.length]; el.style.color = 'white';
-        }
-    },
-
-    async guardarPerfil() {
-        if (!this.usuarioActual) return;
-        const username = document.getElementById('usernameInput').value.trim().toLowerCase();
-        if (username) {
-            localStorage.setItem('username', username);
-            localStorage.setItem('u2e_' + username, this.usuarioActual.email);
-        }
-        this.actualizarBotonesPerfil();
-        const updateData = {};
-        if (username) updateData.username = username;
-        const emoji = localStorage.getItem('avatarEmoji');
-        const bg    = localStorage.getItem('avatarBg');
-        if (emoji) { updateData.avatar_emoji = emoji; updateData.avatar_bg = bg || '#1565C0'; }
-        this.supabase.auth.updateUser({ data: updateData }).catch(() => {});
-        alert('✅ Perfil guardado');
-    },
-
-    establecerFechaHoy() {
-        const hoy = new Date();
-        const y = hoy.getFullYear();
-        const m = String(hoy.getMonth() + 1).padStart(2, '0');
-        const d = String(hoy.getDate()).padStart(2, '0');
-        document.getElementById('fechaInput').value = `${y}-${m}-${d}`;
-        document.getElementById('fechaInput').max   = `${y}-${m}-${d}`;
-    },
-
-    actualizarFecha() {
-        const opts = { weekday: 'long', day: 'numeric', month: 'long' };
-        document.getElementById('fechaHoy').textContent = new Date().toLocaleDateString('es-ES', opts);
-    },
-
-    toggleAuth() {
-        const lf = document.getElementById('loginForm');
-        const rf = document.getElementById('registerForm');
-        lf.style.display = lf.style.display === 'none' ? 'flex' : 'none';
-        rf.style.display = rf.style.display === 'none' ? 'flex' : 'none';
-        document.getElementById('authError').classList.remove('show');
-        document.getElementById('authSuccess').classList.remove('show');
-    },
-
-    mostrarMensaje(msg, tipo) {
-        const el = document.getElementById('auth' + (tipo === 'error' ? 'Error' : 'Success'));
-        el.textContent = msg; el.classList.add('show');
-        setTimeout(() => el.classList.remove('show'), 5000);
-    },
-
-    async login() {
-        if (!this.supabase) { alert('❌ Error de conexión. Recarga la página.'); return; }
-        let input = document.getElementById('loginEmail').value.trim();
-        const password = document.getElementById('loginPassword').value;
-        if (!input || !password) { alert('❌ Completa todos los campos'); return; }
-        let email = input;
-        if (!input.includes('@')) {
-            const saved = localStorage.getItem('u2e_' + input.toLowerCase());
-            if (saved) { email = saved; }
-            else { alert('❌ Usuario no encontrado. Usa tu correo completo la primera vez.'); return; }
-        }
-        this.mostrarMensaje('⏳ Entrando...', 'success');
-        try {
-            const timeout = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Tiempo de espera agotado. Comprueba tu conexión o reactiva el proyecto en supabase.com')), 10000)
-            );
-            const { error } = await Promise.race([
-                this.supabase.auth.signInWithPassword({ email, password }),
-                timeout
-            ]);
-            if (error) {
-                const msg = error.message.includes('Email not confirmed')
-                    ? '📧 Confirma tu email primero. Revisa tu bandeja de entrada.'
-                    : (error.message.includes('Invalid login credentials') || error.message.includes('invalid_credentials'))
-                    ? '❌ Correo o contraseña incorrectos.'
-                    : '❌ ' + error.message;
-                alert(msg);
-            } else {
-                document.getElementById('loginEmail').value = '';
-                document.getElementById('loginPassword').value = '';
-            }
-        } catch(e) {
-            alert('❌ Error: ' + e.message);
-        }
-    },
-
-    async register() {
-        const email = document.getElementById('registerEmail').value.trim();
-        const pw1   = document.getElementById('registerPassword').value;
-        const pw2   = document.getElementById('registerPassword2').value;
-        if (!email || !pw1 || !pw2) { this.mostrarMensaje('❌ Completa todos los campos', 'error'); return; }
-        if (pw1 !== pw2)    { this.mostrarMensaje('❌ Las contraseñas no coinciden', 'error'); return; }
-        if (pw1.length < 6) { this.mostrarMensaje('❌ Mínimo 6 caracteres', 'error'); return; }
-        const { data, error } = await this.supabase.auth.signUp({ email, password: pw1 });
-        if (error) { this.mostrarMensaje('❌ ' + error.message, 'error'); }
-        else if (data?.session) {
-            this.mostrarMensaje('✅ Cuenta creada. Entrando...', 'success');
-            setTimeout(() => {
-                document.getElementById('registerEmail').value = '';
-                document.getElementById('registerPassword').value = '';
-                document.getElementById('registerPassword2').value = '';
-            }, 1000);
-        } else {
-            this.mostrarMensaje('📧 Revisa tu email y confirma tu cuenta antes de iniciar sesión.', 'success');
-            setTimeout(() => {
-                document.getElementById('registerEmail').value = '';
-                document.getElementById('registerPassword').value = '';
-                document.getElementById('registerPassword2').value = '';
-                this.toggleAuth();
-            }, 4000);
-        }
-    },
-
-    mostrarAuth() {
-        document.getElementById('authScreen').classList.remove('hidden');
-        document.getElementById('appScreen').classList.remove('active');
-        document.getElementById('optionsScreen').classList.remove('active');
-    },
-
-    mostrarApp() {
-        document.getElementById('authScreen').classList.add('hidden');
-        document.getElementById('appScreen').classList.add('active');
-        document.getElementById('optionsScreen').classList.remove('active');
-    },
-
-    mostrarOpciones() {
-        document.getElementById('authScreen').classList.add('hidden');
-        document.getElementById('appScreen').classList.remove('active');
-        document.getElementById('optionsScreen').classList.add('active');
-        document.getElementById('darkModeToggle').checked = this.darkMode;
-        document.getElementById('horasAnualesDisplay').textContent = this.horasAnualesCustom + 'h';
-        document.getElementById('usernameInput').value    = localStorage.getItem('username') || '';
-        document.getElementById('perfilEmail').textContent = this.usuarioActual?.email || '(sin correo)';
-        this.actualizarEstadoGPS();
-        this._renderWorkLocations();
-        this._actualizarAvatarPreview();
-        this._actualizarTemaUI();
-    },
-
-    toggleSection(btn) { btn.closest('.ops-section').classList.toggle('open'); },
-
-    async cargarDatos() {
-        if (!this.usuarioActual) return;
-        const { data: rows, error } = await this.supabase
-            .from('horas_trabajo').select('*').eq('user_id', this.usuarioActual.id).limit(1);
-        if (error) {
-            console.error('Error cargando datos Supabase:', error.message);
-            this.mostrarMensaje('⚠️ Error al cargar datos: ' + error.message, 'error');
-        }
-        const raw = rows && rows.length > 0 ? rows[0] : null;
-        const data = raw ? { ...raw, horasTrabajadas: parseFloat(raw.horasTrabajadas) || 0 } : null;
-        this.actualizarUI(data || { horasTrabajadas: 0, historial: {} });
-        this.verificarUbicacion();
-    },
-
-    async registrarHoras() {
-        if (!this.usuarioActual) return;
-        const horas = parseFloat(document.getElementById('horasInput').value);
-        const fecha = document.getElementById('fechaInput').value;
-        if (!fecha || isNaN(horas) || horas <= 0) { alert('❌ Introduce fecha y horas válidas'); return; }
-        const horaInicio     = document.getElementById('horaInicio').value;
-        const horaFin        = document.getElementById('horaFin').value;
-        const esNoche        = document.getElementById('nocheToggle').checked;
-        const esPR           = this.prActivo;
-        const horasNocturnas = esNoche ? (parseFloat(document.getElementById('horasNocturnas').value) || 0) : 0;
-        const precioNoche    = esNoche ? (parseFloat(document.getElementById('precioNoche').value) || 0) : 0;
-        const extraNoche     = Math.round(horasNocturnas * precioNoche * 100) / 100;
-        if (esNoche && horasNocturnas > horas) { alert('❌ Las horas nocturnas no pueden superar las horas totales'); return; }
-        const { data: _rows } = await this.supabase
-            .from('horas_trabajo').select('*').eq('user_id', this.usuarioActual.id).limit(1);
-        const actual = _rows?.[0] ?? null;
-        const datos = actual
-            ? { ...actual, horasTrabajadas: parseFloat(actual.horasTrabajadas) || 0 }
-            : { horasTrabajadas: 0, historial: {} };
-        if (!datos.historial) datos.historial = {};
-        if (this.editingId && datos.historial[this.editingId]) {
-            datos.horasTrabajadas = Math.round((datos.horasTrabajadas - datos.historial[this.editingId].horas) * 10) / 10;
-            delete datos.historial[this.editingId];
-        }
-        if (datos.horasTrabajadas + horas > this.horasAnualesCustom) {
-            alert(`❌ Solo tienes ${(this.horasAnualesCustom - datos.horasTrabajadas).toFixed(1)}h disponibles`); return;
-        }
-        datos.horasTrabajadas = Math.round((datos.horasTrabajadas + horas) * 10) / 10;
-        const fechaFormato = new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const registroId   = fecha.replace(/-/g, '');
-        datos.historial[registroId] = {
-            fecha: fechaFormato, horas,
-            timestamp: new Date(fecha + 'T12:00:00').getTime(),
-            ...(horaInicio && horaFin ? { horaInicio, horaFin } : {}),
-            ...(esNoche && horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
-            ...(esPR ? { pr: true } : {})
-        };
-        if (actual) {
-            await this.supabase.from('horas_trabajo').update(datos).eq('user_id', this.usuarioActual.id);
-        } else {
-            await this.supabase.from('horas_trabajo').insert([{ user_id: this.usuarioActual.id, ...datos }]);
-        }
-        if (horaInicio) localStorage.setItem('lastHoraInicio', horaInicio);
-        const horaFinVal = document.getElementById('horaFin').value;
-        if (horaFinVal) localStorage.setItem('lastHoraFin', horaFinVal);
-        this.actualizarUI(datos);
-        this.cancelarEdicion();
-    },
-
-    async _guardarDesdeModal() {
-        if (!this.usuarioActual || !this.editingId) return;
-        const fecha     = document.getElementById('editModalFecha').value;
-        const horas     = parseFloat(document.getElementById('editModalHoras').value);
-        const horaInicio= document.getElementById('editModalInicio').value;
-        const horaFin   = document.getElementById('editModalFin').value;
-        const horasN    = parseFloat(document.getElementById('editModalNocturnas').value) || 0;
-        const precioN   = parseFloat(document.getElementById('editModalPrecioN').value) || 0;
-        const esPR      = document.getElementById('editModalPR').checked;
-        if (!fecha || isNaN(horas) || horas <= 0) { alert('❌ Introduce fecha y horas válidas'); return; }
-        const { data: _rows } = await this.supabase
-            .from('horas_trabajo').select('*').eq('user_id', this.usuarioActual.id).limit(1);
-        const actual = _rows?.[0] ?? null;
-        const datos = actual
-            ? { ...actual, horasTrabajadas: parseFloat(actual.horasTrabajadas) || 0 }
-            : { horasTrabajadas: 0, historial: {} };
-        if (!datos.historial) datos.historial = {};
-        if (datos.historial[this.editingId]) {
-            datos.horasTrabajadas = Math.round((datos.horasTrabajadas - datos.historial[this.editingId].horas) * 10) / 10;
-            delete datos.historial[this.editingId];
-        }
-        datos.horasTrabajadas = Math.round((datos.horasTrabajadas + horas) * 10) / 10;
-        const fechaFormato = new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const registroId   = fecha.replace(/-/g, '');
-        datos.historial[registroId] = {
-            fecha: fechaFormato, horas,
-            timestamp: new Date(fecha + 'T12:00:00').getTime(),
-            ...(horaInicio && horaFin ? { horaInicio, horaFin } : {}),
-            ...(horasN > 0 ? { horasNocturnas: horasN, precioNoche: precioN, extraNoche: Math.round(horasN * precioN * 100) / 100 } : {}),
-            ...(esPR ? { pr: true } : {})
-        };
-        await this.supabase.from('horas_trabajo').update(datos).eq('user_id', this.usuarioActual.id);
-        this.editingId = null;
-        document.getElementById('editModal').classList.remove('show');
-        this.actualizarUI(datos);
-    },
-
-    editarRegistro(id) {
-        const reg = this._historialMap[id];
-        if (!reg) return;
-        this.editingId = id;
-        const fecha = `${id.slice(0,4)}-${id.slice(4,6)}-${id.slice(6,8)}`;
-        document.getElementById('editModalFecha').value    = fecha;
-        document.getElementById('editModalHoras').value    = reg.horas;
-        document.getElementById('editModalInicio').value   = reg.horaInicio || '';
-        document.getElementById('editModalFin').value      = reg.horaFin    || '';
-        document.getElementById('editModalNocturnas').value= reg.horasNocturnas || '';
-        document.getElementById('editModalPrecioN').value  = reg.precioNoche    || '';
-        document.getElementById('editModalExtraLabel').textContent =
-            reg.horasNocturnas ? `+${(reg.extraNoche || 0).toFixed(2)}€ extra nocturno` : '';
-        document.getElementById('editModalPR').checked = !!reg.pr;
-        document.getElementById('editModal').classList.add('show');
-        if (this.darkMode) document.getElementById('editModalContent').classList.add('dark');
-    },
-
-    cancelarEdicion() { this.editingId = null; this.limpiarInput(); },
-
-    async borrarRegistro(id) {
-        if (!this.usuarioActual) return;
-        if (!confirm('¿Borrar este registro?')) return;
-        const { data: _br } = await this.supabase
-            .from('horas_trabajo').select('*').eq('user_id', this.usuarioActual.id).limit(1);
-        const data = _br?.[0] ?? null;
-        if (data && data.historial && data.historial[id]) {
-            data.horasTrabajadas = Math.round((data.horasTrabajadas - data.historial[id].horas) * 10) / 10;
-            delete data.historial[id];
-            await this.supabase.from('horas_trabajo').update(data).eq('user_id', this.usuarioActual.id);
-            this.actualizarUI(data);
-            if (this.editingId === id) this.editingId = null;
-            if (document.getElementById('historialModal').classList.contains('show')) this._renderHistorialModal();
         }
     },
 
@@ -589,6 +694,10 @@ const app = {
         else document.getElementById('horasInput').value = '';
     },
 
+    cancelarEdicion() { this.editingId = null; this.limpiarInput(); },
+
+    // ── UI de datos ────────────────────────────────────────────────────────────
+
     mostrarHistorialModal() {
         document.getElementById('historialModal').classList.add('show');
         if (this.darkMode) document.getElementById('historialModalContent').classList.add('dark');
@@ -632,6 +741,24 @@ const app = {
             li.querySelector('.hm-del').addEventListener('click', () => this.borrarRegistro(id));
             list.appendChild(li);
         });
+    },
+
+    editarRegistro(id) {
+        const reg = this._historialMap[id];
+        if (!reg) return;
+        this.editingId = id;
+        const fecha = `${id.slice(0,4)}-${id.slice(4,6)}-${id.slice(6,8)}`;
+        document.getElementById('editModalFecha').value    = fecha;
+        document.getElementById('editModalHoras').value    = reg.horas;
+        document.getElementById('editModalInicio').value   = reg.horaInicio || '';
+        document.getElementById('editModalFin').value      = reg.horaFin    || '';
+        document.getElementById('editModalNocturnas').value= reg.horasNocturnas || '';
+        document.getElementById('editModalPrecioN').value  = reg.precioNoche    || '';
+        document.getElementById('editModalExtraLabel').textContent =
+            reg.horasNocturnas ? `+${(reg.extraNoche || 0).toFixed(2)}€ extra nocturno` : '';
+        document.getElementById('editModalPR').checked = !!reg.pr;
+        document.getElementById('editModal').classList.add('show');
+        if (this.darkMode) document.getElementById('editModalContent').classList.add('dark');
     },
 
     _calcMesStats(historial, año, mes) {
@@ -712,6 +839,8 @@ const app = {
         }).join('');
     },
 
+    // ── Opciones ───────────────────────────────────────────────────────────────
+
     revisarSuma() {
         const t = parseFloat(document.getElementById('horasTrabajadas').textContent);
         const r = parseFloat(document.getElementById('horasRestantes').textContent);
@@ -724,7 +853,6 @@ const app = {
         this.darkMode = !this.darkMode;
         localStorage.setItem('darkMode', this.darkMode);
         this.darkMode ? this.aplicarDarkMode() : this.removerDarkMode();
-        if (this.usuarioActual) this.supabase.auth.updateUser({ data: { dark_mode: this.darkMode } }).catch(() => {});
     },
 
     aplicarDarkMode() {
@@ -748,7 +876,6 @@ const app = {
         localStorage.setItem('tema', tema);
         this.aplicarTema(tema);
         this._actualizarTemaUI();
-        if (this.usuarioActual) this.supabase.auth.updateUser({ data: { tema } }).catch(() => {});
     },
 
     aplicarTema(tema) {
@@ -784,18 +911,6 @@ const app = {
         this.mostrarModal('⚠️ Resetear Contador', '¿Estás seguro? Se pondrán todas las horas a 0.', this.resetearContador.bind(this));
     },
 
-    async resetearContador() {
-        if (!this.usuarioActual) return;
-        const { data: _rr } = await this.supabase.from('horas_trabajo').select('*').eq('user_id', this.usuarioActual.id).limit(1);
-        const data = _rr?.[0] ?? null;
-        if (data) {
-            data.horasTrabajadas = 0; data.historial = {};
-            await this.supabase.from('horas_trabajo').update(data).eq('user_id', this.usuarioActual.id);
-            this.actualizarUI(data);
-            alert('✅ Contador reseteado a 0');
-        }
-    },
-
     mostrarModal(titulo, mensaje, callback) {
         document.getElementById('modalTitle').textContent   = titulo;
         document.getElementById('modalMessage').textContent = mensaje;
@@ -803,39 +918,17 @@ const app = {
         this.modalCallback = callback;
     },
 
-    cerrarModal() { document.getElementById('modal').classList.remove('show'); this.modalCallback = null; },
+    cerrarModal()       { document.getElementById('modal').classList.remove('show'); this.modalCallback = null; },
     async confirmarModal() { if (this.modalCallback) await this.modalCallback(); this.cerrarModal(); },
-    confirmarBorrarCuenta() { this.mostrarModal('⚠️ Borrar datos','Se eliminarán todos tus registros y se cerrará la sesión. La cuenta de acceso permanece activa.',this.borrarCuenta.bind(this)); },
 
-    async borrarCuenta() {
-        if (!this.usuarioActual) return;
-        await this.supabase.from('horas_trabajo').delete().eq('user_id', this.usuarioActual.id);
-        await this.supabase.auth.signOut();
+    confirmarBorrarCuenta() {
+        this.mostrarModal('⚠️ Borrar datos', 'Se eliminarán todos tus registros de Drive y se cerrará la sesión.', this.borrarCuenta.bind(this));
     },
 
-    async cambiarPassword() {
-        const nueva = prompt('Nueva contraseña (mínimo 6 caracteres):');
-        if (!nueva) return;
-        if (nueva.length < 6) { alert('❌ Mínimo 6 caracteres'); return; }
-        const confirmar = prompt('Repite la nueva contraseña:');
-        if (nueva !== confirmar) { alert('❌ Las contraseñas no coinciden'); return; }
-        const { error } = await this.supabase.auth.updateUser({ password: nueva });
-        if (error) alert('❌ Error: ' + error.message);
-        else alert('✅ Contraseña cambiada correctamente');
-    },
-
-    async cerrarSesion() {
-        await this.supabase.auth.signOut().catch(() => {});
-        this.usuarioActual = null;
-        this.mostrarAuth();
-    },
+    // ── GPS / Ubicación ────────────────────────────────────────────────────────
 
     _getWorkLocations() { return JSON.parse(localStorage.getItem('workLocations') || '[]'); },
     _saveWorkLocations(locs) { localStorage.setItem('workLocations', JSON.stringify(locs)); },
-    _saveWorkLocationsToSupabase(locs) {
-        if (this.usuarioActual)
-            this.supabase.auth.updateUser({ data: { work_locations: locs } }).catch(() => {});
-    },
 
     async guardarUbicacionTrabajo() {
         const name = prompt('Nombre de esta ubicación (ej: EMT Madrid, Depósito):');
@@ -848,7 +941,6 @@ const app = {
                 const locs = this._getWorkLocations();
                 locs.push({ name: name.trim(), lat: pos.coords.latitude, lng: pos.coords.longitude });
                 this._saveWorkLocations(locs);
-                this._saveWorkLocationsToSupabase(locs);
                 this.actualizarEstadoGPS();
                 this._renderWorkLocations();
                 alert(`✅ "${name.trim()}" guardada. Recibirás notificación al llegar.`);
@@ -862,7 +954,6 @@ const app = {
         if (!confirm(`¿Eliminar "${locs[index].name}"?`)) return;
         locs.splice(index, 1);
         this._saveWorkLocations(locs);
-        this._saveWorkLocationsToSupabase(locs);
         if (locs.length === 0) document.getElementById('workBanner').classList.remove('show');
         this.actualizarEstadoGPS();
         this._renderWorkLocations();
@@ -886,7 +977,6 @@ const app = {
         }
         locs[index] = loc;
         this._saveWorkLocations(locs);
-        this._saveWorkLocationsToSupabase(locs);
         this.actualizarEstadoGPS();
         this._renderWorkLocations();
     },
@@ -965,7 +1055,7 @@ const app = {
             const perm = await Notification.requestPermission();
             if (perm !== 'granted') { alert('❌ Permiso de notificación denegado'); return; }
         }
-        if (Notification.permission === 'denied') { alert('❌ Las notificaciones están bloqueadas. Actiévalas en los ajustes del navegador.'); return; }
+        if (Notification.permission === 'denied') { alert('❌ Las notificaciones están bloqueadas. Actívalas en los ajustes del navegador.'); return; }
         try {
             const reg = await navigator.serviceWorker.ready;
             await reg.showNotification('🔔 Horas EMT — prueba', {
@@ -993,36 +1083,6 @@ const app = {
         document.getElementById('horasInput').focus();
     },
 
-    async exportarDatos() {
-        if (!this.usuarioActual) return;
-        const { data: rows } = await this.supabase.from('horas_trabajo').select('*').eq('user_id', this.usuarioActual.id).limit(1);
-        const data = rows?.[0] || null;
-        const historial = Object.entries((data?.historial) || {})
-            .sort((a, b) => a[1].timestamp - b[1].timestamp)
-            .map(([id, reg]) => ({ id, ...reg }));
-        const json = JSON.stringify({ exportado: new Date().toISOString(), usuario: this.usuarioActual.email, horasAnuales: this.horasAnualesCustom, horasTrabajadas: data?.horasTrabajadas||0, historial }, null, 2);
-        const filename = `horas-emt-${new Date().toISOString().slice(0,10)}.json`;
-        const blob = new Blob([json], { type: 'application/json' });
-        const file = new File([blob], filename, { type: 'application/json' });
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-            try { await navigator.share({ title: 'Copia Horas EMT', files: [file] }); return; }
-            catch(e) { if (e.name === 'AbortError') return; }
-        }
-        if (navigator.share) {
-            try { await navigator.share({ title: 'Copia Horas EMT', text: json }); return; }
-            catch(e) { if (e.name === 'AbortError') return; }
-        }
-        try {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = filename;
-            document.body.appendChild(a); a.click();
-            setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
-            return;
-        } catch(_) {}
-        this._mostrarExportTexto(json);
-    },
-
     _mostrarExportTexto(json) {
         const uid = 'exp-' + Date.now();
         const overlay = document.createElement('div');
@@ -1045,41 +1105,14 @@ const app = {
                 document.getElementById(uid + '-copy').textContent = '✅ Copiado';
             });
         };
-    },
-
-    async importarDatos() {
-        if (!this.usuarioActual) return;
-        const input = document.createElement('input');
-        input.type = 'file'; input.accept = '.json,application/json';
-        input.style.cssText = 'position:fixed;top:-100px;left:-100px;opacity:0;';
-        document.body.appendChild(input);
-        input.addEventListener('change', async (e) => {
-            document.body.removeChild(input);
-            const file = e.target.files[0]; if (!file) return;
-            try {
-                const datos = JSON.parse(await file.text());
-                if (datos.horasTrabajadas === undefined || !datos.historial) { alert('❌ Archivo no válido.'); return; }
-                const historialObj = {};
-                if (Array.isArray(datos.historial)) datos.historial.forEach(({ id, ...rest }) => { historialObj[id] = rest; });
-                else Object.assign(historialObj, datos.historial);
-                const restored = { horasTrabajadas: datos.horasTrabajadas, historial: historialObj };
-                const { error } = await this.supabase.from('horas_trabajo').upsert(
-                    { user_id: this.usuarioActual.id, ...restored }, { onConflict: 'user_id' }
-                );
-                if (error) { alert('❌ Error al guardar en la nube: ' + error.message); return; }
-                if (datos.horasAnuales) { this.horasAnualesCustom = datos.horasAnuales; localStorage.setItem('horasAnuales', datos.horasAnuales); }
-                this.actualizarUI(restored);
-                alert('✅ Copia restaurada correctamente');
-            } catch(err) { alert('❌ Error al leer el archivo: ' + err.message); }
-        });
-        input.click();
     }
 };
 
+// Esperar a que cargue la librería de Google Identity Services
 let _swCheckCount = 0;
 let _swCheck = setInterval(() => {
-    if (window.supabase) { clearInterval(_swCheck); app.init(); return; }
-    if (++_swCheckCount > 100) {
+    if (window.google && window.google.accounts) { clearInterval(_swCheck); app.init(); return; }
+    if (++_swCheckCount > 150) {
         clearInterval(_swCheck);
         const el = document.getElementById('authError');
         if (el) { el.textContent = '❌ Error de red. Comprueba tu conexión y recarga.'; el.classList.add('show'); }

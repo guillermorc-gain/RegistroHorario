@@ -2,163 +2,255 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Horas Realizadas</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#003A99">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Horas EMT">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#0052CC">
-    <title>Horas EMT</title>
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <style>
-        :root{--g1:#1565C0;--g2:#0D47A1;--ac:#1565C0;--ac-dk:#90CAF9;}
-        body.theme-verde{--g1:#2E7D32;--g2:#1B5E20;--ac:#2E7D32;--ac-dk:#A5D6A7;}
-        body.theme-fuego{--g1:#D84315;--g2:#BF360C;--ac:#D84315;--ac-dk:#FFAB91;}
-        body.theme-acero{--g1:#455A64;--g2:#263238;--ac:#607D8B;--ac-dk:#B0BEC5;}
-        body.theme-rojo{--g1:#C62828;--g2:#B71C1C;--ac:#C62828;--ac-dk:#EF9A9A;}
-        .theme-dot{width:32px;height:32px;border-radius:50%;border:3px solid transparent;cursor:pointer;flex-shrink:0;touch-action:manipulation;}
-        .theme-dot.active{outline:3px solid var(--ac);outline-offset:2px;}
-        *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-        html,body{height:100%;overflow:hidden;background:#f0f0f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
-        body.dark{background:#0a0f1e;}
+        *{margin:0;padding:0;box-sizing:border-box;}
+        html,body{height:100%;width:100%;}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);}
+        body.dark{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);}
         .container{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:500px;height:100%;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:white;display:flex;flex-direction:column;overflow:hidden;}
         .container.dark{background:#111827;color:#e0e0e0;}
+
+        /* ── AUTH ── */
         .auth-screen{display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;padding:20px;gap:18px;background:white;}
         .auth-screen.hidden{display:none;}
-        .logo{width:80px;height:80px;border-radius:20px;}
+        .logo{width:70px;height:70px;}
+        .auth-form{width:100%;display:flex;flex-direction:column;gap:10px;}
+        .auth-form input{padding:12px;border:2px solid #e0e0e0;border-radius:8px;font-size:15px;font-family:inherit;background:white;color:#333;}
+        .auth-form input:focus{outline:none;border-color:#667eea;}
+        .auth-form button{padding:12px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:15px;font-family:inherit;}
+        .auth-toggle{text-align:center;color:#7f8c8d;font-size:13px;}
+        .auth-toggle a{color:#667eea;cursor:pointer;font-weight:600;text-decoration:underline;}
         .msg{font-size:12px;padding:10px;border-radius:6px;display:none;text-align:center;}
-        .msg.error{background:#fde8e8;color:#c53030;}
-        .msg.success{background:#e6fffa;color:#276749;}
+        .error{color:#e74c3c;background:#fadbd8;} .success{color:#27ae60;background:#d5f4e6;}
         .msg.show{display:block;}
-        .auth-form{display:flex;flex-direction:column;gap:10px;width:100%;max-width:320px;}
-        .auth-form input{padding:12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;outline:none;transition:border-color .2s;}
-        .auth-form input:focus{border-color:#1565C0;}
-        .auth-form button{padding:12px;background:linear-gradient(135deg,#1565C0,#0D47A1);color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;}
-        .auth-toggle{font-size:12px;color:#718096;text-align:center;}
-        .auth-toggle a{color:#1565C0;cursor:pointer;font-weight:600;}
+
+        /* ── APP SHELL ── */
         .app-screen{display:none;flex-direction:column;flex:1;min-height:0;}
         .app-screen.active{display:flex;}
-        .options-screen{display:none;flex-direction:column;flex:1;min-height:0;}
-        .options-screen.active{display:flex;}
-        .app-header{background:linear-gradient(135deg,var(--g1) 0%,var(--g2) 100%);color:white;padding:10px 15px;flex-shrink:0;display:flex;justify-content:space-between;align-items:center;gap:10px;}
-        .options-header{background:linear-gradient(135deg,var(--g1) 0%,var(--g2) 100%);color:white;padding:10px 15px;flex-shrink:0;display:flex;justify-content:space-between;align-items:center;}
-        .back-btn{background:rgba(255,255,255,0.2);border:none;color:white;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;}
+
+        .app-header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:10px 15px;flex-shrink:0;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+        .app-header.dark{background:linear-gradient(135deg,#2d3561 0%,#1a1a2e 100%);}
+        .app-header-left{display:flex;flex-direction:column;}
+        .app-header-title{font-size:14px;font-weight:700;letter-spacing:0.2px;}
+        .app-header-date{font-size:11px;opacity:0.85;margin-top:1px;}
         .profile-btn{width:42px;height:42px;border-radius:50%;border:2px solid rgba(255,255,255,0.4);cursor:pointer;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;flex-shrink:0;color:white;overflow:hidden;padding:0;}
-        .app-header-left{display:flex;flex-direction:column;gap:1px;}
-        .app-header-title{font-weight:700;font-size:16px;}
-        .app-header-date{font-size:11px;opacity:0.85;}
+
         .app-content{flex:1;min-height:0;padding:10px;overflow:hidden;display:flex;flex-direction:column;gap:8px;}
-        .app-content.scrollable{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+        .app-content.dark{background:#111827;}
+
+        /* ── STATS ROW ── */
         .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex-shrink:0;}
-        .stat-card{background:white;border-radius:10px;padding:10px 12px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
-        .stat-card.dark{background:#1f2937;}
-        .stat-label{font-size:10px;color:#718096;font-weight:500;margin-bottom:2px;}
-        .stat-value{font-size:22px;font-weight:800;color:var(--ac);line-height:1.1;}
-        .stat-unit{font-size:10px;color:#a0aec0;}
+        .stat-card{background:white;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
+        .app-content.dark .stat-card{background:#1e2a3a;}
+        .stat-card.accent{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;}
+        .stat-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#7f8c8d;margin-bottom:4px;}
+        .stat-card.accent .stat-label{color:rgba(255,255,255,0.8);}
+        .app-content.dark .stat-card:not(.accent) .stat-label{color:#a0a0a0;}
+        .stat-value{font-size:28px;font-weight:800;color:#2c3e50;line-height:1;}
+        .stat-card.accent .stat-value{color:white;}
+        .app-content.dark .stat-card:not(.accent) .stat-value{color:#e0e0e0;}
+        .stat-sub{font-size:10px;color:#95a5a6;margin-top:3px;}
+        .stat-card.accent .stat-sub{color:rgba(255,255,255,0.7);}
+
+        /* ── PROGRESS ── */
         .progress-section{background:white;border-radius:10px;padding:10px 14px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
-        .progress-bar{height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;margin:6px 0 4px;}
-        .progress-fill{height:100%;background:linear-gradient(90deg,var(--g1),var(--g2));border-radius:4px;transition:width .6s ease;}
-        .progress-label{display:flex;justify-content:space-between;font-size:10px;color:#718096;}
+        .app-content.dark .progress-section{background:#1e2a3a;}
+        .progress-bar{width:100%;height:7px;background:#ecf0f1;border-radius:10px;overflow:hidden;margin-bottom:4px;}
+        .app-content.dark .progress-bar{background:#2d3561;}
+        .progress-fill{height:100%;background:linear-gradient(90deg,#667eea 0%,#764ba2 100%);width:0%;transition:width 0.4s ease;}
+        .progress-labels{display:flex;justify-content:space-between;align-items:center;}
+        .progress-pct{font-size:12px;font-weight:700;color:#667eea;}
+        .progress-sub{font-size:10px;color:#95a5a6;}
+        .app-content.dark .progress-pct{color:#a0b4f8;}
+        .app-content.dark .progress-sub{color:#7f8c8d;}
+
+        /* ── WORK BANNER ── */
         .work-banner{display:none;background:#27ae60;color:white;padding:9px 13px;flex-shrink:0;align-items:center;gap:10px;border-radius:10px;}
         .work-banner.show{display:flex;}
-        .work-banner-btn{background:rgba(255,255,255,0.25);border:none;color:white;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;white-space:nowrap;flex-shrink:0;}
+        .work-banner-close{background:transparent;color:white;border:none;font-size:20px;cursor:pointer;line-height:1;opacity:0.8;}
+
+        /* ── INPUT SECTION ── */
         .input-section{background:white;padding:10px 12px;border-radius:12px;border:2px solid transparent;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
-        .input-section.editing{border-color:#e67e22;}
-        .input-row{display:flex;gap:8px;align-items:flex-end;}
+        .app-content.dark .input-section{background:#1e2a3a;border-color:#2d3561;}
+        .input-section.editing{border-color:#667eea;}
+        .edit-label{font-size:11px;color:#667eea;font-weight:700;text-align:center;padding-bottom:5px;}
+        .input-row{display:flex;gap:7px;align-items:flex-end;margin-bottom:7px;}
         .input-group{display:flex;flex-direction:column;flex:1;}
-        .input-label{font-size:10px;color:#718096;font-weight:600;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.3px;}
-        .input-field{padding:9px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:15px;font-family:inherit;outline:none;width:100%;transition:border-color .2s;}
-        .input-field:focus{border-color:var(--ac);}
+        .input-group label{font-size:10px;font-weight:700;color:#7f8c8d;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.3px;}
+        .app-content.dark .input-group label{color:#a0a0a0;}
+        .input-group input{width:100%;padding:8px;border:1.5px solid #e8eaf0;border-radius:7px;font-size:13px;font-family:inherit;background:white;color:#2c3e50;}
+        .app-content.dark .input-group input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
+        .input-group input:focus{outline:none;border-color:#667eea;}
         .noche-compact{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 10px;background:#fff3cd;border-radius:8px;border:1.5px solid #ffc107;cursor:pointer;flex-shrink:0;touch-action:manipulation;user-select:none;}
-        .noche-compact.active{background:#ffc107;}
+        .app-content.dark .noche-compact{background:#2a2500;border-color:#665500;}
+        .noche-compact span{font-size:15px;line-height:1;pointer-events:none;}
+        .noche-compact input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#f39c12;}
         .pr-compact{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 8px;background:#e8f4fd;border-radius:8px;border:1.5px solid #3498db;cursor:pointer;flex-shrink:0;touch-action:manipulation;user-select:none;}
-        .pr-compact.active{background:#3498db;color:white;}
-        .compact-label{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;}
-        .time-row{display:flex;gap:6px;align-items:center;margin-top:6px;}
-        .time-field{flex:1;padding:7px 8px;border:1.5px solid #e2e8f0;border-radius:7px;font-size:13px;font-family:inherit;outline:none;}
-        .time-field:focus{border-color:var(--ac);}
-        .noche-extra{display:none;margin-top:6px;}
-        .noche-extra.visible{display:flex;flex-direction:column;gap:6px;}
-        .btn-row{display:flex;gap:8px;margin-top:8px;}
-        .btn-main{flex:1;padding:10px;background:linear-gradient(135deg,var(--g1) 0%,var(--g2) 100%);color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;}
-        .btn-secondary{padding:10px 14px;background:#f7fafc;color:#4a5568;border:1.5px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit;font-weight:600;}
+        .pr-compact.active{background:#3498db;border-color:#2980b9;}
+        .pr-compact.active span{color:white;}
+        .app-content.dark .pr-compact{background:#0a1929;border-color:#2980b9;}
+        .app-content.dark .pr-compact.active{background:#2980b9;}
+        .pr-compact span{font-size:11px;font-weight:800;color:#2980b9;line-height:1;letter-spacing:0.5px;pointer-events:none;}
+        .pr-compact input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#3498db;}
+        .pr-badge{display:inline-block;background:#3498db;color:white;font-size:9px;font-weight:800;padding:2px 6px;border-radius:10px;letter-spacing:0.5px;vertical-align:middle;}
+        .noche-extra{display:none;margin-bottom:7px;padding:8px 9px;background:#fff8e1;border-radius:8px;border:1px solid #ffc107;}
+        .noche-extra.visible{display:block;}
+        .app-content.dark .noche-extra{background:#1a1500;border-color:#665500;}
+        .noche-resumen{font-size:11px;color:#856404;font-weight:700;text-align:right;padding-top:2px;}
+        .app-content.dark .noche-resumen{color:#ffc107;}
+        .noche-extra .input-group label{color:#856404;}
+        .app-content.dark .noche-extra .input-group label{color:#ffc107;}
+        .noche-extra .input-group input{border-color:#ffc107;}
+        .app-content.dark .noche-extra .input-group input{background:#0a0800;color:#e0e0e0;border-color:#665500;}
+        .btn-row{display:flex;gap:6px;}
+        .btn-main{flex:1;padding:10px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;}
+        .btn-secondary{padding:10px 13px;background:#e8eaf0;color:#555;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;font-family:inherit;}
+        .app-content.dark .btn-secondary{background:#2d3561;color:#e0e0e0;}
+
+        /* ── MONTHLY BREAKDOWN ── */
         .mensual-section{background:white;border-radius:12px;padding:10px 12px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
-        .section-title{font-size:11px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;}
-        .mes-row{display:flex;align-items:center;gap:8px;padding:3px 0;}
+        .app-content.dark .mensual-section{background:#1e2a3a;}
+        .mensual-title{font-size:10px;font-weight:800;color:#667eea;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px;}
+        .mes-row{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #f0f0f0;}
+        .app-content.dark .mes-row{border-color:#2d3561;}
+        .mes-row:last-child{border-bottom:none;padding-bottom:0;}
         .mes-label{font-size:10px;font-weight:600;color:#7f8c8d;width:75px;flex-shrink:0;}
+        .app-content.dark .mes-label{color:#a0a0a0;}
         .mes-bar-wrap{flex:1;height:5px;background:#ecf0f1;border-radius:3px;overflow:hidden;}
-        .mes-bar{height:100%;background:linear-gradient(90deg,var(--g1),var(--g2));border-radius:3px;transition:width .4s;}
+        .app-content.dark .mes-bar-wrap{background:#2d3561;}
+        .mes-bar{height:100%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:3px;min-width:2px;}
         .mes-vals{display:flex;gap:5px;align-items:center;flex-shrink:0;}
         .mes-vals span{font-size:10px;font-weight:700;color:#2c3e50;}
-        .mes-noche{color:#856404!important;}
-        .mes-extra{color:#27ae60!important;}
-        .historial-section{background:white;border-radius:12px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);flex-shrink:0;}
-        .historial-btn{width:100%;padding:9px;background:#f7fafc;border:1.5px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit;font-weight:600;color:#4a5568;display:flex;justify-content:space-between;align-items:center;}
-        .pr-badge{background:#e74c3c;color:white;font-size:9px;font-weight:700;padding:2px 5px;border-radius:4px;text-transform:uppercase;}
-        .options-content{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px;display:flex;flex-direction:column;gap:8px;}
-        .ops-section{background:white;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);overflow:hidden;}
-        .ops-section.dark{background:#1f2937;}
-        .ops-header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;cursor:pointer;user-select:none;}
-        .ops-title{font-size:13px;font-weight:700;color:#2c3e50;}
-        .ops-arrow{font-size:12px;color:#95a5a6;transition:transform .2s;}
-        .ops-section.open .ops-arrow{transform:rotate(180deg);}
-        .ops-body{display:none;padding:0 14px 14px;}
+        .app-content.dark .mes-vals span{color:#e0e0e0;}
+        .mes-noche{color:#856404!important;background:#fff3cd;padding:1px 5px;border-radius:8px;}
+        .mes-extra{color:#27ae60!important;background:#d5f4e6;padding:1px 5px;border-radius:8px;}
+
+        /* ── HISTORIAL BAR ── */
+        .historial-bar{display:flex;align-items:center;background:white;border-radius:12px;padding:10px 14px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,0.07);cursor:pointer;user-select:none;}
+        .app-content.dark .historial-bar{background:#1e2a3a;}
+        .historial-bar-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:#7f8c8d;flex:1;}
+        .app-content.dark .historial-bar-title{color:#a0a0a0;}
+        .historial-count{font-size:11px;font-weight:700;color:#667eea;margin-right:10px;}
+        .historial-toggle{width:30px;height:30px;background:linear-gradient(135deg,#667eea,#764ba2);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;flex-shrink:0;}
+
+        /* ── OPTIONS ── */
+        .options-screen{display:none;flex-direction:column;flex:1;min-height:0;}
+        .options-screen.active{display:flex;}
+        .options-content{flex:1;min-height:0;padding:12px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;}
+        .options-content.dark{background:#111827;}
+
+        .ops-section{background:white;border-radius:12px;border:1px solid #e8eaf0;box-shadow:0 2px 6px rgba(0,0,0,0.06);flex-shrink:0;}
+        .options-content.dark .ops-section{background:#1e2a3a;border-color:#2d3561;}
+        .ops-title{width:100%;display:flex;align-items:center;justify-content:space-between;padding:15px 16px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:#667eea;background:transparent;border:none;border-radius:12px;cursor:pointer;font-family:inherit;gap:8px;text-align:left;}
+        .ops-section.open .ops-title{border-radius:12px 12px 0 0;}
+        .ops-title:active{opacity:0.7;}
+        .ops-chevron{font-size:16px;color:#aab0bb;transition:transform 0.25s;flex-shrink:0;display:inline-block;}
+        .ops-section.open .ops-chevron{transform:rotate(90deg);}
+        .ops-body{display:none;border-top:1px solid #e8eaf0;border-radius:0 0 12px 12px;overflow:hidden;}
+        .options-content.dark .ops-body{border-color:#2d3561;}
         .ops-section.open .ops-body{display:block;}
-        .ops-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f0f0f0;gap:10px;}
+        .ops-row{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid #f5f5f5;gap:10px;}
         .ops-row:last-child{border-bottom:none;}
-        .ops-label{font-size:13px;color:#4a5568;flex:1;}
-        .ops-sublabel{font-size:10px;color:#95a5a6;margin-top:1px;}
-        .ops-btn{padding:7px 12px;background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:7px;font-size:12px;cursor:pointer;font-weight:600;font-family:inherit;white-space:nowrap;}
-        .ops-btn.danger{background:linear-gradient(135deg,#e74c3c,#c0392b);}
-        .ops-btn.secondary{background:#718096;}
-        .toggle-switch{position:relative;width:44px;height:24px;flex-shrink:0;}
-        .toggle-switch input{opacity:0;width:0;height:0;}
-        .toggle-slider{position:absolute;inset:0;background:#ccc;border-radius:24px;cursor:pointer;transition:.3s;}
-        .toggle-slider:before{content:'';position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.3s;}
-        input:checked+.toggle-slider{background:var(--ac);}
-        input:checked+.toggle-slider:before{transform:translateX(20px);}
-        .gps-badge{font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;}
-        .gps-badge.saved{background:#d4edda;color:#155724;}
-        .gps-badge.none{background:#f8d7da;color:#721c24;}
-        .footer{font-size:10px;color:#a0aec0;text-align:center;padding:8px;flex-shrink:0;}
+        .options-content.dark .ops-row{border-color:#2d3561;}
+        .ops-row-label{font-size:13px;font-weight:600;color:#2c3e50;display:flex;align-items:center;gap:8px;}
+        .options-content.dark .ops-row-label{color:#e0e0e0;}
+        .ops-row-sub{font-size:11px;color:#7f8c8d;font-weight:400;display:block;margin-top:2px;}
+        .options-content.dark .ops-row-sub{color:#a0a0a0;}
+        .ops-btn{width:100%;padding:12px 14px;background:transparent;border:none;border-bottom:1px solid #f5f5f5;cursor:pointer;text-align:left;font-size:13px;font-weight:600;font-family:inherit;color:#2c3e50;display:flex;align-items:center;gap:10px;}
+        .ops-btn:last-child{border-bottom:none;}
+        .options-content.dark .ops-btn{border-color:#2d3561;color:#e0e0e0;}
+        .ops-btn:active{background:rgba(0,0,0,0.04);}
+        .ops-btn.danger{color:#e74c3c;} .ops-btn.primary-blue{color:#0052CC;}
+        .options-content.dark .ops-btn.primary-blue{color:#6699ff;}
+        .ops-btn .ops-arrow{margin-left:auto;color:#bdc3c7;font-size:14px;}
+        .ops-field{padding:4px 14px 12px;display:flex;flex-direction:column;gap:5px;border-bottom:1px solid #f5f5f5;}
+        .ops-field:last-child{border-bottom:none;}
+        .ops-field-label{font-size:10px;font-weight:800;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.5px;margin-top:8px;}
+        .options-content.dark .ops-field-label{color:#a0a0a0;}
+        .ops-field-sub{font-size:11px;color:#95a5a6;}
+        .ops-input{width:100%;padding:9px 11px;border:1.5px solid #e8eaf0;border-radius:8px;font-size:14px;font-family:inherit;background:white;color:#2c3e50;}
+        .ops-input:focus{outline:none;border-color:#667eea;}
+        .options-content.dark .ops-input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
+        .ops-night-input{width:100%;padding:9px 11px;border:1.5px solid #ffc107;border-radius:8px;font-size:14px;font-family:inherit;background:#fffdf0;color:#5a4000;}
+        .ops-night-input:focus{outline:none;border-color:#f39c12;}
+        .options-content.dark .ops-night-input{background:#1a1400;color:#ffd700;border-color:#665500;}
+        .gps-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;}
+        .gps-badge.saved{background:#d5f4e6;color:#1e8449;} .gps-badge.none{background:#f0f0f0;color:#95a5a6;}
+        .options-content.dark .gps-badge.saved{background:#1a3d2b;color:#52be80;}
+        .options-content.dark .gps-badge.none{background:#2d3561;color:#7f8c8d;}
+        .avatar-preview{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;}
+        .footer{text-align:center;font-size:11px;color:#7f8c8d;padding:8px 0 2px;}
+        .options-content.dark .footer{color:#a0a0a0;}
+
+        /* ── MODALS ── */
         .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:1000;justify-content:center;align-items:center;padding:15px;}
         .modal.show{display:flex;}
-        .modal-content{background:white;border-radius:16px;padding:20px;width:100%;max-width:340px;}
-        .modal-content.dark{background:#1f2937;color:#e0e0e0;}
-        .modal-title{font-size:16px;font-weight:700;margin-bottom:8px;}
-        .modal-message{font-size:13px;color:#718096;margin-bottom:16px;}
-        .modal-btns{display:flex;gap:10px;}
-        .modal-btn{flex:1;padding:11px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;}
-        .modal-btn-cancel{background:#f7fafc;color:#4a5568;}
-        .modal-btn-confirm{background:linear-gradient(135deg,#e74c3c,#c0392b);color:white;}
-        .edit-modal-content{background:white;border-radius:16px;padding:20px;width:100%;max-width:360px;max-height:90vh;overflow-y:auto;}
-        .edit-modal-content.dark{background:#1f2937;color:#e0e0e0;}
-        .edit-field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;}
-        .edit-label{font-size:11px;font-weight:700;color:#718096;text-transform:uppercase;}
-        .edit-input{padding:9px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:inherit;outline:none;}
-        .edit-input:focus{border-color:var(--ac);}
-        .historial-modal-content{background:white;border-radius:16px;width:100%;max-width:400px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;}
-        .historial-modal-content.dark{background:#1f2937;color:#e0e0e0;}
-        .historial-modal-header{padding:16px 18px 12px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;}
-        .historial-modal-header h3{font-size:16px;font-weight:700;}
-        .historial-close-btn{background:none;border:none;font-size:20px;cursor:pointer;color:#718096;padding:4px;}
-        .historial-modal-list{list-style:none;overflow-y:auto;flex:1;}
-        .avatar-modal-content{background:white;border-radius:16px;padding:20px;width:100%;max-width:320px;text-align:center;}
-        .avatar-modal-content.dark{background:#1f2937;color:#e0e0e0;}
-        .avatar-modal-content h2{font-size:16px;font-weight:700;margin-bottom:14px;}
-        .avatar-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px;}
-        .avatar-option{width:100%;aspect-ratio:1;border-radius:50%;border:none;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center;}
-        .avatar-photo-btn{width:100%;padding:10px;background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;margin-bottom:8px;}
-        .avatar-cancel-btn{width:100%;padding:10px;background:#f7fafc;color:#4a5568;border:1.5px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;}
-        .profile-avatar-preview{width:70px;height:70px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;border:3px solid var(--ac);flex-shrink:0;overflow:hidden;}
+        .modal-card{background:white;border-radius:16px;width:100%;max-width:440px;overflow:hidden;max-height:90vh;display:flex;flex-direction:column;}
+        .modal-card.dark{background:#1e2a3a;color:#e0e0e0;}
+        .modal-header{padding:16px 18px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f0f0f0;flex-shrink:0;}
+        .modal-card.dark .modal-header{border-color:#2d3561;}
+        .modal-header h3{font-size:15px;font-weight:700;color:#2c3e50;}
+        .modal-card.dark .modal-header h3{color:#e0e0e0;}
+        .modal-close{background:transparent;border:none;font-size:22px;cursor:pointer;color:#95a5a6;line-height:1;padding:0;}
+        .modal-body{padding:14px 18px;overflow-y:auto;flex:1;}
+        .modal-footer{padding:12px 18px;border-top:1px solid #f0f0f0;display:flex;gap:8px;flex-shrink:0;}
+        .modal-card.dark .modal-footer{border-color:#2d3561;}
+        .modal-btn{flex:1;padding:11px;border:none;border-radius:9px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px;}
+        .modal-btn-confirm{background:linear-gradient(135deg,#667eea,#764ba2);color:white;}
+        .modal-btn-cancel{background:#e8eaf0;color:#555;}
+        .app-content.dark .modal-btn-cancel,.modal-card.dark .modal-btn-cancel{background:#2d3561;color:#e0e0e0;}
+        .modal-btn-danger{background:#e74c3c;color:white;}
+
+        /* confirm modal */
+        .modal-content{background:white;padding:22px;border-radius:14px;width:90%;max-width:360px;text-align:center;}
+        .modal-content.dark{background:#2d3561;color:#e0e0e0;}
+        .modal-content h2{margin-bottom:10px;font-size:17px;}
+        .modal-buttons{display:flex;gap:10px;margin-top:14px;}
+        .modal-buttons button{flex:1;padding:11px;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-family:inherit;font-size:14px;}
+        .modal-btn-cf{background:#e74c3c;color:white;} .modal-btn-cl{background:#95a5a6;color:white;}
+
+        /* ── EDIT MODAL FIELDS ── */
+        .edit-field{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;}
+        .edit-field label{font-size:10px;font-weight:800;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.4px;}
+        .modal-card.dark .edit-field label{color:#a0a0a0;}
+        .edit-field input{padding:9px 11px;border:1.5px solid #e8eaf0;border-radius:8px;font-size:14px;font-family:inherit;background:white;color:#2c3e50;}
+        .edit-field input:focus{outline:none;border-color:#667eea;}
+        .modal-card.dark .edit-field input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
+        .edit-row{display:flex;gap:8px;}
+        .edit-row .edit-field{flex:1;}
+        .extra-label{font-size:11px;color:#27ae60;font-weight:700;text-align:right;margin-top:2px;}
+
+        /* avatar picker */
+        .avatar-modal-content{background:white;padding:20px;border-radius:16px;width:92%;max-width:380px;}
+        .avatar-modal-content.dark{background:#2d3561;color:#e0e0e0;}
+        .avatar-modal-content h2{font-size:16px;margin-bottom:14px;text-align:center;}
+        .avatar-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;}
+        .avatar-option{width:100%;aspect-ratio:1;border-radius:50%;border:3px solid transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;transition:transform 0.1s;}
+        .avatar-option:active{transform:scale(0.88);}
+        .avatar-photo-btn{width:100%;padding:11px;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:8px;}
+        .avatar-cancel-btn{width:100%;padding:10px;background:#f0f0f0;color:#555;border:none;border-radius:10px;font-size:13px;cursor:pointer;font-family:inherit;}
+        .options-content.dark .avatar-cancel-btn,.modal-card.dark .avatar-cancel-btn{background:#3d4571;color:#e0e0e0;}
+
+        /* ── INSTALL BANNER ── */
         .install-banner{display:none;background:#0052CC;color:white;padding:12px 15px;flex-shrink:0;align-items:center;gap:10px;box-shadow:0 -2px 6px rgba(0,0,0,0.25);}
         .install-banner.show{display:flex;}
         .install-banner-close{background:transparent;color:white;border:none;font-size:22px;cursor:pointer;padding:0 4px;line-height:1;opacity:0.8;}
+
+        ::-webkit-scrollbar{width:4px;}
+        ::-webkit-scrollbar-thumb{background:#667eea;border-radius:2px;}
+        .app-content.dark ::-webkit-scrollbar-thumb,.options-content.dark ::-webkit-scrollbar-thumb{background:#3d4571;}
     </style>
 </head>
 <body>
-
 <div class="container">
 
     <!-- ── AUTH ── -->
@@ -174,29 +266,20 @@
             <line x1="256" y1="224" x2="210" y2="148" stroke="white" stroke-width="16" stroke-linecap="round"/>
             <line x1="256" y1="224" x2="322" y2="178" stroke="white" stroke-width="12" stroke-linecap="round"/>
             <circle cx="256" cy="224" r="11" fill="white"/>
-            <line x1="128" y1="360" x2="384" y2="360" stroke="rgba(255,255,255,0.4)" stroke-width="4" stroke-linecap="round"/>
-            <line x1="160" y1="382" x2="352" y2="382" stroke="rgba(255,255,255,0.25)" stroke-width="3" stroke-linecap="round"/>
+            <text x="256" y="464" font-family="Arial Black,Arial,sans-serif" font-size="86" font-weight="900" text-anchor="middle" fill="white" letter-spacing="5">EMT</text>
         </svg>
-        <div>
-            <h1 style="color:#2c3e50;text-align:center;font-size:20px;font-weight:800;">🕐 Horas EMT</h1>
+        <div style="text-align:center;">
+            <h1 style="color:#2c3e50;font-size:22px;margin-bottom:4px;">Horas Realizadas</h1>
             <p style="color:#7f8c8d;font-size:13px;">Control de horas EMT</p>
         </div>
         <div id="authError" class="msg error"></div>
         <div id="authSuccess" class="msg success"></div>
         <div class="auth-form" id="loginForm">
-            <h2 style="color:#2c3e50;text-align:center;font-size:14px;margin-bottom:6px;">Iniciar Sesión</h2>
-            <input type="text" id="loginEmail" placeholder="Correo o nombre de usuario" autocapitalize="none" autocorrect="off">
-            <input type="password" id="loginPassword" placeholder="Contraseña">
-            <button type="button" onclick="app.login()">Iniciar Sesión</button>
-            <div class="auth-toggle">¿Sin cuenta? <a onclick="app.toggleAuth()">Regístrate</a></div>
-        </div>
-        <div class="auth-form" id="registerForm" style="display:none;">
-            <h2 style="color:#2c3e50;text-align:center;font-size:14px;margin-bottom:6px;">Registrarse</h2>
-            <input type="email" id="registerEmail" placeholder="Correo">
-            <input type="password" id="registerPassword" placeholder="Contraseña (mín. 6)">
-            <input type="password" id="registerPassword2" placeholder="Confirmar contraseña">
-            <button type="button" onclick="app.register()">Crear Cuenta</button>
-            <div class="auth-toggle">¿Ya tienes cuenta? <a onclick="app.toggleAuth()">Inicia sesión</a></div>
+            <p style="color:#7f8c8d;font-size:13px;text-align:center;margin-bottom:8px;">Tus datos se guardan en tu Google Drive</p>
+            <button type="button" onclick="app.login()" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:13px;background:white;color:#3c4043;border:1.5px solid #dadce0;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;width:100%;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+                Continuar con Google
+            </button>
         </div>
     </div>
 
@@ -209,221 +292,213 @@
             </div>
             <button class="profile-btn" id="profileBtn" onclick="app.mostrarOpciones()"></button>
         </div>
-        <div class="app-content scrollable" id="appContent">
-            <div class="work-banner" id="workBanner">
-                <span style="flex:1;font-size:13px;font-weight:600;">📍 Pareces estar en el trabajo</span>
-                <button class="work-banner-btn" onclick="app.registrarJornadaHoy()">Registrar</button>
-            </div>
+        <div class="app-content" id="appContent">
+
+            <!-- Stats 2x2 -->
             <div class="stats-grid">
-                <div class="stat-card" id="cardTrabajadas">
-                    <div class="stat-label">Trabajadas</div>
-                    <div><span class="stat-value" id="horasTrabajadas">0.0</span><span class="stat-unit">h</span></div>
-                </div>
-                <div class="stat-card" id="cardRestantes">
+                <div class="stat-card accent">
                     <div class="stat-label">Restantes</div>
-                    <div><span class="stat-value" id="horasRestantes">777.0</span><span class="stat-unit">h</span></div>
+                    <div class="stat-value" id="horasRestantes">777</div>
+                    <div class="stat-sub">horas del año</div>
+                </div>
+                <div class="stat-card accent">
+                    <div class="stat-label">Trabajadas</div>
+                    <div class="stat-value" id="horasTrabajadas">0</div>
+                    <div class="stat-sub">horas totales</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Este mes</div>
+                    <div class="stat-value" id="statMesHoras">0</div>
+                    <div class="stat-sub">horas trabajadas</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">🌙 Nocturnas</div>
+                    <div class="stat-value" id="statMesNoche">0</div>
+                    <div class="stat-sub">horas este mes</div>
                 </div>
             </div>
-            <div class="progress-section" id="progressSection">
-                <div class="progress-label">
-                    <span style="font-weight:600;font-size:11px;">Progreso anual</span>
-                    <span style="font-weight:700;color:var(--ac);"><span id="porcentaje">0</span>%</span>
-                </div>
-                <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
-                <div style="display:flex;gap:12px;margin-top:4px;">
-                    <span style="font-size:10px;color:#95a5a6;">🌙 Noct. este mes: <strong id="statMesNoche">0.0</strong>h</span>
-                    <span style="font-size:10px;color:#95a5a6;">📅 Horas mes: <strong id="statMesHoras">0.0</strong>h</span>
+
+            <!-- Progress -->
+            <div class="progress-section">
+                <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+                <div class="progress-labels">
+                    <span class="progress-pct"><span id="porcentaje">0</span>% completado</span>
+                    <span class="progress-sub" id="progressSub">del objetivo anual</span>
                 </div>
             </div>
-            <div class="mensual-section" id="mensualSection">
-                <div class="section-title">📊 Últimos meses</div>
-                <div id="mensualTable"></div>
+
+            <!-- GPS Banner -->
+            <div class="work-banner" id="workBanner">
+                <div style="flex:1;">
+                    <strong style="font-size:13px;display:block;">📍 Parece que estás en el trabajo</strong>
+                    <span style="font-size:11px;opacity:0.9;">¿Registras la jornada de hoy?</span>
+                </div>
+                <button onclick="app.registrarJornadaHoy()" style="background:white;color:#27ae60;border:none;border-radius:6px;padding:7px 11px;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;">Registrar</button>
+                <button class="work-banner-close" onclick="document.getElementById('workBanner').classList.remove('show')">×</button>
             </div>
+
+            <!-- Input -->
             <div class="input-section" id="inputSection">
+                <div id="editLabel" class="edit-label" style="display:none;">✏️ Editando en pantalla</div>
+                <div class="input-row" style="margin-bottom:6px;">
+                    <div class="input-group" style="flex:1;">
+                        <label>Fecha</label>
+                        <input type="date" id="fechaInput" oninput="app.calcularHorasPorTiempo()" onchange="app.calcularHorasPorTiempo()">
+                    </div>
+                </div>
                 <div class="input-row">
                     <div class="input-group">
-                        <div class="input-label">Fecha</div>
-                        <input type="date" id="fechaInput" class="input-field">
+                        <label>Inicio</label>
+                        <input type="time" id="horaInicio" oninput="app.calcularHorasPorTiempo();app.guardarUltimaHoraInicio()">
                     </div>
-                    <div class="input-group" style="max-width:90px;">
-                        <div class="input-label">Horas</div>
-                        <input type="number" id="horasInput" class="input-field" placeholder="7.5" step="0.5" min="0.5" max="24">
+                    <div class="input-group">
+                        <label>Fin</label>
+                        <input type="time" id="horaFin" oninput="app.calcularHorasPorTiempo();app.guardarUltimaHoraFin()">
                     </div>
-                    <div class="noche-compact" id="nocheCompact" onclick="app.clickNocheCompact()">
-                        <span style="font-size:16px;">🌙</span>
-                        <span class="compact-label">Noche</span>
+                    <div class="input-group" style="flex:0.7;">
+                        <label>Horas</label>
+                        <input type="number" id="horasInput" min="0" step="0.5" placeholder="8">
                     </div>
-                    <div class="pr-compact" id="prCompact" onclick="app.clickPrCompact()">
-                        <span style="font-size:14px;font-weight:800;">PR</span>
-                        <span class="compact-label">Fiesta</span>
+                    <div class="noche-compact" onclick="app.clickNocheCompact()" title="Nocturno">
+                        <span>🌙</span>
+                        <input type="checkbox" id="nocheToggle" onclick="event.stopPropagation();app.toggleNoche()">
+                    </div>
+                    <div class="pr-compact" id="prCompact" ontouchend="event.preventDefault();app.clickPrCompact()" onclick="app.clickPrCompact()" title="Prolongación de Ruta">
+                        <span>PR</span>
+                        <input type="checkbox" id="prToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#3498db;cursor:pointer;">
                     </div>
                 </div>
-                <div class="time-row">
-                    <span style="font-size:10px;color:#95a5a6;flex-shrink:0;">⏰</span>
-                    <input type="time" id="horaInicio" class="time-field" placeholder="Inicio" onchange="app.guardarUltimaHoraInicio();app.calcularHorasPorTiempo()">
-                    <span style="font-size:12px;color:#95a5a6;">–</span>
-                    <input type="time" id="horaFin" class="time-field" placeholder="Fin" onchange="app.guardarUltimaHoraFin();app.calcularHorasPorTiempo()">
-                </div>
-                <div id="nocheToggle" style="display:none;"><input type="checkbox" id="nocheToggle"></div>
-                <div id="prToggle" style="display:none;"><input type="checkbox" id="prToggle"></div>
                 <div class="noche-extra" id="nocheExtra">
-                    <div style="display:flex;gap:8px;">
+                    <div class="input-row" style="margin-bottom:0;">
                         <div class="input-group">
-                            <div class="input-label">Horas noct.</div>
-                            <input type="number" id="horasNocturnas" class="input-field" placeholder="3" step="0.5" min="0" oninput="app.calcularExtra()">
+                            <label>Hrs. noct. (auto)</label>
+                            <input type="number" id="horasNocturnas" min="0" step="0.5" placeholder="2" oninput="app.calcularExtra()">
                         </div>
                         <div class="input-group">
-                            <div class="input-label">€/hora noct.</div>
-                            <input type="number" id="precioNoche" class="input-field" placeholder="0.00" step="0.01" min="0" oninput="app.calcularExtra()">
+                            <label>€/h noct.</label>
+                            <input type="number" id="precioNoche" min="0" step="0.01" placeholder="1.50" oninput="app.calcularExtra()">
                         </div>
                     </div>
-                    <div id="nocheResumen" style="font-size:11px;color:#856404;font-weight:600;"></div>
+                    <div class="noche-resumen" id="nocheResumen"></div>
                 </div>
                 <div class="btn-row">
-                    <button class="btn-main" onclick="app.registrarHoras()">✅ Guardar Jornada</button>
-                    <button class="btn-secondary" onclick="app.cancelarEdicion()">✕</button>
+                    <button type="button" class="btn-main" id="registrarBtn" onclick="app.registrarHoras()">Registrar</button>
+                    <button type="button" class="btn-secondary" onclick="app.limpiarInput()">Limpiar</button>
                 </div>
             </div>
-            <div class="historial-section" id="historialSection">
-                <button class="historial-btn" onclick="app.mostrarHistorialModal()">
-                    <span>📋 Ver historial</span>
-                    <span id="historialCount" style="font-size:11px;color:#95a5a6;">Sin registros</span>
-                </button>
+
+            <!-- Monthly breakdown -->
+            <div class="mensual-section">
+                <div class="mensual-title">📊 Por mes</div>
+                <div id="mensualTable"><div style="text-align:center;color:#95a5a6;font-size:12px;padding:6px;">Sin datos</div></div>
             </div>
+
+            <!-- History bar (collapsed by default) -->
+            <div class="historial-bar" onclick="app.mostrarHistorialModal()">
+                <span class="historial-bar-title">Últimas jornadas</span>
+                <span class="historial-count" id="historialCount">—</span>
+                <button class="historial-toggle" title="Ver registros">▼</button>
+            </div>
+
         </div>
     </div>
 
     <!-- ── OPTIONS SCREEN ── -->
     <div class="options-screen" id="optionsScreen">
-        <div class="options-header" id="optionsHeader">
-            <button class="back-btn" onclick="app.mostrarApp()">← Volver</button>
-            <span style="font-weight:700;font-size:15px;">⚙️ Ajustes</span>
-            <div style="width:60px;"></div>
+        <div class="app-header" id="optionsHeader">
+            <span class="app-header-title">⚙️ Ajustes</span>
+            <button class="profile-btn" onclick="app.mostrarApp()" style="font-size:20px;">←</button>
         </div>
         <div class="options-content" id="optionsContent">
 
             <!-- Perfil -->
-            <div class="ops-section open" id="secPerfil">
-                <div class="ops-header" onclick="app.toggleSection(this)">
-                    <span class="ops-title">👤 Mi Perfil</span>
-                    <span class="ops-arrow">▼</span>
-                </div>
+            <div class="ops-section">
+                <button class="ops-title" onclick="app.toggleSection(this)">👤 Perfil <span class="ops-chevron">›</span></button>
                 <div class="ops-body">
-                    <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-                        <div class="profile-avatar-preview" id="profileAvatarPreview" onclick="app.mostrarAvatarPicker()"></div>
-                        <div>
-                            <div style="font-size:12px;color:#718096;" id="perfilEmail"></div>
-                            <button onclick="app.mostrarAvatarPicker()" style="margin-top:6px;padding:5px 12px;background:var(--ac);color:white;border:none;border-radius:6px;font-size:11px;cursor:pointer;font-weight:600;">Cambiar avatar</button>
+                    <div class="ops-row" style="gap:14px;">
+                        <div id="profileAvatarPreview" class="avatar-preview" style="background:#667eea;color:white;font-size:26px;">?</div>
+                        <button onclick="app.mostrarAvatarPicker()" style="padding:8px 14px;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Cambiar avatar</button>
+                    </div>
+                    <div class="ops-field">
+                        <span class="ops-field-label">Cuenta Google</span>
+                        <div id="perfilNombre" style="font-size:14px;font-weight:600;color:#2c3e50;padding:2px 0;"></div>
+                        <div id="perfilEmail" style="font-size:12px;color:#7f8c8d;padding:2px 0;"></div>
+                        <div style="padding-top:10px;">
+                            <button class="btn-main" onclick="app.cerrarSesion()" style="background:linear-gradient(135deg,#e74c3c,#c0392b);width:100%;">🚪 Cerrar sesión de Google</button>
                         </div>
-                    </div>
-                    <div class="ops-row">
-                        <div><div class="ops-label">Nombre de usuario</div><div class="ops-sublabel">Para iniciar sesión sin correo</div></div>
-                        <input type="text" id="usernameInput" placeholder="usuario" style="width:110px;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:7px;font-size:13px;font-family:inherit;outline:none;" autocapitalize="none">
-                    </div>
-                    <div class="ops-row" style="border-bottom:none;padding-top:10px;">
-                        <button onclick="app.guardarPerfil()" class="ops-btn" style="width:100%;">💾 Guardar perfil</button>
-                    </div>
-                    <div style="display:flex;gap:8px;padding-top:4px;">
-                        <button onclick="app.cambiarPassword()" class="ops-btn secondary" style="flex:1;">🔑 Cambiar contraseña</button>
-                        <button onclick="app.cerrarSesion()" class="ops-btn danger" style="flex:1;">🚪 Cerrar sesión</button>
                     </div>
                 </div>
             </div>
 
             <!-- Apariencia -->
-            <div class="ops-section" id="secApariencia">
-                <div class="ops-header" onclick="app.toggleSection(this)">
-                    <span class="ops-title">🎨 Apariencia</span>
-                    <span class="ops-arrow">▼</span>
-                </div>
+            <div class="ops-section">
+                <button class="ops-title" onclick="app.toggleSection(this)">🎨 Apariencia <span class="ops-chevron">›</span></button>
                 <div class="ops-body">
                     <div class="ops-row">
-                        <div class="ops-label">Modo oscuro</div>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="darkModeToggle" onchange="app.toggleDarkMode()">
-                            <span class="toggle-slider"></span>
-                        </label>
+                        <span class="ops-row-label">🌙 Modo Oscuro</span>
+                        <input type="checkbox" id="darkModeToggle" onchange="app.toggleDarkMode()">
                     </div>
-                    <div class="ops-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;gap:10px;">
-                        <div class="ops-label">Color de tema</div>
-                        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                            <button id="dot-azul"   class="theme-dot" style="background:linear-gradient(135deg,#1565C0,#0D47A1);" onclick="app.seleccionarTema('azul')"></button>
-                            <button id="dot-verde"  class="theme-dot" style="background:linear-gradient(135deg,#2E7D32,#1B5E20);" onclick="app.seleccionarTema('verde')"></button>
-                            <button id="dot-fuego"  class="theme-dot" style="background:linear-gradient(135deg,#D84315,#BF360C);" onclick="app.seleccionarTema('fuego')"></button>
-                            <button id="dot-acero"  class="theme-dot" style="background:linear-gradient(135deg,#455A64,#263238);" onclick="app.seleccionarTema('acero')"></button>
-                            <button id="dot-rojo"   class="theme-dot" style="background:linear-gradient(135deg,#C62828,#B71C1C);" onclick="app.seleccionarTema('rojo')"></button>
+                </div>
+            </div>
+
+            <!-- Trabajo -->
+            <div class="ops-section">
+                <button class="ops-title" onclick="app.toggleSection(this)">💼 Trabajo <span class="ops-chevron">›</span></button>
+                <div class="ops-body">
+                    <div class="ops-field">
+                        <span class="ops-field-label">💰 Precio hora nocturna (€)</span>
+                        <input type="number" class="ops-night-input" id="precioNocheGlobal" min="0" step="0.01" placeholder="ej: 2.89" onchange="app.guardarPrecioNoche()">
+                        <span class="ops-field-sub">Se aplica automáticamente al detectar horario 21h–06h</span>
+                    </div>
+                    <button class="ops-btn" onclick="app.mostrarCambiarHoras()">
+                        ⚙️ Horas anuales
+                        <span id="horasAnualesDisplay" style="margin-left:auto;color:#667eea;font-weight:700;font-size:13px;"></span>
+                        <span class="ops-arrow">›</span>
+                    </button>
+                    <button class="ops-btn" onclick="app.revisarSuma()">🔍 Revisar suma <span class="ops-arrow">›</span></button>
+                </div>
+            </div>
+
+            <!-- GPS -->
+            <div class="ops-section">
+                <button class="ops-title" onclick="app.toggleSection(this)">📍 Detección de trabajo <span class="ops-chevron">›</span></button>
+                <div class="ops-body">
+                    <div class="ops-row" style="flex-direction:column;align-items:flex-start;gap:10px;">
+                        <div>
+                            <div class="ops-row-label">Ubicaciones del trabajo</div>
+                            <span class="ops-row-sub">La app detecta si estás cerca y envía una notificación al sistema</span>
                         </div>
+                        <div id="gpsStatus" class="gps-badge none">Sin ubicaciones</div>
+                        <div id="workLocationsList" style="width:100%;"></div>
+                        <button onclick="app.guardarUbicacionTrabajo()" style="padding:9px 14px;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;border-radius:8px;font-weight:600;font-size:12px;cursor:pointer;font-family:inherit;">📍 Añadir ubicación actual</button>
                     </div>
                 </div>
             </div>
 
-            <!-- Lugar de trabajo -->
-            <div class="ops-section" id="secGPS">
-                <div class="ops-header" onclick="app.toggleSection(this)">
-                    <span class="ops-title">📍 Lugar de trabajo</span>
-                    <span class="ops-arrow">▼</span>
-                </div>
+            <!-- Copia de Seguridad -->
+            <div class="ops-section">
+                <button class="ops-title" onclick="app.toggleSection(this)">💾 Copia de Seguridad <span class="ops-chevron">›</span></button>
                 <div class="ops-body">
-                    <div class="ops-row" style="border-bottom:none;flex-direction:column;align-items:flex-start;gap:10px;">
-                        <span id="gpsStatus" class="gps-badge none">Sin ubicaciones</span>
-                        <div id="workLocationsList"></div>
-                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                            <button onclick="app.guardarUbicacionTrabajo()" style="padding:9px 14px;background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;font-weight:600;font-size:12px;cursor:pointer;font-family:inherit;">📍 Añadir ubicación actual</button>
-                            <button onclick="app.probarNotificacion()" style="padding:9px 14px;background:#455a64;color:white;border:none;border-radius:8px;font-weight:600;font-size:12px;cursor:pointer;font-family:inherit;">🔔 Probar notificación</button>
-                        </div>
-                    </div>
+                    <button class="ops-btn" onclick="app.exportarDatos()">⬆️ Exportar datos JSON <span class="ops-arrow">›</span></button>
+                    <button class="ops-btn" onclick="app.importarDatos()">⬇️ Importar / Restaurar copia <span class="ops-arrow">›</span></button>
                 </div>
             </div>
 
-            <!-- Horas y datos -->
-            <div class="ops-section" id="secHoras">
-                <div class="ops-header" onclick="app.toggleSection(this)">
-                    <span class="ops-title">⏱️ Horas y Datos</span>
-                    <span class="ops-arrow">▼</span>
-                </div>
-                <div class="ops-body">
-                    <div class="ops-row">
-                        <div><div class="ops-label">Horas anuales</div><div class="ops-sublabel" id="horasAnualesDisplay">777h</div></div>
-                        <button onclick="app.mostrarCambiarHoras()" class="ops-btn">Cambiar</button>
-                    </div>
-                    <div class="ops-row">
-                        <div><div class="ops-label">Precio hora nocturna</div><div class="ops-sublabel">Para calcular extras</div></div>
-                        <input type="number" id="precioNocheGlobal" placeholder="0.00" step="0.01" min="0" onchange="app.guardarPrecioNoche()" style="width:80px;padding:7px 10px;border:1.5px solid #e2e8f0;border-radius:7px;font-size:13px;font-family:inherit;outline:none;">
-                    </div>
-                    <div class="ops-row">
-                        <div class="ops-label">Verificar suma de horas</div>
-                        <button onclick="app.revisarSuma()" class="ops-btn">Verificar</button>
-                    </div>
-                    <div class="ops-row">
-                        <div><div class="ops-label">Exportar / copia de seguridad</div></div>
-                        <button onclick="app.exportarDatos()" class="ops-btn">Exportar</button>
-                    </div>
-                    <div class="ops-row">
-                        <div><div class="ops-label">Importar / restaurar</div></div>
-                        <button onclick="app.importarDatos()" class="ops-btn">Importar</button>
-                    </div>
-                    <div class="ops-row">
-                        <div><div class="ops-label">Resetear horas a 0</div><div class="ops-sublabel">Borra todos los registros</div></div>
-                        <button onclick="app.confirmarResetear()" class="ops-btn danger">Resetear</button>
-                    </div>
-                    <div class="ops-row" style="border-bottom:none;">
-                        <div><div class="ops-label">Borrar cuenta y datos</div><div class="ops-sublabel">Elimina registros y cierra sesión</div></div>
-                        <button onclick="app.confirmarBorrarCuenta()" class="ops-btn danger">Borrar</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Instalar -->
+            <!-- Aplicación -->
             <div class="ops-section" id="installSection" style="display:none;">
-                <div class="ops-header" onclick="app.toggleSection(this)">
-                    <span class="ops-title">📲 Instalar App</span>
-                    <span class="ops-arrow">▼</span>
-                </div>
+                <button class="ops-title" onclick="app.toggleSection(this)">📲 Aplicación <span class="ops-chevron">›</span></button>
                 <div class="ops-body">
-                    <div class="ops-row" style="border-bottom:none;">
-                        <div class="ops-label">Instalar en pantalla de inicio</div>
-                        <button onclick="app.instalarApp()" class="ops-btn">Instalar</button>
-                    </div>
+                    <button class="ops-btn" onclick="app.instalarApp()">📲 Instalar aplicación <span class="ops-arrow">›</span></button>
+                </div>
+            </div>
+
+            <!-- Cuenta -->
+            <div class="ops-section">
+                <button class="ops-title" onclick="app.toggleSection(this)">🔑 Cuenta <span class="ops-chevron">›</span></button>
+                <div class="ops-body">
+                    <button class="ops-btn primary-blue" onclick="app.cerrarSesion()">🚪 Cerrar Sesión <span class="ops-arrow">›</span></button>
+                    <button class="ops-btn danger" onclick="app.confirmarResetear()">🔄 Resetear Contador <span class="ops-arrow">›</span></button>
+                    <button class="ops-btn danger" onclick="app.confirmarBorrarCuenta()">🗑️ Borrar datos y cerrar sesión <span class="ops-arrow">›</span></button>
                 </div>
             </div>
 
@@ -438,40 +513,78 @@
             <span id="installBannerMsg" style="font-size:11px;opacity:0.9;">Instala la app para acceso rápido</span>
         </div>
         <button id="installBannerBtn" onclick="app.instalarApp()" style="background:white;color:#0052CC;border:none;border-radius:6px;padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;">Instalar</button>
-        <button class="install-banner-close" onclick="app.ocultarInstallBanner()">×</button>    </div>
+        <button class="install-banner-close" onclick="app.ocultarInstallBanner()">×</button>
+    </div>
+</div>
 
-<!-- Modales -->
+<!-- Confirm Modal -->
 <div class="modal" id="modal">
     <div class="modal-content" id="modalContent">
-        <div class="modal-title" id="modalTitle"></div>
-        <div class="modal-message" id="modalMessage"></div>
-        <div class="modal-btns">
-            <button class="modal-btn modal-btn-cancel" onclick="app.cerrarModal()">Cancelar</button>
-            <button class="modal-btn modal-btn-confirm" onclick="app.confirmarModal()">Confirmar</button>
+        <h2 id="modalTitle"></h2>
+        <p id="modalMessage" style="color:#666;font-size:13px;margin-top:6px;"></p>
+        <div class="modal-buttons">
+            <button class="modal-btn-cl" type="button" onclick="app.cerrarModal()">Cancelar</button>
+            <button class="modal-btn-cf" type="button" onclick="app.confirmarModal()">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Historial Modal -->
+<div class="modal" id="historialModal">
+    <div class="modal-card" id="historialModalContent">
+        <div class="modal-header">
+            <h3>📋 Todas las jornadas</h3>
+            <button class="modal-close" onclick="document.getElementById('historialModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <ul id="historialModalList" style="list-style:none;"></ul>
         </div>
     </div>
 </div>
 
 <!-- Edit Modal -->
 <div class="modal" id="editModal">
-    <div class="edit-modal-content" id="editModalContent">
-        <h3 style="font-size:15px;font-weight:700;margin-bottom:14px;">✏️ Editar registro</h3>
-        <div class="edit-field"><label class="edit-label">Fecha</label><input type="date" id="editModalFecha" class="edit-input"></div>
-        <div class="edit-field"><label class="edit-label">Horas trabajadas</label><input type="number" id="editModalHoras" class="edit-input" step="0.5" min="0.5"></div>
-        <div style="display:flex;gap:8px;margin-bottom:12px;">
-            <div class="edit-field" style="flex:1;"><label class="edit-label">Inicio</label><input type="time" id="editModalInicio" class="edit-input" onchange="app.calcularHorasModalPorTiempo()"></div>
-            <div class="edit-field" style="flex:1;"><label class="edit-label">Fin</label><input type="time" id="editModalFin" class="edit-input" onchange="app.calcularHorasModalPorTiempo()"></div>
+    <div class="modal-card" id="editModalContent">
+        <div class="modal-header">
+            <h3>✏️ Editar jornada</h3>
+            <button class="modal-close" onclick="document.getElementById('editModal').classList.remove('show')">×</button>
         </div>
-        <div style="display:flex;gap:8px;margin-bottom:12px;">
-            <div class="edit-field" style="flex:1;"><label class="edit-label">Horas noct.</label><input type="number" id="editModalNocturnas" class="edit-input" step="0.5" min="0" oninput="app.calcularExtraModal()"></div>
-            <div class="edit-field" style="flex:1;"><label class="edit-label">€/hora noct.</label><input type="number" id="editModalPrecioN" class="edit-input" step="0.01" min="0" oninput="app.calcularExtraModal()"></div>
+        <div class="modal-body">
+            <div class="edit-field">
+                <label>Fecha</label>
+                <input type="date" id="editModalFecha">
+            </div>
+            <div class="edit-row">
+                <div class="edit-field">
+                    <label>Inicio</label>
+                    <input type="time" id="editModalInicio" oninput="app.calcularHorasModalPorTiempo()">
+                </div>
+                <div class="edit-field">
+                    <label>Fin</label>
+                    <input type="time" id="editModalFin" oninput="app.calcularHorasModalPorTiempo()">
+                </div>
+                <div class="edit-field" style="flex:0.7;">
+                    <label>Horas</label>
+                    <input type="number" id="editModalHoras" min="0" step="0.5" placeholder="8">
+                </div>
+            </div>
+            <div class="edit-row">
+                <div class="edit-field">
+                    <label>🌙 Hrs. noct.</label>
+                    <input type="number" id="editModalNocturnas" min="0" step="0.5" placeholder="0" oninput="app.calcularExtraModal()">
+                </div>
+                <div class="edit-field">
+                    <label>€/h noct.</label>
+                    <input type="number" id="editModalPrecioN" min="0" step="0.01" placeholder="2.89" oninput="app.calcularExtraModal()">
+                </div>
+            </div>
+            <div class="extra-label" id="editModalExtraLabel"></div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+                <input type="checkbox" id="editModalPR" style="width:16px;height:16px;accent-color:#3498db;cursor:pointer;">
+                <label for="editModalPR" style="font-size:13px;font-weight:600;color:#2980b9;cursor:pointer;">PR — Prolongación de Ruta</label>
+            </div>
         </div>
-        <div id="editModalExtraLabel" style="font-size:11px;color:#856404;font-weight:600;margin-bottom:10px;"></div>
-        <div class="edit-field" style="flex-direction:row;align-items:center;gap:10px;margin-bottom:14px;">
-            <label class="edit-label" style="margin:0;">Día festivo / PR</label>
-            <input type="checkbox" id="editModalPR" style="width:18px;height:18px;">
-        </div>
-        <div class="modal-btns">
+        <div class="modal-footer">
             <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('editModal').classList.remove('show')">Cancelar</button>
             <button class="modal-btn modal-btn-confirm" onclick="app._guardarDesdeModal()">Guardar</button>
         </div>
@@ -488,27 +601,7 @@
     </div>
 </div>
 
-<!-- Historial Modal -->
-<div class="modal" id="historialModal">
-    <div class="historial-modal-content" id="historialModalContent">
-        <div class="historial-modal-header">
-            <h3>📋 Historial completo</h3>
-            <button class="historial-close-btn" onclick="document.getElementById('historialModal').classList.remove('show')">✕</button>
-        </div>
-        <ul class="historial-modal-list" id="historialModalList"></ul>
-    </div>
-</div>
-
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://accounts.google.com/gsi/client" async></script>
 <script src="app.js"></script>
-<script>
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.addEventListener('message', e => {
-        if (e.data?.type === 'SW_UPDATED') location.reload();
-    });
-}
-</script>
 </body>
 </html>
