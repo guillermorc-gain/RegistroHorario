@@ -28,6 +28,19 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
+      - name: Set Android launcher icon
+        run: |
+          SRC="icons/icon-512.png"
+          RES="android/app/src/main/res"
+          for pair in "mipmap-mdpi:48" "mipmap-hdpi:72" "mipmap-xhdpi:96" "mipmap-xxhdpi:144" "mipmap-xxxhdpi:192"; do
+            dir="${pair%%:*}"
+            size="${pair##*:}"
+            convert "$SRC" -background "#FFFFFF" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher.png"
+            convert "$SRC" -background "#FFFFFF" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher_round.png"
+          done
+          rm -f "$RES/drawable/ic_launcher_foreground.xml"
+          convert "$SRC" -resize "288x288" -gravity center -background none -extent "432x432" "$RES/drawable/ic_launcher_foreground.png"
+
       - name: Patch variables.gradle — targetSdkVersion 34
         run: |
           VARS="android/variables.gradle"

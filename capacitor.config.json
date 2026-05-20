@@ -3,7 +3,8 @@
   "appName": "Horas EMT",
   "webDir": "www",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "allowNavigation": ["accounts.google.com", "*.google.com", "oauth2.googleapis.com"]
   },
   "plugins": {
     "LocalNotifications": {
