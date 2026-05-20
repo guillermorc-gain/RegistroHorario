@@ -1,0 +1,13 @@
+{
+  "appId": "com.guillermorc.horasemt",
+  "appName": "Horas EMT",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "iconColor": "#1565C0"
+    }
+  }
+}
