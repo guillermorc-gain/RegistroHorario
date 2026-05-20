@@ -30,6 +30,7 @@ jobs:
 
       - name: Set Android launcher icon
         run: |
+          sudo apt-get install -y --no-install-recommends imagemagick
           SRC="icons/icon-512.png"
           RES="android/app/src/main/res"
           for pair in "mipmap-mdpi:48" "mipmap-hdpi:72" "mipmap-xhdpi:96" "mipmap-xxhdpi:144" "mipmap-xxxhdpi:192"; do
