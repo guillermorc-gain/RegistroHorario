@@ -429,7 +429,7 @@ const app = {
         const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         btn.style.cssText = '';
         if (photo) {
-            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` ;
             btn.style.background = 'transparent'; btn.style.padding = '0'; btn.style.overflow = 'hidden';
         } else if (emoji) {
             btn.textContent = emoji; btn.style.background = bg; btn.style.fontSize = '20px'; btn.style.color = 'white';
@@ -497,7 +497,7 @@ const app = {
         const emoji = localStorage.getItem('avatarEmoji');
         const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         if (photo) {
-            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` ;
             el.style.background = 'transparent';
         } else if (emoji) {
             el.textContent = emoji; el.style.background = bg; el.style.color = '';
@@ -510,7 +510,10 @@ const app = {
         }
     },
 
-    guardarPerfil() { this.actualizarBotonesPerfil(); alert('✅ Perfil guardado'); },
+    guardarPerfil() {
+        this.actualizarBotonesPerfil();
+        alert('✅ Perfil guardado');
+    },
 
     establecerFechaHoy() {
         const hoy = new Date();
@@ -569,7 +572,9 @@ const app = {
         if (b <= a) b += 1440;
         const windows = [[1260, 1440], [1440, 1800]];
         let mins = 0;
-        windows.forEach(([ws, we]) => { mins += Math.max(0, Math.min(b, we) - Math.max(a, ws)); });
+        windows.forEach(([ws, we]) => {
+            mins += Math.max(0, Math.min(b, we) - Math.max(a, ws));
+        });
         return Math.round(mins / 60 * 2) / 2;
     },
 
@@ -599,7 +604,12 @@ const app = {
         }
     },
 
-    clickNocheCompact() { const cb = document.getElementById('nocheToggle'); cb.checked = !cb.checked; this.toggleNoche(); },
+    clickNocheCompact() {
+        const cb = document.getElementById('nocheToggle');
+        cb.checked = !cb.checked;
+        this.toggleNoche();
+    },
+
     clickPrCompact() {
         this.prActivo = !this.prActivo;
         document.getElementById('prCompact').classList.toggle('active', this.prActivo);
@@ -678,12 +688,17 @@ const app = {
         const list = document.getElementById('historialModalList');
         list.innerHTML = '';
         const registros = Object.entries(this._historialMap).sort((a, b) => b[1].timestamp - a[1].timestamp);
-        if (registros.length === 0) { list.innerHTML = '<li style="text-align:center;padding:24px;color:#95a5a6;font-size:13px;">Sin registros</li>'; return; }
+        if (registros.length === 0) {
+            list.innerHTML = '<li style="text-align:center;padding:24px;color:#95a5a6;font-size:13px;">Sin registros</li>';
+            return;
+        }
         registros.forEach(([id, reg]) => {
             const li = document.createElement('li');
             li.style.cssText = 'padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #efefef;gap:8px;';
-            const nocheStr = reg.horasNocturnas ? `<div style="font-size:10px;color:#856404;font-weight:600;">🌙 ${reg.horasNocturnas}h noct. · +${(reg.extraNoche||0).toFixed(2)}€</div>` : '';
-            const horario = (reg.horaInicio && reg.horaFin) ? `<span style="color:#95a5a6;font-size:10px;font-style:italic;">${reg.horaInicio}–${reg.horaFin}</span>` : '';
+            const nocheStr = reg.horasNocturnas
+                ? `<div style="font-size:10px;color:#856404;font-weight:600;">🌙 ${reg.horasNocturnas}h noct. · +${(reg.extraNoche||0).toFixed(2)}€</div>` : '';
+            const horario = (reg.horaInicio && reg.horaFin)
+                ? `<span style="color:#95a5a6;font-size:10px;font-style:italic;">${reg.horaInicio}–${reg.horaFin}</span>` : '';
             const prBadge = reg.pr ? `<span class="pr-badge">PR</span>` : '';
             li.innerHTML = `
                 <div style="flex:1;min-width:0;">
@@ -699,14 +714,18 @@ const app = {
                     <button class="hm-edit" style="background:#3498db;color:white;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;border:none;font-weight:600;">✏️</button>
                     <button class="hm-del"  style="background:#e74c3c;color:white;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;border:none;font-weight:600;">×</button>
                 </div>`;
-            li.querySelector('.hm-edit').addEventListener('click', () => { document.getElementById('historialModal').classList.remove('show'); this.editarRegistro(id); });
+            li.querySelector('.hm-edit').addEventListener('click', () => {
+                document.getElementById('historialModal').classList.remove('show');
+                this.editarRegistro(id);
+            });
             li.querySelector('.hm-del').addEventListener('click', () => this.borrarRegistro(id));
             list.appendChild(li);
         });
     },
 
     editarRegistro(id) {
-        const reg = this._historialMap[id]; if (!reg) return;
+        const reg = this._historialMap[id];
+        if (!reg) return;
         this.editingId = id;
         const fecha = `${id.slice(0,4)}-${id.slice(4,6)}-${id.slice(6,8)}`;
         document.getElementById('editModalFecha').value    = fecha;
@@ -715,14 +734,18 @@ const app = {
         document.getElementById('editModalFin').value      = reg.horaFin    || '';
         document.getElementById('editModalNocturnas').value= reg.horasNocturnas || '';
         document.getElementById('editModalPrecioN').value  = reg.precioNoche    || '';
-        document.getElementById('editModalExtraLabel').textContent = reg.horasNocturnas ? `+${(reg.extraNoche || 0).toFixed(2)}€ extra nocturno` : '';
+        document.getElementById('editModalExtraLabel').textContent =
+            reg.horasNocturnas ? `+${(reg.extraNoche || 0).toFixed(2)}€ extra nocturno` : '';
         document.getElementById('editModalPR').checked = !!reg.pr;
         document.getElementById('editModal').classList.add('show');
         if (this.darkMode) document.getElementById('editModalContent').classList.add('dark');
     },
 
     _calcMesStats(historial, año, mes) {
-        const entries = Object.values(historial).filter(r => { const d = new Date(r.timestamp); return d.getFullYear() === año && d.getMonth() + 1 === mes; });
+        const entries = Object.values(historial).filter(r => {
+            const d = new Date(r.timestamp);
+            return d.getFullYear() === año && d.getMonth() + 1 === mes;
+        });
         return {
             horas:     Math.round(entries.reduce((s, r) => s + r.horas, 0) * 10) / 10,
             nocturnas: Math.round(entries.reduce((s, r) => s + (r.horasNocturnas || 0), 0) * 10) / 10,
@@ -759,7 +782,8 @@ const app = {
         if (pct >= 100) document.getElementById('progressFill').style.background = 'linear-gradient(90deg,#27ae60,#229954)';
         const ahora = new Date();
         const mesStats = this._calcMesStats(this._historialFull, ahora.getFullYear(), ahora.getMonth() + 1);
-        const elMesH = document.getElementById('statMesHoras'); const elMesN = document.getElementById('statMesNoche');
+        const elMesH = document.getElementById('statMesHoras');
+        const elMesN = document.getElementById('statMesNoche');
         if (elMesH) elMesH.textContent = mesStats.horas.toFixed(1);
         if (elMesN) elMesN.textContent = mesStats.nocturnas.toFixed(1);
         this._renderMensual(this._historialFull);
@@ -775,14 +799,23 @@ const app = {
     },
 
     _renderMensual(historial) {
-        const container = document.getElementById('mensualTable'); if (!container) return;
+        const container = document.getElementById('mensualTable');
+        if (!container) return;
         const meses = this._calcTodosMeses(historial);
         const keys  = Object.keys(meses).sort((a, b) => b.localeCompare(a)).slice(0, 6);
         if (keys.length === 0) { container.innerHTML = '<div style="text-align:center;color:#95a5a6;font-size:12px;padding:8px;">Sin datos</div>'; return; }
         container.innerHTML = keys.map(k => {
             const m = meses[k];
             const barPct = Math.min((m.horas / (this.horasAnualesCustom / 12)) * 100, 100);
-            return `<div class="mes-row"><div class="mes-label">${m.label}</div><div class="mes-bar-wrap"><div class="mes-bar" style="width:${barPct}%"></div></div><div class="mes-vals"><span>${m.horas}h</span>${m.nocturnas > 0 ? `<span class="mes-noche">🌙${m.nocturnas}h</span>` : ''}${m.extra > 0 ? `<span class="mes-extra">+${m.extra.toFixed(2)}€</span>` : ''}</div></div>`;
+            return `<div class="mes-row">
+                <div class="mes-label">${m.label}</div>
+                <div class="mes-bar-wrap"><div class="mes-bar" style="width:${barPct}%"></div></div>
+                <div class="mes-vals">
+                    <span>${m.horas}h</span>
+                    ${m.nocturnas > 0 ? `<span class="mes-noche">🌙${m.nocturnas}h</span>` : ''}
+                    ${m.extra > 0    ? `<span class="mes-extra">+${m.extra.toFixed(2)}€</span>` : ''}
+                </div>
+            </div>`;
         }).join('');
     },
 
@@ -794,34 +827,51 @@ const app = {
         else alert(`❌ Error!\n\nTrabajadas: ${t}h\nRestantes: ${r}h\nTotal: ${s}h\nEsperado: ${this.horasAnualesCustom}h`);
     },
 
-    toggleDarkMode() { this.darkMode = !this.darkMode; localStorage.setItem('darkMode', this.darkMode); this.darkMode ? this.aplicarDarkMode() : this.removerDarkMode(); },
+    toggleDarkMode() {
+        this.darkMode = !this.darkMode;
+        localStorage.setItem('darkMode', this.darkMode);
+        this.darkMode ? this.aplicarDarkMode() : this.removerDarkMode();
+    },
 
     aplicarDarkMode() {
         document.body.classList.add('dark');
-        ['#appHeader','#appContent','#optionsHeader','#optionsContent','#modalContent','#editModalContent','#historialModalContent','#avatarModalContent']
+        ['#appHeader','#appContent','#optionsHeader','#optionsContent','#modalContent',
+         '#editModalContent','#historialModalContent','#avatarModalContent']
             .forEach(s => { const e = document.querySelector(s); if(e) e.classList.add('dark'); });
         document.querySelector('.container')?.classList.add('dark');
     },
 
     removerDarkMode() {
         document.body.classList.remove('dark');
-        ['#appHeader','#appContent','#optionsHeader','#optionsContent','#modalContent','#editModalContent','#historialModalContent','#avatarModalContent']
+        ['#appHeader','#appContent','#optionsHeader','#optionsContent','#modalContent',
+         '#editModalContent','#historialModalContent','#avatarModalContent']
             .forEach(s => { const e = document.querySelector(s); if(e) e.classList.remove('dark'); });
         document.querySelector('.container')?.classList.remove('dark');
     },
 
-    seleccionarTema(tema) { this.tema = tema; localStorage.setItem('tema', tema); this.aplicarTema(tema); this._actualizarTemaUI(); },
+    seleccionarTema(tema) {
+        this.tema = tema;
+        localStorage.setItem('tema', tema);
+        this.aplicarTema(tema);
+        this._actualizarTemaUI();
+    },
+
     aplicarTema(tema) {
         document.body.classList.remove('theme-verde','theme-fuego','theme-acero','theme-rojo');
         if (tema && tema !== 'azul') document.body.classList.add('theme-' + tema);
     },
+
     _actualizarTemaUI() {
-        ['azul','verde','fuego','acero','rojo'].forEach(t => { const dot = document.getElementById('dot-' + t); if (dot) dot.classList.toggle('active', t === this.tema); });
+        ['azul','verde','fuego','acero','rojo'].forEach(t => {
+            const dot = document.getElementById('dot-' + t);
+            if (dot) dot.classList.toggle('active', t === this.tema);
+        });
     },
 
     guardarPrecioNoche() {
         const precio = parseFloat(document.getElementById('precioNocheGlobal').value) || 0;
-        this.precioNocheDefault = precio; localStorage.setItem('precioNoche', precio);
+        this.precioNocheDefault = precio;
+        localStorage.setItem('precioNoche', precio);
     },
 
     mostrarCambiarHoras() {
@@ -835,16 +885,23 @@ const app = {
         }
     },
 
-    confirmarResetear() { this.mostrarModal('⚠️ Resetear Contador', '¿Estás seguro? Se pondrán todas las horas a 0.', this.resetearContador.bind(this)); },
+    confirmarResetear() {
+        this.mostrarModal('⚠️ Resetear Contador', '¿Estás seguro? Se pondrán todas las horas a 0.', this.resetearContador.bind(this));
+    },
+
     mostrarModal(titulo, mensaje, callback) {
         document.getElementById('modalTitle').textContent   = titulo;
         document.getElementById('modalMessage').textContent = mensaje;
         document.getElementById('modal').classList.add('show');
         this.modalCallback = callback;
     },
+
     cerrarModal()       { document.getElementById('modal').classList.remove('show'); this.modalCallback = null; },
     async confirmarModal() { if (this.modalCallback) await this.modalCallback(); this.cerrarModal(); },
-    confirmarBorrarCuenta() { this.mostrarModal('⚠️ Borrar datos', 'Se eliminarán todos tus registros de Drive y se cerrará la sesión.', this.borrarCuenta.bind(this)); },
+
+    confirmarBorrarCuenta() {
+        this.mostrarModal('⚠️ Borrar datos', 'Se eliminarán todos tus registros de Drive y se cerrará la sesión.', this.borrarCuenta.bind(this));
+    },
 
     _getWorkLocations() { return JSON.parse(localStorage.getItem('workLocations') || '[]'); },
     _saveWorkLocations(locs) { localStorage.setItem('workLocations', JSON.stringify(locs)); },
@@ -853,13 +910,15 @@ const app = {
         const name = prompt('Nombre de esta ubicación (ej: EMT Madrid, Depósito):');
         if (!name) return;
         if (!navigator.geolocation) { alert('❌ Tu dispositivo no soporta geolocalización'); return; }
-        if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission();
+        if ('Notification' in window && Notification.permission === 'default')
+            await Notification.requestPermission();
         navigator.geolocation.getCurrentPosition(
             (pos) => {
                 const locs = this._getWorkLocations();
                 locs.push({ name: name.trim(), lat: pos.coords.latitude, lng: pos.coords.longitude });
                 this._saveWorkLocations(locs);
-                this.actualizarEstadoGPS(); this._renderWorkLocations();
+                this.actualizarEstadoGPS();
+                this._renderWorkLocations();
                 alert(`✅ "${name.trim()}" guardada. Recibirás notificación al llegar.`);
                 if (!this._bgGeoStarted) this._iniciarGeofencingNativo();
             },
@@ -870,13 +929,16 @@ const app = {
     borrarUbicacion(index) {
         const locs = this._getWorkLocations();
         if (!confirm(`¿Eliminar "${locs[index].name}"?`)) return;
-        locs.splice(index, 1); this._saveWorkLocations(locs);
+        locs.splice(index, 1);
+        this._saveWorkLocations(locs);
         if (locs.length === 0) document.getElementById('workBanner').classList.remove('show');
-        this.actualizarEstadoGPS(); this._renderWorkLocations();
+        this.actualizarEstadoGPS();
+        this._renderWorkLocations();
     },
 
     async editarUbicacion(index) {
-        const locs = this._getWorkLocations(); const loc  = locs[index];
+        const locs = this._getWorkLocations();
+        const loc  = locs[index];
         const nuevoNombre = prompt('Nombre de la ubicación:', loc.name);
         if (nuevoNombre === null) return;
         if (!nuevoNombre.trim()) { alert('❌ El nombre no puede estar vacío'); return; }
@@ -890,34 +952,62 @@ const app = {
                 );
             });
         }
-        locs[index] = loc; this._saveWorkLocations(locs);
-        this.actualizarEstadoGPS(); this._renderWorkLocations();
+        locs[index] = loc;
+        this._saveWorkLocations(locs);
+        this.actualizarEstadoGPS();
+        this._renderWorkLocations();
     },
 
     _renderWorkLocations() {
-        const container = document.getElementById('workLocationsList'); if (!container) return;
+        const container = document.getElementById('workLocationsList');
+        if (!container) return;
         const locs = this._getWorkLocations();
-        if (locs.length === 0) { container.innerHTML = '<div style="font-size:12px;color:#95a5a6;padding:4px 0;">Sin ubicaciones guardadas</div>'; return; }
+        if (locs.length === 0) {
+            container.innerHTML = '<div style="font-size:12px;color:#95a5a6;padding:4px 0;">Sin ubicaciones guardadas</div>';
+            return;
+        }
         const isDark = this.darkMode;
         container.innerHTML = locs.map((loc, i) => {
-            const latStr = loc.lat.toFixed(5); const lngStr = loc.lng.toFixed(5);
+            const latStr = loc.lat.toFixed(5);
+            const lngStr = loc.lng.toFixed(5);
             const mapUrl = `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
-            return `<div style="background:${isDark?'#111827':'#f8f9ff'};border:1px solid ${isDark?'#2d3561':'#e0e4ff'};border-radius:10px;padding:10px 12px;margin-bottom:8px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;"><span style="font-size:13px;font-weight:700;color:${isDark?'#e0e0e0':'#2c3e50'}">📍 ${loc.name}</span><div style="display:flex;gap:6px;"><button onclick="app.editarUbicacion(${i})" style="background:var(--ac);color:white;border:none;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600;">✏️ Editar</button><button onclick="app.borrarUbicacion(${i})" style="background:#e74c3c;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600;">🗑️</button></div></div><div style="font-size:11px;color:#7f8c8d;margin-bottom:4px;">🌐 ${latStr}, ${lngStr}</div><a href="${mapUrl}" target="_blank" rel="noopener" style="font-size:11px;color:var(--ac);text-decoration:none;font-weight:600;">📌 Ver en Google Maps →</a></div>`;
+            return `
+            <div style="background:${isDark?'#111827':'#f8f9ff'};border:1px solid ${isDark?'#2d3561':'#e0e4ff'};border-radius:10px;padding:10px 12px;margin-bottom:8px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                    <span style="font-size:13px;font-weight:700;color:${isDark?'#e0e0e0':'#2c3e50'};">📍 ${loc.name}</span>
+                    <div style="display:flex;gap:6px;">
+                        <button onclick="app.editarUbicacion(${i})" style="background:var(--ac);color:white;border:none;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600;">✏️ Editar</button>
+                        <button onclick="app.borrarUbicacion(${i})" style="background:#e74c3c;color:white;border:none;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600;">🗑️</button>
+                    </div>
+                </div>
+                <div style="font-size:11px;color:#7f8c8d;margin-bottom:4px;">🌐 ${latStr}, ${lngStr}</div>
+                <a href="${mapUrl}" target="_blank" rel="noopener" style="font-size:11px;color:var(--ac);text-decoration:none;font-weight:600;">📌 Ver en Google Maps →</a>
+            </div>`;
         }).join('');
     },
 
     actualizarEstadoGPS() {
-        const locs = this._getWorkLocations(); const el = document.getElementById('gpsStatus'); if (!el) return;
-        if (locs.length > 0) { el.textContent = `✅ ${locs.length} ubicación${locs.length > 1 ? 'es' : ''} guardada${locs.length > 1 ? 's' : ''}`; el.className = 'gps-badge saved'; }
-        else { el.textContent = 'Sin ubicaciones'; el.className = 'gps-badge none'; }
+        const locs = this._getWorkLocations();
+        const el   = document.getElementById('gpsStatus');
+        if (!el) return;
+        if (locs.length > 0) {
+            el.textContent = `✅ ${locs.length} ubicación${locs.length > 1 ? 'es' : ''} guardada${locs.length > 1 ? 's' : ''}`;
+            el.className = 'gps-badge saved';
+        } else {
+            el.textContent = 'Sin ubicaciones'; el.className = 'gps-badge none';
+        }
     },
 
     verificarUbicacion() {
         const locs = this._getWorkLocations();
         if (locs.length === 0 || !navigator.geolocation) return;
         navigator.geolocation.getCurrentPosition((pos) => {
-            const cercano = locs.some(loc => this.calcularDistancia(pos.coords.latitude, pos.coords.longitude, loc.lat, loc.lng) < 300);
-            if (cercano) { document.getElementById('workBanner').classList.add('show'); this._enviarNotificacionTrabajo(); }
+            const cercano = locs.some(loc =>
+                this.calcularDistancia(pos.coords.latitude, pos.coords.longitude, loc.lat, loc.lng) < 300);
+            if (cercano) {
+                document.getElementById('workBanner').classList.add('show');
+                this._enviarNotificacionTrabajo();
+            }
         }, () => {});
     },
 
@@ -925,8 +1015,15 @@ const app = {
         if (!('Notification' in window) || Notification.permission !== 'granted') return;
         try {
             const reg = await navigator.serviceWorker.ready;
-            reg.showNotification('📍 Horas EMT', { body: 'Parece que estás en el trabajo. ¿Registras la jornada?', icon: '/icons/icon-192.png', badge: '/icons/badge.svg', tag: 'trabajo-cercano', requireInteraction: true, actions: [{ action: 'abrir', title: 'Abrir app' }] });
-        } catch(_) { new Notification('📍 Horas EMT', { body: 'Parece que estás en el trabajo.', icon: '/icons/icon-192.png' }); }
+            reg.showNotification('📍 Horas EMT', {
+                body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
+                icon: '/icons/icon-192.png', badge: '/icons/badge.svg',
+                tag: 'trabajo-cercano', requireInteraction: true,
+                actions: [{ action: 'abrir', title: 'Abrir app' }]
+            });
+        } catch(_) {
+            new Notification('📍 Horas EMT', { body: 'Parece que estás en el trabajo.', icon: '/icons/icon-192.png' });
+        }
     },
 
     async _iniciarGeofencingNativo() {
@@ -938,24 +1035,44 @@ const app = {
             this._geoWatcherId = await BGGeo.addWatcher({
                 backgroundMessage: 'Monitorizando tu ubicación de trabajo',
                 backgroundTitle: 'Horas EMT',
-                requestPermissions: true, stale: false, distanceFilter: 100
+                requestPermissions: true,
+                stale: false,
+                distanceFilter: 100
             }, (location, error) => {
                 if (error || !location) return;
                 const ahora = Date.now();
                 if (ahora - this._notifEnviadaAt < 30 * 60 * 1000) return;
-                const locs = this._getWorkLocations(); if (locs.length === 0) return;
-                const cercano = locs.some(loc => this.calcularDistancia(location.latitude, location.longitude, loc.lat, loc.lng) < 300);
-                if (cercano) { this._notifEnviadaAt = ahora; this._enviarNotificacionLlegadaNativa(); }
+                const locs = this._getWorkLocations();
+                if (locs.length === 0) return;
+                const cercano = locs.some(loc =>
+                    this.calcularDistancia(location.latitude, location.longitude, loc.lat, loc.lng) < 300
+                );
+                if (cercano) {
+                    this._notifEnviadaAt = ahora;
+                    this._enviarNotificacionLlegadaNativa();
+                }
             });
             this._bgGeoStarted = true;
-        } catch(e) { console.error('Background geo error:', e); }
+        } catch(e) {
+            console.error('Background geo error:', e);
+        }
     },
 
     async _enviarNotificacionLlegadaNativa() {
-        const LN = window.Capacitor?.Plugins?.LocalNotifications; if (!LN) return;
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (!LN) return;
         try {
-            await LN.schedule({ notifications: [{ id: 1001, title: '📍 Horas EMT', body: 'Parece que estás en el trabajo. ¿Registras la jornada?', schedule: { at: new Date(Date.now() + 500) } }] });
-        } catch(e) { console.error('Notification error:', e); }
+            await LN.schedule({
+                notifications: [{
+                    id: 1001,
+                    title: '📍 Horas EMT',
+                    body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
+                    schedule: { at: new Date(Date.now() + 500) }
+                }]
+            });
+        } catch(e) {
+            console.error('Notification error:', e);
+        }
     },
 
     async probarNotificacion() {
@@ -967,8 +1084,14 @@ const app = {
         if (Notification.permission === 'denied') { alert('❌ Las notificaciones están bloqueadas. Actívalas en los ajustes del navegador.'); return; }
         try {
             const reg = await navigator.serviceWorker.ready;
-            await reg.showNotification('🔔 Horas EMT — prueba', { body: 'Las notificaciones funcionan correctamente.', icon: '/icons/icon-192.png', badge: '/icons/badge.svg', tag: 'test-notif' });
-        } catch(_) { new Notification('🔔 Horas EMT — prueba', { body: 'Las notificaciones funcionan correctamente.', icon: '/icons/icon-192.png' }); }
+            await reg.showNotification('🔔 Horas EMT — prueba', {
+                body: 'Las notificaciones funcionan correctamente.',
+                icon: '/icons/icon-192.png', badge: '/icons/badge.svg',
+                tag: 'test-notif'
+            });
+        } catch(_) {
+            new Notification('🔔 Horas EMT — prueba', { body: 'Las notificaciones funcionan correctamente.', icon: '/icons/icon-192.png' });
+        }
     },
 
     calcularDistancia(lat1, lng1, lat2, lng2) {
@@ -981,7 +1104,9 @@ const app = {
 
     registrarJornadaHoy() {
         document.getElementById('workBanner').classList.remove('show');
-        this.establecerFechaHoy(); this.mostrarApp(); document.getElementById('horasInput').focus();
+        this.establecerFechaHoy();
+        this.mostrarApp();
+        document.getElementById('horasInput').focus();
     },
 
     _mostrarExportTexto(json) {
@@ -989,10 +1114,23 @@ const app = {
         const overlay = document.createElement('div');
         overlay.id = uid + '-overlay';
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
-        overlay.innerHTML = `<div style="background:var(--card);border-radius:16px;padding:20px;width:100%;max-width:480px;max-height:80vh;display:flex;flex-direction:column;gap:12px"><div style="font-weight:700;font-size:16px">Copia de seguridad</div><div style="font-size:12px;color:var(--text-secondary)">Copia este texto y guárdalo en un archivo .json</div><textarea id="${uid}" readonly style="flex:1;min-height:200px;font-family:monospace;font-size:11px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);resize:none"></textarea><div style="display:flex;gap:8px"><button id="${uid}-copy" style="flex:1;padding:10px;border-radius:8px;background:var(--primary);color:#fff;border:none;cursor:pointer">Copiar</button><button onclick="document.getElementById('${uid}-overlay').remove()" style="flex:1;padding:10px;border-radius:8px;background:var(--border);border:none;cursor:pointer">Cerrar</button></div></div>`;
+        overlay.innerHTML = `
+            <div style="background:var(--card);border-radius:16px;padding:20px;width:100%;max-width:480px;max-height:80vh;display:flex;flex-direction:column;gap:12px">
+                <div style="font-weight:700;font-size:16px">Copia de seguridad</div>
+                <div style="font-size:12px;color:var(--text-secondary)">Copia este texto y guárdalo en un archivo .json</div>
+                <textarea id="${uid}" readonly style="flex:1;min-height:200px;font-family:monospace;font-size:11px;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);resize:none"></textarea>
+                <div style="display:flex;gap:8px">
+                    <button id="${uid}-copy" style="flex:1;padding:10px;border-radius:8px;background:var(--primary);color:#fff;border:none;cursor:pointer">Copiar</button>
+                    <button onclick="document.getElementById('${uid}-overlay').remove()" style="flex:1;padding:10px;border-radius:8px;background:var(--border);border:none;cursor:pointer">Cerrar</button>
+                </div>
+            </div>`;
         document.body.appendChild(overlay);
         document.getElementById(uid).value = json;
-        document.getElementById(uid + '-copy').onclick = () => { navigator.clipboard.writeText(json).then(() => { document.getElementById(uid + '-copy').textContent = '✅ Copiado'; }); };
+        document.getElementById(uid + '-copy').onclick = () => {
+            navigator.clipboard.writeText(json).then(() => {
+                document.getElementById(uid + '-copy').textContent = '✅ Copiado';
+            });
+        };
     }
 };
 
@@ -1005,11 +1143,12 @@ const _isStandalone = window.navigator.standalone === true || window.matchMedia(
 function _showInstallBanner(ios) {
     if (_isStandalone) return;
     const banner = document.getElementById('installBanner');
-    document.getElementById('installBannerMsg').textContent = ios ? 'Toca Compartir ↑ → "Añadir a inicio"' : 'Instala la app para acceso rápido';
+    document.getElementById('installBannerMsg').textContent = ios ? 'Toca Compartir ↑ → "Ñadir a inicio"' : 'Instala la app para acceso rápido';
     const bannerBtn = document.getElementById('installBannerBtn');
     if (bannerBtn) bannerBtn.style.display = ios ? 'none' : '';
     if (banner) banner.classList.add('show');
-    const sec = document.getElementById('installSection'); if (sec) sec.style.display = '';
+    const sec = document.getElementById('installSection');
+    if (sec) sec.style.display = '';
 }
 
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window._deferredPrompt = e; _showInstallBanner(false); });
@@ -1020,7 +1159,7 @@ window.addEventListener('appinstalled', () => {
 });
 
 app.instalarApp = async function() {
-    if (!window._deferredPrompt) { alert(_isIOS ? 'En Safari:\n1. Toca Compartir (□↑)\n2. "Añadir a pantalla de inicio"\n3. Pulsa "Añadir"' : 'Usa el menú del navegador → "Instalar app".'); return; }
+    if (!window._deferredPrompt) { alert(_isIOS ? 'En Safari:\n1. Toca Compartir (□↑)\n2. "Ñadir a pantalla de inicio"\n3. Pulsa "Ñadir"' : 'Usa el menú del navegador → "Instalar app".'); return; }
     window._deferredPrompt.prompt();
     const { outcome } = await window._deferredPrompt.userChoice;
     if (outcome === 'accepted') { const banner = document.getElementById('installBanner'); if (banner) banner.classList.remove('show'); const sec = document.getElementById('installSection'); if (sec) sec.style.display = 'none'; }
