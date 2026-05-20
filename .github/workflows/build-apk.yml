@@ -28,6 +28,12 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
+      - name: Patch variables.gradle — targetSdkVersion 34
+        run: |
+          VARS="android/variables.gradle"
+          sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 34/' "$VARS"
+          sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 34/' "$VARS"
+
       - name: Patch AndroidManifest — background location permissions
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
