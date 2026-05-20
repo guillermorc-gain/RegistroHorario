@@ -2,7 +2,7 @@
 'use strict';
 
 const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.googleusercontent.com';
-const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata';
+const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata profile email';
 const DRIVE_FILE_NAME  = 'horas-emt.json';
 const HORAS_ANUALES    = 777;
 
@@ -138,8 +138,6 @@ const app = {
         if (lastInicio && lastFin) this.calcularHorasPorTiempo();
     },
 
-    // ── Drive API helpers ─────────────────────────────────────────────
-
     async _driveGet(url) {
         if (!await this._ensureToken()) throw new Error('Sin autenticación');
         return fetch(url, { headers: { Authorization: `Bearer ${this.accessToken}` } });
@@ -194,11 +192,13 @@ const app = {
                 },
                 body
             });
+            if (!resp.ok) { const t = await resp.text(); throw new Error('Drive crear: ' + resp.status + ' ' + t.slice(0,120)); }
             const result = await resp.json();
+            if (!result.id) throw new Error('Drive crear: sin id en respuesta');
             this.driveFileId = result.id;
             localStorage.setItem('driveFileId', result.id);
         } else {
-            await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+            const resp = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
                 method: 'PATCH',
                 headers: {
                     Authorization: `Bearer ${this.accessToken}`,
@@ -206,10 +206,9 @@ const app = {
                 },
                 body: json
             });
+            if (!resp.ok) { const t = await resp.text(); throw new Error('Drive actualizar: ' + resp.status + ' ' + t.slice(0,120)); }
         }
     },
-
-    // ── Data operations ────────────────────────────────────────────
 
     async cargarDatos() {
         if (!this.usuarioActual) return;
@@ -224,7 +223,7 @@ const app = {
     },
 
     async registrarHoras() {
-        if (!this.usuarioActual) return;
+        if (!this.usuarioActual) { alert('❌ No hay sesión activa'); return; }
         const horas = parseFloat(document.getElementById('horasInput').value);
         const fecha = document.getElementById('fechaInput').value;
         if (!fecha || isNaN(horas) || horas <= 0) { alert('❌ Introduce fecha y horas válidas'); return; }
@@ -237,34 +236,38 @@ const app = {
         const extraNoche     = Math.round(horasNocturnas * precioNoche * 100) / 100;
         if (esNoche && horasNocturnas > horas) { alert('❌ Las horas nocturnas no pueden superar las horas totales'); return; }
 
-        const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
-        datos.horasTrabajadas = parseFloat(datos.horasTrabajadas) || 0;
-        if (!datos.historial) datos.historial = {};
+        try {
+            const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
+            datos.horasTrabajadas = parseFloat(datos.horasTrabajadas) || 0;
+            if (!datos.historial) datos.historial = {};
 
-        if (this.editingId && datos.historial[this.editingId]) {
-            datos.horasTrabajadas = Math.round((datos.horasTrabajadas - datos.historial[this.editingId].horas) * 10) / 10;
-            delete datos.historial[this.editingId];
-        }
-        if (datos.horasTrabajadas + horas > this.horasAnualesCustom) {
-            alert(`❌ Solo tienes ${(this.horasAnualesCustom - datos.horasTrabajadas).toFixed(1)}h disponibles`); return;
-        }
-        datos.horasTrabajadas = Math.round((datos.horasTrabajadas + horas) * 10) / 10;
-        const fechaFormato = new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const registroId   = fecha.replace(/-/g, '');
-        datos.historial[registroId] = {
-            fecha: fechaFormato, horas,
-            timestamp: new Date(fecha + 'T12:00:00').getTime(),
-            ...(horaInicio && horaFin ? { horaInicio, horaFin } : {}),
-            ...(esNoche && horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
-            ...(esPR ? { pr: true } : {})
-        };
+            if (this.editingId && datos.historial[this.editingId]) {
+                datos.horasTrabajadas = Math.round((datos.horasTrabajadas - datos.historial[this.editingId].horas) * 10) / 10;
+                delete datos.historial[this.editingId];
+            }
+            if (datos.horasTrabajadas + horas > this.horasAnualesCustom) {
+                alert(`❌ Solo tienes ${(this.horasAnualesCustom - datos.horasTrabajadas).toFixed(1)}h disponibles`); return;
+            }
+            datos.horasTrabajadas = Math.round((datos.horasTrabajadas + horas) * 10) / 10;
+            const fechaFormato = new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const registroId   = fecha.replace(/-/g, '');
+            datos.historial[registroId] = {
+                fecha: fechaFormato, horas,
+                timestamp: new Date(fecha + 'T12:00:00').getTime(),
+                ...(horaInicio && horaFin ? { horaInicio, horaFin } : {}),
+                ...(esNoche && horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
+                ...(esPR ? { pr: true } : {})
+            };
 
-        await this._writeDriveFile(datos);
-        if (horaInicio) localStorage.setItem('lastHoraInicio', horaInicio);
-        const horaFinVal = document.getElementById('horaFin').value;
-        if (horaFinVal) localStorage.setItem('lastHoraFin', horaFinVal);
-        this.actualizarUI(datos);
-        this.cancelarEdicion();
+            await this._writeDriveFile(datos);
+            if (horaInicio) localStorage.setItem('lastHoraInicio', horaInicio);
+            const horaFinVal = document.getElementById('horaFin').value;
+            if (horaFinVal) localStorage.setItem('lastHoraFin', horaFinVal);
+            this.actualizarUI(datos);
+            this.cancelarEdicion();
+        } catch(e) {
+            alert('❌ Error al guardar: ' + e.message);
+        }
     },
 
     async _guardarDesdeModal() {
@@ -398,8 +401,6 @@ const app = {
         });
         input.click();
     },
-
-    // ── Auth / UI ────────────────────────────────────────────────
 
     async cerrarSesion() {
         if (this.accessToken) {
@@ -558,8 +559,6 @@ const app = {
 
     toggleSection(btn) { btn.closest('.ops-section').classList.toggle('open'); },
 
-    // ── Cálculos de tiempo ─────────────────────────────────────────────
-
     _calcHorasNocturnas(inicio, fin) {
         if (!inicio || !fin) return 0;
         const [h1, m1] = inicio.split(':').map(Number);
@@ -674,8 +673,6 @@ const app = {
     },
 
     cancelarEdicion() { this.editingId = null; this.limpiarInput(); },
-
-    // ── UI de datos ──────────────────────────────────────────────────
 
     mostrarHistorialModal() {
         document.getElementById('historialModal').classList.add('show');
@@ -818,8 +815,6 @@ const app = {
         }).join('');
     },
 
-    // ── Opciones ─────────────────────────────────────────────────────
-
     revisarSuma() {
         const t = parseFloat(document.getElementById('horasTrabajadas').textContent);
         const r = parseFloat(document.getElementById('horasRestantes').textContent);
@@ -903,8 +898,6 @@ const app = {
     confirmarBorrarCuenta() {
         this.mostrarModal('⚠️ Borrar datos', 'Se eliminarán todos tus registros de Drive y se cerrará la sesión.', this.borrarCuenta.bind(this));
     },
-
-    // ── GPS / Ubicación ──────────────────────────────────────────────
 
     _getWorkLocations() { return JSON.parse(localStorage.getItem('workLocations') || '[]'); },
     _saveWorkLocations(locs) { localStorage.setItem('workLocations', JSON.stringify(locs)); },
