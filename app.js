@@ -1026,8 +1026,6 @@ const app = {
         }
     },
 
-    // --- Geolocalización nativa en background (solo app Android) ---
-
     async _iniciarGeofencingNativo() {
         const BGGeo = window.Capacitor?.Plugins?.BackgroundGeolocation;
         if (!BGGeo) return;
@@ -1145,7 +1143,7 @@ const _isStandalone = window.navigator.standalone === true || window.matchMedia(
 function _showInstallBanner(ios) {
     if (_isStandalone) return;
     const banner = document.getElementById('installBanner');
-    document.getElementById('installBannerMsg').textContent = ios ? 'Toca Compartir ↑ → "Ñadir a inicio"' : 'Instala la app para acceso rápido';
+    document.getElementById('installBannerMsg').textContent = ios ? 'Toca Compartir ↑ → "Añadir a inicio"' : 'Instala la app para acceso rápido';
     const bannerBtn = document.getElementById('installBannerBtn');
     if (bannerBtn) bannerBtn.style.display = ios ? 'none' : '';
     if (banner) banner.classList.add('show');
@@ -1161,7 +1159,7 @@ window.addEventListener('appinstalled', () => {
 });
 
 app.instalarApp = async function() {
-    if (!window._deferredPrompt) { alert(_isIOS ? 'En Safari:\n1. Toca Compartir (□↑)\n2. "Ñadir a pantalla de inicio"\n3. Pulsa "Ñadir"' : 'Usa el menú del navegador → "Instalar app".'); return; }
+    if (!window._deferredPrompt) { alert(_isIOS ? 'En Safari:\n1. Toca Compartir (□↑)\n2. "Añadir a pantalla de inicio"\n3. Pulsa "Añadir"' : 'Usa el menú del navegador → "Instalar app".'); return; }
     window._deferredPrompt.prompt();
     const { outcome } = await window._deferredPrompt.userChoice;
     if (outcome === 'accepted') { const banner = document.getElementById('installBanner'); if (banner) banner.classList.remove('show'); const sec = document.getElementById('installSection'); if (sec) sec.style.display = 'none'; }
