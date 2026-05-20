@@ -56,6 +56,14 @@ const app = {
             const error = params.get('error');
             history.replaceState(null, '', window.location.pathname);
             if (token) {
+                // En Chrome Custom Tab (Android, fuera del WebView de Capacitor): pasar el token
+                // de vuelta a la app nativa via intent://, que abre Capacitor con el hash del token.
+                if (!window.Capacitor && /Android/i.test(navigator.userAgent) &&
+                    window.location.origin === 'https://registro-horario-emt.vercel.app') {
+                    const exp = params.get('expires_in') || '3600';
+                    window.location.href = `intent://localhost/#access_token=${token}&expires_in=${exp}&token_type=Bearer#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
+                    return;
+                }
                 const expiresIn = parseInt(params.get('expires_in') || '3600');
                 this.driveFileId = null;
                 localStorage.removeItem('driveFileId');
@@ -108,7 +116,12 @@ const app = {
     },
 
     login() {
-        const redirectUri = window.location.origin + '/';
+        // En Android nativo (Capacitor) el WebView es bloqueado por Google; usamos Chrome Custom Tab
+        // con redirect_uri a Vercel, que luego devuelve el token a la app via intent://.
+        const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
+        const redirectUri = isAndroidNative
+            ? 'https://registro-horario-emt.vercel.app/'
+            : window.location.origin + '/';
         const params = new URLSearchParams({
             client_id: GOOGLE_CLIENT_ID,
             redirect_uri: redirectUri,
