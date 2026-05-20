@@ -12,9 +12,20 @@
     <meta name="apple-mobile-web-app-title" content="Horas EMT">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <style>
+        /* ── THEMES ── */
+        :root{--g1:#1565C0;--g2:#003A99;--gdark1:#0d2147;--gdark2:#06102a;}
+        body.theme-verde{--g1:#00897B;--g2:#004D40;--gdark1:#003830;--gdark2:#001c18;}
+        body.theme-fuego{--g1:#F4511E;--g2:#BF360C;--gdark1:#4a1800;--gdark2:#2a0d00;}
+        body.theme-acero{--g1:#546E7A;--g2:#263238;--gdark1:#1a2530;--gdark2:#0d151c;}
+        body.theme-rojo {--g1:#E53935;--g2:#B71C1C;--gdark1:#3a0808;--gdark2:#200404;}
+        .tema-dot{width:28px;height:28px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:border-color 0.15s,transform 0.1s;flex-shrink:0;}
+        .tema-dot:active{transform:scale(0.88);}
+        .tema-dot.active{border-color:rgba(0,0,0,0.4);}
+        .options-content.dark .tema-dot.active{border-color:rgba(255,255,255,0.6);}
+
         *{margin:0;padding:0;box-sizing:border-box;}
         html,body{height:100%;width:100%;}
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:linear-gradient(135deg,var(--g1) 0%,var(--g2) 100%);}
         body.dark{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);}
         .container{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:500px;height:100%;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:white;display:flex;flex-direction:column;overflow:hidden;}
         .container.dark{background:#111827;color:#e0e0e0;}
@@ -25,10 +36,10 @@
         .logo{width:70px;height:70px;}
         .auth-form{width:100%;display:flex;flex-direction:column;gap:10px;}
         .auth-form input{padding:12px;border:2px solid #e0e0e0;border-radius:8px;font-size:15px;font-family:inherit;background:white;color:#333;}
-        .auth-form input:focus{outline:none;border-color:#667eea;}
-        .auth-form button{padding:12px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:15px;font-family:inherit;}
+        .auth-form input:focus{outline:none;border-color:var(--g1);}
+        .auth-form button{padding:12px;background:linear-gradient(135deg,var(--g1) 0%,var(--g2) 100%);color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:15px;font-family:inherit;}
         .auth-toggle{text-align:center;color:#7f8c8d;font-size:13px;}
-        .auth-toggle a{color:#667eea;cursor:pointer;font-weight:600;text-decoration:underline;}
+        .auth-toggle a{color:var(--g1);cursor:pointer;font-weight:600;text-decoration:underline;}
         .msg{font-size:12px;padding:10px;border-radius:6px;display:none;text-align:center;}
         .error{color:#e74c3c;background:#fadbd8;} .success{color:#27ae60;background:#d5f4e6;}
         .msg.show{display:block;}
@@ -37,8 +48,8 @@
         .app-screen{display:none;flex-direction:column;flex:1;min-height:0;}
         .app-screen.active{display:flex;}
 
-        .app-header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:10px 15px;flex-shrink:0;display:flex;justify-content:space-between;align-items:center;gap:10px;}
-        .app-header.dark{background:linear-gradient(135deg,#2d3561 0%,#1a1a2e 100%);}
+        .app-header{background:linear-gradient(135deg,var(--g1) 0%,var(--g2) 100%);color:white;padding:10px 15px;flex-shrink:0;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+        .app-header.dark{background:linear-gradient(135deg,var(--gdark1) 0%,var(--gdark2) 100%);}
         .app-header-left{display:flex;flex-direction:column;}
         .app-header-title{font-size:14px;font-weight:700;letter-spacing:0.2px;}
         .app-header-date{font-size:11px;opacity:0.85;margin-top:1px;}
@@ -51,7 +62,7 @@
         .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex-shrink:0;}
         .stat-card{background:white;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
         .app-content.dark .stat-card{background:#1e2a3a;}
-        .stat-card.accent{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;}
+        .stat-card.accent{background:linear-gradient(135deg,var(--g1) 0%,var(--g2) 100%);color:white;}
         .stat-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#7f8c8d;margin-bottom:4px;}
         .stat-card.accent .stat-label{color:rgba(255,255,255,0.8);}
         .app-content.dark .stat-card:not(.accent) .stat-label{color:#a0a0a0;}
@@ -66,11 +77,11 @@
         .app-content.dark .progress-section{background:#1e2a3a;}
         .progress-bar{width:100%;height:7px;background:#ecf0f1;border-radius:10px;overflow:hidden;margin-bottom:4px;}
         .app-content.dark .progress-bar{background:#2d3561;}
-        .progress-fill{height:100%;background:linear-gradient(90deg,#667eea 0%,#764ba2 100%);width:0%;transition:width 0.4s ease;}
+        .progress-fill{height:100%;background:linear-gradient(90deg,var(--g1) 0%,var(--g2) 100%);width:0%;transition:width 0.4s ease;}
         .progress-labels{display:flex;justify-content:space-between;align-items:center;}
-        .progress-pct{font-size:12px;font-weight:700;color:#667eea;}
+        .progress-pct{font-size:12px;font-weight:700;color:var(--g1);}
         .progress-sub{font-size:10px;color:#95a5a6;}
-        .app-content.dark .progress-pct{color:#a0b4f8;}
+        .app-content.dark .progress-pct{color:var(--g1);filter:brightness(1.4);}
         .app-content.dark .progress-sub{color:#7f8c8d;}
 
         /* ── WORK BANNER ── */
@@ -81,15 +92,15 @@
         /* ── INPUT SECTION ── */
         .input-section{background:white;padding:10px 12px;border-radius:12px;border:2px solid transparent;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
         .app-content.dark .input-section{background:#1e2a3a;border-color:#2d3561;}
-        .input-section.editing{border-color:#667eea;}
-        .edit-label{font-size:11px;color:#667eea;font-weight:700;text-align:center;padding-bottom:5px;}
+        .input-section.editing{border-color:var(--g1);}
+        .edit-label{font-size:11px;color:var(--g1);font-weight:700;text-align:center;padding-bottom:5px;}
         .input-row{display:flex;gap:7px;align-items:flex-end;margin-bottom:7px;}
         .input-group{display:flex;flex-direction:column;flex:1;}
         .input-group label{font-size:10px;font-weight:700;color:#7f8c8d;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.3px;}
         .app-content.dark .input-group label{color:#a0a0a0;}
         .input-group input{width:100%;padding:8px;border:1.5px solid #e8eaf0;border-radius:7px;font-size:13px;font-family:inherit;background:white;color:#2c3e50;}
         .app-content.dark .input-group input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
-        .input-group input:focus{outline:none;border-color:#667eea;}
+        .input-group input:focus{outline:none;border-color:var(--g1);}
         .noche-compact{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 10px;background:#fff3cd;border-radius:8px;border:1.5px solid #ffc107;cursor:pointer;flex-shrink:0;touch-action:manipulation;user-select:none;}
         .app-content.dark .noche-compact{background:#2a2500;border-color:#665500;}
         .noche-compact span{font-size:15px;line-height:1;pointer-events:none;}
@@ -112,14 +123,14 @@
         .noche-extra .input-group input{border-color:#ffc107;}
         .app-content.dark .noche-extra .input-group input{background:#0a0800;color:#e0e0e0;border-color:#665500;}
         .btn-row{display:flex;gap:6px;}
-        .btn-main{flex:1;padding:10px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;}
+        .btn-main{flex:1;padding:10px;background:linear-gradient(135deg,var(--g1) 0%,var(--g2) 100%);color:white;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;}
         .btn-secondary{padding:10px 13px;background:#e8eaf0;color:#555;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;font-family:inherit;}
         .app-content.dark .btn-secondary{background:#2d3561;color:#e0e0e0;}
 
         /* ── MONTHLY BREAKDOWN ── */
         .mensual-section{background:white;border-radius:12px;padding:10px 12px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
         .app-content.dark .mensual-section{background:#1e2a3a;}
-        .mensual-title{font-size:10px;font-weight:800;color:#667eea;text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px;}
+        .mensual-title{font-size:10px;font-weight:800;color:var(--g1);text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px;}
         .mes-row{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #f0f0f0;}
         .app-content.dark .mes-row{border-color:#2d3561;}
         .mes-row:last-child{border-bottom:none;padding-bottom:0;}
@@ -127,7 +138,7 @@
         .app-content.dark .mes-label{color:#a0a0a0;}
         .mes-bar-wrap{flex:1;height:5px;background:#ecf0f1;border-radius:3px;overflow:hidden;}
         .app-content.dark .mes-bar-wrap{background:#2d3561;}
-        .mes-bar{height:100%;background:linear-gradient(90deg,#667eea,#764ba2);border-radius:3px;min-width:2px;}
+        .mes-bar{height:100%;background:linear-gradient(90deg,var(--g1),var(--g2));border-radius:3px;min-width:2px;}
         .mes-vals{display:flex;gap:5px;align-items:center;flex-shrink:0;}
         .mes-vals span{font-size:10px;font-weight:700;color:#2c3e50;}
         .app-content.dark .mes-vals span{color:#e0e0e0;}
@@ -139,8 +150,8 @@
         .app-content.dark .historial-bar{background:#1e2a3a;}
         .historial-bar-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:#7f8c8d;flex:1;}
         .app-content.dark .historial-bar-title{color:#a0a0a0;}
-        .historial-count{font-size:11px;font-weight:700;color:#667eea;margin-right:10px;}
-        .historial-toggle{width:30px;height:30px;background:linear-gradient(135deg,#667eea,#764ba2);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;flex-shrink:0;}
+        .historial-count{font-size:11px;font-weight:700;color:var(--g1);margin-right:10px;}
+        .historial-toggle{width:30px;height:30px;background:linear-gradient(135deg,var(--g1),var(--g2));border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;flex-shrink:0;}
 
         /* ── OPTIONS ── */
         .options-screen{display:none;flex-direction:column;flex:1;min-height:0;}
@@ -150,7 +161,7 @@
 
         .ops-section{background:white;border-radius:12px;border:1px solid #e8eaf0;box-shadow:0 2px 6px rgba(0,0,0,0.06);flex-shrink:0;}
         .options-content.dark .ops-section{background:#1e2a3a;border-color:#2d3561;}
-        .ops-title{width:100%;display:flex;align-items:center;justify-content:space-between;padding:15px 16px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:#667eea;background:transparent;border:none;border-radius:12px;cursor:pointer;font-family:inherit;gap:8px;text-align:left;}
+        .ops-title{width:100%;display:flex;align-items:center;justify-content:space-between;padding:15px 16px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:var(--g1);background:transparent;border:none;border-radius:12px;cursor:pointer;font-family:inherit;gap:8px;text-align:left;}
         .ops-section.open .ops-title{border-radius:12px 12px 0 0;}
         .ops-title:active{opacity:0.7;}
         .ops-chevron{font-size:16px;color:#aab0bb;transition:transform 0.25s;flex-shrink:0;display:inline-block;}
@@ -178,7 +189,7 @@
         .options-content.dark .ops-field-label{color:#a0a0a0;}
         .ops-field-sub{font-size:11px;color:#95a5a6;}
         .ops-input{width:100%;padding:9px 11px;border:1.5px solid #e8eaf0;border-radius:8px;font-size:14px;font-family:inherit;background:white;color:#2c3e50;}
-        .ops-input:focus{outline:none;border-color:#667eea;}
+        .ops-input:focus{outline:none;border-color:var(--g1);}
         .options-content.dark .ops-input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
         .ops-night-input{width:100%;padding:9px 11px;border:1.5px solid #ffc107;border-radius:8px;font-size:14px;font-family:inherit;background:#fffdf0;color:#5a4000;}
         .ops-night-input:focus{outline:none;border-color:#f39c12;}
@@ -205,7 +216,7 @@
         .modal-footer{padding:12px 18px;border-top:1px solid #f0f0f0;display:flex;gap:8px;flex-shrink:0;}
         .modal-card.dark .modal-footer{border-color:#2d3561;}
         .modal-btn{flex:1;padding:11px;border:none;border-radius:9px;font-weight:700;cursor:pointer;font-family:inherit;font-size:13px;}
-        .modal-btn-confirm{background:linear-gradient(135deg,#667eea,#764ba2);color:white;}
+        .modal-btn-confirm{background:linear-gradient(135deg,var(--g1),var(--g2));color:white;}
         .modal-btn-cancel{background:#e8eaf0;color:#555;}
         .app-content.dark .modal-btn-cancel,.modal-card.dark .modal-btn-cancel{background:#2d3561;color:#e0e0e0;}
         .modal-btn-danger{background:#e74c3c;color:white;}
@@ -223,7 +234,7 @@
         .edit-field label{font-size:10px;font-weight:800;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.4px;}
         .modal-card.dark .edit-field label{color:#a0a0a0;}
         .edit-field input{padding:9px 11px;border:1.5px solid #e8eaf0;border-radius:8px;font-size:14px;font-family:inherit;background:white;color:#2c3e50;}
-        .edit-field input:focus{outline:none;border-color:#667eea;}
+        .edit-field input:focus{outline:none;border-color:var(--g1);}
         .modal-card.dark .edit-field input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
         .edit-row{display:flex;gap:8px;}
         .edit-row .edit-field{flex:1;}
@@ -236,7 +247,7 @@
         .avatar-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;}
         .avatar-option{width:100%;aspect-ratio:1;border-radius:50%;border:3px solid transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;transition:transform 0.1s;}
         .avatar-option:active{transform:scale(0.88);}
-        .avatar-photo-btn{width:100%;padding:11px;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:8px;}
+        .avatar-photo-btn{width:100%;padding:11px;background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:8px;}
         .avatar-cancel-btn{width:100%;padding:10px;background:#f0f0f0;color:#555;border:none;border-radius:10px;font-size:13px;cursor:pointer;font-family:inherit;}
         .options-content.dark .avatar-cancel-btn,.modal-card.dark .avatar-cancel-btn{background:#3d4571;color:#e0e0e0;}
 
@@ -246,7 +257,7 @@
         .install-banner-close{background:transparent;color:white;border:none;font-size:22px;cursor:pointer;padding:0 4px;line-height:1;opacity:0.8;}
 
         ::-webkit-scrollbar{width:4px;}
-        ::-webkit-scrollbar-thumb{background:#667eea;border-radius:2px;}
+        ::-webkit-scrollbar-thumb{background:var(--g1);border-radius:2px;}
         .app-content.dark ::-webkit-scrollbar-thumb,.options-content.dark ::-webkit-scrollbar-thumb{background:#3d4571;}
     </style>
 </head>
@@ -416,8 +427,8 @@
                 <button class="ops-title" onclick="app.toggleSection(this)">👤 Perfil <span class="ops-chevron">›</span></button>
                 <div class="ops-body">
                     <div class="ops-row" style="gap:14px;">
-                        <div id="profileAvatarPreview" class="avatar-preview" style="background:#667eea;color:white;font-size:26px;">?</div>
-                        <button onclick="app.mostrarAvatarPicker()" style="padding:8px 14px;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Cambiar avatar</button>
+                        <div id="profileAvatarPreview" class="avatar-preview" style="background:var(--g1);color:white;font-size:26px;">?</div>
+                        <button onclick="app.mostrarAvatarPicker()" style="padding:8px 14px;background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Cambiar avatar</button>
                     </div>
                     <div class="ops-field">
                         <span class="ops-field-label">Cuenta Google</span>
@@ -438,6 +449,28 @@
                         <span class="ops-row-label">🌙 Modo Oscuro</span>
                         <input type="checkbox" id="darkModeToggle" onchange="app.toggleDarkMode()">
                     </div>
+                    <div class="ops-row" style="gap:12px;flex-direction:column;align-items:flex-start;">
+                        <span class="ops-row-label">🎨 Color de la app</span>
+                        <div style="display:flex;gap:12px;align-items:center;">
+                            <div class="tema-dot" id="dot-azul"  style="background:linear-gradient(135deg,#1565C0,#003A99);" onclick="app.seleccionarTema('azul')"  title="Azul"></div>
+                            <div class="tema-dot" id="dot-verde" style="background:linear-gradient(135deg,#00897B,#004D40);" onclick="app.seleccionarTema('verde')" title="Verde"></div>
+                            <div class="tema-dot" id="dot-fuego" style="background:linear-gradient(135deg,#F4511E,#BF360C);" onclick="app.seleccionarTema('fuego')" title="Naranja"></div>
+                            <div class="tema-dot" id="dot-acero" style="background:linear-gradient(135deg,#546E7A,#263238);" onclick="app.seleccionarTema('acero')" title="Acero"></div>
+                            <div class="tema-dot" id="dot-rojo"  style="background:linear-gradient(135deg,#E53935,#B71C1C);" onclick="app.seleccionarTema('rojo')"  title="Rojo"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notificaciones -->
+            <div class="ops-section">
+                <button class="ops-title" onclick="app.toggleSection(this)">🔔 Notificaciones <span class="ops-chevron">›</span></button>
+                <div class="ops-body">
+                    <div class="ops-row" style="flex-direction:column;align-items:flex-start;">
+                        <span class="ops-row-label">Notificaciones del sistema</span>
+                        <span class="ops-row-sub">El sistema te avisa al llegar al trabajo (requiere ubicación guardada). En la app Android funciona aunque tengas la pantalla apagada.</span>
+                    </div>
+                    <button class="ops-btn" onclick="app.probarNotificacion()">🔔 Probar notificación <span class="ops-arrow">›</span></button>
                 </div>
             </div>
 
@@ -452,7 +485,7 @@
                     </div>
                     <button class="ops-btn" onclick="app.mostrarCambiarHoras()">
                         ⚙️ Horas anuales
-                        <span id="horasAnualesDisplay" style="margin-left:auto;color:#667eea;font-weight:700;font-size:13px;"></span>
+                        <span id="horasAnualesDisplay" style="margin-left:auto;color:var(--g1);font-weight:700;font-size:13px;"></span>
                         <span class="ops-arrow">›</span>
                     </button>
                     <button class="ops-btn" onclick="app.revisarSuma()">🔍 Revisar suma <span class="ops-arrow">›</span></button>
@@ -470,7 +503,7 @@
                         </div>
                         <div id="gpsStatus" class="gps-badge none">Sin ubicaciones</div>
                         <div id="workLocationsList" style="width:100%;"></div>
-                        <button onclick="app.guardarUbicacionTrabajo()" style="padding:9px 14px;background:linear-gradient(135deg,#667eea,#764ba2);color:white;border:none;border-radius:8px;font-weight:600;font-size:12px;cursor:pointer;font-family:inherit;">📍 Añadir ubicación actual</button>
+                        <button onclick="app.guardarUbicacionTrabajo()" style="padding:9px 14px;background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;font-weight:600;font-size:12px;cursor:pointer;font-family:inherit;">📍 Añadir ubicación actual</button>
                     </div>
                 </div>
             </div>

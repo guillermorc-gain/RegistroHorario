@@ -27,6 +27,9 @@ const app = {
     tema: localStorage.getItem('tema') || 'azul',
     _historialMap: {},
     _historialFull: {},
+    _bgGeoStarted: false,
+    _notifEnviadaAt: 0,
+    _geoWatcherId: null,
 
     async init() {
         this._migrarUbicacionAntigua();
@@ -216,6 +219,7 @@ const app = {
             const data = await this._readDriveFile();
             this.actualizarUI(data || { horasTrabajadas: 0, historial: {} });
             this.verificarUbicacion();
+            if (!this._bgGeoStarted) this._iniciarGeofencingNativo();
         } catch(e) {
             console.error('Error cargando datos:', e);
             this.actualizarUI({ horasTrabajadas: 0, historial: {} });
@@ -916,6 +920,7 @@ const app = {
                 this.actualizarEstadoGPS();
                 this._renderWorkLocations();
                 alert(`✅ "${name.trim()}" guardada. Recibirás notificación al llegar.`);
+                if (!this._bgGeoStarted) this._iniciarGeofencingNativo();
             },
             () => alert('❌ No se pudo obtener la ubicación. Activa el GPS.')
         );
@@ -1018,6 +1023,57 @@ const app = {
             });
         } catch(_) {
             new Notification('📍 Horas EMT', { body: 'Parece que estás en el trabajo.', icon: '/icons/icon-192.png' });
+        }
+    },
+
+    // --- Geolocalización nativa en background (solo app Android) ---
+
+    async _iniciarGeofencingNativo() {
+        const BGGeo = window.Capacitor?.Plugins?.BackgroundGeolocation;
+        if (!BGGeo) return;
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (LN) { try { await LN.requestPermissions(); } catch(_) {} }
+        try {
+            this._geoWatcherId = await BGGeo.addWatcher({
+                backgroundMessage: 'Monitorizando tu ubicación de trabajo',
+                backgroundTitle: 'Horas EMT',
+                requestPermissions: true,
+                stale: false,
+                distanceFilter: 100
+            }, (location, error) => {
+                if (error || !location) return;
+                const ahora = Date.now();
+                if (ahora - this._notifEnviadaAt < 30 * 60 * 1000) return;
+                const locs = this._getWorkLocations();
+                if (locs.length === 0) return;
+                const cercano = locs.some(loc =>
+                    this.calcularDistancia(location.latitude, location.longitude, loc.lat, loc.lng) < 300
+                );
+                if (cercano) {
+                    this._notifEnviadaAt = ahora;
+                    this._enviarNotificacionLlegadaNativa();
+                }
+            });
+            this._bgGeoStarted = true;
+        } catch(e) {
+            console.error('Background geo error:', e);
+        }
+    },
+
+    async _enviarNotificacionLlegadaNativa() {
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (!LN) return;
+        try {
+            await LN.schedule({
+                notifications: [{
+                    id: 1001,
+                    title: '📍 Horas EMT',
+                    body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
+                    schedule: { at: new Date(Date.now() + 500) }
+                }]
+            });
+        } catch(e) {
+            console.error('Notification error:', e);
         }
     },
 
