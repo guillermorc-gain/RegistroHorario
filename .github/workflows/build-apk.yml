@@ -28,22 +28,6 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
-      - name: Set Android launcher icon
-        run: |
-          sudo apt-get install -y --no-install-recommends imagemagick
-          SRC="icons/icon-512.png"
-          RES="android/app/src/main/res"
-          for pair in "mipmap-mdpi:48" "mipmap-hdpi:72" "mipmap-xhdpi:96" "mipmap-xxhdpi:144" "mipmap-xxxhdpi:192"; do
-            dir="${pair%%:*}"
-            size="${pair##*:}"
-            convert "$SRC" -background "#FFFFFF" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher.png"
-            convert "$SRC" -background "#FFFFFF" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher_round.png"
-          done
-          rm -f "$RES/drawable/ic_launcher_foreground.xml" "$RES/drawable-v24/ic_launcher_foreground.xml"
-          convert "$SRC" -resize "324x324" -gravity center -background none -extent "432x432" "$RES/drawable/ic_launcher_foreground.png"
-          find "$RES/values" -name "*.xml" -exec grep -l "ic_launcher_background" {} \; | \
-            xargs sed -i 's|<color name="ic_launcher_background">[^<]*|<color name="ic_launcher_background">#FFFFFF|'
-
       - name: Patch variables.gradle — targetSdkVersion 34
         run: |
           VARS="android/variables.gradle"
@@ -58,6 +42,19 @@ jobs:
 
       - name: Sync Capacitor
         run: npx cap sync android
+
+      - name: Set Android launcher icon
+        run: |
+          sudo apt-get install -y --no-install-recommends imagemagick
+          SRC="icons/icon-512.png"
+          RES="android/app/src/main/res"
+          for pair in "mipmap-mdpi:48" "mipmap-hdpi:72" "mipmap-xhdpi:96" "mipmap-xxhdpi:144" "mipmap-xxxhdpi:192"; do
+            dir="${pair%%:*}"
+            size="${pair##*:}"
+            convert "$SRC" -background "#FFFFFF" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher.png"
+            convert "$SRC" -background "#FFFFFF" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher_round.png"
+          done
+          rm -rf "$RES/mipmap-anydpi-v26"
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
