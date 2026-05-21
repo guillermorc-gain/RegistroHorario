@@ -56,6 +56,14 @@ const app = {
             const error = params.get('error');
             history.replaceState(null, '', window.location.pathname);
             if (token) {
+                // En Chrome Custom Tab (Android, fuera del WebView de Capacitor): pasar el token
+                // de vuelta a la app nativa via intent://, que abre Capacitor con el hash del token.
+                if (!window.Capacitor && /Android/i.test(navigator.userAgent) &&
+                    window.location.origin === 'https://registro-horario-emt.vercel.app') {
+                    const exp = params.get('expires_in') || '3600';
+                    window.location.href = `intent://localhost/#access_token=${token}&expires_in=${exp}&token_type=Bearer#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
+                    return;
+                }
                 const expiresIn = parseInt(params.get('expires_in') || '3600');
                 this.driveFileId = null;
                 localStorage.removeItem('driveFileId');
@@ -108,7 +116,12 @@ const app = {
     },
 
     login() {
-        const redirectUri = window.location.origin + '/';
+        // En Android nativo (Capacitor) el WebView es bloqueado por Google; usamos Chrome Custom Tab
+        // con redirect_uri a Vercel, que luego devuelve el token a la app via intent://.
+        const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
+        const redirectUri = isAndroidNative
+            ? 'https://registro-horario-emt.vercel.app/'
+            : window.location.origin + '/';
         const params = new URLSearchParams({
             client_id: GOOGLE_CLIENT_ID,
             redirect_uri: redirectUri,
@@ -1143,7 +1156,7 @@ const _isStandalone = window.navigator.standalone === true || window.matchMedia(
 function _showInstallBanner(ios) {
     if (_isStandalone) return;
     const banner = document.getElementById('installBanner');
-    document.getElementById('installBannerMsg').textContent = ios ? 'Toca Compartir ↑ → "Ñadir a inicio"' : 'Instala la app para acceso rápido';
+    document.getElementById('installBannerMsg').textContent = ios ? 'Toca Compartir ↑ → "Añadir a inicio"' : 'Instala la app para acceso rápido';
     const bannerBtn = document.getElementById('installBannerBtn');
     if (bannerBtn) bannerBtn.style.display = ios ? 'none' : '';
     if (banner) banner.classList.add('show');
@@ -1159,7 +1172,7 @@ window.addEventListener('appinstalled', () => {
 });
 
 app.instalarApp = async function() {
-    if (!window._deferredPrompt) { alert(_isIOS ? 'En Safari:\n1. Toca Compartir (□↑)\n2. "Ñadir a pantalla de inicio"\n3. Pulsa "Ñadir"' : 'Usa el menú del navegador → "Instalar app".'); return; }
+    if (!window._deferredPrompt) { alert(_isIOS ? 'En Safari:\n1. Toca Compartir (□↑)\n2. "Añadir a pantalla de inicio"\n3. Pulsa "Añadir"' : 'Usa el menú del navegador → "Instalar app".'); return; }
     window._deferredPrompt.prompt();
     const { outcome } = await window._deferredPrompt.userChoice;
     if (outcome === 'accepted') { const banner = document.getElementById('installBanner'); if (banner) banner.classList.remove('show'); const sec = document.getElementById('installSection'); if (sec) sec.style.display = 'none'; }
