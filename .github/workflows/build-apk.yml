@@ -50,10 +50,11 @@ jobs:
           sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 34/' "$VARS"
           sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 34/' "$VARS"
 
-      - name: Patch AndroidManifest — background location permissions
+      - name: Patch AndroidManifest — permissions + intent filter localhost
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|' "$MANIFEST"
+          sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
 
       - name: Sync Capacitor
         run: npx cap sync android
