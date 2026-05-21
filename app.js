@@ -56,12 +56,13 @@ const app = {
             const error = params.get('error');
             history.replaceState(null, '', window.location.pathname);
             if (token) {
-                // En Chrome Custom Tab (Android, fuera del WebView de Capacitor): pasar el token
-                // de vuelta a la app nativa via intent://, que abre Capacitor con el hash del token.
+                // En Chrome Custom Tab (Android, fuera del WebView de Capacitor): mostrar botón
+                // para volver a la app via intent:// (Chrome requiere gesto del usuario).
                 if (!window.Capacitor && /Android/i.test(navigator.userAgent) &&
                     window.location.origin === 'https://registro-horario-emt.vercel.app') {
                     const exp = params.get('expires_in') || '3600';
-                    window.location.href = `intent://localhost/#access_token=${token}&expires_in=${exp}&token_type=Bearer#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
+                    const intentUrl = `intent://localhost/#access_token=${token}&expires_in=${exp}&token_type=Bearer#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
+                    document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Toca el botón para volver a la app.</p><a href="${intentUrl}" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir Horas EMT ›</a></div>`;
                     return;
                 }
                 const expiresIn = parseInt(params.get('expires_in') || '3600');
@@ -442,7 +443,7 @@ const app = {
         const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         btn.style.cssText = '';
         if (photo) {
-            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` ;
+            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
             btn.style.background = 'transparent'; btn.style.padding = '0'; btn.style.overflow = 'hidden';
         } else if (emoji) {
             btn.textContent = emoji; btn.style.background = bg; btn.style.fontSize = '20px'; btn.style.color = 'white';
@@ -510,7 +511,7 @@ const app = {
         const emoji = localStorage.getItem('avatarEmoji');
         const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         if (photo) {
-            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` ;
+            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
             el.style.background = 'transparent';
         } else if (emoji) {
             el.textContent = emoji; el.style.background = bg; el.style.color = '';
