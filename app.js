@@ -953,7 +953,9 @@ const app = {
         const name = prompt('Nombre de esta ubicación (ej: EMT Madrid, Depósito):');
         if (!name) return;
         if (!navigator.geolocation) { alert('❌ Tu dispositivo no soporta geolocalización'); return; }
-        if ('Notification' in window && Notification.permission === 'default')
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (LN) await LN.requestPermissions().catch(() => {});
+        else if ('Notification' in window && Notification.permission === 'default')
             await Notification.requestPermission();
         navigator.geolocation.getCurrentPosition(
             (pos) => {
@@ -1119,6 +1121,22 @@ const app = {
     },
 
     async probarNotificacion() {
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (LN) {
+            try {
+                await LN.requestPermissions();
+                await LN.schedule({
+                    notifications: [{
+                        id: 9999,
+                        title: '🔔 Horas EMT — prueba',
+                        body: 'Las notificaciones funcionan correctamente.'
+                    }]
+                });
+            } catch(e) {
+                alert('❌ Error al enviar notificación: ' + e.message);
+            }
+            return;
+        }
         if (!('Notification' in window)) { alert('❌ Tu navegador no soporta notificaciones'); return; }
         if (Notification.permission === 'default') {
             const perm = await Notification.requestPermission();
