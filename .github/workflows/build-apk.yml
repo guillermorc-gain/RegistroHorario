@@ -54,30 +54,25 @@ jobs:
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  handleOAuthIntent(getIntent());
+                  // Arranque en frío via intent OAuth: reemplaza la carga inicial
+                  if (getIntent() != null && getBridge() != null) {
+                      Uri data = getIntent().getData();
+                      if (data != null) {
+                          String token = data.getQueryParameter("access_token");
+                          if (token != null && !token.isEmpty()) {
+                              String exp = data.getQueryParameter("expires_in");
+                              String url = "https://localhost/?access_token=" + Uri.encode(token)
+                                  + (exp != null ? "&expires_in=" + exp : "");
+                              getBridge().getWebView().loadUrl(url);
+                          }
+                      }
+                  }
               }
 
               @Override
               protected void onNewIntent(Intent intent) {
-                  super.onNewIntent(intent);
+                  super.onNewIntent(intent);  // dispara appUrlOpen al JS via Capacitor
                   setIntent(intent);
-                  handleOAuthIntent(intent);
-              }
-
-              private void handleOAuthIntent(Intent intent) {
-                  if (intent == null || getBridge() == null) return;
-                  Uri data = intent.getData();
-                  if (data == null) return;
-                  String token = data.getQueryParameter("access_token");
-                  if (token == null || token.isEmpty()) return;
-                  String exp = data.getQueryParameter("expires_in");
-                  final String url = "https://localhost/?access_token=" + Uri.encode(token)
-                      + (exp != null ? "&expires_in=" + exp : "");
-                  getBridge().getWebView().postDelayed(() -> {
-                      if (getBridge() != null && getBridge().getWebView() != null) {
-                          getBridge().getWebView().loadUrl(url);
-                      }
-                  }, 700);
               }
           }
           JAVAEOF

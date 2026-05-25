@@ -36,6 +36,7 @@ const app = {
         this.setupUI();
         if (this.darkMode) this.aplicarDarkMode();
         this._buildAvatarGrid();
+        this._setupDeepLinkListener();
         this._initGoogleAuth();
     },
 
@@ -48,21 +49,33 @@ const app = {
         }
     },
 
-    _initGoogleAuth() {
-        // El token llega en hash (OAuth web) o en query params (intent:// de Android,
-        // que no soporta # en la URL destino porque conflicta con #Intent;).
+    async _initGoogleAuth() {
         const hashParams = window.location.hash.length > 1
             ? new URLSearchParams(window.location.hash.slice(1)) : null;
         const searchParams = window.location.search.length > 1
             ? new URLSearchParams(window.location.search.slice(1)) : null;
-        const token = hashParams?.get('access_token') || searchParams?.get('access_token');
-        const error = hashParams?.get('error') || searchParams?.get('error');
+        let token = hashParams?.get('access_token') || searchParams?.get('access_token');
+        let error = hashParams?.get('error') || searchParams?.get('error');
+        let expiresIn = parseInt(hashParams?.get('expires_in') || searchParams?.get('expires_in') || '3600');
+
+        // Android nativo: arranque en frío via intent deep-link — consulta la URL de lanzamiento
+        if (!token && !error && window.Capacitor?.isNativePlatform?.()) {
+            try {
+                const launch = await window.Capacitor.Plugins.App?.getLaunchUrl?.();
+                if (launch?.url) {
+                    const lu = new URL(launch.url);
+                    token = lu.searchParams.get('access_token');
+                    error = lu.searchParams.get('error');
+                    expiresIn = parseInt(lu.searchParams.get('expires_in') || '3600');
+                }
+            } catch (_) {}
+        }
 
         if (token || error) {
             history.replaceState(null, '', window.location.pathname);
             if (token) {
-                // En Chrome Custom Tab (Android nativo): mostrar botón para volver a la app.
-                // intent:// usa ?access_token= (query param) porque # conflicta con #Intent;
+                // Chrome Custom Tab en Android: mostrar botón para volver a la app nativa.
+                // intent:// usa ?access_token= porque # conflicta con #Intent;
                 if (!window.Capacitor && /Android/i.test(navigator.userAgent) &&
                     window.location.origin === 'https://registro-horario-emt.vercel.app') {
                     const exp = hashParams?.get('expires_in') || '3600';
@@ -70,7 +83,6 @@ const app = {
                     document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Toca el botón para volver a la app.</p><a href="${intentUrl}" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir Horas EMT ›</a></div>`;
                     return;
                 }
-                const expiresIn = parseInt(hashParams?.get('expires_in') || searchParams?.get('expires_in') || '3600');
                 this.driveFileId = null;
                 localStorage.removeItem('driveFileId');
                 this._saveToken({ access_token: token, expires_in: expiresIn });
@@ -86,6 +98,31 @@ const app = {
         } else {
             this.mostrarAuth();
         }
+    },
+
+    // Escucha appUrlOpen de Capacitor: se dispara cuando la app ya está abierta
+    // (arranque en caliente) y recibe un deep-link intent con el token OAuth.
+    _setupDeepLinkListener() {
+        if (!window.Capacitor?.isNativePlatform?.()) return;
+        try {
+            window.Capacitor.Plugins.App?.addListener('appUrlOpen', (data) => {
+                this._processOAuthUrl(data?.url);
+            });
+        } catch (_) {}
+    },
+
+    _processOAuthUrl(url) {
+        if (!url) return;
+        try {
+            const u = new URL(url);
+            const token = u.searchParams.get('access_token');
+            if (!token) return;
+            const expiresIn = parseInt(u.searchParams.get('expires_in') || '3600');
+            this.driveFileId = null;
+            localStorage.removeItem('driveFileId');
+            this._saveToken({ access_token: token, expires_in: expiresIn });
+            this._loadUserAndStart();
+        } catch (_) {}
     },
 
     async _ensureToken() {
