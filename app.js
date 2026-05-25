@@ -60,13 +60,14 @@ const app = {
         if (token || error) {
             history.replaceState(null, '', window.location.pathname);
             if (token) {
-                // Chrome Custom Tab en Android: mostrar botón para volver a la app nativa.
-                // intent:// usa ?access_token= porque # conflicta con #Intent;
-                if (!window.Capacitor && /Android/i.test(navigator.userAgent) &&
-                    window.location.origin === 'https://registro-horario-emt.vercel.app') {
+                // Callback OAuth en Chrome (Android nativo): redirigir automáticamente a la app.
+                // No se comprueba el origen porque Vercel puede tener distintas URLs de preview.
+                if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
                     const exp = hashParams?.get('expires_in') || '3600';
                     const intentUrl = `intent://localhost/?access_token=${encodeURIComponent(token)}&expires_in=${exp}#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
-                    document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Toca el botón para volver a la app.</p><a href="${intentUrl}" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir Horas EMT ›</a></div>`;
+                    document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Abriendo la app...</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir Horas EMT ›</a></div>`;
+                    // Auto-redirect: equivalent to tapping the button
+                    setTimeout(() => document.getElementById('_oauthReturnBtn')?.click(), 300);
                     return;
                 }
                 const expiresIn = parseInt(hashParams?.get('expires_in') || searchParams?.get('expires_in') || '3600');
@@ -156,12 +157,9 @@ const app = {
             prompt: 'select_account'
         });
         const url = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
-        if (isAndroidNative) {
-            // window.open(_system) hace que Capacitor abra Chrome en lugar de navegar el WebView
-            window.open(url, '_system');
-        } else {
-            window.location.assign(url);
-        }
+        // window.location.assign dispara shouldOverrideUrlLoading en Capacitor,
+        // que lo intercepta y abre Chrome en lugar de navegar el WebView.
+        window.location.assign(url);
     },
 
     _autoRellenarFormulario() {

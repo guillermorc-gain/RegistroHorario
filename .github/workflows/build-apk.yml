@@ -43,39 +43,40 @@ jobs:
       - name: Patch MainActivity — handle OAuth callback from intent
         run: |
           cat > android/app/src/main/java/com/guillermorc/horasemt/MainActivity.java << 'JAVAEOF'
-          package com.guillermorc.horasemt;
+package com.guillermorc.horasemt;
 
-          import android.content.Intent;
-          import android.net.Uri;
-          import android.os.Bundle;
-          import com.getcapacitor.BridgeActivity;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Bundle;
+import com.getcapacitor.BridgeActivity;
 
-          public class MainActivity extends BridgeActivity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  // Arranque en frío via intent OAuth: reemplaza la carga inicial
-                  if (getIntent() != null && getBridge() != null) {
-                      Uri data = getIntent().getData();
-                      if (data != null) {
-                          String token = data.getQueryParameter("access_token");
-                          if (token != null && !token.isEmpty()) {
-                              String exp = data.getQueryParameter("expires_in");
-                              String url = "https://localhost/?access_token=" + Uri.encode(token)
-                                  + (exp != null ? "&expires_in=" + exp : "");
-                              getBridge().getWebView().loadUrl(url);
-                          }
-                      }
-                  }
-              }
+public class MainActivity extends BridgeActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        handleOAuthIntent(getIntent());
+    }
 
-              @Override
-              protected void onNewIntent(Intent intent) {
-                  super.onNewIntent(intent);  // dispara appUrlOpen al JS via Capacitor
-                  setIntent(intent);
-              }
-          }
-          JAVAEOF
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleOAuthIntent(intent);
+    }
+
+    private void handleOAuthIntent(Intent intent) {
+        if (intent == null || getBridge() == null) return;
+        Uri data = intent.getData();
+        if (data == null) return;
+        String token = data.getQueryParameter("access_token");
+        if (token == null || token.isEmpty()) return;
+        String exp = data.getQueryParameter("expires_in");
+        String url = "https://localhost/?access_token=" + Uri.encode(token)
+            + (exp != null ? "&expires_in=" + exp : "");
+        getBridge().getWebView().post(() -> getBridge().getWebView().loadUrl(url));
+    }
+}
+JAVAEOF
 
       - name: Sync Capacitor
         run: npx cap sync android
