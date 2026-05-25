@@ -483,7 +483,7 @@ const app = {
         const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         btn.style.cssText = '';
         if (photo) {
-            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`);
             btn.style.background = 'transparent'; btn.style.padding = '0'; btn.style.overflow = 'hidden';
         } else if (emoji) {
             btn.textContent = emoji; btn.style.background = bg; btn.style.fontSize = '20px'; btn.style.color = 'white';
@@ -551,7 +551,7 @@ const app = {
         const emoji = localStorage.getItem('avatarEmoji');
         const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         if (photo) {
-            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`);
             el.style.background = 'transparent';
         } else if (emoji) {
             el.textContent = emoji; el.style.background = bg; el.style.color = '';
