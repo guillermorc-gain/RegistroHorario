@@ -30,6 +30,7 @@ const app = {
     _bgGeoStarted: false,
     _notifEnviadaAt: 0,
     _geoWatcherId: null,
+    _lastGeoCheck: 0,
 
     async init() {
         this._migrarUbicacionAntigua();
@@ -310,6 +311,7 @@ const app = {
             if (horaInicio) localStorage.setItem('lastHoraInicio', horaInicio);
             const horaFinVal = document.getElementById('horaFin').value;
             if (horaFinVal) localStorage.setItem('lastHoraFin', horaFinVal);
+            this._detenerGeofencingNativo();
             this.actualizarUI(datos);
             this.cancelarEdicion();
         } catch(e) {
@@ -405,6 +407,14 @@ const app = {
         const filename = `horas-emt-${new Date().toISOString().slice(0,10)}.json`;
         const blob = new Blob([json], { type: 'application/json' });
         const file = new File([blob], filename, { type: 'application/json' });
+        if (window.Capacitor) {
+            if (navigator.share) {
+                try { await navigator.share({ title: 'Copia Horas EMT', text: json }); return; }
+                catch(e) { if (e.name === 'AbortError') return; }
+            }
+            this._mostrarExportTexto(json);
+            return;
+        }
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
             try { await navigator.share({ title: 'Copia Horas EMT', files: [file] }); return; }
             catch(e) { if (e.name === 'AbortError') return; }
@@ -472,7 +482,7 @@ const app = {
         const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         btn.style.cssText = '';
         if (photo) {
-            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` ;
+            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
             btn.style.background = 'transparent'; btn.style.padding = '0'; btn.style.overflow = 'hidden';
         } else if (emoji) {
             btn.textContent = emoji; btn.style.background = bg; btn.style.fontSize = '20px'; btn.style.color = 'white';
@@ -540,7 +550,7 @@ const app = {
         const emoji = localStorage.getItem('avatarEmoji');
         const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         if (photo) {
-            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` ;
+            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
             el.style.background = 'transparent';
         } else if (emoji) {
             el.textContent = emoji; el.style.background = bg; el.style.color = '';
@@ -1057,6 +1067,20 @@ const app = {
     },
 
     async _enviarNotificacionTrabajo() {
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (LN) {
+            try {
+                await LN.schedule({
+                    notifications: [{
+                        id: 1001,
+                        title: '📍 Horas EMT',
+                        body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
+                        schedule: { at: new Date(Date.now() + 500) }
+                    }]
+                });
+            } catch(e) { console.error('Notification error:', e); }
+            return;
+        }
         if (!('Notification' in window) || Notification.permission !== 'granted') return;
         try {
             const reg = await navigator.serviceWorker.ready;
@@ -1078,15 +1102,16 @@ const app = {
         if (LN) { try { await LN.requestPermissions(); } catch(_) {} }
         try {
             this._geoWatcherId = await BGGeo.addWatcher({
-                backgroundMessage: 'Monitorizando tu ubicación de trabajo',
+                backgroundMessage: '',
                 backgroundTitle: 'Horas EMT',
                 requestPermissions: true,
                 stale: false,
-                distanceFilter: 100
+                distanceFilter: 200
             }, (location, error) => {
                 if (error || !location) return;
                 const ahora = Date.now();
-                if (ahora - this._notifEnviadaAt < 30 * 60 * 1000) return;
+                if (ahora - this._lastGeoCheck < 60 * 60 * 1000) return;
+                this._lastGeoCheck = ahora;
                 const locs = this._getWorkLocations();
                 if (locs.length === 0) return;
                 const cercano = locs.some(loc =>
@@ -1101,6 +1126,18 @@ const app = {
         } catch(e) {
             console.error('Background geo error:', e);
         }
+    },
+
+    async _detenerGeofencingNativo() {
+        const BGGeo = window.Capacitor?.Plugins?.BackgroundGeolocation;
+        if (!BGGeo || !this._geoWatcherId) return;
+        try {
+            await BGGeo.removeWatcher({ id: this._geoWatcherId });
+        } catch(e) {
+            console.error('removeWatcher error:', e);
+        }
+        this._geoWatcherId = null;
+        this._bgGeoStarted = false;
     },
 
     async _enviarNotificacionLlegadaNativa() {
@@ -1165,6 +1202,7 @@ const app = {
 
     registrarJornadaHoy() {
         document.getElementById('workBanner').classList.remove('show');
+        this._detenerGeofencingNativo();
         this.establecerFechaHoy();
         this.mostrarApp();
         document.getElementById('horasInput').focus();
