@@ -224,7 +224,8 @@ const app = {
 
     async _writeDriveFile(data) {
         if (!await this._ensureToken()) throw new Error('Sin autenticación');
-        const json    = JSON.stringify(data);
+        const payload = { ...data, preferencias: this._getPreferencias() };
+        const json    = JSON.stringify(payload);
         const fileId  = await this._getDriveFileId();
 
         if (!fileId) {
@@ -261,6 +262,7 @@ const app = {
         if (!this.usuarioActual) return;
         try {
             const data = await this._readDriveFile();
+            if (data?.preferencias) this._aplicarPreferenciasDesde(data.preferencias);
             this.actualizarUI(data || { horasTrabajadas: 0, historial: {} });
             this.verificarUbicacion();
             if (!this._bgGeoStarted) this._iniciarGeofencingNativo();
@@ -512,6 +514,7 @@ const app = {
         localStorage.setItem('avatarEmoji', emoji); localStorage.setItem('avatarBg', bg); localStorage.removeItem('avatarPhoto');
         document.getElementById('avatarPickerModal').classList.remove('show');
         this.actualizarBotonesPerfil(); this._actualizarAvatarPreview();
+        this._guardarPreferencias();
     },
 
     mostrarAvatarPicker() {
@@ -535,6 +538,7 @@ const app = {
                     localStorage.removeItem('avatarEmoji');
                     document.getElementById('avatarPickerModal').classList.remove('show');
                     this.actualizarBotonesPerfil(); this._actualizarAvatarPreview();
+                    this._guardarPreferencias();
                 };
                 img.src = ev.target.result;
             };
@@ -884,6 +888,7 @@ const app = {
         this.darkMode = !this.darkMode;
         localStorage.setItem('darkMode', this.darkMode);
         this.darkMode ? this.aplicarDarkMode() : this.removerDarkMode();
+        this._guardarPreferencias();
     },
 
     aplicarDarkMode() {
@@ -906,6 +911,7 @@ const app = {
         this.tema = tema;
         localStorage.setItem('tema', tema);
         this.aplicarTema(tema);
+        this._guardarPreferencias();
         this._actualizarTemaUI();
     },
 
@@ -1190,6 +1196,51 @@ const app = {
         } catch(_) {
             new Notification('🔔 Horas EMT — prueba', { body: 'Las notificaciones funcionan correctamente.', icon: '/icons/icon-192.png' });
         }
+    },
+
+    _getPreferencias() {
+        return {
+            darkMode: this.darkMode,
+            tema: this.tema,
+            avatarEmoji: localStorage.getItem('avatarEmoji') || null,
+            avatarBg: localStorage.getItem('avatarBg') || null,
+            avatarPhoto: localStorage.getItem('avatarPhoto') || null
+        };
+    },
+
+    _aplicarPreferenciasDesde(prefs) {
+        if (prefs.darkMode !== undefined && prefs.darkMode !== this.darkMode) {
+            this.darkMode = prefs.darkMode;
+            localStorage.setItem('darkMode', String(prefs.darkMode));
+            prefs.darkMode ? this.aplicarDarkMode() : this.removerDarkMode();
+            const toggle = document.getElementById('darkModeToggle');
+            if (toggle) toggle.checked = this.darkMode;
+        }
+        if (prefs.tema && prefs.tema !== this.tema) {
+            this.tema = prefs.tema;
+            localStorage.setItem('tema', prefs.tema);
+            this.aplicarTema(prefs.tema);
+        }
+        if (prefs.avatarPhoto) {
+            localStorage.setItem('avatarPhoto', prefs.avatarPhoto);
+            localStorage.removeItem('avatarEmoji');
+        } else if (prefs.avatarEmoji) {
+            localStorage.setItem('avatarEmoji', prefs.avatarEmoji);
+            if (prefs.avatarBg) localStorage.setItem('avatarBg', prefs.avatarBg);
+            localStorage.removeItem('avatarPhoto');
+        }
+        this.actualizarBotonesPerfil();
+    },
+
+    _guardarPreferencias() {
+        clearTimeout(this._prefSaveTimer);
+        this._prefSaveTimer = setTimeout(async () => {
+            if (!this.usuarioActual) return;
+            try {
+                const data = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
+                await this._writeDriveFile(data);
+            } catch(e) { console.error('Error guardando preferencias:', e); }
+        }, 2000);
     },
 
     calcularDistancia(lat1, lng1, lat2, lng2) {
