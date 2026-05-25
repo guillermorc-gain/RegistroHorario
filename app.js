@@ -144,8 +144,6 @@ const app = {
     },
 
     login() {
-        // En Android nativo (Capacitor) el WebView es bloqueado por Google; usamos Chrome Custom Tab
-        // con redirect_uri a Vercel, que luego devuelve el token a la app via intent://.
         const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
         const redirectUri = isAndroidNative
             ? 'https://registro-horario-emt.vercel.app/'
@@ -157,7 +155,13 @@ const app = {
             scope: DRIVE_SCOPE,
             prompt: 'select_account'
         });
-        window.location.assign('https://accounts.google.com/o/oauth2/v2/auth?' + params);
+        const url = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
+        if (isAndroidNative) {
+            // window.open(_system) hace que Capacitor abra Chrome en lugar de navegar el WebView
+            window.open(url, '_system');
+        } else {
+            window.location.assign(url);
+        }
     },
 
     _autoRellenarFormulario() {
