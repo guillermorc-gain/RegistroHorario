@@ -65,13 +65,19 @@ jobs:
               }
 
               private void handleOAuthIntent(Intent intent) {
-                  if (intent == null) return;
+                  if (intent == null || getBridge() == null) return;
                   Uri data = intent.getData();
                   if (data == null) return;
-                  String query = data.getQuery();
-                  if (query == null || !query.contains("access_token")) return;
-                  getBridge().getWebView().postDelayed(() ->
-                      getBridge().getWebView().loadUrl("https://localhost/?" + query), 300);
+                  String token = data.getQueryParameter("access_token");
+                  if (token == null || token.isEmpty()) return;
+                  String exp = data.getQueryParameter("expires_in");
+                  final String url = "https://localhost/?access_token=" + Uri.encode(token)
+                      + (exp != null ? "&expires_in=" + exp : "");
+                  getBridge().getWebView().postDelayed(() -> {
+                      if (getBridge() != null && getBridge().getWebView() != null) {
+                          getBridge().getWebView().loadUrl(url);
+                      }
+                  }, 700);
               }
           }
           JAVAEOF
