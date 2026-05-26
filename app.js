@@ -31,6 +31,13 @@ const app = {
     _notifEnviadaAt: 0,
     _geoWatcherId: null,
     _lastGeoCheck: 0,
+    gpsMode: localStorage.getItem('gpsMode') || 'always',
+    gpsInterval: parseInt(localStorage.getItem('gpsInterval') || '60'),
+    gpsScheduleFrom: localStorage.getItem('gpsScheduleFrom') || '07:00',
+    gpsScheduleTo: localStorage.getItem('gpsScheduleTo') || '09:00',
+    _scheduleTimer: null,
+    _tokenRefreshTimer: null,
+    _toastTimer: null,
 
     async init() {
         this._migrarUbicacionAntigua();
@@ -123,12 +130,33 @@ const app = {
         this.tokenExpiry = Date.now() + (parseInt(response.expires_in) - 60) * 1000;
         localStorage.setItem('gAccessToken', this.accessToken);
         localStorage.setItem('gTokenExpiry', this.tokenExpiry);
+        this._scheduleTokenRefresh();
+    },
+
+    _scheduleTokenRefresh() {
+        clearTimeout(this._tokenRefreshTimer);
+        const ms = this.tokenExpiry - Date.now() - 5 * 60 * 1000;
+        if (ms <= 0) return;
+        this._tokenRefreshTimer = setTimeout(() => {
+            this._mostrarToast('⚠️ Tu sesión caduca pronto. Toca para renovar.', 10000, () => this.login());
+        }, ms);
     },
 
     async _loadUserAndStart() {
         try {
             const ok = await this._ensureToken();
-            if (!ok) { this.mostrarAuth(); this.mostrarMensaje('Sesión expirada, vuelve a entrar', 'error'); return; }
+            if (!ok) {
+                const cachedEmail = localStorage.getItem('gUserEmail');
+                if (cachedEmail) {
+                    this.usuarioActual = { email: cachedEmail, name: cachedEmail };
+                    this.mostrarApp();
+                    this.actualizarBotonesPerfil();
+                    this._mostrarToast('⚠️ Sesión expirada. Toca para renovar.', 0, () => this.login());
+                } else {
+                    this.mostrarAuth();
+                }
+                return;
+            }
             const resp = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
                 headers: { Authorization: `Bearer ${this.accessToken}` }
             });
@@ -138,6 +166,7 @@ const app = {
             this.mostrarApp();
             this.actualizarBotonesPerfil();
             setTimeout(() => this._autoRellenarFormulario(), 50);
+            this._scheduleTokenRefresh();
             this.cargarDatos();
         } catch(e) {
             this.mostrarAuth();
@@ -264,8 +293,10 @@ const app = {
             const data = await this._readDriveFile();
             if (data?.preferencias) this._aplicarPreferenciasDesde(data.preferencias);
             this.actualizarUI(data || { horasTrabajadas: 0, historial: {} });
+            this._renderGpsSettings();
+            this._startScheduleTimer();
             this.verificarUbicacion();
-            if (!this._bgGeoStarted) this._iniciarGeofencingNativo();
+            this._updateGpsState();
         } catch(e) {
             console.error('Error cargando datos:', e);
             this.actualizarUI({ horasTrabajadas: 0, historial: {} });
@@ -418,11 +449,11 @@ const app = {
             return;
         }
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-            try { await navigator.share({ title: 'Copia Horas EMT', files: [file] }); return; }
+            try { await navigator.share({ title: 'Copia Horas EMT', files: [file] }); this._mostrarToast('✅ Copia exportada', 3000); return; }
             catch(e) { if (e.name === 'AbortError') return; }
         }
         if (navigator.share) {
-            try { await navigator.share({ title: 'Copia Horas EMT', text: json }); return; }
+            try { await navigator.share({ title: 'Copia Horas EMT', text: json }); this._mostrarToast('✅ Copia exportada', 3000); return; }
             catch(e) { if (e.name === 'AbortError') return; }
         }
         try {
@@ -431,6 +462,7 @@ const app = {
             a.href = url; a.download = filename;
             document.body.appendChild(a); a.click();
             setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+            this._mostrarToast('✅ Copia exportada', 3000);
             return;
         } catch(_) {}
         this._mostrarExportTexto(json);
@@ -455,7 +487,7 @@ const app = {
                 await this._writeDriveFile(restored);
                 if (datos.horasAnuales) { this.horasAnualesCustom = datos.horasAnuales; localStorage.setItem('horasAnuales', datos.horasAnuales); }
                 this.actualizarUI(restored);
-                alert('✅ Copia restaurada correctamente');
+                await this._notificarBackup('💾 Copia restaurada', 'Los datos se han importado correctamente');
             } catch(err) { alert('❌ Error al leer el archivo: ' + err.message); }
         });
         input.click();
@@ -1116,7 +1148,7 @@ const app = {
             }, (location, error) => {
                 if (error || !location) return;
                 const ahora = Date.now();
-                if (ahora - this._lastGeoCheck < 60 * 60 * 1000) return;
+                if (ahora - this._lastGeoCheck < this.gpsInterval * 60 * 1000) return;
                 this._lastGeoCheck = ahora;
                 const locs = this._getWorkLocations();
                 if (locs.length === 0) return;
@@ -1204,7 +1236,11 @@ const app = {
             tema: this.tema,
             avatarEmoji: localStorage.getItem('avatarEmoji') || null,
             avatarBg: localStorage.getItem('avatarBg') || null,
-            avatarPhoto: localStorage.getItem('avatarPhoto') || null
+            avatarPhoto: localStorage.getItem('avatarPhoto') || null,
+            gpsMode: this.gpsMode,
+            gpsInterval: this.gpsInterval,
+            gpsScheduleFrom: this.gpsScheduleFrom,
+            gpsScheduleTo: this.gpsScheduleTo
         };
     },
 
@@ -1229,7 +1265,91 @@ const app = {
             if (prefs.avatarBg) localStorage.setItem('avatarBg', prefs.avatarBg);
             localStorage.removeItem('avatarPhoto');
         }
+        if (prefs.gpsMode) { this.gpsMode = prefs.gpsMode; localStorage.setItem('gpsMode', prefs.gpsMode); }
+        if (prefs.gpsInterval) { this.gpsInterval = prefs.gpsInterval; localStorage.setItem('gpsInterval', String(prefs.gpsInterval)); }
+        if (prefs.gpsScheduleFrom) { this.gpsScheduleFrom = prefs.gpsScheduleFrom; localStorage.setItem('gpsScheduleFrom', prefs.gpsScheduleFrom); }
+        if (prefs.gpsScheduleTo) { this.gpsScheduleTo = prefs.gpsScheduleTo; localStorage.setItem('gpsScheduleTo', prefs.gpsScheduleTo); }
         this.actualizarBotonesPerfil();
+    },
+
+    _mostrarToast(msg, duration = 3000, onClick = null) {
+        let toast = document.getElementById('appToast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'appToast';
+            toast.style.cssText = 'position:fixed;bottom:88px;left:50%;transform:translateX(-50%);background:rgba(21,101,192,0.95);color:#fff;padding:11px 20px;border-radius:24px;font-size:13px;font-weight:600;z-index:9999;max-width:85vw;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.25);cursor:pointer;';
+            document.body.appendChild(toast);
+        }
+        toast.textContent = msg;
+        toast.style.display = 'block';
+        toast.style.opacity = '1';
+        toast.onclick = onClick || null;
+        clearTimeout(this._toastTimer);
+        if (duration > 0) {
+            this._toastTimer = setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => { toast.style.display = 'none'; }, 300); }, duration);
+        }
+    },
+
+    async _notificarBackup(titulo, cuerpo) {
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (LN) {
+            try {
+                await LN.schedule({ notifications: [{ id: 2001, title: titulo, body: cuerpo, schedule: { at: new Date(Date.now() + 300) } }] });
+                return;
+            } catch(e) {}
+        }
+        this._mostrarToast('✅ ' + cuerpo, 4000);
+    },
+
+    _updateGpsState() {
+        const locs = this._getWorkLocations();
+        if (locs.length === 0 || this.gpsMode === 'off') { this._detenerGeofencingNativo(); return; }
+        if (this.gpsMode === 'schedule' && !this._isInGpsSchedule()) { this._detenerGeofencingNativo(); return; }
+        if (!this._bgGeoStarted) this._iniciarGeofencingNativo();
+    },
+
+    _isInGpsSchedule() {
+        const toMin = hhmm => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
+        const cur = new Date().getHours() * 60 + new Date().getMinutes();
+        const from = toMin(this.gpsScheduleFrom);
+        const to = toMin(this.gpsScheduleTo);
+        return from <= to ? (cur >= from && cur <= to) : (cur >= from || cur <= to);
+    },
+
+    _startScheduleTimer() {
+        clearInterval(this._scheduleTimer);
+        this._scheduleTimer = setInterval(() => this._updateGpsState(), 5 * 60 * 1000);
+    },
+
+    guardarGpsConfig() {
+        const mode = document.querySelector('input[name="gpsMode"]:checked')?.value || 'always';
+        const interval = parseInt(document.getElementById('gpsIntervalSelect')?.value || '60');
+        const from = document.getElementById('gpsFrom')?.value || '07:00';
+        const to = document.getElementById('gpsTo')?.value || '09:00';
+        this.gpsMode = mode; this.gpsInterval = interval;
+        this.gpsScheduleFrom = from; this.gpsScheduleTo = to;
+        localStorage.setItem('gpsMode', mode);
+        localStorage.setItem('gpsInterval', String(interval));
+        localStorage.setItem('gpsScheduleFrom', from);
+        localStorage.setItem('gpsScheduleTo', to);
+        this._renderGpsSettings();
+        this._updateGpsState();
+        this._guardarPreferencias();
+    },
+
+    _renderGpsSettings() {
+        const radio = document.querySelector(`input[name="gpsMode"][value="${this.gpsMode}"]`);
+        if (radio) radio.checked = true;
+        const sel = document.getElementById('gpsIntervalSelect');
+        if (sel) sel.value = String(this.gpsInterval);
+        const fromEl = document.getElementById('gpsFrom');
+        if (fromEl) fromEl.value = this.gpsScheduleFrom;
+        const toEl = document.getElementById('gpsTo');
+        if (toEl) toEl.value = this.gpsScheduleTo;
+        const intervalRow = document.getElementById('gpsIntervalRow');
+        const scheduleRow = document.getElementById('gpsScheduleRow');
+        if (intervalRow) intervalRow.style.display = this.gpsMode === 'off' ? 'none' : '';
+        if (scheduleRow) scheduleRow.style.display = this.gpsMode === 'schedule' ? '' : 'none';
     },
 
     _guardarPreferencias() {
