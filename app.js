@@ -303,6 +303,7 @@ const app = {
             this.actualizarUI(data || { horasTrabajadas: 0, historial: {} });
             this._renderGpsSettings();
             this._startScheduleTimer();
+            this._setupNotificationActions();
             this.verificarUbicacion();
             this._updateGpsState();
         } catch(e) {
@@ -353,6 +354,7 @@ const app = {
             const horaFinVal = document.getElementById('horaFin').value;
             if (horaFinVal) localStorage.setItem('lastHoraFin', horaFinVal);
             this._detenerGeofencingNativo();
+            this._cancelarNotificacionTrabajo();
             this.actualizarUI(datos);
             this.cancelarEdicion();
         } catch(e) {
@@ -1121,6 +1123,7 @@ const app = {
                         id: 1001,
                         title: '📍 Horas EMT',
                         body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
+                        actionTypeId: 'TRABAJO_CERCANO',
                         schedule: { at: new Date(Date.now() + 500) }
                     }]
                 });
@@ -1194,12 +1197,83 @@ const app = {
                 notifications: [{
                     id: 1001,
                     title: '📍 Horas EMT',
-                    body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
+                    body: 'Parece que estás en el trabajo. ¿Registras la jornada de hoy?',
+                    actionTypeId: 'TRABAJO_CERCANO',
                     schedule: { at: new Date(Date.now() + 500) }
                 }]
             });
         } catch(e) {
             console.error('Notification error:', e);
+        }
+    },
+
+    async _cancelarNotificacionTrabajo() {
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (!LN) return;
+        try { await LN.cancel({ notifications: [{ id: 1001 }] }); } catch(_) {}
+    },
+
+    async _setupNotificationActions() {
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (!LN) return;
+        try {
+            await LN.registerActionTypes({
+                types: [{
+                    id: 'TRABAJO_CERCANO',
+                    actions: [
+                        { id: 'registro-rapido', title: '✅ Registrar jornada' },
+                        { id: 'otro-horario',    title: '🕐 Otro horario' }
+                    ]
+                }]
+            });
+            LN.addListener('localNotificationActionPerformed', (ev) => {
+                if (ev.actionId === 'registro-rapido') {
+                    this._registrarDesdeNotificacion();
+                } else {
+                    this.mostrarApp();
+                    document.getElementById('workBanner')?.classList.remove('show');
+                    setTimeout(() => document.getElementById('horasInput')?.focus(), 200);
+                }
+            });
+        } catch(e) {
+            console.error('registerActionTypes error:', e);
+        }
+    },
+
+    async _registrarDesdeNotificacion() {
+        const horaInicio = localStorage.getItem('lastHoraInicio');
+        const horaFin    = localStorage.getItem('lastHoraFin');
+        if (!horaInicio || !horaFin || !this.usuarioActual) return;
+        const [h1, m1] = horaInicio.split(':').map(Number);
+        const [h2, m2] = horaFin.split(':').map(Number);
+        let minutos = (h2 * 60 + m2) - (h1 * 60 + m1);
+        if (minutos <= 0) minutos += 24 * 60;
+        const horas = Math.round(minutos / 6) / 10;
+        const fecha = new Date().toISOString().slice(0, 10);
+        const registroId = fecha.replace(/-/g, '');
+        try {
+            const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
+            datos.horasTrabajadas = parseFloat(datos.horasTrabajadas) || 0;
+            if (!datos.historial) datos.historial = {};
+            if (datos.historial[registroId]) {
+                this._mostrarToast('⚠️ Ya hay un registro para hoy', 3000);
+                return;
+            }
+            datos.horasTrabajadas = Math.round((datos.horasTrabajadas + horas) * 10) / 10;
+            datos.historial[registroId] = {
+                fecha: new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+                horas,
+                timestamp: new Date(fecha + 'T12:00:00').getTime(),
+                horaInicio,
+                horaFin
+            };
+            await this._writeDriveFile(datos);
+            this._detenerGeofencingNativo();
+            this._cancelarNotificacionTrabajo();
+            this.actualizarUI(datos);
+            this._mostrarToast(`✅ ${horas}h registradas (${horaInicio}–${horaFin})`, 4000);
+        } catch(e) {
+            this._mostrarToast('❌ Error al registrar: ' + e.message, 4000);
         }
     },
 
@@ -1382,6 +1456,7 @@ const app = {
     registrarJornadaHoy() {
         document.getElementById('workBanner').classList.remove('show');
         this._detenerGeofencingNativo();
+        this._cancelarNotificacionTrabajo();
         this.establecerFechaHoy();
         this.mostrarApp();
         document.getElementById('horasInput').focus();
