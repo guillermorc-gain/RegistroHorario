@@ -410,11 +410,16 @@ const app = {
         const blob = new Blob([json], { type: 'application/json' });
         const file = new File([blob], filename, { type: 'application/json' });
         if (window.Capacitor) {
-            if (navigator.share) {
-                try { await navigator.share({ title: 'Copia Horas EMT', text: json }); return; }
-                catch(e) { if (e.name === 'AbortError') return; }
-            }
-            this._mostrarExportTexto(json);
+            const reader = new FileReader();
+            reader.onload = () => {
+                const a = document.createElement('a');
+                a.href = reader.result;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            };
+            reader.readAsDataURL(blob);
             return;
         }
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
