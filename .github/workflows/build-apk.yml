@@ -1,1 +1,184 @@
-bmFtZTogQnVpbGQgQVBLCgpvbjoKICBwdXNoOgogICAgYnJhbmNoZXM6IFttYWluLCBjbGF1ZGUvcHdhLWluc3RhbGwtc3VwcG9ydC1kWGMwdl0KICB3b3JrZmxvd19kaXNwYXRjaDoKCmpvYnM6CiAgYnVpbGQtYXBrOgogICAgcnVucy1vbjogdWJ1bnR1LWxhdGVzdAoKICAgIHN0ZXBzOgogICAgICAtIG5hbWU6IENoZWNrb3V0CiAgICAgICAgdXNlczogYWN0aW9ucy9jaGVja291dEB2NAoKICAgICAgLSBuYW1lOiBTZXR1cCBOb2RlLmpzCiAgICAgICAgdXNlczogYWN0aW9ucy9zZXR1cC1ub2RlQHY0CiAgICAgICAgd2l0aDoKICAgICAgICAgIG5vZGUtdmVyc2lvbjogJzIwJwogICAgICAgICAgY2FjaGU6ICducG0nCgogICAgICAtIG5hbWU6IEluc3RhbGwgZGVwZW5kZW5jaWVzCiAgICAgICAgcnVuOiBucG0gY2kKCiAgICAgIC0gbmFtZTogQnVpbGQgd3d3LwogICAgICAgIHJ1bjogbnBtIHJ1biBidWlsZDp3d3cKCiAgICAgIC0gbmFtZTogQWRkIEFuZHJvaWQgcGxhdGZvcm0KICAgICAgICBydW46IG5weCBjYXAgYWRkIGFuZHJvaWQKCiAgICAgIC0gbmFtZTogUGF0Y2ggdmFyaWFibGVzLmdyYWRsZSDigJQgdGFyZ2V0U2RrVmVyc2lvbiAzNAogICAgICAgIHJ1bjogfAogICAgICAgICAgVkFSUz0iYW5kcm9pZC92YXJpYWJsZXMuZ3JhZGxlIgogICAgICAgICAgc2VkIC1pICdzL2NvbXBpbGVTZGtWZXJzaW9uID0gWzAtOV0qL2NvbXBpbGVTZGtWZXJzaW9uID0gMzQvJyAiJFZBUlMiCiAgICAgICAgICBzZWQgLWkgJ3MvdGFyZ2V0U2RrVmVyc2lvbiA9IFswLTldKi90YXJnZXRTZGtWZXJzaW9uID0gMzQvJyAiJFZBUlMiCgogICAgICAtIG5hbWU6IFBhdGNoIEFuZHJvaWRNYW5pZmVzdCDigJQgcGVybWlzc2lvbnMgKyBpbnRlbnQgZmlsdGVyIGxvY2FsaG9zdAogICAgICAgIHJ1bjogfAogICAgICAgICAgTUFOSUZFU1Q9ImFuZHJvaWQvYXBwL3NyYy9tYWluL0FuZHJvaWRNYW5pZmVzdC54bWwiCiAgICAgICAgICBzZWQgLWkgJ3N8PHVzZXMtcGVybWlzc2lvbiBhbmRyb2lkOm5hbWU9ImFuZHJvaWQucGVybWlzc2lvbi5JTlRFUk5FVCIgLz58PHVzZXMtcGVybWlzc2lvbiBhbmRyb2lkOm5hbWU9ImFuZHJvaWQucGVybWlzc2lvbi5JTlRFUk5FVCIgLz5cbiAgICA8dXNlcy1wZXJtaXNzaW9uIGFuZHJvaWQ6bmFtZT0iYW5kcm9pZC5wZXJtaXNzaW9uLkFDQ0VTU19DT0FSU0VfTE9DQVRJT04iIC8+XG4gICAgPHVzZXMtcGVybWlzc2lvbiBhbmRyb2lkOm5hbWU9ImFuZHJvaWQucGVybWlzc2lvbi5BQ0NFU1NfRklORV9MT0NBVElPTiIgLz5cbiAgICA8dXNlcy1wZXJtaXNzaW9uIGFuZHJvaWQ6bmFtZT0iYW5kcm9pZC5wZXJtaXNzaW9uLkFDQ0VTU19CQUNLR1JPVU5EX0xPQ0FUSU9OIiAvPlxuICAgIDx1c2VzLXBlcm1pc3Npb24gYW5kcm9pZDpuYW1lPSJhbmRyb2lkLnBlcm1pc3Npb24uRk9SRUdST1VORF9TRVJWSUNFIiAvPlxuICAgIDx1c2VzLXBlcm1pc3Npb24gYW5kcm9pZDpuYW1lPSJhbmRyb2lkLnBlcm1pc3Npb24uRk9SRUdST1VORF9TRVJWSUNFX0xPQ0FUSU9OIiAvPlxuICAgIDx1c2VzLXBlcm1pc3Npb24gYW5kcm9pZDpuYW1lPSJhbmRyb2lkLnBlcm1pc3Npb24uUkVDRUlWRV9CT09UX0NPTVBMRVRFRCIgLz58JyAiJE1BTklGRVNUIgogICAgICAgICAgc2VkIC1pICdzfDwvYWN0aXZpdHk+fCAgICAgICAgPGludGVudC1maWx0ZXI+XG4gICAgICAgICAgICA8YWN0aW9uIGFuZHJvaWQ6bmFtZT0iYW5kcm9pZC5pbnRlbnQuYWN0aW9uLlZJRVciIC8+XG4gICAgICAgICAgICA8Y2F0ZWdvcnkgYW5kcm9pZDpuYW1lPSJhbmRyb2lkLmludGVudC5jYXRlZ29yeS5ERUZBVUxUIiAvPlxuICAgICAgICAgICAgPGNhdGVnb3J5IGFuZHJvaWQ6bmFtZT0iYW5kcm9pZC5pbnRlbnQuY2F0ZWdvcnkuQlJPV1NBQkxFIiAvPlxuICAgICAgICAgICAgPGRhdGEgYW5kcm9pZDpzY2hlbWU9Imh0dHBzIiBhbmRyb2lkOmhvc3Q9ImxvY2FsaG9zdCIgLz5cbiAgICAgICAgPC9pbnRlbnQtZmlsdGVyPlxuICAgIDwvYWN0aXZpdHk+fCcgIiRNQU5JRkVTVCIKCiAgICAgIC0gbmFtZTogUGF0Y2ggTWFpbkFjdGl2aXR5IOKAlCBoYW5kbGUgT0F1dGggY2FsbGJhY2sgKyBmaWxlIGRvd25sb2FkcwogICAgICAgIHJ1bjogfAogICAgICAgICAgY2F0ID4gYW5kcm9pZC9hcHAvc3JjL21haW4vamF2YS9jb20vZ3VpbGxlcm1vcmMvaG9yYXNlbXQvTWFpbkFjdGl2aXR5LmphdmEgPDwgJ0pBVkFFT0YnCiAgICAgICAgICBwYWNrYWdlIGNvbS5ndWlsbGVybW9yYy5ob3Jhc2VtdDsKCiAgICAgICAgICBpbXBvcnQgYW5kcm9pZC5jb250ZW50LkNvbnRlbnRWYWx1ZXM7CiAgICAgICAgICBpbXBvcnQgYW5kcm9pZC5jb250ZW50LkludGVudDsKICAgICAgICAgIGltcG9ydCBhbmRyb2lkLm5ldC5Vcmk7CiAgICAgICAgICBpbXBvcnQgYW5kcm9pZC5vcy5CdWlsZDsKICAgICAgICAgIGltcG9ydCBhbmRyb2lkLm9zLkJ1bmRsZTsKICAgICAgICAgIGltcG9ydCBhbmRyb2lkLm9zLkVudmlyb25tZW50OwogICAgICAgICAgaW1wb3J0IGFuZHJvaWQucHJvdmlkZXIuTWVkaWFTdG9yZTsKICAgICAgICAgIGltcG9ydCBhbmRyb2lkLndlYmtpdC5KYXZhc2NyaXB0SW50ZXJmYWNlOwogICAgICAgICAgaW1wb3J0IGFuZHJvaWQud2lkZ2V0LlRvYXN0OwogICAgICAgICAgaW1wb3J0IGNvbS5nZXRjYXBhY2l0b3IuQnJpZGdlQWN0aXZpdHk7CiAgICAgICAgICBpbXBvcnQgamF2YS5pby5PdXRwdXRTdHJlYW07CgogICAgICAgICAgcHVibGljIGNsYXNzIE1haW5BY3Rpdml0eSBleHRlbmRzIEJyaWRnZUFjdGl2aXR5IHsKICAgICAgICAgICAgICBAT3ZlcnJpZGUKICAgICAgICAgICAgICBwcm90ZWN0ZWQgdm9pZCBvbkNyZWF0ZShCdW5kbGUgc2F2ZWRJbnN0YW5jZVN0YXRlKSB7CiAgICAgICAgICAgICAgICAgIHN1cGVyLm9uQ3JlYXRlKHNhdmVkSW5zdGFuY2VTdGF0ZSk7CiAgICAgICAgICAgICAgICAgIGhhbmRsZU9BdXRoSW50ZW50KGdldEludGVudCgpKTsKICAgICAgICAgICAgICAgICAgc2V0dXBKYXZhc2NyaXB0SW50ZXJmYWNlKCk7CiAgICAgICAgICAgICAgfQoKICAgICAgICAgICAgICBAT3ZlcnJpZGUKICAgICAgICAgICAgICBwcm90ZWN0ZWQgdm9pZCBvbk5ld0ludGVudChJbnRlbnQgaW50ZW50KSB7CiAgICAgICAgICAgICAgICAgIHN1cGVyLm9uTmV3SW50ZW50KGludGVudCk7CiAgICAgICAgICAgICAgICAgIHNldEludGVudChpbnRlbnQpOwogICAgICAgICAgICAgICAgICBoYW5kbGVPQXV0aEludGVudChpbnRlbnQpOwogICAgICAgICAgICAgIH0KCiAgICAgICAgICAgICAgcHJpdmF0ZSB2b2lkIGhhbmRsZU9BdXRoSW50ZW50KEludGVudCBpbnRlbnQpIHsKICAgICAgICAgICAgICAgICAgaWYgKGludGVudCA9PSBudWxsIHx8IGdldEJyaWRnZSgpID09IG51bGwpIHJldHVybjsKICAgICAgICAgICAgICAgICAgVXJpIGRhdGEgPSBpbnRlbnQuZ2V0RGF0YSgpOwogICAgICAgICAgICAgICAgICBpZiAoZGF0YSA9PSBudWxsKSByZXR1cm47CiAgICAgICAgICAgICAgICAgIFN0cmluZyB0b2tlbiA9IGRhdGEuZ2V0UXVlcnlQYXJhbWV0ZXIoImFjY2Vzc190b2tlbiIpOwogICAgICAgICAgICAgICAgICBpZiAodG9rZW4gPT0gbnVsbCB8fCB0b2tlbi5pc0VtcHR5KCkpIHJldHVybjsKICAgICAgICAgICAgICAgICAgU3RyaW5nIGV4cCA9IGRhdGEuZ2V0UXVlcnlQYXJhbWV0ZXIoImV4cGlyZXNfaW4iKTsKICAgICAgICAgICAgICAgICAgU3RyaW5nIHVybCA9ICJodHRwczovL2xvY2FsaG9zdC8/YWNjZXNzX3Rva2VuPSIgKyBVcmkuZW5jb2RlKHRva2VuKQogICAgICAgICAgICAgICAgICAgICAgKyAoZXhwICE9IG51bGwgPyAiJmV4cGlyZXNfaW49IiArIGV4cCA6ICIiKTsKICAgICAgICAgICAgICAgICAgZ2V0QnJpZGdlKCkuZ2V0V2ViVmlldygpLnBvc3QoKCkgLT4gZ2V0QnJpZGdlKCkuZ2V0V2ViVmlldygpLmxvYWRVcmwodXJsKSk7CiAgICAgICAgICAgICAgfQoKICAgICAgICAgICAgICBwcml2YXRlIHZvaWQgc2V0dXBKYXZhc2NyaXB0SW50ZXJmYWNlKCkgewogICAgICAgICAgICAgICAgICBpZiAoZ2V0QnJpZGdlKCkgPT0gbnVsbCB8fCBnZXRCcmlkZ2UoKS5nZXRXZWJWaWV3KCkgPT0gbnVsbCkgcmV0dXJuOwogICAgICAgICAgICAgICAgICBnZXRCcmlkZ2UoKS5nZXRXZWJWaWV3KCkuYWRkSmF2YXNjcmlwdEludGVyZmFjZShuZXcgT2JqZWN0KCkgewogICAgICAgICAgICAgICAgICAgICAgQEphdmFzY3JpcHRJbnRlcmZhY2UKICAgICAgICAgICAgICAgICAgICAgIHB1YmxpYyB2b2lkIHNhdmVGaWxlKFN0cmluZyBjb250ZW50LCBTdHJpbmcgZmlsZW5hbWUpIHsKICAgICAgICAgICAgICAgICAgICAgICAgICBmaW5hbCBTdHJpbmcgZm5hbWUgPSAoZmlsZW5hbWUgIT0gbnVsbCAmJiAhZmlsZW5hbWUuaXNFbXB0eSgpKQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICA/IGZpbGVuYW1lIDogImhvcmFzLWVtdC5qc29uIjsKICAgICAgICAgICAgICAgICAgICAgICAgICBieXRlW10gYnl0ZXM7CiAgICAgICAgICAgICAgICAgICAgICAgICAgdHJ5IHsgYnl0ZXMgPSBjb250ZW50LmdldEJ5dGVzKCJVVEYtOCIpOyB9CiAgICAgICAgICAgICAgICAgICAgICAgICAgY2F0Y2ggKEV4Y2VwdGlvbiBlKSB7IGJ5dGVzID0gY29udGVudC5nZXRCeXRlcygpOyB9CiAgICAgICAgICAgICAgICAgICAgICAgICAgZmluYWwgYnl0ZVtdIGRhdGEgPSBieXRlczsKICAgICAgICAgICAgICAgICAgICAgICAgICB0cnkgewogICAgICAgICAgICAgICAgICAgICAgICAgICAgICBpZiAoQnVpbGQuVkVSU0lPTi5TREtfSU5UID49IEJ1aWxkLlZFUlNJT05fQ09ERVMuUSkgewogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgQ29udGVudFZhbHVlcyB2ID0gbmV3IENvbnRlbnRWYWx1ZXMoKTsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHYucHV0KE1lZGlhU3RvcmUuRG93bmxvYWRzLkRJU1BMQVlfTkFNRSwgZm5hbWUpOwogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgdi5wdXQoTWVkaWFTdG9yZS5Eb3dubG9hZHMuTUlNRV9UWVBFLCAiYXBwbGljYXRpb24vanNvbiIpOwogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgVXJpIHVyaSA9IGdldENvbnRlbnRSZXNvbHZlcigpLmluc2VydCgKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBNZWRpYVN0b3JlLkRvd25sb2Fkcy5FWFRFUk5BTF9DT05URU5UX1VSSSwgdik7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBpZiAodXJpID09IG51bGwpIHJldHVybjsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHRyeSAoT3V0cHV0U3RyZWFtIG9zID0gZ2V0Q29udGVudFJlc29sdmVyKCkub3Blbk91dHB1dFN0cmVhbSh1cmkpKSB7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgaWYgKG9zICE9IG51bGwpIG9zLndyaXRlKGRhdGEpOwogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICB9IGVsc2UgewogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgamF2YS5pby5GaWxlIGYgPSBuZXcgamF2YS5pby5GaWxlKAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEVudmlyb25tZW50LmdldEV4dGVybmFsU3RvcmFnZVB1YmxpY0RpcmVjdG9yeSgKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgRW52aXJvbm1lbnQuRElSRUNUT1JZX0RPV05MT0FEUyksIGZuYW1lKTsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHRyeSAoamF2YS5pby5GaWxlT3V0cHV0U3RyZWFtIGZvcyA9IG5ldyBqYXZhLmlvLkZpbGVPdXRwdXRTdHJlYW0oZikpIHsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBmb3Mud3JpdGUoZGF0YSk7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBhbmRyb2lkLm1lZGlhLk1lZGlhU2Nhbm5lckNvbm5lY3Rpb24uc2NhbkZpbGUoCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgTWFpbkFjdGl2aXR5LnRoaXMsIG5ldyBTdHJpbmdbXXtmLmdldEFic29sdXRlUGF0aCgpfSwgbnVsbCwgbnVsbCk7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgcnVuT25VaVRocmVhZCgoKSAtPiBUb2FzdC5tYWtlVGV4dChNYWluQWN0aXZpdHkudGhpcywKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICJHdWFyZGFkbyBlbiBEZXNjYXJnYXM6ICIgKyBmbmFtZSwgVG9hc3QuTEVOR1RIX0xPTkcpLnNob3coKSk7CiAgICAgICAgICAgICAgICAgICAgICAgICAgfSBjYXRjaCAoRXhjZXB0aW9uIGUpIHsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgcnVuT25VaVRocmVhZCgoKSAtPiBUb2FzdC5tYWtlVGV4dChNYWluQWN0aXZpdHkudGhpcywKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICJFcnJvciBhbCBndWFyZGFyIiwgVG9hc3QuTEVOR1RIX1NIT1JUKS5zaG93KCkpOwogICAgICAgICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgfSwgIkFuZHJvaWRCcmlkZ2UiKTsKICAgICAgICAgICAgICB9CiAgICAgICAgICB9CiAgICAgICAgICBKQVZBRU9GCgogICAgICAtIG5hbWU6IFN5bmMgQ2FwYWNpdG9yCiAgICAgICAgcnVuOiBucHggY2FwIHN5bmMgYW5kcm9pZAoKICAgICAgLSBuYW1lOiBTZXQgQW5kcm9pZCBsYXVuY2hlciBpY29uCiAgICAgICAgcnVuOiB8CiAgICAgICAgICBzdWRvIGFwdC1nZXQgaW5zdGFsbCAteSAtLW5vLWluc3RhbGwtcmVjb21tZW5kcyBpbWFnZW1hZ2ljawogICAgICAgICAgU1JDPSJpY29ucy9pY29uLTUxMi5wbmciCiAgICAgICAgICBSRVM9ImFuZHJvaWQvYXBwL3NyYy9tYWluL3JlcyIKICAgICAgICAgIEJHPSIjMTU2NUMwIgogICAgICAgICAgIyBMZWdhY3kgaWNvbnMgKyBhZGFwdGl2ZSBmb3JlZ3JvdW5kL2JhY2tncm91bmQgZm9yIGV2ZXJ5IGRlbnNpdHkKICAgICAgICAgICMgQWRhcHRpdmUgY2FudmFzIHNpemVzOiBtZHBpPTEwOCBoZHBpPTE2MiB4aGRwaT0yMTYgeHhoZHBpPTMyNCB4eHhoZHBpPTQzMgogICAgICAgICAgZm9yIGVudHJ5IGluICJtaXBtYXAtbWRwaTo0ODoxMDgiICJtaXBtYXAtaGRwaTo3MjoxNjIiICJtaXBtYXAteGhkcGk6OTY6MjE2IiAibWlwbWFwLXh4aGRwaToxNDQ6MzI0IiAibWlwbWFwLXh4eGhkcGk6MTkyOjQzMiI7IGRvCiAgICAgICAgICAgIGRpcj0iJHtlbnRyeSUlOip9IjsgcmVzdD0iJHtlbnRyeSMqOn0iOyBzaXplPSIke3Jlc3QlJToqfSI7IGFzaXplPSIke3Jlc3QjIyo6fSIKICAgICAgICAgICAgIyBMZWdhY3kgbGF1bmNoZXIgaWNvbnMgKHNvbGlkIGJhY2tncm91bmQpCiAgICAgICAgICAgIGNvbnZlcnQgIiRTUkMiIC1iYWNrZ3JvdW5kICIkQkciIC1hbHBoYSByZW1vdmUgLXJlc2l6ZSAiJHtzaXplfXgke3NpemV9IiAiJFJFUy8kZGlyL2ljX2xhdW5jaGVyLnBuZyIKICAgICAgICAgICAgY29udmVydCAiJFNSQyIgLWJhY2tncm91bmQgIiRCRyIgLWFscGhhIHJlbW92ZSAtcmVzaXplICIke3NpemV9eCR7c2l6ZX0iICIkUkVTLyRkaXIvaWNfbGF1bmNoZXJfcm91bmQucG5nIgogICAgICAgICAgICAjIEFkYXB0aXZlIGZvcmVncm91bmQ6IGljb24gYXQgNjYgJSBvZiBjYW52YXMsIGNlbnRlcmVkCiAgICAgICAgICAgIGZnc2l6ZT0kKChhc2l6ZSAqIDIgLyAzKSkKICAgICAgICAgICAgY29udmVydCAtc2l6ZSAke2FzaXplfXgke2FzaXplfSAieGM6JHtCR30iIFwKICAgICAgICAgICAgICBcKCAiJFNSQyIgLXJlc2l6ZSAke2Znc2l6ZX14JHtmZ3NpemV9IFwpIFwKICAgICAgICAgICAgICAtZ3Jhdml0eSBjZW50ZXIgLWNvbXBvc2l0ZSAiJFJFUy8kZGlyL2ljX2xhdW5jaGVyX2ZvcmVncm91bmQucG5nIgogICAgICAgICAgICAjIEFkYXB0aXZlIGJhY2tncm91bmQ6IHNvbGlkIGNvbG9yCiAgICAgICAgICAgIGNvbnZlcnQgLXNpemUgJHthc2l6ZX14JHthc2l6ZX0gInhjOiR7Qkd9IiAiJFJFUy8kZGlyL2ljX2xhdW5jaGVyX2JhY2tncm91bmQucG5nIgogICAgICAgICAgZG9uZQogICAgICAgICAgIyBBZGFwdGl2ZSBpY29uIFhNTCAoQW5kcm9pZCA4KykKICAgICAgICAgIG1rZGlyIC1wICIkUkVTL21pcG1hcC1hbnlkcGktdjI2IgogICAgICAgICAgY2F0ID4gIiRSRVMvbWlwbWFwLWFueWRwaS12MjYvaWNfbGF1bmNoZXIueG1sIiA8PCAnSUNPTkVPRicKICAgICAgICAgIDw/eG1sIHZlcnNpb249IjEuMCIgZW5jb2Rpbmc9InV0Zi04Ij8+CiAgICAgICAgICA8YWRhcHRpdmUtaWNvbiB4bWxuczphbmRyb2lkPSJodHRwOi8vc2NoZW1hcy5hbmRyb2lkLmNvbS9hcGsvcmVzL2FuZHJvaWQiPgogICAgICAgICAgICAgIDxiYWNrZ3JvdW5kIGFuZHJvaWQ6ZHJhd2FibGU9IkBtaXBtYXAvaWNfbGF1bmNoZXJfYmFja2dyb3VuZCIvPgogICAgICAgICAgICAgIDxmb3JlZ3JvdW5kIGFuZHJvaWQ6ZHJhd2FibGU9IkBtaXBtYXAvaWNfbGF1bmNoZXJfZm9yZWdyb3VuZCIvPgogICAgICAgICAgPC9hZGFwdGl2ZS1pY29uPgogICAgICAgICAgSUNPTkVPRgogICAgICAgICAgY3AgIiRSRVMvbWlwbWFwLWFueWRwaS12MjYvaWNfbGF1bmNoZXIueG1sIiAiJFJFUy9taXBtYXAtYW55ZHBpLXYyNi9pY19sYXVuY2hlcl9yb3VuZC54bWwiCgogICAgICAtIG5hbWU6IFNldHVwIEphdmEgMTcKICAgICAgICB1c2VzOiBhY3Rpb25zL3NldHVwLWphdmFAdjQKICAgICAgICB3aXRoOgogICAgICAgICAgZGlzdHJpYnV0aW9uOiAndGVtdXJpbicKICAgICAgICAgIGphdmEtdmVyc2lvbjogJzE3JwoKICAgICAgLSBuYW1lOiBTZXR1cCBBbmRyb2lkIFNESwogICAgICAgIHVzZXM6IGFuZHJvaWQtYWN0aW9ucy9zZXR1cC1hbmRyb2lkQHYzCgogICAgICAtIG5hbWU6IEJ1aWxkIGRlYnVnIEFQSwogICAgICAgIHdvcmtpbmctZGlyZWN0b3J5OiBhbmRyb2lkCiAgICAgICAgcnVuOiAuL2dyYWRsZXcgYXNzZW1ibGVEZWJ1ZyAtLW5vLWRhZW1vbgoKICAgICAgLSBuYW1lOiBVcGxvYWQgQVBLCiAgICAgICAgdXNlczogYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAdjQKICAgICAgICB3aXRoOgogICAgICAgICAgbmFtZTogaG9yYXMtZW10LSR7eyBnaXRodWIucnVuX251bWJlciB9fQogICAgICAgICAgcGF0aDogYW5kcm9pZC9hcHAvYnVpbGQvb3V0cHV0cy9hcGsvZGVidWcvYXBwLWRlYnVnLmFwawogICAgICAgICAgcmV0ZW50aW9uLWRheXM6IDMwCg==
+name: Build APK
+
+on:
+  push:
+    branches: [main, claude/pwa-install-support-dXc0v]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build www/
+        run: npm run build:www
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Patch variables.gradle — targetSdkVersion 34
+        run: |
+          VARS="android/variables.gradle"
+          sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 34/' "$VARS"
+          sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 34/' "$VARS"
+
+      - name: Patch AndroidManifest — permissions + intent filter localhost
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|' "$MANIFEST"
+          sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
+
+      - name: Patch MainActivity — handle OAuth callback + file downloads
+        run: |
+          cat > android/app/src/main/java/com/guillermorc/horasemt/MainActivity.java << 'JAVAEOF'
+          package com.guillermorc.horasemt;
+
+          import android.content.ContentValues;
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.Environment;
+          import android.provider.MediaStore;
+          import android.webkit.JavascriptInterface;
+          import android.widget.Toast;
+          import com.getcapacitor.BridgeActivity;
+          import java.io.OutputStream;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  handleOAuthIntent(getIntent());
+                  setupJavascriptInterface();
+              }
+
+              @Override
+              protected void onNewIntent(Intent intent) {
+                  super.onNewIntent(intent);
+                  setIntent(intent);
+                  handleOAuthIntent(intent);
+              }
+
+              private void handleOAuthIntent(Intent intent) {
+                  if (intent == null || getBridge() == null) return;
+                  Uri data = intent.getData();
+                  if (data == null) return;
+                  String token = data.getQueryParameter("access_token");
+                  if (token == null || token.isEmpty()) return;
+                  String exp = data.getQueryParameter("expires_in");
+                  String url = "https://localhost/?access_token=" + Uri.encode(token)
+                      + (exp != null ? "&expires_in=" + exp : "");
+                  getBridge().getWebView().post(() -> getBridge().getWebView().loadUrl(url));
+              }
+
+              private void setupJavascriptInterface() {
+                  if (getBridge() == null || getBridge().getWebView() == null) return;
+                  getBridge().getWebView().addJavascriptInterface(new Object() {
+                      @JavascriptInterface
+                      public void saveFile(String content, String filename) {
+                          final String fname = (filename != null && !filename.isEmpty())
+                              ? filename : "horas-emt.json";
+                          byte[] bytes;
+                          try { bytes = content.getBytes("UTF-8"); }
+                          catch (Exception e) { bytes = content.getBytes(); }
+                          final byte[] data = bytes;
+                          try {
+                              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                  ContentValues v = new ContentValues();
+                                  v.put(MediaStore.Downloads.DISPLAY_NAME, fname);
+                                  v.put(MediaStore.Downloads.MIME_TYPE, "application/json");
+                                  Uri uri = getContentResolver().insert(
+                                      MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                                  if (uri == null) return;
+                                  try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+                                      if (os != null) os.write(data);
+                                  }
+                              } else {
+                                  java.io.File f = new java.io.File(
+                                      Environment.getExternalStoragePublicDirectory(
+                                          Environment.DIRECTORY_DOWNLOADS), fname);
+                                  try (java.io.FileOutputStream fos = new java.io.FileOutputStream(f)) {
+                                      fos.write(data);
+                                  }
+                                  android.media.MediaScannerConnection.scanFile(
+                                      MainActivity.this, new String[]{f.getAbsolutePath()}, null, null);
+                              }
+                              runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                                  "Guardado en Descargas: " + fname, Toast.LENGTH_LONG).show());
+                          } catch (Exception e) {
+                              runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                                  "Error al guardar", Toast.LENGTH_SHORT).show());
+                          }
+                      }
+                  }, "AndroidBridge");
+              }
+          }
+          JAVAEOF
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Set Android launcher icon
+        run: |
+          sudo apt-get install -y --no-install-recommends imagemagick
+          SRC="icons/icon-512.png"
+          RES="android/app/src/main/res"
+          BG="#1565C0"
+          # Legacy icons + adaptive foreground/background for every density
+          # Adaptive canvas sizes: mdpi=108 hdpi=162 xhdpi=216 xxhdpi=324 xxxhdpi=432
+          for entry in "mipmap-mdpi:48:108" "mipmap-hdpi:72:162" "mipmap-xhdpi:96:216" "mipmap-xxhdpi:144:324" "mipmap-xxxhdpi:192:432"; do
+            dir="${entry%%:*}"; rest="${entry#*:}"; size="${rest%%:*}"; asize="${rest##*:}"
+            # Legacy launcher icons (solid background)
+            convert "$SRC" -background "$BG" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher.png"
+            convert "$SRC" -background "$BG" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher_round.png"
+            # Adaptive foreground: icon at 66 % of canvas, centered
+            fgsize=$((asize * 2 / 3))
+            convert -size ${asize}x${asize} "xc:${BG}" \
+              \( "$SRC" -resize ${fgsize}x${fgsize} \) \
+              -gravity center -composite "$RES/$dir/ic_launcher_foreground.png"
+            # Adaptive background: solid color
+            convert -size ${asize}x${asize} "xc:${BG}" "$RES/$dir/ic_launcher_background.png"
+          done
+          # Adaptive icon XML (Android 8+)
+          mkdir -p "$RES/mipmap-anydpi-v26"
+          cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" << 'ICONEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@mipmap/ic_launcher_background"/>
+              <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+          </adaptive-icon>
+          ICONEOF
+          cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: horas-emt-${{ github.run_number }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
