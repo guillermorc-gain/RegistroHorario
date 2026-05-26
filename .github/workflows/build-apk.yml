@@ -136,13 +136,32 @@ jobs:
           sudo apt-get install -y --no-install-recommends imagemagick
           SRC="icons/icon-512.png"
           RES="android/app/src/main/res"
-          for pair in "mipmap-mdpi:48" "mipmap-hdpi:72" "mipmap-xhdpi:96" "mipmap-xxhdpi:144" "mipmap-xxxhdpi:192"; do
-            dir="${pair%%:*}"
-            size="${pair##*:}"
-            convert "$SRC" -background "#FFFFFF" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher.png"
-            convert "$SRC" -background "#FFFFFF" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher_round.png"
+          BG="#1565C0"
+          # Legacy icons + adaptive foreground/background for every density
+          # Adaptive canvas sizes: mdpi=108 hdpi=162 xhdpi=216 xxhdpi=324 xxxhdpi=432
+          for entry in "mipmap-mdpi:48:108" "mipmap-hdpi:72:162" "mipmap-xhdpi:96:216" "mipmap-xxhdpi:144:324" "mipmap-xxxhdpi:192:432"; do
+            dir="${entry%%:*}"; rest="${entry#*:}"; size="${rest%%:*}"; asize="${rest##*:}"
+            # Legacy launcher icons (solid background)
+            convert "$SRC" -background "$BG" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher.png"
+            convert "$SRC" -background "$BG" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher_round.png"
+            # Adaptive foreground: icon at 66 % of canvas, centered
+            fgsize=$((asize * 2 / 3))
+            convert -size ${asize}x${asize} "xc:${BG}" \
+              \( "$SRC" -resize ${fgsize}x${fgsize} \) \
+              -gravity center -composite "$RES/$dir/ic_launcher_foreground.png"
+            # Adaptive background: solid color
+            convert -size ${asize}x${asize} "xc:${BG}" "$RES/$dir/ic_launcher_background.png"
           done
-          rm -rf "$RES/mipmap-anydpi-v26"
+          # Adaptive icon XML (Android 8+)
+          mkdir -p "$RES/mipmap-anydpi-v26"
+          cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" << 'ICONEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@mipmap/ic_launcher_background"/>
+              <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+          </adaptive-icon>
+          ICONEOF
+          cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
