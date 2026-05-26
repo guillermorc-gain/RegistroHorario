@@ -978,6 +978,7 @@ const app = {
         const precio = parseFloat(document.getElementById('precioNocheGlobal').value) || 0;
         this.precioNocheDefault = precio;
         localStorage.setItem('precioNoche', precio);
+        this._guardarPreferencias();
     },
 
     mostrarCambiarHoras() {
@@ -1025,6 +1026,7 @@ const app = {
                 const locs = this._getWorkLocations();
                 locs.push({ name: name.trim(), lat: pos.coords.latitude, lng: pos.coords.longitude });
                 this._saveWorkLocations(locs);
+                this._guardarPreferencias();
                 this.actualizarEstadoGPS();
                 this._renderWorkLocations();
                 alert(`✅ "${name.trim()}" guardada. Recibirás notificación al llegar.`);
@@ -1039,6 +1041,7 @@ const app = {
         if (!confirm(`¿Eliminar "${locs[index].name}"?`)) return;
         locs.splice(index, 1);
         this._saveWorkLocations(locs);
+        this._guardarPreferencias();
         if (locs.length === 0) document.getElementById('workBanner').classList.remove('show');
         this.actualizarEstadoGPS();
         this._renderWorkLocations();
@@ -1062,6 +1065,7 @@ const app = {
         }
         locs[index] = loc;
         this._saveWorkLocations(locs);
+        this._guardarPreferencias();
         this.actualizarEstadoGPS();
         this._renderWorkLocations();
     },
