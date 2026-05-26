@@ -38,6 +38,7 @@ const app = {
     _scheduleTimer: null,
     _tokenRefreshTimer: null,
     _toastTimer: null,
+    _pendingNotifAction: null,
 
     async init() {
         this._migrarUbicacionAntigua();
@@ -45,6 +46,7 @@ const app = {
         if (this.darkMode) this.aplicarDarkMode();
         this._buildAvatarGrid();
         this._setupDeepLinkListener();
+        this._setupNotificationActions(); // must register listener before any async
         this._initGoogleAuth();
     },
 
@@ -303,9 +305,12 @@ const app = {
             this.actualizarUI(data || { horasTrabajadas: 0, historial: {} });
             this._renderGpsSettings();
             this._startScheduleTimer();
-            this._setupNotificationActions();
             this.verificarUbicacion();
             this._updateGpsState();
+            if (this._pendingNotifAction === 'registro-rapido') {
+                this._pendingNotifAction = null;
+                this._registrarDesdeNotificacion();
+            }
         } catch(e) {
             console.error('Error cargando datos:', e);
             this.actualizarUI({ horasTrabajadas: 0, historial: {} });
@@ -1227,8 +1232,13 @@ const app = {
             });
             LN.addListener('localNotificationActionPerformed', (ev) => {
                 if (ev.actionId === 'registro-rapido') {
-                    this._registrarDesdeNotificacion();
+                    if (this.usuarioActual) {
+                        this._registrarDesdeNotificacion();
+                    } else {
+                        this._pendingNotifAction = 'registro-rapido';
+                    }
                 } else {
+                    this._pendingNotifAction = null;
                     this.mostrarApp();
                     document.getElementById('workBanner')?.classList.remove('show');
                     setTimeout(() => document.getElementById('horasInput')?.focus(), 200);
@@ -1321,7 +1331,10 @@ const app = {
             gpsMode: this.gpsMode,
             gpsInterval: this.gpsInterval,
             gpsScheduleFrom: this.gpsScheduleFrom,
-            gpsScheduleTo: this.gpsScheduleTo
+            gpsScheduleTo: this.gpsScheduleTo,
+            precioNocheDefault: this.precioNocheDefault,
+            horasAnualesCustom: this.horasAnualesCustom,
+            workLocations: this._getWorkLocations()
         };
     },
 
@@ -1350,6 +1363,19 @@ const app = {
         if (prefs.gpsInterval) { this.gpsInterval = prefs.gpsInterval; localStorage.setItem('gpsInterval', String(prefs.gpsInterval)); }
         if (prefs.gpsScheduleFrom) { this.gpsScheduleFrom = prefs.gpsScheduleFrom; localStorage.setItem('gpsScheduleFrom', prefs.gpsScheduleFrom); }
         if (prefs.gpsScheduleTo) { this.gpsScheduleTo = prefs.gpsScheduleTo; localStorage.setItem('gpsScheduleTo', prefs.gpsScheduleTo); }
+        if (prefs.precioNocheDefault !== undefined && prefs.precioNocheDefault !== null) {
+            this.precioNocheDefault = prefs.precioNocheDefault;
+            localStorage.setItem('precioNoche', String(prefs.precioNocheDefault));
+            const el = document.getElementById('precioNocheGlobal');
+            if (el) el.value = prefs.precioNocheDefault;
+        }
+        if (prefs.horasAnualesCustom) {
+            this.horasAnualesCustom = prefs.horasAnualesCustom;
+            localStorage.setItem('horasAnuales', String(prefs.horasAnualesCustom));
+        }
+        if (Array.isArray(prefs.workLocations) && prefs.workLocations.length > 0) {
+            this._saveWorkLocations(prefs.workLocations);
+        }
         this.actualizarBotonesPerfil();
     },
 
