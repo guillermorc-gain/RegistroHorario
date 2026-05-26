@@ -1229,7 +1229,7 @@ const app = {
                 types: [{
                     id: 'TRABAJO_CERCANO',
                     actions: [
-                        { id: 'registro-rapido', title: '✅ Registrar jornada' },
+                        { id: 'registro-rapido', title: '✅ Registrar jornada', foreground: false },
                         { id: 'otro-horario',    title: '🕐 Otro horario' }
                     ]
                 }]

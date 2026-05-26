@@ -72,6 +72,17 @@ jobs:
                   handleOAuthIntent(intent);
               }
 
+              @Override
+              public void onTaskRemoved(Intent rootIntent) {
+                  super.onTaskRemoved(rootIntent);
+                  try {
+                      stopService(new Intent(this,
+                          Class.forName("com.equimaps.capacitorbackgroundgeolocation.BackgroundGeolocationService")));
+                  } catch (Exception ignored) {}
+                  finishAndRemoveTask();
+                  android.os.Process.killProcess(android.os.Process.myPid());
+              }
+
               private void handleOAuthIntent(Intent intent) {
                   if (intent == null || getBridge() == null) return;
                   Uri data = intent.getData();
