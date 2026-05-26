@@ -52,7 +52,7 @@ jobs:
           import android.os.Bundle;
           import android.os.Environment;
           import android.provider.MediaStore;
-          import android.util.Base64;
+          import android.webkit.JavascriptInterface;
           import android.widget.Toast;
           import com.getcapacitor.BridgeActivity;
           import java.io.OutputStream;
@@ -62,7 +62,7 @@ jobs:
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   handleOAuthIntent(getIntent());
-                  setupDownloadListener();
+                  setupJavascriptInterface();
               }
 
               @Override
@@ -84,44 +84,46 @@ jobs:
                   getBridge().getWebView().post(() -> getBridge().getWebView().loadUrl(url));
               }
 
-              private void setupDownloadListener() {
+              private void setupJavascriptInterface() {
                   if (getBridge() == null || getBridge().getWebView() == null) return;
-                  getBridge().getWebView().setDownloadListener((url, ua, cd, mime, cl) -> {
-                      if (!url.startsWith("data:")) return;
-                      String b64 = url.contains(",") ? url.substring(url.indexOf(",") + 1) : "";
-                      byte[] bytes;
-                      try { bytes = Base64.decode(b64, Base64.DEFAULT); } catch (Exception e) { return; }
-                      String name = "horas-emt-" + new java.text.SimpleDateFormat(
-                          "yyyy-MM-dd", java.util.Locale.getDefault()).format(new java.util.Date()) + ".json";
-                      final String fname = name;
-                      try {
-                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                              ContentValues v = new ContentValues();
-                              v.put(MediaStore.Downloads.DISPLAY_NAME, fname);
-                              v.put(MediaStore.Downloads.MIME_TYPE, "application/json");
-                              Uri uri = getContentResolver().insert(
-                                  MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
-                              if (uri == null) return;
-                              try (OutputStream os = getContentResolver().openOutputStream(uri)) {
-                                  if (os != null) os.write(bytes);
+                  getBridge().getWebView().addJavascriptInterface(new Object() {
+                      @JavascriptInterface
+                      public void saveFile(String content, String filename) {
+                          final String fname = (filename != null && !filename.isEmpty())
+                              ? filename : "horas-emt.json";
+                          byte[] bytes;
+                          try { bytes = content.getBytes("UTF-8"); }
+                          catch (Exception e) { bytes = content.getBytes(); }
+                          final byte[] data = bytes;
+                          try {
+                              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                  ContentValues v = new ContentValues();
+                                  v.put(MediaStore.Downloads.DISPLAY_NAME, fname);
+                                  v.put(MediaStore.Downloads.MIME_TYPE, "application/json");
+                                  Uri uri = getContentResolver().insert(
+                                      MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                                  if (uri == null) return;
+                                  try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+                                      if (os != null) os.write(data);
+                                  }
+                              } else {
+                                  java.io.File f = new java.io.File(
+                                      Environment.getExternalStoragePublicDirectory(
+                                          Environment.DIRECTORY_DOWNLOADS), fname);
+                                  try (java.io.FileOutputStream fos = new java.io.FileOutputStream(f)) {
+                                      fos.write(data);
+                                  }
+                                  android.media.MediaScannerConnection.scanFile(
+                                      MainActivity.this, new String[]{f.getAbsolutePath()}, null, null);
                               }
-                          } else {
-                              java.io.File f = new java.io.File(
-                                  Environment.getExternalStoragePublicDirectory(
-                                      Environment.DIRECTORY_DOWNLOADS), fname);
-                              try (java.io.FileOutputStream fos = new java.io.FileOutputStream(f)) {
-                                  fos.write(bytes);
-                              }
-                              android.media.MediaScannerConnection.scanFile(
-                                  this, new String[]{f.getAbsolutePath()}, null, null);
+                              runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                                  "Guardado en Descargas: " + fname, Toast.LENGTH_LONG).show());
+                          } catch (Exception e) {
+                              runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                                  "Error al guardar", Toast.LENGTH_SHORT).show());
                           }
-                          runOnUiThread(() -> Toast.makeText(this,
-                              "Guardado en Descargas: " + fname, Toast.LENGTH_LONG).show());
-                      } catch (Exception e) {
-                          runOnUiThread(() -> Toast.makeText(this,
-                              "Error al guardar", Toast.LENGTH_SHORT).show());
                       }
-                  });
+                  }, "AndroidBridge");
               }
           }
           JAVAEOF

@@ -410,16 +410,11 @@ const app = {
         const blob = new Blob([json], { type: 'application/json' });
         const file = new File([blob], filename, { type: 'application/json' });
         if (window.Capacitor) {
-            const reader = new FileReader();
-            reader.onload = () => {
-                const a = document.createElement('a');
-                a.href = reader.result;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            };
-            reader.readAsDataURL(blob);
+            if (window.AndroidBridge) {
+                window.AndroidBridge.saveFile(json, filename);
+            } else {
+                this._mostrarExportTexto(json);
+            }
             return;
         }
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
