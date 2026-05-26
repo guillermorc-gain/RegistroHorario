@@ -68,21 +68,25 @@ const app = {
         if (token || error) {
             history.replaceState(null, '', window.location.pathname);
             if (token) {
-                // Callback OAuth en Chrome (Android nativo): redirigir automáticamente a la app.
-                // No se comprueba el origen porque Vercel puede tener distintas URLs de preview.
                 if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
                     const exp = hashParams?.get('expires_in') || '3600';
                     const intentUrl = `intent://localhost/?access_token=${encodeURIComponent(token)}&expires_in=${exp}#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
                     document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Abriendo la app...</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir Horas EMT ›</a></div>`;
-                    // Auto-redirect: equivalent to tapping the button
                     setTimeout(() => document.getElementById('_oauthReturnBtn')?.click(), 300);
                     return;
                 }
                 const expiresIn = parseInt(hashParams?.get('expires_in') || searchParams?.get('expires_in') || '3600');
                 this.driveFileId = null;
                 localStorage.removeItem('driveFileId');
+                sessionStorage.removeItem('silentReauthAttempted');
                 this._saveToken({ access_token: token, expires_in: expiresIn });
                 this._loadUserAndStart();
+                return;
+            }
+            // error param: if on Chrome/Android, bounce back to app so it can show login
+            if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
+                const failUrl = `intent://localhost/?silent_failed=1#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
+                setTimeout(() => { window.location.href = failUrl; }, 100);
                 return;
             }
             this.mostrarAuth();
@@ -92,7 +96,14 @@ const app = {
         if (this.accessToken && Date.now() < this.tokenExpiry) {
             this._loadUserAndStart();
         } else {
-            this.mostrarAuth();
+            const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
+            if (isAndroidNative && localStorage.getItem('gUserEmail') && !sessionStorage.getItem('silentReauthAttempted')) {
+                sessionStorage.setItem('silentReauthAttempted', '1');
+                this._silentReauth();
+            } else {
+                sessionStorage.removeItem('silentReauthAttempted');
+                this.mostrarAuth();
+            }
         }
     },
 
@@ -111,6 +122,11 @@ const app = {
         if (!url) return;
         try {
             const u = new URL(url);
+            if (u.searchParams.get('silent_failed') === '1') {
+                sessionStorage.removeItem('silentReauthAttempted');
+                this.mostrarAuth();
+                return;
+            }
             const token = u.searchParams.get('access_token');
             if (!token) return;
             const expiresIn = parseInt(u.searchParams.get('expires_in') || '3600');
@@ -135,28 +151,15 @@ const app = {
 
     _scheduleTokenRefresh() {
         clearTimeout(this._tokenRefreshTimer);
-        const ms = this.tokenExpiry - Date.now() - 5 * 60 * 1000;
-        if (ms <= 0) return;
-        this._tokenRefreshTimer = setTimeout(() => {
-            this._mostrarToast('⚠️ Tu sesión caduca pronto. Toca para renovar.', 10000, () => this.login());
-        }, ms);
+        const ms = this.tokenExpiry - Date.now() - 2 * 60 * 1000; // 2 min before expiry
+        if (ms <= 0) { this._silentReauth(); return; }
+        this._tokenRefreshTimer = setTimeout(() => this._silentReauth(), ms);
     },
 
     async _loadUserAndStart() {
         try {
             const ok = await this._ensureToken();
-            if (!ok) {
-                const cachedEmail = localStorage.getItem('gUserEmail');
-                if (cachedEmail) {
-                    this.usuarioActual = { email: cachedEmail, name: cachedEmail };
-                    this.mostrarApp();
-                    this.actualizarBotonesPerfil();
-                    this._mostrarToast('⚠️ Sesión expirada. Toca para renovar.', 0, () => this.login());
-                } else {
-                    this.mostrarAuth();
-                }
-                return;
-            }
+            if (!ok) { this._silentReauth(); return; }
             const resp = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
                 headers: { Authorization: `Bearer ${this.accessToken}` }
             });
@@ -174,22 +177,27 @@ const app = {
         }
     },
 
-    login() {
+    login(silent = false) {
         const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
         const redirectUri = isAndroidNative
             ? 'https://registro-horario-emt.vercel.app/'
             : window.location.origin + '/';
+        const email = this.usuarioActual?.email || localStorage.getItem('gUserEmail') || '';
         const params = new URLSearchParams({
             client_id: GOOGLE_CLIENT_ID,
             redirect_uri: redirectUri,
             response_type: 'token',
             scope: DRIVE_SCOPE,
-            prompt: 'select_account'
+            prompt: silent ? 'none' : 'select_account',
+            ...(silent && email ? { login_hint: email } : {})
         });
         const url = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
-        // window.location.assign dispara shouldOverrideUrlLoading en Capacitor,
-        // que lo intercepta y abre Chrome en lugar de navegar el WebView.
         window.location.assign(url);
+    },
+
+    _silentReauth() {
+        if (!window.Capacitor?.isNativePlatform?.()) return;
+        this.login(true);
     },
 
     _autoRellenarFormulario() {
