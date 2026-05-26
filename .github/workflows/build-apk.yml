@@ -72,17 +72,6 @@ jobs:
                   handleOAuthIntent(intent);
               }
 
-              @Override
-              public void onTaskRemoved(Intent rootIntent) {
-                  super.onTaskRemoved(rootIntent);
-                  try {
-                      stopService(new Intent(this,
-                          Class.forName("com.equimaps.capacitorbackgroundgeolocation.BackgroundGeolocationService")));
-                  } catch (Exception ignored) {}
-                  finishAndRemoveTask();
-                  android.os.Process.killProcess(android.os.Process.myPid());
-              }
-
               private void handleOAuthIntent(Intent intent) {
                   if (intent == null || getBridge() == null) return;
                   Uri data = intent.getData();
@@ -141,6 +130,14 @@ jobs:
 
       - name: Sync Capacitor
         run: npx cap sync android
+
+      - name: Patch BackgroundGeo service — stopWithTask
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          # Add xmlns:tools if not already present
+          sed -i 's|xmlns:android="http://schemas.android.com/apk/res/android"|xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"|' "$MANIFEST"
+          # Declare service override so it stops when user swipes the app from recents
+          sed -i 's|</application>|    <service android:name="com.equimaps.capacitorbackgroundgeolocation.BackgroundGeolocationService" android:stopWithTask="true" tools:node="merge"/>\n    </application>|' "$MANIFEST"
 
       - name: Set Android launcher icon
         run: |
