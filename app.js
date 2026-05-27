@@ -1113,6 +1113,8 @@ const app = {
     verificarUbicacion() {
         const locs = this._getWorkLocations();
         if (locs.length === 0 || !navigator.geolocation) return;
+        const todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        if (this._historialFull[todayId]) return;
         navigator.geolocation.getCurrentPosition((pos) => {
             const cercano = locs.some(loc =>
                 this.calcularDistancia(pos.coords.latitude, pos.coords.longitude, loc.lat, loc.lng) < 300);
@@ -1169,6 +1171,8 @@ const app = {
                 const ahora = Date.now();
                 if (ahora - this._lastGeoCheck < this.gpsInterval * 60 * 1000) return;
                 this._lastGeoCheck = ahora;
+                const todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                if (this._historialFull[todayId]) return;
                 const locs = this._getWorkLocations();
                 if (locs.length === 0) return;
                 const cercano = locs.some(loc =>
