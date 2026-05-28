@@ -359,6 +359,8 @@ const app = {
             };
 
             await this._writeDriveFile(datos);
+            localStorage.setItem('lastRegisteredDate', registroId);
+            window.AndroidBridge?.saveToPrefs('lastRegisteredDate', registroId);
             if (horaInicio) localStorage.setItem('lastHoraInicio', horaInicio);
             const horaFinVal = document.getElementById('horaFin').value;
             if (horaFinVal) localStorage.setItem('lastHoraFin', horaFinVal);
@@ -1118,6 +1120,7 @@ const app = {
         const locs = this._getWorkLocations();
         if (locs.length === 0 || !navigator.geolocation) return;
         const todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        if (localStorage.getItem('lastRegisteredDate') === todayId) return;
         if (this._historialFull[todayId]) return;
         navigator.geolocation.getCurrentPosition((pos) => {
             const cercano = locs.some(loc =>
@@ -1176,6 +1179,7 @@ const app = {
                 if (ahora - this._lastGeoCheck < this.gpsInterval * 60 * 1000) return;
                 this._lastGeoCheck = ahora;
                 const todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                if (localStorage.getItem('lastRegisteredDate') === todayId) return;
                 if (this._historialFull[todayId]) return;
                 const locs = this._getWorkLocations();
                 if (locs.length === 0) return;
@@ -1296,6 +1300,8 @@ const app = {
                 horaFin
             };
             await this._writeDriveFile(datos);
+            localStorage.setItem('lastRegisteredDate', registroId);
+            window.AndroidBridge?.saveToPrefs('lastRegisteredDate', registroId);
             this._detenerGeofencingNativo();
             this._cancelarNotificacionTrabajo();
             this.actualizarUI(datos);
