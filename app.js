@@ -358,6 +358,11 @@ const app = {
                 ...(esPR ? { pr: true } : {})
             };
 
+            if (horaInicio && horaFin) {
+                if (!datos.prefs) datos.prefs = {};
+                datos.prefs.horaInicio = horaInicio;
+                datos.prefs.horaFin = horaFin;
+            }
             await this._writeDriveFile(datos);
             localStorage.setItem('lastRegisteredDate', registroId);
             window.AndroidBridge?.saveToPrefs('lastRegisteredDate', registroId);
@@ -765,8 +770,8 @@ const app = {
         this.calcularExtraModal();
     },
 
-    guardarUltimaHoraInicio() { const val = document.getElementById('horaInicio').value; if (val) localStorage.setItem('lastHoraInicio', val); },
-    guardarUltimaHoraFin()    { const val = document.getElementById('horaFin').value;    if (val) localStorage.setItem('lastHoraFin', val); },
+    guardarUltimaHoraInicio() { const val = document.getElementById('horaInicio').value; if (val) { localStorage.setItem('lastHoraInicio', val); this._guardarPreferencias(); } },
+    guardarUltimaHoraFin()    { const val = document.getElementById('horaFin').value;    if (val) { localStorage.setItem('lastHoraFin', val);    this._guardarPreferencias(); } },
 
     limpiarInput() {
         this.establecerFechaHoy();
@@ -898,6 +903,15 @@ const app = {
         if (elMesN) elMesN.textContent = mesStats.nocturnas.toFixed(1);
         this._renderMensual(this._historialFull);
         this.actualizarHistorial(datos.historial || {});
+        if (datos.prefs?.horaInicio && !localStorage.getItem('lastHoraInicio')) {
+            localStorage.setItem('lastHoraInicio', datos.prefs.horaInicio);
+            document.getElementById('horaInicio').value = datos.prefs.horaInicio;
+        }
+        if (datos.prefs?.horaFin && !localStorage.getItem('lastHoraFin')) {
+            localStorage.setItem('lastHoraFin', datos.prefs.horaFin);
+            document.getElementById('horaFin').value = datos.prefs.horaFin;
+            if (datos.prefs.horaInicio) this.calcularHorasPorTiempo();
+        }
     },
 
     actualizarHistorial(historial) {
@@ -1490,6 +1504,13 @@ const app = {
             if (!this.usuarioActual) return;
             try {
                 const data = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
+                const hi = localStorage.getItem('lastHoraInicio');
+                const hf = localStorage.getItem('lastHoraFin');
+                if (hi && hf) {
+                    if (!data.prefs) data.prefs = {};
+                    data.prefs.horaInicio = hi;
+                    data.prefs.horaFin = hf;
+                }
                 await this._writeDriveFile(data);
             } catch(e) { console.error('Error guardando preferencias:', e); }
         }, 2000);
