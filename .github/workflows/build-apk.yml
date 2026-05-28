@@ -39,28 +39,43 @@ jobs:
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|' "$MANIFEST"
           sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
+          sed -i 's|</application>|    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    </application>|' "$MANIFEST"
 
-      - name: Patch MainActivity — handle OAuth callback + file downloads
+      - name: Patch MainActivity — OAuth + file downloads + BroadcastReceiver
         run: |
           cat > android/app/src/main/java/com/guillermorc/horasemt/MainActivity.java << 'JAVAEOF'
           package com.guillermorc.horasemt;
 
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.content.BroadcastReceiver;
           import android.content.ContentValues;
+          import android.content.Context;
           import android.content.Intent;
+          import android.content.SharedPreferences;
           import android.net.Uri;
           import android.os.Build;
           import android.os.Bundle;
           import android.os.Environment;
+          import android.os.Handler;
+          import android.os.Looper;
           import android.provider.MediaStore;
           import android.webkit.JavascriptInterface;
           import android.widget.Toast;
+          import androidx.core.app.NotificationCompat;
           import com.getcapacitor.BridgeActivity;
           import java.io.OutputStream;
 
           public class MainActivity extends BridgeActivity {
+
+              public static final String PREFS      = "HorasEMT";
+              public static final String CHANNEL_ID = "trabajo_cercano";
+
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+                  createNotificationChannel();
                   handleOAuthIntent(getIntent());
                   setupJavascriptInterface();
               }
@@ -70,6 +85,15 @@ jobs:
                   super.onNewIntent(intent);
                   setIntent(intent);
                   handleOAuthIntent(intent);
+              }
+
+              private void createNotificationChannel() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      NotificationChannel ch = new NotificationChannel(
+                          CHANNEL_ID, "Trabajo cercano", NotificationManager.IMPORTANCE_HIGH);
+                      ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE))
+                          .createNotificationChannel(ch);
+                  }
               }
 
               private void handleOAuthIntent(Intent intent) {
@@ -86,7 +110,50 @@ jobs:
 
               private void setupJavascriptInterface() {
                   if (getBridge() == null || getBridge().getWebView() == null) return;
+                  final Context ctx = this;
                   getBridge().getWebView().addJavascriptInterface(new Object() {
+
+                      @JavascriptInterface
+                      public void saveToPrefs(String key, String value) {
+                          ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                              .edit().putString(key, value).apply();
+                      }
+
+                      @JavascriptInterface
+                      public void scheduleWorkNotification(String horaInicio, String horaFin) {
+                          ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                              .putString("lastHoraInicio", horaInicio)
+                              .putString("lastHoraFin", horaFin).apply();
+                          NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                              nm.createNotificationChannel(new NotificationChannel(
+                                  CHANNEL_ID, "Trabajo cercano", NotificationManager.IMPORTANCE_HIGH));
+                          }
+                          int flags = PendingIntent.FLAG_UPDATE_CURRENT
+                              | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
+                          Intent bi = new Intent("com.guillermorc.horasemt.REGISTRAR");
+                          bi.setPackage("com.guillermorc.horasemt");
+                          PendingIntent broadcastPI = PendingIntent.getBroadcast(ctx, 0, bi, flags);
+                          Intent oi = new Intent(ctx, MainActivity.class);
+                          oi.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                          PendingIntent openPI = PendingIntent.getActivity(ctx, 1, oi, flags);
+                          nm.notify(1001, new NotificationCompat.Builder(ctx, CHANNEL_ID)
+                              .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+                              .setContentTitle("📍 Horas EMT")
+                              .setContentText("Parece que estás en el trabajo. ¿Registras la jornada?")
+                              .setPriority(NotificationCompat.PRIORITY_HIGH)
+                              .setContentIntent(openPI)
+                              .setAutoCancel(false)
+                              .addAction(0, "✅ Registrar jornada", broadcastPI)
+                              .addAction(0, "🕐 Otro horario", openPI)
+                              .build());
+                      }
+
+                      @JavascriptInterface
+                      public void cancelWorkNotification() {
+                          ((NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE)).cancel(1001);
+                      }
+
                       @JavascriptInterface
                       public void saveFile(String content, String filename) {
                           final String fname = (filename != null && !filename.isEmpty())
@@ -100,10 +167,10 @@ jobs:
                                   ContentValues v = new ContentValues();
                                   v.put(MediaStore.Downloads.DISPLAY_NAME, fname);
                                   v.put(MediaStore.Downloads.MIME_TYPE, "application/json");
-                                  Uri uri = getContentResolver().insert(
+                                  Uri uri = ctx.getContentResolver().insert(
                                       MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
                                   if (uri == null) return;
-                                  try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+                                  try (OutputStream os = ctx.getContentResolver().openOutputStream(uri)) {
                                       if (os != null) os.write(data);
                                   }
                               } else {
@@ -114,16 +181,97 @@ jobs:
                                       fos.write(data);
                                   }
                                   android.media.MediaScannerConnection.scanFile(
-                                      MainActivity.this, new String[]{f.getAbsolutePath()}, null, null);
+                                      ctx, new String[]{f.getAbsolutePath()}, null, null);
                               }
-                              runOnUiThread(() -> Toast.makeText(MainActivity.this,
-                                  "Guardado en Descargas: " + fname, Toast.LENGTH_LONG).show());
+                              new Handler(Looper.getMainLooper()).post(() ->
+                                  Toast.makeText(ctx, "Guardado en Descargas: " + fname, Toast.LENGTH_LONG).show());
                           } catch (Exception e) {
-                              runOnUiThread(() -> Toast.makeText(MainActivity.this,
-                                  "Error al guardar", Toast.LENGTH_SHORT).show());
+                              new Handler(Looper.getMainLooper()).post(() ->
+                                  Toast.makeText(ctx, "Error al guardar", Toast.LENGTH_SHORT).show());
                           }
                       }
                   }, "AndroidBridge");
+              }
+
+              // Registers hours directly from notification without opening the app
+              public static class RegistrarReceiver extends BroadcastReceiver {
+                  @Override
+                  public void onReceive(Context ctx, Intent intent) {
+                      final PendingResult pr = goAsync();
+                      SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                      final String token  = prefs.getString("accessToken", null);
+                      final String fileId = prefs.getString("driveFileId", null);
+                      final String inicio = prefs.getString("lastHoraInicio", null);
+                      final String fin    = prefs.getString("lastHoraFin", null);
+                      final Context app   = ctx.getApplicationContext();
+                      if (token == null || inicio == null || fin == null || fileId == null || fileId.isEmpty()) {
+                          new Handler(Looper.getMainLooper()).post(() ->
+                              Toast.makeText(app, "⚠️ Abre la app para registrar", Toast.LENGTH_LONG).show());
+                          pr.finish(); return;
+                      }
+                      new Thread(() -> {
+                          try {
+                              String[] p1 = inicio.split(":"), p2 = fin.split(":");
+                              int min = (Integer.parseInt(p2[0])*60 + Integer.parseInt(p2[1]))
+                                      - (Integer.parseInt(p1[0])*60 + Integer.parseInt(p1[1]));
+                              if (min <= 0) min += 1440;
+                              final double horas = Math.round(min / 6.0) / 10.0;
+                              String fecha   = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date());
+                              String regId   = fecha.replace("-", "");
+                              String fechaES = new java.text.SimpleDateFormat("dd/MM/yyyy",  java.util.Locale.US).format(new java.util.Date());
+                              // GET existing Drive file
+                              java.net.URL getUrl = new java.net.URL("https://www.googleapis.com/drive/v3/files/" + fileId + "?alt=media");
+                              java.net.HttpURLConnection gc = (java.net.HttpURLConnection) getUrl.openConnection();
+                              gc.setRequestProperty("Authorization", "Bearer " + token);
+                              org.json.JSONObject data = new org.json.JSONObject("{}");
+                              if (gc.getResponseCode() == 200) {
+                                  java.io.BufferedReader br = new java.io.BufferedReader(
+                                      new java.io.InputStreamReader(gc.getInputStream(), "UTF-8"));
+                                  StringBuilder sb = new StringBuilder(); String line;
+                                  while ((line = br.readLine()) != null) sb.append(line);
+                                  data = new org.json.JSONObject(sb.toString());
+                              }
+                              gc.disconnect();
+                              if (!data.has("historial")) data.put("historial", new org.json.JSONObject());
+                              if (!data.has("horasTrabajadas")) data.put("horasTrabajadas", 0.0);
+                              org.json.JSONObject hist = data.getJSONObject("historial");
+                              if (hist.has(regId)) {
+                                  new Handler(Looper.getMainLooper()).post(() ->
+                                      Toast.makeText(app, "⚠️ Ya hay un registro para hoy", Toast.LENGTH_LONG).show());
+                                  pr.finish(); return;
+                              }
+                              double total = Math.round((data.getDouble("horasTrabajadas") + horas) * 10) / 10.0;
+                              data.put("horasTrabajadas", total);
+                              org.json.JSONObject reg = new org.json.JSONObject();
+                              reg.put("fecha", fechaES); reg.put("horas", horas);
+                              reg.put("timestamp", System.currentTimeMillis());
+                              reg.put("horaInicio", inicio); reg.put("horaFin", fin);
+                              hist.put(regId, reg);
+                              // PATCH Drive file
+                              byte[] body = data.toString().getBytes("UTF-8");
+                              java.net.URL pUrl = new java.net.URL(
+                                  "https://www.googleapis.com/upload/drive/v3/files/" + fileId + "?uploadType=media");
+                              java.net.HttpURLConnection pc = (java.net.HttpURLConnection) pUrl.openConnection();
+                              pc.setRequestMethod("PATCH");
+                              pc.setRequestProperty("Authorization", "Bearer " + token);
+                              pc.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                              pc.setDoOutput(true);
+                              pc.getOutputStream().write(body);
+                              final int code = pc.getResponseCode();
+                              pc.disconnect();
+                              ((NotificationManager) app.getSystemService(Context.NOTIFICATION_SERVICE)).cancel(1001);
+                              new Handler(Looper.getMainLooper()).post(() ->
+                                  Toast.makeText(app,
+                                      (code == 200 || code == 201)
+                                          ? "✅ " + horas + "h registradas (" + inicio + "–" + fin + ")"
+                                          : "❌ Error al registrar (" + code + ")",
+                                      Toast.LENGTH_LONG).show());
+                          } catch (Exception e) {
+                              new Handler(Looper.getMainLooper()).post(() ->
+                                  Toast.makeText(app, "❌ " + e.getMessage(), Toast.LENGTH_LONG).show());
+                          } finally { pr.finish(); }
+                      }).start();
+                  }
               }
           }
           JAVAEOF

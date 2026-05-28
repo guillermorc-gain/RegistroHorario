@@ -149,6 +149,7 @@ const app = {
         this.tokenExpiry = Date.now() + (parseInt(response.expires_in) - 60) * 1000;
         localStorage.setItem('gAccessToken', this.accessToken);
         localStorage.setItem('gTokenExpiry', this.tokenExpiry);
+        window.AndroidBridge?.saveToPrefs('accessToken', this.accessToken);
         this._scheduleTokenRefresh();
     },
 
@@ -248,6 +249,7 @@ const app = {
         if (data.files && data.files.length > 0) {
             this.driveFileId = data.files[0].id;
             localStorage.setItem('driveFileId', this.driveFileId);
+            window.AndroidBridge?.saveToPrefs('driveFileId', this.driveFileId);
         }
         return this.driveFileId;
     },
@@ -285,6 +287,7 @@ const app = {
             if (!result.id) throw new Error('Drive crear: sin id en respuesta');
             this.driveFileId = result.id;
             localStorage.setItem('driveFileId', result.id);
+            window.AndroidBridge?.saveToPrefs('driveFileId', result.id);
         } else {
             const resp = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
                 method: 'PATCH',
@@ -1181,7 +1184,13 @@ const app = {
                 );
                 if (cercano) {
                     this._notifEnviadaAt = ahora;
-                    this._enviarNotificacionLlegadaNativa();
+                    const inicio = localStorage.getItem('lastHoraInicio') || '';
+                    const fin    = localStorage.getItem('lastHoraFin') || '';
+                    if (window.AndroidBridge?.scheduleWorkNotification) {
+                        window.AndroidBridge.scheduleWorkNotification(inicio, fin);
+                    } else {
+                        this._enviarNotificacionLlegadaNativa();
+                    }
                 }
             });
             this._bgGeoStarted = true;
@@ -1221,6 +1230,7 @@ const app = {
     },
 
     async _cancelarNotificacionTrabajo() {
+        window.AndroidBridge?.cancelWorkNotification?.();
         const LN = window.Capacitor?.Plugins?.LocalNotifications;
         if (!LN) return;
         try { await LN.cancel({ notifications: [{ id: 1001 }] }); } catch(_) {}
