@@ -121,7 +121,10 @@ jobs:
 
                       @JavascriptInterface
                       public void scheduleWorkNotification(String horaInicio, String horaFin) {
-                          ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                          SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                          String today = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(new java.util.Date());
+                          if (today.equals(prefs.getString("lastRegisteredDate", ""))) return;
+                          prefs.edit()
                               .putString("lastHoraInicio", horaInicio)
                               .putString("lastHoraFin", horaFin).apply();
                           NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -260,6 +263,10 @@ jobs:
                               final int code = pc.getResponseCode();
                               pc.disconnect();
                               ((NotificationManager) app.getSystemService(Context.NOTIFICATION_SERVICE)).cancel(1001);
+                              if (code == 200 || code == 201) {
+                                  app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                                      .putString("lastRegisteredDate", regId).apply();
+                              }
                               new Handler(Looper.getMainLooper()).post(() ->
                                   Toast.makeText(app,
                                       (code == 200 || code == 201)
