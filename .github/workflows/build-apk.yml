@@ -131,14 +131,6 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Patch BackgroundGeo service — stopWithTask
-        run: |
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-          # Add xmlns:tools if not already present
-          sed -i 's|xmlns:android="http://schemas.android.com/apk/res/android"|xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"|' "$MANIFEST"
-          # Declare service override so it stops when user swipes the app from recents
-          sed -i 's|</application>|    <service android:name="com.equimaps.capacitorbackgroundgeolocation.BackgroundGeolocationService" android:stopWithTask="true" tools:node="merge"/>\n    </application>|' "$MANIFEST"
-
       - name: Set Android launcher icon
         run: |
           sudo apt-get install -y --no-install-recommends imagemagick

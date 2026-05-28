@@ -101,6 +101,7 @@ const app = {
             const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
             if (isAndroidNative && localStorage.getItem('gUserEmail') && !sessionStorage.getItem('silentReauthAttempted')) {
                 sessionStorage.setItem('silentReauthAttempted', '1');
+                document.getElementById('authScreen').classList.add('hidden');
                 this._silentReauth();
             } else {
                 sessionStorage.removeItem('silentReauthAttempted');
