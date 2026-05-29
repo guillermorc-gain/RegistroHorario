@@ -39,6 +39,7 @@ const app = {
     _tokenRefreshTimer: null,
     _toastTimer: null,
     _pendingNotifAction: null,
+    notifSound: localStorage.getItem('notifSound') || 'default',
 
     async init() {
         this._migrarUbicacionAntigua();
@@ -773,6 +774,13 @@ const app = {
     guardarUltimaHoraInicio() { const val = document.getElementById('horaInicio').value; if (val) { localStorage.setItem('lastHoraInicio', val); this._guardarPreferencias(); } },
     guardarUltimaHoraFin()    { const val = document.getElementById('horaFin').value;    if (val) { localStorage.setItem('lastHoraFin', val);    this._guardarPreferencias(); } },
 
+    guardarSonidoNotif(sound) {
+        this.notifSound = sound;
+        localStorage.setItem('notifSound', sound);
+        window.AndroidBridge?.saveToPrefs('notifSound', sound);
+        this._guardarPreferencias();
+    },
+
     limpiarInput() {
         this.establecerFechaHoy();
         const lastInicio = localStorage.getItem('lastHoraInicio') || '';
@@ -1150,14 +1158,14 @@ const app = {
         const LN = window.Capacitor?.Plugins?.LocalNotifications;
         if (LN) {
             try {
-                await LN.schedule({
-                    notifications: [{
-                        id: 1001,
-                        title: '📍 Horas EMT',
-                        body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
-                        schedule: { at: new Date(Date.now() + 500) }
-                    }]
-                });
+                const notif = {
+                    id: 1001,
+                    title: '📍 Horas EMT',
+                    body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
+                    schedule: { at: new Date(Date.now() + 500) }
+                };
+                if (this.notifSound && this.notifSound !== 'default') notif.sound = this.notifSound;
+                await LN.schedule({ notifications: [notif] });
             } catch(e) { console.error('Notification error:', e); }
             return;
         }
@@ -1233,15 +1241,15 @@ const app = {
         const LN = window.Capacitor?.Plugins?.LocalNotifications;
         if (!LN) return;
         try {
-            await LN.schedule({
-                notifications: [{
-                    id: 1001,
-                    title: '📍 Horas EMT',
-                    body: 'Parece que estás en el trabajo. ¿Registras la jornada de hoy?',
-                    actionTypeId: 'TRABAJO_CERCANO',
-                    schedule: { at: new Date(Date.now() + 500) }
-                }]
-            });
+            const notif = {
+                id: 1001,
+                title: '📍 Horas EMT',
+                body: 'Parece que estás en el trabajo. ¿Registras la jornada de hoy?',
+                actionTypeId: 'TRABAJO_CERCANO',
+                schedule: { at: new Date(Date.now() + 500) }
+            };
+            if (this.notifSound && this.notifSound !== 'default') notif.sound = this.notifSound;
+            await LN.schedule({ notifications: [notif] });
         } catch(e) {
             console.error('Notification error:', e);
         }
@@ -1373,7 +1381,8 @@ const app = {
             gpsScheduleTo: this.gpsScheduleTo,
             precioNocheDefault: this.precioNocheDefault,
             horasAnualesCustom: this.horasAnualesCustom,
-            workLocations: this._getWorkLocations()
+            workLocations: this._getWorkLocations(),
+            notifSound: this.notifSound
         };
     },
 
@@ -1414,6 +1423,10 @@ const app = {
         }
         if (Array.isArray(prefs.workLocations) && prefs.workLocations.length > 0) {
             this._saveWorkLocations(prefs.workLocations);
+        }
+        if (prefs.notifSound) {
+            this.notifSound = prefs.notifSound;
+            localStorage.setItem('notifSound', prefs.notifSound);
         }
         this.actualizarBotonesPerfil();
     },
@@ -1492,6 +1505,8 @@ const app = {
         if (fromEl) fromEl.value = this.gpsScheduleFrom;
         const toEl = document.getElementById('gpsTo');
         if (toEl) toEl.value = this.gpsScheduleTo;
+        const soundSel = document.getElementById('notifSoundSelect');
+        if (soundSel) soundSel.value = this.notifSound;
         const intervalRow = document.getElementById('gpsIntervalRow');
         const scheduleRow = document.getElementById('gpsScheduleRow');
         if (intervalRow) intervalRow.style.display = this.gpsMode === 'off' ? 'none' : '';

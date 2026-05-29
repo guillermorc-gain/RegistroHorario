@@ -470,6 +470,16 @@
                         <span class="ops-row-label">Aviso al llegar al trabajo</span>
                         <span class="ops-row-sub">Recibirás una notificación cuando el GPS detecte que estás cerca de una ubicación de trabajo guardada. En Android funciona en segundo plano.</span>
                     </div>
+                    <div class="ops-field" style="gap:8px;padding-top:2px;">
+                        <span class="ops-field-label">🔊 Sonido de notificación</span>
+                        <select id="notifSoundSelect" onchange="app.guardarSonidoNotif(this.value)" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;width:100%;">
+                            <option value="default">Predeterminado</option>
+                            <option value="notif_ding">Ding</option>
+                            <option value="notif_campana">Campana</option>
+                            <option value="notif_alerta">Alerta</option>
+                        </select>
+                        <span class="ops-row-sub">Solo en Android. Los cambios aplican desde la próxima notificación.</span>
+                    </div>
                     <button class="ops-btn" onclick="app.probarNotificacion()">🔔 Probar notificación <span class="ops-arrow">›</span></button>
                 </div>
             </div>
