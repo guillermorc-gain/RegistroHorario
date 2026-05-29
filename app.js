@@ -779,6 +779,41 @@ const app = {
         localStorage.setItem('notifSound', sound);
         window.AndroidBridge?.saveToPrefs('notifSound', sound);
         this._guardarPreferencias();
+        this._previewNotifSound(sound);
+    },
+
+    _previewNotifSound(sound) {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const map = {
+                'default':       [[880, 0.20]],
+                'notif_ding':    [[880, 0.35]],
+                'notif_campana': [[660, 0.15], [880, 0.28]],
+                'notif_alerta':  [[440, 0.12], [880, 0.12], [440, 0.12]],
+                'notif_silbido': [[1200, 0.18]],
+                'notif_doble':   [[880, 0.12], [0, 0.08], [880, 0.12]],
+                'notif_fanfare': [[440, 0.10], [660, 0.10], [880, 0.22]],
+                'notif_suave':   [[330, 0.55]]
+            };
+            const notes = map[sound] || map['default'];
+            let t = ctx.currentTime + 0.05;
+            notes.forEach(([freq, dur]) => {
+                if (freq > 0) {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0, t);
+                    gain.gain.linearRampToValueAtTime(0.4, t + 0.005);
+                    gain.gain.linearRampToValueAtTime(0.4, t + dur - 0.05);
+                    gain.gain.linearRampToValueAtTime(0, t + dur);
+                    osc.start(t);
+                    osc.stop(t + dur);
+                }
+                t += dur;
+            });
+        } catch(_) {}
     },
 
     limpiarInput() {
@@ -1338,13 +1373,14 @@ const app = {
         if (LN) {
             try {
                 await LN.requestPermissions();
-                await LN.schedule({
-                    notifications: [{
-                        id: 9999,
-                        title: '🔔 Horas EMT — prueba',
-                        body: 'Las notificaciones funcionan correctamente.'
-                    }]
-                });
+                const notif = {
+                    id: 9999,
+                    title: '🔔 Horas EMT — prueba',
+                    body: 'Las notificaciones funcionan correctamente.',
+                    schedule: { at: new Date(Date.now() + 500) }
+                };
+                if (this.notifSound && this.notifSound !== 'default') notif.sound = this.notifSound;
+                await LN.schedule({ notifications: [notif] });
             } catch(e) {
                 alert('❌ Error al enviar notificación: ' + e.message);
             }
