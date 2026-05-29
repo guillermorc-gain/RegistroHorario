@@ -312,6 +312,7 @@ const app = {
             this._startScheduleTimer();
             this.verificarUbicacion();
             this._updateGpsState();
+            this._pedirPermisosIniciales();
             if (this._pendingNotifAction === 'registro-rapido') {
                 this._pendingNotifAction = null;
                 this._registrarDesdeNotificacion();
@@ -785,34 +786,46 @@ const app = {
     _previewNotifSound(sound) {
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const map = {
-                'default':       [[880, 0.20]],
-                'notif_ding':    [[880, 0.35]],
-                'notif_campana': [[660, 0.15], [880, 0.28]],
-                'notif_alerta':  [[440, 0.12], [880, 0.12], [440, 0.12]],
-                'notif_silbido': [[1200, 0.18]],
-                'notif_doble':   [[880, 0.12], [0, 0.08], [880, 0.12]],
-                'notif_fanfare': [[440, 0.10], [660, 0.10], [880, 0.22]],
-                'notif_suave':   [[330, 0.55]]
+            const bell = (freq, t0, dur) => {
+                const osc = ctx.createOscillator(); const g = ctx.createGain();
+                osc.connect(g); g.connect(ctx.destination);
+                osc.frequency.value = freq;
+                g.gain.setValueAtTime(0.55, t0);
+                g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+                osc.start(t0); osc.stop(t0 + dur + 0.05);
             };
-            const notes = map[sound] || map['default'];
-            let t = ctx.currentTime + 0.05;
-            notes.forEach(([freq, dur]) => {
-                if (freq > 0) {
-                    const osc = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    osc.connect(gain);
-                    gain.connect(ctx.destination);
-                    osc.frequency.value = freq;
-                    gain.gain.setValueAtTime(0, t);
-                    gain.gain.linearRampToValueAtTime(0.4, t + 0.005);
-                    gain.gain.linearRampToValueAtTime(0.4, t + dur - 0.05);
-                    gain.gain.linearRampToValueAtTime(0, t + dur);
-                    osc.start(t);
-                    osc.stop(t + dur);
-                }
-                t += dur;
-            });
+            const tone = (freq, t0, dur) => {
+                const osc = ctx.createOscillator(); const g = ctx.createGain();
+                osc.connect(g); g.connect(ctx.destination);
+                osc.frequency.value = freq;
+                g.gain.setValueAtTime(0, t0);
+                g.gain.linearRampToValueAtTime(0.5, t0 + 0.012);
+                g.gain.linearRampToValueAtTime(0.5, t0 + dur - 0.07);
+                g.gain.linearRampToValueAtTime(0, t0 + dur);
+                osc.start(t0); osc.stop(t0 + dur);
+            };
+            const sweep = (f1, f2, t0, dur) => {
+                const osc = ctx.createOscillator(); const g = ctx.createGain();
+                osc.connect(g); g.connect(ctx.destination);
+                osc.frequency.setValueAtTime(f1, t0);
+                osc.frequency.linearRampToValueAtTime(f2, t0 + dur);
+                g.gain.setValueAtTime(0, t0);
+                g.gain.linearRampToValueAtTime(0.45, t0 + 0.02);
+                g.gain.linearRampToValueAtTime(0.45, t0 + dur - 0.08);
+                g.gain.linearRampToValueAtTime(0, t0 + dur);
+                osc.start(t0); osc.stop(t0 + dur);
+            };
+            const t = ctx.currentTime + 0.05;
+            switch (sound) {
+                case 'notif_ding':    bell(880, t, 1.0); break;
+                case 'notif_campana': bell(660, t, 0.5); bell(880, t + 0.42, 0.75); break;
+                case 'notif_alerta':  tone(440, t, 0.20); tone(660, t+0.25, 0.20); tone(880, t+0.50, 0.30); break;
+                case 'notif_silbido': sweep(800, 1400, t, 0.42); sweep(1400, 800, t+0.40, 0.38); break;
+                case 'notif_doble':   tone(880, t, 0.30); tone(880, t+0.42, 0.30); break;
+                case 'notif_fanfare': tone(440, t, 0.20); tone(550, t+0.22, 0.20); tone(660, t+0.44, 0.20); bell(880, t+0.66, 0.60); break;
+                case 'notif_suave':   bell(330, t, 1.2); break;
+                default:              bell(880, t, 0.7);
+            }
         } catch(_) {}
     },
 
@@ -1199,7 +1212,10 @@ const app = {
                     body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
                     schedule: { at: new Date(Date.now() + 500) }
                 };
-                if (this.notifSound && this.notifSound !== 'default') notif.sound = this.notifSound;
+                if (this.notifSound && this.notifSound !== 'default') {
+                    notif.sound = this.notifSound;
+                    notif.channelId = this.notifSound;
+                }
                 await LN.schedule({ notifications: [notif] });
             } catch(e) { console.error('Notification error:', e); }
             return;
@@ -1283,7 +1299,10 @@ const app = {
                 actionTypeId: 'TRABAJO_CERCANO',
                 schedule: { at: new Date(Date.now() + 500) }
             };
-            if (this.notifSound && this.notifSound !== 'default') notif.sound = this.notifSound;
+            if (this.notifSound && this.notifSound !== 'default') {
+                notif.sound = this.notifSound;
+                notif.channelId = this.notifSound;
+            }
             await LN.schedule({ notifications: [notif] });
         } catch(e) {
             console.error('Notification error:', e);
@@ -1379,7 +1398,10 @@ const app = {
                     body: 'Las notificaciones funcionan correctamente.',
                     schedule: { at: new Date(Date.now() + 500) }
                 };
-                if (this.notifSound && this.notifSound !== 'default') notif.sound = this.notifSound;
+                if (this.notifSound && this.notifSound !== 'default') {
+                    notif.sound = this.notifSound;
+                    notif.channelId = this.notifSound;
+                }
                 await LN.schedule({ notifications: [notif] });
             } catch(e) {
                 alert('❌ Error al enviar notificación: ' + e.message);
@@ -1565,6 +1587,31 @@ const app = {
                 await this._writeDriveFile(data);
             } catch(e) { console.error('Error guardando preferencias:', e); }
         }, 2000);
+    },
+
+    async _pedirPermisosIniciales() {
+        if (!window.Capacitor?.isNativePlatform?.()) return;
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (!LN) return;
+        try { await LN.requestPermissions(); } catch(_) {}
+        this._crearCanalesNotificacion();
+    },
+
+    _crearCanalesNotificacion() {
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (!LN?.createChannel) return;
+        const channels = [
+            { id: 'notif_ding',    name: 'Ding',        sound: 'notif_ding' },
+            { id: 'notif_campana', name: 'Campana',      sound: 'notif_campana' },
+            { id: 'notif_alerta',  name: 'Alerta',       sound: 'notif_alerta' },
+            { id: 'notif_silbido', name: 'Silbido',      sound: 'notif_silbido' },
+            { id: 'notif_doble',   name: 'Doble pitido', sound: 'notif_doble' },
+            { id: 'notif_fanfare', name: 'Fanfare',      sound: 'notif_fanfare' },
+            { id: 'notif_suave',   name: 'Suave',        sound: 'notif_suave' },
+        ];
+        channels.forEach(ch => {
+            LN.createChannel({ ...ch, importance: 5, visibility: 1 }).catch(() => {});
+        });
     },
 
     calcularDistancia(lat1, lng1, lat2, lng2) {
