@@ -8,10 +8,15 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Inject build version
+        run: echo "const APP_VERSION = 'build-${{ github.run_number }}';" > version.js
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -193,6 +198,15 @@ jobs:
                                   Toast.makeText(ctx, "Error al guardar", Toast.LENGTH_SHORT).show());
                           }
                       }
+
+                      @JavascriptInterface
+                      public void openExternalUrl(String url) {
+                          try {
+                              Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                              intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                              ctx.startActivity(intent);
+                          } catch (Exception e) {}
+                      }
                   }, "AndroidBridge");
               }
 
@@ -373,9 +387,19 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: horas-emt-${{ github.run_number }}
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "Horas EMT — Build ${{ github.run_number }}"
+          body: "APK generado automáticamente en build #${{ github.run_number }}."
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true
