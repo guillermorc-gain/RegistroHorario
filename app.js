@@ -119,6 +119,19 @@ const app = {
             window.Capacitor.Plugins.App?.addListener('appUrlOpen', (data) => {
                 this._processOAuthUrl(data?.url);
             });
+            window.Capacitor.Plugins.App?.addListener('backButton', () => {
+                if (document.getElementById('historialModal')?.classList.contains('show')) {
+                    document.getElementById('historialModal').classList.remove('show');
+                } else if (document.getElementById('editModal')?.classList.contains('show')) {
+                    document.getElementById('editModal').classList.remove('show');
+                } else if (document.getElementById('avatarModal')?.classList.contains('show')) {
+                    document.getElementById('avatarModal').classList.remove('show');
+                } else if (document.getElementById('optionsScreen')?.classList.contains('active')) {
+                    this.mostrarApp();
+                } else {
+                    window.Capacitor.Plugins.App?.minimizeApp?.();
+                }
+            });
         } catch (_) {}
     },
 
@@ -1203,6 +1216,12 @@ const app = {
     },
 
     async _enviarNotificacionTrabajo() {
+        if (window.AndroidBridge?.scheduleWorkNotification) {
+            const inicio = localStorage.getItem('lastHoraInicio') || '';
+            const fin    = localStorage.getItem('lastHoraFin') || '';
+            window.AndroidBridge.scheduleWorkNotification(inicio, fin);
+            return;
+        }
         const LN = window.Capacitor?.Plugins?.LocalNotifications;
         if (LN) {
             try {
@@ -1210,6 +1229,7 @@ const app = {
                     id: 1001,
                     title: '📍 Horas EMT',
                     body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
+                    actionTypeId: 'TRABAJO_CERCANO',
                     schedule: { at: new Date(Date.now() + 500) }
                 };
                 if (this.notifSound && this.notifSound !== 'default') {
@@ -1592,9 +1612,10 @@ const app = {
     async _pedirPermisosIniciales() {
         if (!window.Capacitor?.isNativePlatform?.()) return;
         const LN = window.Capacitor?.Plugins?.LocalNotifications;
-        if (!LN) return;
-        try { await LN.requestPermissions(); } catch(_) {}
+        if (LN) { try { await LN.requestPermissions(); } catch(_) {} }
         this._crearCanalesNotificacion();
+        const Geo = window.Capacitor?.Plugins?.Geolocation;
+        if (Geo) { try { await Geo.requestPermissions({ permissions: ['location', 'coarseLocation'] }); } catch(_) {} }
     },
 
     _crearCanalesNotificacion() {
@@ -1626,9 +1647,15 @@ const app = {
         document.getElementById('workBanner').classList.remove('show');
         this._detenerGeofencingNativo();
         this._cancelarNotificacionTrabajo();
-        this.establecerFechaHoy();
-        this.mostrarApp();
-        document.getElementById('horasInput').focus();
+        const horaInicio = localStorage.getItem('lastHoraInicio');
+        const horaFin    = localStorage.getItem('lastHoraFin');
+        if (horaInicio && horaFin && this.usuarioActual) {
+            this._registrarDesdeNotificacion();
+        } else {
+            this.establecerFechaHoy();
+            this.mostrarApp();
+            document.getElementById('horasInput').focus();
+        }
     },
 
     _mostrarExportTexto(json) {
