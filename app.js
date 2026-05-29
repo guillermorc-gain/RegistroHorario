@@ -9,7 +9,7 @@ const HORAS_ANUALES    = 777;
 const NOCHE_INICIO_MIN = 21 * 60;
 const NOCHE_FIN_MIN    = 6  * 60;
 
-const AVATAR_EMOJIS = ['🚌','⭐','🔥','⚡','🌊','🎯','🚀','🦸','🎨','🌈'];
+const AVATAR_EMOJIS = ['😌','⭐','🔥','⚡','🌊','🎯','🚀','🦸','🎨','🌈'];
 const AVATAR_BG     = ['#667eea','#e74c3c','#f39c12','#27ae60','#3498db','#9b59b6','#1abc9c','#e67e22','#764ba2','#e91e63'];
 const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -39,6 +39,7 @@ const app = {
     _tokenRefreshTimer: null,
     _toastTimer: null,
     _pendingNotifAction: null,
+    notifSound: localStorage.getItem('notifSound') || 'default',
 
     async init() {
         this._migrarUbicacionAntigua();
@@ -101,6 +102,7 @@ const app = {
             const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
             if (isAndroidNative && localStorage.getItem('gUserEmail') && !sessionStorage.getItem('silentReauthAttempted')) {
                 sessionStorage.setItem('silentReauthAttempted', '1');
+                document.getElementById('authScreen').classList.add('hidden');
                 this._silentReauth();
             } else {
                 sessionStorage.removeItem('silentReauthAttempted');
@@ -148,6 +150,7 @@ const app = {
         this.tokenExpiry = Date.now() + (parseInt(response.expires_in) - 60) * 1000;
         localStorage.setItem('gAccessToken', this.accessToken);
         localStorage.setItem('gTokenExpiry', this.tokenExpiry);
+        window.AndroidBridge?.saveToPrefs('accessToken', this.accessToken);
         this._scheduleTokenRefresh();
     },
 
@@ -247,6 +250,7 @@ const app = {
         if (data.files && data.files.length > 0) {
             this.driveFileId = data.files[0].id;
             localStorage.setItem('driveFileId', this.driveFileId);
+            window.AndroidBridge?.saveToPrefs('driveFileId', this.driveFileId);
         }
         return this.driveFileId;
     },
@@ -284,6 +288,7 @@ const app = {
             if (!result.id) throw new Error('Drive crear: sin id en respuesta');
             this.driveFileId = result.id;
             localStorage.setItem('driveFileId', result.id);
+            window.AndroidBridge?.saveToPrefs('driveFileId', result.id);
         } else {
             const resp = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
                 method: 'PATCH',
@@ -769,6 +774,48 @@ const app = {
     guardarUltimaHoraInicio() { const val = document.getElementById('horaInicio').value; if (val) { localStorage.setItem('lastHoraInicio', val); this._guardarPreferencias(); } },
     guardarUltimaHoraFin()    { const val = document.getElementById('horaFin').value;    if (val) { localStorage.setItem('lastHoraFin', val);    this._guardarPreferencias(); } },
 
+    guardarSonidoNotif(sound) {
+        this.notifSound = sound;
+        localStorage.setItem('notifSound', sound);
+        window.AndroidBridge?.saveToPrefs('notifSound', sound);
+        this._guardarPreferencias();
+        this._previewNotifSound(sound);
+    },
+
+    _previewNotifSound(sound) {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const map = {
+                'default':       [[880, 0.20]],
+                'notif_ding':    [[880, 0.35]],
+                'notif_campana': [[660, 0.15], [880, 0.28]],
+                'notif_alerta':  [[440, 0.12], [880, 0.12], [440, 0.12]],
+                'notif_silbido': [[1200, 0.18]],
+                'notif_doble':   [[880, 0.12], [0, 0.08], [880, 0.12]],
+                'notif_fanfare': [[440, 0.10], [660, 0.10], [880, 0.22]],
+                'notif_suave':   [[330, 0.55]]
+            };
+            const notes = map[sound] || map['default'];
+            let t = ctx.currentTime + 0.05;
+            notes.forEach(([freq, dur]) => {
+                if (freq > 0) {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0, t);
+                    gain.gain.linearRampToValueAtTime(0.4, t + 0.005);
+                    gain.gain.linearRampToValueAtTime(0.4, t + dur - 0.05);
+                    gain.gain.linearRampToValueAtTime(0, t + dur);
+                    osc.start(t);
+                    osc.stop(t + dur);
+                }
+                t += dur;
+            });
+        } catch(_) {}
+    },
+
     limpiarInput() {
         this.establecerFechaHoy();
         const lastInicio = localStorage.getItem('lastHoraInicio') || '';
@@ -994,6 +1041,7 @@ const app = {
         const precio = parseFloat(document.getElementById('precioNocheGlobal').value) || 0;
         this.precioNocheDefault = precio;
         localStorage.setItem('precioNoche', precio);
+        this._guardarPreferencias();
     },
 
     mostrarCambiarHoras() {
@@ -1041,6 +1089,7 @@ const app = {
                 const locs = this._getWorkLocations();
                 locs.push({ name: name.trim(), lat: pos.coords.latitude, lng: pos.coords.longitude });
                 this._saveWorkLocations(locs);
+                this._guardarPreferencias();
                 this.actualizarEstadoGPS();
                 this._renderWorkLocations();
                 alert(`✅ "${name.trim()}" guardada. Recibirás notificación al llegar.`);
@@ -1055,6 +1104,7 @@ const app = {
         if (!confirm(`¿Eliminar "${locs[index].name}"?`)) return;
         locs.splice(index, 1);
         this._saveWorkLocations(locs);
+        this._guardarPreferencias();
         if (locs.length === 0) document.getElementById('workBanner').classList.remove('show');
         this.actualizarEstadoGPS();
         this._renderWorkLocations();
@@ -1078,6 +1128,7 @@ const app = {
         }
         locs[index] = loc;
         this._saveWorkLocations(locs);
+        this._guardarPreferencias();
         this.actualizarEstadoGPS();
         this._renderWorkLocations();
     },
@@ -1142,14 +1193,14 @@ const app = {
         const LN = window.Capacitor?.Plugins?.LocalNotifications;
         if (LN) {
             try {
-                await LN.schedule({
-                    notifications: [{
-                        id: 1001,
-                        title: '📍 Horas EMT',
-                        body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
-                        schedule: { at: new Date(Date.now() + 500) }
-                    }]
-                });
+                const notif = {
+                    id: 1001,
+                    title: '📍 Horas EMT',
+                    body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
+                    schedule: { at: new Date(Date.now() + 500) }
+                };
+                if (this.notifSound && this.notifSound !== 'default') notif.sound = this.notifSound;
+                await LN.schedule({ notifications: [notif] });
             } catch(e) { console.error('Notification error:', e); }
             return;
         }
@@ -1194,7 +1245,13 @@ const app = {
                 );
                 if (cercano) {
                     this._notifEnviadaAt = ahora;
-                    this._enviarNotificacionLlegadaNativa();
+                    const inicio = localStorage.getItem('lastHoraInicio') || '';
+                    const fin    = localStorage.getItem('lastHoraFin') || '';
+                    if (window.AndroidBridge?.scheduleWorkNotification) {
+                        window.AndroidBridge.scheduleWorkNotification(inicio, fin);
+                    } else {
+                        this._enviarNotificacionLlegadaNativa();
+                    }
                 }
             });
             this._bgGeoStarted = true;
@@ -1219,21 +1276,22 @@ const app = {
         const LN = window.Capacitor?.Plugins?.LocalNotifications;
         if (!LN) return;
         try {
-            await LN.schedule({
-                notifications: [{
-                    id: 1001,
-                    title: '📍 Horas EMT',
-                    body: 'Parece que estás en el trabajo. ¿Registras la jornada de hoy?',
-                    actionTypeId: 'TRABAJO_CERCANO',
-                    schedule: { at: new Date(Date.now() + 500) }
-                }]
-            });
+            const notif = {
+                id: 1001,
+                title: '📍 Horas EMT',
+                body: 'Parece que estás en el trabajo. ¿Registras la jornada de hoy?',
+                actionTypeId: 'TRABAJO_CERCANO',
+                schedule: { at: new Date(Date.now() + 500) }
+            };
+            if (this.notifSound && this.notifSound !== 'default') notif.sound = this.notifSound;
+            await LN.schedule({ notifications: [notif] });
         } catch(e) {
             console.error('Notification error:', e);
         }
     },
 
     async _cancelarNotificacionTrabajo() {
+        window.AndroidBridge?.cancelWorkNotification?.();
         const LN = window.Capacitor?.Plugins?.LocalNotifications;
         if (!LN) return;
         try { await LN.cancel({ notifications: [{ id: 1001 }] }); } catch(_) {}
@@ -1247,7 +1305,7 @@ const app = {
                 types: [{
                     id: 'TRABAJO_CERCANO',
                     actions: [
-                        { id: 'registro-rapido', title: '✅ Registrar jornada' },
+                        { id: 'registro-rapido', title: '✅ Registrar jornada', foreground: false },
                         { id: 'otro-horario',    title: '🕐 Otro horario' }
                     ]
                 }]
@@ -1315,13 +1373,14 @@ const app = {
         if (LN) {
             try {
                 await LN.requestPermissions();
-                await LN.schedule({
-                    notifications: [{
-                        id: 9999,
-                        title: '🔔 Horas EMT — prueba',
-                        body: 'Las notificaciones funcionan correctamente.'
-                    }]
-                });
+                const notif = {
+                    id: 9999,
+                    title: '🔔 Horas EMT — prueba',
+                    body: 'Las notificaciones funcionan correctamente.',
+                    schedule: { at: new Date(Date.now() + 500) }
+                };
+                if (this.notifSound && this.notifSound !== 'default') notif.sound = this.notifSound;
+                await LN.schedule({ notifications: [notif] });
             } catch(e) {
                 alert('❌ Error al enviar notificación: ' + e.message);
             }
@@ -1358,7 +1417,8 @@ const app = {
             gpsScheduleTo: this.gpsScheduleTo,
             precioNocheDefault: this.precioNocheDefault,
             horasAnualesCustom: this.horasAnualesCustom,
-            workLocations: this._getWorkLocations()
+            workLocations: this._getWorkLocations(),
+            notifSound: this.notifSound
         };
     },
 
@@ -1399,6 +1459,10 @@ const app = {
         }
         if (Array.isArray(prefs.workLocations) && prefs.workLocations.length > 0) {
             this._saveWorkLocations(prefs.workLocations);
+        }
+        if (prefs.notifSound) {
+            this.notifSound = prefs.notifSound;
+            localStorage.setItem('notifSound', prefs.notifSound);
         }
         this.actualizarBotonesPerfil();
     },
@@ -1477,6 +1541,8 @@ const app = {
         if (fromEl) fromEl.value = this.gpsScheduleFrom;
         const toEl = document.getElementById('gpsTo');
         if (toEl) toEl.value = this.gpsScheduleTo;
+        const soundSel = document.getElementById('notifSoundSelect');
+        if (soundSel) soundSel.value = this.notifSound;
         const intervalRow = document.getElementById('gpsIntervalRow');
         const scheduleRow = document.getElementById('gpsScheduleRow');
         if (intervalRow) intervalRow.style.display = this.gpsMode === 'off' ? 'none' : '';
@@ -1552,7 +1618,7 @@ const _isStandalone = window.navigator.standalone === true || window.matchMedia(
 function _showInstallBanner(ios) {
     if (_isStandalone) return;
     const banner = document.getElementById('installBanner');
-    document.getElementById('installBannerMsg').textContent = ios ? 'Toca Compartir ↑ → "Añadir a inicio"' : 'Instala la app para acceso rápido';
+    document.getElementById('installBannerMsg').textContent = ios ? 'Toca Compartir ↑ → "Ã±adir a inicio"' : 'Instala la app para acceso rápido';
     const bannerBtn = document.getElementById('installBannerBtn');
     if (bannerBtn) bannerBtn.style.display = ios ? 'none' : '';
     if (banner) banner.classList.add('show');
