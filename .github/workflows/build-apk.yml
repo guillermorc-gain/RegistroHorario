@@ -295,9 +295,12 @@ jobs:
               for freq, dur in notes:
                   n = int(sr * dur)
                   for i in range(n):
-                      t = i / sr
-                      env = min(1.0, t / 0.005) * min(1.0, (dur - t) / 0.05)
-                      frames.append(struct.pack('<h', int(32767 * env * math.sin(2 * math.pi * freq * t))))
+                      if freq == 0:
+                          frames.append(struct.pack('<h', 0))
+                      else:
+                          t = i / sr
+                          env = min(1.0, t / 0.005) * min(1.0, (dur - t) / 0.05)
+                          frames.append(struct.pack('<h', int(32767 * env * math.sin(2 * math.pi * freq * t))))
               with wave.open(path, 'w') as f:
                   f.setnchannels(1); f.setsampwidth(2); f.setframerate(sr)
                   f.writeframes(b''.join(frames))
@@ -305,6 +308,10 @@ jobs:
           gen_wav('android/app/src/main/res/raw/notif_ding.wav',    [(880, 0.35)])
           gen_wav('android/app/src/main/res/raw/notif_campana.wav', [(660, 0.15), (880, 0.28)])
           gen_wav('android/app/src/main/res/raw/notif_alerta.wav',  [(440, 0.12), (880, 0.12), (440, 0.12)])
+          gen_wav('android/app/src/main/res/raw/notif_silbido.wav', [(1200, 0.18)])
+          gen_wav('android/app/src/main/res/raw/notif_doble.wav',   [(880, 0.12), (0, 0.08), (880, 0.12)])
+          gen_wav('android/app/src/main/res/raw/notif_fanfare.wav', [(440, 0.10), (660, 0.10), (880, 0.22)])
+          gen_wav('android/app/src/main/res/raw/notif_suave.wav',   [(330, 0.55)])
           print("Sound files OK")
           PYEOF
 
