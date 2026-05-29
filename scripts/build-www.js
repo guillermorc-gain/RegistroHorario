@@ -7,7 +7,7 @@ const www  = path.join(root, 'www');
 
 fs.mkdirSync(www, { recursive: true });
 
-['index.html', 'app.js', 'service-worker.js', 'manifest.json'].forEach(f => {
+['index.html', 'app.js', 'version.js', 'service-worker.js', 'manifest.json'].forEach(f => {
     const src = path.join(root, f);
     if (fs.existsSync(src)) fs.copyFileSync(src, path.join(www, f));
 });

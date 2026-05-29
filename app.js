@@ -40,6 +40,7 @@ const app = {
     _toastTimer: null,
     _pendingNotifAction: null,
     notifSound: localStorage.getItem('notifSound') || 'default',
+    _updateApkUrl: null,
 
     async init() {
         this._migrarUbicacionAntigua();
@@ -49,6 +50,7 @@ const app = {
         this._setupDeepLinkListener();
         this._setupNotificationActions(); // must register listener before any async
         this._initGoogleAuth();
+        this._checkForUpdates();
     },
 
     _migrarUbicacionAntigua() {
@@ -1655,6 +1657,37 @@ const app = {
             this.establecerFechaHoy();
             this.mostrarApp();
             document.getElementById('horasInput').focus();
+        }
+    },
+
+    async _checkForUpdates() {
+        if (!window.Capacitor?.isNativePlatform?.()) return;
+        if (typeof APP_VERSION === 'undefined' || APP_VERSION === '0') return;
+        try {
+            const resp = await fetch('https://api.github.com/repos/guillermorc-gain/RegistroHorario/releases/latest');
+            if (!resp.ok) return;
+            const release = await resp.json();
+            const latestTag = release.tag_name || '';
+            const latestNum = parseInt(latestTag.replace('build-', '')) || 0;
+            const currentNum = parseInt(String(APP_VERSION).replace('build-', '')) || 0;
+            if (latestNum > currentNum) {
+                const asset = release.assets?.find(a => a.name.endsWith('.apk'));
+                this._updateApkUrl = asset?.browser_download_url || release.html_url;
+                const banner = document.getElementById('updateBanner');
+                const msg    = document.getElementById('updateBannerMsg');
+                if (msg) msg.textContent = `Build ${latestNum} disponible (tienes build ${currentNum})`;
+                if (banner) banner.style.display = 'flex';
+            }
+        } catch(_) {}
+    },
+
+    _descargarActualizacion() {
+        const url = this._updateApkUrl;
+        if (!url) return;
+        if (window.AndroidBridge?.openExternalUrl) {
+            window.AndroidBridge.openExternalUrl(url);
+        } else {
+            window.open(url, '_system');
         }
     },
 
