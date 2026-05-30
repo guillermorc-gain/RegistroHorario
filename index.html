@@ -592,6 +592,16 @@
         </div>
     </div>
 
+    <!-- Update Banner -->
+    <div class="install-banner" id="updateBanner" style="display:none;background:linear-gradient(135deg,#f39c12,#e67e22);">
+        <div style="flex:1;">
+            <strong style="display:block;font-size:13px;margin-bottom:2px;">🔄 Nueva versión disponible</strong>
+            <span id="updateBannerMsg" style="font-size:11px;opacity:0.9;">Toca para actualizar</span>
+        </div>
+        <button onclick="app._descargarActualizacion()" style="background:white;color:#e67e22;border:none;border-radius:6px;padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;">Actualizar</button>
+        <button onclick="document.getElementById('updateBanner').style.display='none'" style="background:transparent;border:none;color:white;font-size:20px;cursor:pointer;padding:0 6px;line-height:1;">×</button>
+    </div>
+
     <!-- Install Banner -->
     <div class="install-banner" id="installBanner">
         <div style="flex:1;">
@@ -687,6 +697,7 @@
     </div>
 </div>
 
+<script src="version.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
