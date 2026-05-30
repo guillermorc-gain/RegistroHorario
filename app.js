@@ -40,6 +40,7 @@ const app = {
     _toastTimer: null,
     _pendingNotifAction: null,
     notifSound: localStorage.getItem('notifSound') || 'default',
+    _updateApkUrl: null,
 
     async init() {
         this._migrarUbicacionAntigua();
@@ -49,6 +50,7 @@ const app = {
         this._setupDeepLinkListener();
         this._setupNotificationActions(); // must register listener before any async
         this._initGoogleAuth();
+        this._checkForUpdates();
     },
 
     _migrarUbicacionAntigua() {
@@ -86,7 +88,6 @@ const app = {
                 this._loadUserAndStart();
                 return;
             }
-            // error param: if on Chrome/Android, bounce back to app so it can show login
             if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
                 const failUrl = `intent://localhost/?silent_failed=1#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
                 setTimeout(() => { window.location.href = failUrl; }, 100);
@@ -111,8 +112,6 @@ const app = {
         }
     },
 
-    // Escucha appUrlOpen de Capacitor: se dispara cuando la app ya está abierta
-    // (arranque en caliente) y recibe un deep-link intent con el token OAuth.
     _setupDeepLinkListener() {
         if (!window.Capacitor?.isNativePlatform?.()) return;
         try {
@@ -169,7 +168,7 @@ const app = {
 
     _scheduleTokenRefresh() {
         clearTimeout(this._tokenRefreshTimer);
-        const ms = this.tokenExpiry - Date.now() - 2 * 60 * 1000; // 2 min before expiry
+        const ms = this.tokenExpiry - Date.now() - 2 * 60 * 1000;
         if (ms <= 0) { this._silentReauth(); return; }
         this._tokenRefreshTimer = setTimeout(() => this._silentReauth(), ms);
     },
@@ -557,7 +556,7 @@ const app = {
         const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         btn.style.cssText = '';
         if (photo) {
-            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">>`;
+            btn.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
             btn.style.background = 'transparent'; btn.style.padding = '0'; btn.style.overflow = 'hidden';
         } else if (emoji) {
             btn.textContent = emoji; btn.style.background = bg; btn.style.fontSize = '20px'; btn.style.color = 'white';
@@ -627,7 +626,7 @@ const app = {
         const emoji = localStorage.getItem('avatarEmoji');
         const bg    = localStorage.getItem('avatarBg') || '#1565C0';
         if (photo) {
-            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">>`;
+            el.innerHTML = `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
             el.style.background = 'transparent';
         } else if (emoji) {
             el.textContent = emoji; el.style.background = bg; el.style.color = '';
@@ -1655,6 +1654,37 @@ const app = {
             this.establecerFechaHoy();
             this.mostrarApp();
             document.getElementById('horasInput').focus();
+        }
+    },
+
+    async _checkForUpdates() {
+        if (!window.Capacitor?.isNativePlatform?.()) return;
+        if (typeof APP_VERSION === 'undefined' || APP_VERSION === '0') return;
+        try {
+            const resp = await fetch('https://api.github.com/repos/guillermorc-gain/RegistroHorario/releases/latest');
+            if (!resp.ok) return;
+            const release = await resp.json();
+            const latestTag = release.tag_name || '';
+            const latestNum = parseInt(latestTag.replace('build-', '')) || 0;
+            const currentNum = parseInt(String(APP_VERSION).replace('build-', '')) || 0;
+            if (latestNum > currentNum) {
+                const asset = release.assets?.find(a => a.name.endsWith('.apk'));
+                this._updateApkUrl = asset?.browser_download_url || release.html_url;
+                const banner = document.getElementById('updateBanner');
+                const msg    = document.getElementById('updateBannerMsg');
+                if (msg) msg.textContent = `Build ${latestNum} disponible (tienes build ${currentNum})`;
+                if (banner) banner.style.display = 'flex';
+            }
+        } catch(_) {}
+    },
+
+    _descargarActualizacion() {
+        const url = this._updateApkUrl;
+        if (!url) return;
+        if (window.AndroidBridge?.openExternalUrl) {
+            window.AndroidBridge.openExternalUrl(url);
+        } else {
+            window.open(url, '_system');
         }
     },
 
