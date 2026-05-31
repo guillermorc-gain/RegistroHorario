@@ -211,6 +211,18 @@ jobs:
                           }
                       }
                       @JavascriptInterface
+                      public String getPref(String key) {
+                          return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                              .getString(key, null);
+                      }
+
+                      @JavascriptInterface
+                      public void removePref(String key) {
+                          ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                              .edit().remove(key).apply();
+                      }
+
+                      @JavascriptInterface
                       public void openExternalUrl(String url) {
                           try {
                               Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
@@ -446,7 +458,9 @@ jobs:
                               ((NotificationManager) app.getSystemService(Context.NOTIFICATION_SERVICE)).cancel(1001);
                               if (code == 200 || code == 201) {
                                   app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                                      .putString("lastRegisteredDate", regId).apply();
+                                      .putString("lastRegisteredDate", regId)
+                                      .putString("pendingRefresh", "1")
+                                      .apply();
                               }
                               new Handler(Looper.getMainLooper()).post(() ->
                                   Toast.makeText(app,

@@ -246,10 +246,23 @@ const app = {
         const onBackground = () => {
             if (this.accessToken && Date.now() < this.tokenExpiry) this._autoBackup();
         };
+        const onForeground = () => {
+            // If RegistrarReceiver updated Drive while in background, refresh the data
+            const flag = window.AndroidBridge?.getPref?.('pendingRefresh');
+            if (flag === '1' && this.usuarioActual) {
+                window.AndroidBridge?.removePref?.('pendingRefresh');
+                this.cargarDatos();
+            }
+            // Also re-run update check (at most once every 30 min)
+            const lastCheck = parseInt(sessionStorage.getItem('lastUpdateCheck') || '0');
+            if (Date.now() - lastCheck > 30 * 60 * 1000) {
+                this._checkForUpdates();
+            }
+        };
         if (window.Capacitor?.isNativePlatform?.()) {
             try {
                 window.Capacitor.Plugins.App?.addListener('appStateChange', ({ isActive }) => {
-                    if (!isActive) onBackground();
+                    if (!isActive) onBackground(); else onForeground();
                 });
             } catch (_) {}
         }
@@ -1759,12 +1772,16 @@ const app = {
         if (el) el.textContent = 'Versión ' + this._buildNumToVersion(n);
     },
 
-    async _checkForUpdates() {
+    async _checkForUpdates(showFeedback = false) {
         if (!window.Capacitor?.isNativePlatform?.()) return;
         if (typeof APP_VERSION === 'undefined' || APP_VERSION === '0') return;
+        sessionStorage.setItem('lastUpdateCheck', String(Date.now()));
         try {
             const resp = await fetch('https://api.github.com/repos/guillermorc-gain/RegistroHorario/releases/latest');
-            if (!resp.ok) return;
+            if (!resp.ok) {
+                if (showFeedback) this._mostrarToast('❌ No se pudo comprobar (error ' + resp.status + ')');
+                return;
+            }
             const release = await resp.json();
             const latestTag = release.tag_name || '';
             const latestNum = parseInt(latestTag.replace('build-', '')) || 0;
@@ -1776,8 +1793,13 @@ const app = {
                 const msg    = document.getElementById('updateBannerMsg');
                 if (msg) msg.textContent = `${this._buildNumToVersion(latestNum)} disponible (tienes ${this._buildNumToVersion(currentNum)})`;
                 if (banner) banner.style.display = 'flex';
+                if (showFeedback) this._mostrarToast('🔄 ' + this._buildNumToVersion(latestNum) + ' disponible');
+            } else if (showFeedback) {
+                this._mostrarToast('✅ Tienes la versión más reciente (' + this._buildNumToVersion(currentNum) + ')');
             }
-        } catch(_) {}
+        } catch(_) {
+            if (showFeedback) this._mostrarToast('❌ No se pudo comprobar la versión');
+        }
     },
 
     _descargarActualizacion() {
