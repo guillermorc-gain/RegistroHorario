@@ -490,6 +490,7 @@ jobs:
 
       - name: Set Android launcher icon
         run: |
+          pip install Pillow -q
           python3 << 'PYEOF'
           from PIL import Image
           import os
@@ -551,7 +552,6 @@ jobs:
               <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
           </adaptive-icon>
           ICONEOF
-          cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
           cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
 
       - name: Setup Java 17
