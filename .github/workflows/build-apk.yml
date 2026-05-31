@@ -267,6 +267,87 @@ jobs:
                               }
                           }).start();
                       }
+
+                      @JavascriptInterface
+                      public void performOAuthInWebView(final String authUrl, final boolean isSilent) {
+                          ((android.app.Activity) ctx).runOnUiThread(new Runnable() {
+                              @Override public void run() {
+                                  final android.webkit.WebView wv = new android.webkit.WebView(ctx);
+                                  wv.getSettings().setJavaScriptEnabled(true);
+                                  wv.getSettings().setDomStorageEnabled(true);
+                                  wv.getSettings().setUserAgentString("Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
+                                  final android.app.Dialog[] dlgRef = {null};
+                                  final boolean[] handled = {false};
+                                  if (!isSilent) {
+                                      android.app.Dialog dlg = new android.app.Dialog(ctx, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+                                      android.widget.FrameLayout fl = new android.widget.FrameLayout(ctx);
+                                      fl.addView(wv, new android.widget.FrameLayout.LayoutParams(-1, -1));
+                                      dlg.setContentView(fl);
+                                      if (dlg.getWindow() != null) dlg.getWindow().setLayout(-1, -1);
+                                      dlgRef[0] = dlg;
+                                  }
+                                  wv.setWebViewClient(new android.webkit.WebViewClient() {
+                                      private void reportResult(final String fragment) {
+                                          if (handled[0]) return;
+                                          handled[0] = true;
+                                          if (dlgRef[0] != null) try { dlgRef[0].dismiss(); } catch (Exception e) {}
+                                          ((android.app.Activity) ctx).runOnUiThread(new Runnable() {
+                                              @Override public void run() {
+                                                  try {
+                                                      String tk = null; int exp = 3600;
+                                                      if (fragment != null) {
+                                                          for (String p : fragment.split("&")) {
+                                                              String[] kv = p.split("=", 2);
+                                                              if (kv.length < 2) continue;
+                                                              if ("access_token".equals(kv[0])) { try { tk = java.net.URLDecoder.decode(kv[1], "UTF-8"); } catch (Exception e) { tk = kv[1]; } }
+                                                              else if ("expires_in".equals(kv[0])) { try { exp = Integer.parseInt(kv[1]); } catch (Exception e) {} }
+                                                          }
+                                                      }
+                                                      final String js = tk != null
+                                                          ? "app._onOAuthResult('" + tk.replace("'", "\\'") + "'," + exp + ")"
+                                                          : "app._onOAuthResult(null,0)";
+                                                      ((BridgeActivity) ctx).getBridge().getWebView().evaluateJavascript(js, null);
+                                                  } catch (Exception e) {}
+                                              }
+                                          });
+                                      }
+                                      @Override
+                                      public boolean shouldOverrideUrlLoading(android.webkit.WebView view, android.webkit.WebResourceRequest req) {
+                                          if (handled[0]) return true;
+                                          String u = req.getUrl().toString();
+                                          if (u.contains("registro-horario-emt.vercel.app") || u.contains("access_token=")) {
+                                              String frag = req.getUrl().getFragment();
+                                              String qry  = req.getUrl().getQuery();
+                                              String src  = (frag != null && frag.contains("access_token=")) ? frag : (qry != null ? qry : "");
+                                              reportResult(src);
+                                              return true;
+                                          }
+                                          if (u.contains("silent_failed=1") || u.contains("error=access_denied") || u.contains("error=interaction_required")) {
+                                              reportResult(null); return true;
+                                          }
+                                          return false;
+                                      }
+                                      @Override
+                                      public void onPageFinished(android.webkit.WebView view, String pageUrl) {
+                                          if (handled[0] || pageUrl == null || !pageUrl.contains("registro-horario-emt.vercel.app")) return;
+                                          view.evaluateJavascript(
+                                              "(function(){var h=(window.location.hash||'').replace(/^#/,'');var q=(window.location.search||'').replace(/^\\?/,'');return h.indexOf('access_token=')>=0?h:q;})();",
+                                              new android.webkit.ValueCallback<String>() {
+                                                  @Override public void onReceiveValue(String val) {
+                                                      if (val != null && !val.equals("null") && val.length() > 4) {
+                                                          String clean = val.startsWith("\"") ? val.substring(1, val.length()-1) : val;
+                                                          reportResult(clean.contains("access_token=") ? clean : null);
+                                                      } else { reportResult(null); }
+                                                  }
+                                              }
+                                          );
+                                      }
+                                  });
+                                  wv.loadUrl(authUrl);
+                                  if (dlgRef[0] != null) dlgRef[0].show();
+                              }
+                          });
+                      }
                   }, "AndroidBridge");
               }
 
