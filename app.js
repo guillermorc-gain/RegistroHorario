@@ -48,6 +48,7 @@ const app = {
         if (this.darkMode) this.aplicarDarkMode();
         this._buildAvatarGrid();
         this._setupDeepLinkListener();
+        this._setupAppLifecycleBackup();
         this._setupNotificationActions(); // must register listener before any async
         this._initGoogleAuth();
         this._checkForUpdates();
@@ -213,12 +214,46 @@ const app = {
             ...(silent && email ? { login_hint: email } : {})
         });
         const url = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
-        window.location.assign(url);
+        if (isAndroidNative && window.AndroidBridge?.performOAuthInWebView
+                && !sessionStorage.getItem('oauthWebViewFailed')) {
+            window.AndroidBridge.performOAuthInWebView(url, silent);
+        } else {
+            window.location.assign(url);
+        }
     },
 
     _silentReauth() {
         if (!window.Capacitor?.isNativePlatform?.()) return;
         this.login(true);
+    },
+
+    _onOAuthResult(token, expiresIn) {
+        if (!token) {
+            sessionStorage.setItem('oauthWebViewFailed', '1');
+            sessionStorage.removeItem('silentReauthAttempted');
+            this.mostrarAuth();
+            return;
+        }
+        sessionStorage.removeItem('oauthWebViewFailed');
+        sessionStorage.removeItem('silentReauthAttempted');
+        this.driveFileId = null;
+        localStorage.removeItem('driveFileId');
+        this._saveToken({ access_token: token, expires_in: parseInt(expiresIn) || 3600 });
+        this._loadUserAndStart();
+    },
+
+    _setupAppLifecycleBackup() {
+        const onBackground = () => {
+            if (this.accessToken && Date.now() < this.tokenExpiry) this._autoBackup();
+        };
+        if (window.Capacitor?.isNativePlatform?.()) {
+            try {
+                window.Capacitor.Plugins.App?.addListener('appStateChange', ({ isActive }) => {
+                    if (!isActive) onBackground();
+                });
+            } catch (_) {}
+        }
+        document.addEventListener('visibilitychange', () => { if (document.hidden) onBackground(); });
     },
 
     _autoRellenarFormulario() {
@@ -316,6 +351,59 @@ const app = {
             });
             if (!resp.ok) { const t = await resp.text(); throw new Error('Drive actualizar: ' + resp.status + ' ' + t.slice(0,120)); }
         }
+        localStorage.setItem('lastBackupTime', Date.now().toString());
+    },
+
+    async _autoBackup() {
+        const lastBackup = parseInt(localStorage.getItem('lastBackupTime') || '0');
+        if (Date.now() - lastBackup < 5 * 60 * 1000) return;
+        if (this._autoBackupBusy) return;
+        if (!this.accessToken || Date.now() >= this.tokenExpiry) return;
+        this._autoBackupBusy = true;
+        try {
+            const data = await this._readDriveFile();
+            if (data) await this._writeDriveFile(data);
+        } catch (_) {}
+        this._autoBackupBusy = false;
+    },
+
+    async hacerCopiaEnDrive() {
+        if (!this.usuarioActual) { this._mostrarToast('❌ Inicia sesión primero', 3000); return; }
+        this._mostrarToast('☁️ Guardando copia...', 2000);
+        try {
+            const data = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
+            await this._writeDriveFile(data);
+            this._mostrarToast('✅ Copia guardada en Google Drive', 3000);
+            this._actualizarInfoCopia();
+        } catch (e) {
+            this._mostrarToast('❌ Error al guardar: ' + e.message, 4000);
+        }
+    },
+
+    async restaurarDesdeDrive() {
+        if (!this.usuarioActual) { this._mostrarToast('❌ Inicia sesión primero', 3000); return; }
+        if (!confirm('¿Restaurar datos desde Google Drive?\nSe aplicarán los datos de la última copia guardada.')) return;
+        this._mostrarToast('⬇️ Restaurando...', 2000);
+        try {
+            const data = await this._readDriveFile();
+            if (!data) { this._mostrarToast('❌ No se encontró copia en Drive', 3000); return; }
+            if (data.preferencias) this._aplicarPreferenciasDesde(data.preferencias);
+            this.actualizarUI(data);
+            this._mostrarToast('✅ Datos restaurados desde Google Drive', 3000);
+            this._actualizarInfoCopia();
+        } catch (e) {
+            this._mostrarToast('❌ Error al restaurar: ' + e.message, 4000);
+        }
+    },
+
+    _actualizarInfoCopia() {
+        const el = document.getElementById('lastBackupInfo');
+        if (!el) return;
+        const t = parseInt(localStorage.getItem('lastBackupTime') || '0');
+        if (!t) { el.textContent = 'Sin copia registrada aún'; return; }
+        const d = new Date(t);
+        el.textContent = 'Última copia: ' + d.toLocaleDateString('es-ES')
+            + ' ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     },
 
     async cargarDatos() {
@@ -692,6 +780,7 @@ const app = {
         this._renderWorkLocations();
         this._actualizarAvatarPreview();
         this._actualizarTemaUI();
+        this._actualizarInfoCopia();
     },
 
     toggleSection(btn) { btn.closest('.ops-section').classList.toggle('open'); },

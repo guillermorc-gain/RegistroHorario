@@ -563,10 +563,13 @@
 
             <!-- Copia de Seguridad -->
             <div class="ops-section">
-                <button class="ops-title" onclick="app.toggleSection(this)">💾 Copia de Seguridad <span class="ops-chevron">›</span></button>
+                <button class="ops-title" onclick="app.toggleSection(this)">☁️ Copia de Seguridad <span class="ops-chevron">›</span></button>
                 <div class="ops-body">
+                    <div id="lastBackupInfo" style="font-size:12px;color:var(--text-secondary);padding:6px 14px 2px;opacity:0.8;">Comprobando...</div>
+                    <button class="ops-btn" onclick="app.hacerCopiaEnDrive()">☁️ Guardar copia en Google Drive <span class="ops-arrow">›</span></button>
+                    <button class="ops-btn" onclick="app.restaurarDesdeDrive()">⬇️ Restaurar desde Google Drive <span class="ops-arrow">›</span></button>
                     <button class="ops-btn" onclick="app.exportarDatos()">⬆️ Exportar datos JSON <span class="ops-arrow">›</span></button>
-                    <button class="ops-btn" onclick="app.importarDatos()">⬇️ Importar / Restaurar copia <span class="ops-arrow">›</span></button>
+                    <button class="ops-btn" onclick="app.importarDatos()">⬇️ Importar archivo JSON <span class="ops-arrow">›</span></button>
                 </div>
             </div>
 
