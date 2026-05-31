@@ -51,6 +51,7 @@ const app = {
         this._setupNotificationActions(); // must register listener before any async
         this._initGoogleAuth();
         this._checkForUpdates();
+        this._actualizarVersionDisplay();
     },
 
     _migrarUbicacionAntigua() {
@@ -1657,6 +1658,18 @@ const app = {
         }
     },
 
+    _buildNumToVersion(n) {
+        return 'v' + Math.floor(n / 100) + '.' + String(n % 100).padStart(2, '0');
+    },
+
+    _actualizarVersionDisplay() {
+        if (typeof APP_VERSION === 'undefined' || APP_VERSION === '0') return;
+        const n = parseInt(String(APP_VERSION).replace('build-', '')) || 0;
+        if (!n) return;
+        const el = document.getElementById('versionDisplay');
+        if (el) el.textContent = 'Versión ' + this._buildNumToVersion(n);
+    },
+
     async _checkForUpdates() {
         if (!window.Capacitor?.isNativePlatform?.()) return;
         if (typeof APP_VERSION === 'undefined' || APP_VERSION === '0') return;
@@ -1672,7 +1685,7 @@ const app = {
                 this._updateApkUrl = asset?.browser_download_url || release.html_url;
                 const banner = document.getElementById('updateBanner');
                 const msg    = document.getElementById('updateBannerMsg');
-                if (msg) msg.textContent = `Build ${latestNum} disponible (tienes build ${currentNum})`;
+                if (msg) msg.textContent = `${this._buildNumToVersion(latestNum)} disponible (tienes ${this._buildNumToVersion(currentNum)})`;
                 if (banner) banner.style.display = 'flex';
             }
         } catch(_) {}
@@ -1681,11 +1694,42 @@ const app = {
     _descargarActualizacion() {
         const url = this._updateApkUrl;
         if (!url) return;
-        if (window.AndroidBridge?.openExternalUrl) {
-            window.AndroidBridge.openExternalUrl(url);
+        const overlay = document.getElementById('updateProgressOverlay');
+        if (overlay) overlay.style.display = 'flex';
+        const bar = document.getElementById('updateProgressBar');
+        const pct = document.getElementById('updateProgressPct');
+        const txt = document.getElementById('updateProgressTxt');
+        const closeBtn = document.getElementById('updateProgressClose');
+        if (bar) bar.style.width = '0%';
+        if (pct) pct.textContent = '0%';
+        if (txt) txt.textContent = 'Descargando nueva versión...';
+        if (closeBtn) closeBtn.style.display = 'none';
+        if (window.AndroidBridge?.downloadAndInstallApk) {
+            window.AndroidBridge.downloadAndInstallApk(url);
         } else {
+            if (overlay) overlay.style.display = 'none';
             window.open(url, '_system');
         }
+    },
+
+    _onUpdateProgress(pct) {
+        const bar = document.getElementById('updateProgressBar');
+        const pctEl = document.getElementById('updateProgressPct');
+        const txt = document.getElementById('updateProgressTxt');
+        const closeBtn = document.getElementById('updateProgressClose');
+        if (bar) bar.style.width = pct + '%';
+        if (pctEl) pctEl.textContent = pct + '%';
+        if (pct >= 100) {
+            if (txt) txt.textContent = 'Instalando... el sistema pedirá confirmación.';
+            if (closeBtn) closeBtn.style.display = 'inline-block';
+        }
+    },
+
+    _onUpdateError() {
+        const txt = document.getElementById('updateProgressTxt');
+        const closeBtn = document.getElementById('updateProgressClose');
+        if (txt) txt.textContent = 'Error al descargar. Inténtalo de nuevo.';
+        if (closeBtn) closeBtn.style.display = 'inline-block';
     },
 
     _mostrarExportTexto(json) {

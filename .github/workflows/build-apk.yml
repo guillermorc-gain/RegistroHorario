@@ -44,7 +44,18 @@ jobs:
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|' "$MANIFEST"
           sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
-          sed -i 's|</application>|    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    </application>|' "$MANIFEST"
+          sed -i 's|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />|' "$MANIFEST"
+          sed -i 's|</application>|    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
+
+      - name: Create FileProvider paths config
+        run: |
+          mkdir -p android/app/src/main/res/xml
+          cat > android/app/src/main/res/xml/file_paths.xml << 'XMLEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths>
+              <cache-path name="apk_downloads" path="." />
+          </paths>
+          XMLEOF
 
       - name: Patch MainActivity — OAuth + file downloads + BroadcastReceiver
         run: |
@@ -69,6 +80,7 @@ jobs:
           import android.webkit.JavascriptInterface;
           import android.widget.Toast;
           import androidx.core.app.NotificationCompat;
+          import androidx.core.content.FileProvider;
           import com.getcapacitor.BridgeActivity;
           import java.io.OutputStream;
 
@@ -205,6 +217,55 @@ jobs:
                               intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                               ctx.startActivity(intent);
                           } catch (Exception e) {}
+                      }
+
+                      @JavascriptInterface
+                      public void downloadAndInstallApk(String url) {
+                          new Thread(() -> {
+                              try {
+                                  java.net.URL apkUrl = new java.net.URL(url);
+                                  java.net.HttpURLConnection conn = (java.net.HttpURLConnection) apkUrl.openConnection();
+                                  conn.setRequestProperty("User-Agent", "HorasEMT/1.0");
+                                  conn.setInstanceFollowRedirects(true);
+                                  conn.connect();
+                                  int totalSize = conn.getContentLength();
+                                  java.io.File apkFile = new java.io.File(ctx.getCacheDir(), "update.apk");
+                                  try (java.io.InputStream in = conn.getInputStream();
+                                       java.io.FileOutputStream out = new java.io.FileOutputStream(apkFile)) {
+                                      byte[] buf = new byte[8192];
+                                      int read; long downloaded = 0;
+                                      while ((read = in.read(buf)) != -1) {
+                                          out.write(buf, 0, read);
+                                          downloaded += read;
+                                          if (totalSize > 0) {
+                                              final int pct = (int)(downloaded * 100L / totalSize);
+                                              ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                                  try {
+                                                      ((BridgeActivity) ctx).getBridge().getWebView()
+                                                          .evaluateJavascript("app._onUpdateProgress(" + pct + ")", null);
+                                                  } catch (Exception ignored) {}
+                                              });
+                                          }
+                                      }
+                                  }
+                                  conn.disconnect();
+                                  Uri apkUri = FileProvider.getUriForFile(ctx,
+                                      ctx.getPackageName() + ".fileprovider", apkFile);
+                                  Intent install = new Intent(Intent.ACTION_VIEW);
+                                  install.setDataAndType(apkUri, "application/vnd.android.package-archive");
+                                  install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                                  install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                  ctx.startActivity(install);
+                              } catch (Exception e) {
+                                  ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                      Toast.makeText(ctx, "Error al descargar: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                                      try {
+                                          ((BridgeActivity) ctx).getBridge().getWebView()
+                                              .evaluateJavascript("app._onUpdateError()", null);
+                                      } catch (Exception ignored) {}
+                                  });
+                              }
+                          }).start();
                       }
                   }, "AndroidBridge");
               }
