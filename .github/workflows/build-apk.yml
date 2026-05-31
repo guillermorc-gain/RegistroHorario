@@ -1,1 +1,465 @@
-placeholder
+name: Build APK
+
+on:
+  push:
+    branches: [main, claude/pwa-install-support-dXc0v]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inject build version
+        run: echo "const APP_VERSION = 'build-${{ github.run_number }}';" > version.js
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build www/
+        run: npm run build:www
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Patch variables.gradle — targetSdkVersion 34
+        run: |
+          VARS="android/variables.gradle"
+          sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 34/' "$VARS"
+          sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 34/' "$VARS"
+
+      - name: Patch AndroidManifest — permissions + intent filter localhost
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|' "$MANIFEST"
+          sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
+          sed -i 's|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />|' "$MANIFEST"
+          sed -i 's|</application>|    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
+
+      - name: Create FileProvider paths config
+        run: |
+          mkdir -p android/app/src/main/res/xml
+          cat > android/app/src/main/res/xml/file_paths.xml << 'XMLEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths>
+              <cache-path name="apk_downloads" path="." />
+          </paths>
+          XMLEOF
+
+      - name: Patch MainActivity — OAuth + file downloads + BroadcastReceiver
+        run: |
+          cat > android/app/src/main/java/com/guillermorc/horasemt/MainActivity.java << 'JAVAEOF'
+          package com.guillermorc.horasemt;
+
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.content.BroadcastReceiver;
+          import android.content.ContentValues;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.Environment;
+          import android.os.Handler;
+          import android.os.Looper;
+          import android.provider.MediaStore;
+          import android.webkit.JavascriptInterface;
+          import android.widget.Toast;
+          import androidx.core.app.NotificationCompat;
+          import androidx.core.content.FileProvider;
+          import com.getcapacitor.BridgeActivity;
+          import java.io.OutputStream;
+
+          public class MainActivity extends BridgeActivity {
+
+              public static final String PREFS      = "HorasEMT";
+              public static final String CHANNEL_ID = "trabajo_cercano";
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  createNotificationChannel();
+                  handleOAuthIntent(getIntent());
+                  setupJavascriptInterface();
+              }
+
+              @Override
+              protected void onNewIntent(Intent intent) {
+                  super.onNewIntent(intent);
+                  setIntent(intent);
+                  handleOAuthIntent(intent);
+              }
+
+              private void createNotificationChannel() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      NotificationChannel ch = new NotificationChannel(
+                          CHANNEL_ID, "Trabajo cercano", NotificationManager.IMPORTANCE_HIGH);
+                      ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE))
+                          .createNotificationChannel(ch);
+                  }
+              }
+
+              private void handleOAuthIntent(Intent intent) {
+                  if (intent == null || getBridge() == null) return;
+                  Uri data = intent.getData();
+                  if (data == null) return;
+                  String token = data.getQueryParameter("access_token");
+                  if (token == null || token.isEmpty()) return;
+                  String exp = data.getQueryParameter("expires_in");
+                  String url = "https://localhost/?access_token=" + Uri.encode(token)
+                      + (exp != null ? "&expires_in=" + exp : "");
+                  getBridge().getWebView().post(() -> getBridge().getWebView().loadUrl(url));
+              }
+
+              private void setupJavascriptInterface() {
+                  if (getBridge() == null || getBridge().getWebView() == null) return;
+                  final Context ctx = this;
+                  getBridge().getWebView().addJavascriptInterface(new Object() {
+
+                      @JavascriptInterface
+                      public void saveToPrefs(String key, String value) {
+                          ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                              .edit().putString(key, value).apply();
+                      }
+
+                      @JavascriptInterface
+                      public void scheduleWorkNotification(String horaInicio, String horaFin) {
+                          SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                          String today = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(new java.util.Date());
+                          if (today.equals(prefs.getString("lastRegisteredDate", ""))) return;
+                          prefs.edit()
+                              .putString("lastHoraInicio", horaInicio)
+                              .putString("lastHoraFin", horaFin).apply();
+                          NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                              nm.createNotificationChannel(new NotificationChannel(
+                                  CHANNEL_ID, "Trabajo cercano", NotificationManager.IMPORTANCE_HIGH));
+                          }
+                          int flags = PendingIntent.FLAG_UPDATE_CURRENT
+                              | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
+                          Intent bi = new Intent("com.guillermorc.horasemt.REGISTRAR");
+                          bi.setPackage("com.guillermorc.horasemt");
+                          PendingIntent broadcastPI = PendingIntent.getBroadcast(ctx, 0, bi, flags);
+                          Intent oi = new Intent(ctx, MainActivity.class);
+                          oi.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                          PendingIntent openPI = PendingIntent.getActivity(ctx, 1, oi, flags);
+                          nm.notify(1001, new NotificationCompat.Builder(ctx, CHANNEL_ID)
+                              .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+                              .setContentTitle("📍 Horas EMT")
+                              .setContentText("Parece que estás en el trabajo. ¿Registras la jornada?")
+                              .setPriority(NotificationCompat.PRIORITY_HIGH)
+                              .setContentIntent(openPI)
+                              .setAutoCancel(false)
+                              .addAction(0, "✅ Registrar jornada", broadcastPI)
+                              .addAction(0, "🕐 Otro horario", openPI)
+                              .build());
+                      }
+
+                      @JavascriptInterface
+                      public void cancelWorkNotification() {
+                          ((NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE)).cancel(1001);
+                      }
+
+                      @JavascriptInterface
+                      public void saveFile(String content, String filename) {
+                          final String fname = (filename != null && !filename.isEmpty())
+                              ? filename : "horas-emt.json";
+                          byte[] bytes;
+                          try { bytes = content.getBytes("UTF-8"); }
+                          catch (Exception e) { bytes = content.getBytes(); }
+                          final byte[] data = bytes;
+                          try {
+                              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                  ContentValues v = new ContentValues();
+                                  v.put(MediaStore.Downloads.DISPLAY_NAME, fname);
+                                  v.put(MediaStore.Downloads.MIME_TYPE, "application/json");
+                                  Uri uri = ctx.getContentResolver().insert(
+                                      MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                                  if (uri == null) return;
+                                  try (OutputStream os = ctx.getContentResolver().openOutputStream(uri)) {
+                                      if (os != null) os.write(data);
+                                  }
+                              } else {
+                                  java.io.File f = new java.io.File(
+                                      Environment.getExternalStoragePublicDirectory(
+                                          Environment.DIRECTORY_DOWNLOADS), fname);
+                                  try (java.io.FileOutputStream fos = new java.io.FileOutputStream(f)) {
+                                      fos.write(data);
+                                  }
+                                  android.media.MediaScannerConnection.scanFile(
+                                      ctx, new String[]{f.getAbsolutePath()}, null, null);
+                              }
+                              new Handler(Looper.getMainLooper()).post(() ->
+                                  Toast.makeText(ctx, "Guardado en Descargas: " + fname, Toast.LENGTH_LONG).show());
+                          } catch (Exception e) {
+                              new Handler(Looper.getMainLooper()).post(() ->
+                                  Toast.makeText(ctx, "Error al guardar", Toast.LENGTH_SHORT).show());
+                          }
+                      }
+                      @JavascriptInterface
+                      public void openExternalUrl(String url) {
+                          try {
+                              Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                              intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                              ctx.startActivity(intent);
+                          } catch (Exception e) {}
+                      }
+
+                      @JavascriptInterface
+                      public void downloadAndInstallApk(String url) {
+                          new Thread(() -> {
+                              try {
+                                  java.net.URL apkUrl = new java.net.URL(url);
+                                  java.net.HttpURLConnection conn = (java.net.HttpURLConnection) apkUrl.openConnection();
+                                  conn.setRequestProperty("User-Agent", "HorasEMT/1.0");
+                                  conn.setInstanceFollowRedirects(true);
+                                  conn.connect();
+                                  int totalSize = conn.getContentLength();
+                                  java.io.File apkFile = new java.io.File(ctx.getCacheDir(), "update.apk");
+                                  try (java.io.InputStream in = conn.getInputStream();
+                                       java.io.FileOutputStream out = new java.io.FileOutputStream(apkFile)) {
+                                      byte[] buf = new byte[8192];
+                                      int read; long downloaded = 0;
+                                      while ((read = in.read(buf)) != -1) {
+                                          out.write(buf, 0, read);
+                                          downloaded += read;
+                                          if (totalSize > 0) {
+                                              final int pct = (int)(downloaded * 100L / totalSize);
+                                              ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                                  try {
+                                                      ((BridgeActivity) ctx).getBridge().getWebView()
+                                                          .evaluateJavascript("app._onUpdateProgress(" + pct + ")", null);
+                                                  } catch (Exception ignored) {}
+                                              });
+                                          }
+                                      }
+                                  }
+                                  conn.disconnect();
+                                  Uri apkUri = FileProvider.getUriForFile(ctx,
+                                      ctx.getPackageName() + ".fileprovider", apkFile);
+                                  Intent install = new Intent(Intent.ACTION_VIEW);
+                                  install.setDataAndType(apkUri, "application/vnd.android.package-archive");
+                                  install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                                  install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                  ctx.startActivity(install);
+                              } catch (Exception e) {
+                                  ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                      Toast.makeText(ctx, "Error al descargar: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                                      try {
+                                          ((BridgeActivity) ctx).getBridge().getWebView()
+                                              .evaluateJavascript("app._onUpdateError()", null);
+                                      } catch (Exception ignored) {}
+                                  });
+                              }
+                          }).start();
+                      }
+                  }, "AndroidBridge");
+              }
+
+              // Registers hours directly from notification without opening the app
+              public static class RegistrarReceiver extends BroadcastReceiver {
+                  @Override
+                  public void onReceive(Context ctx, Intent intent) {
+                      final PendingResult pr = goAsync();
+                      SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                      final String token  = prefs.getString("accessToken", null);
+                      final String fileId = prefs.getString("driveFileId", null);
+                      final String inicio = prefs.getString("lastHoraInicio", null);
+                      final String fin    = prefs.getString("lastHoraFin", null);
+                      final Context app   = ctx.getApplicationContext();
+                      if (token == null || inicio == null || fin == null || fileId == null || fileId.isEmpty()) {
+                          new Handler(Looper.getMainLooper()).post(() ->
+                              Toast.makeText(app, "⚠️ Abre la app para registrar", Toast.LENGTH_LONG).show());
+                          pr.finish(); return;
+                      }
+                      new Thread(() -> {
+                          try {
+                              String[] p1 = inicio.split(":"), p2 = fin.split(":");
+                              int min = (Integer.parseInt(p2[0])*60 + Integer.parseInt(p2[1]))
+                                      - (Integer.parseInt(p1[0])*60 + Integer.parseInt(p1[1]));
+                              if (min <= 0) min += 1440;
+                              final double horas = Math.round(min / 6.0) / 10.0;
+                              String fecha   = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date());
+                              String regId   = fecha.replace("-", "");
+                              String fechaES = new java.text.SimpleDateFormat("dd/MM/yyyy",  java.util.Locale.US).format(new java.util.Date());
+                              // GET existing Drive file
+                              java.net.URL getUrl = new java.net.URL("https://www.googleapis.com/drive/v3/files/" + fileId + "?alt=media");
+                              java.net.HttpURLConnection gc = (java.net.HttpURLConnection) getUrl.openConnection();
+                              gc.setRequestProperty("Authorization", "Bearer " + token);
+                              org.json.JSONObject data = new org.json.JSONObject("{}");
+                              if (gc.getResponseCode() == 200) {
+                                  java.io.BufferedReader br = new java.io.BufferedReader(
+                                      new java.io.InputStreamReader(gc.getInputStream(), "UTF-8"));
+                                  StringBuilder sb = new StringBuilder(); String line;
+                                  while ((line = br.readLine()) != null) sb.append(line);
+                                  data = new org.json.JSONObject(sb.toString());
+                              }
+                              gc.disconnect();
+                              if (!data.has("historial")) data.put("historial", new org.json.JSONObject());
+                              if (!data.has("horasTrabajadas")) data.put("horasTrabajadas", 0.0);
+                              org.json.JSONObject hist = data.getJSONObject("historial");
+                              if (hist.has(regId)) {
+                                  new Handler(Looper.getMainLooper()).post(() ->
+                                      Toast.makeText(app, "⚠️ Ya hay un registro para hoy", Toast.LENGTH_LONG).show());
+                                  pr.finish(); return;
+                              }
+                              double total = Math.round((data.getDouble("horasTrabajadas") + horas) * 10) / 10.0;
+                              data.put("horasTrabajadas", total);
+                              org.json.JSONObject reg = new org.json.JSONObject();
+                              reg.put("fecha", fechaES); reg.put("horas", horas);
+                              reg.put("timestamp", System.currentTimeMillis());
+                              reg.put("horaInicio", inicio); reg.put("horaFin", fin);
+                              hist.put(regId, reg);
+                              // PATCH Drive file
+                              byte[] body = data.toString().getBytes("UTF-8");
+                              java.net.URL pUrl = new java.net.URL(
+                                  "https://www.googleapis.com/upload/drive/v3/files/" + fileId + "?uploadType=media");
+                              java.net.HttpURLConnection pc = (java.net.HttpURLConnection) pUrl.openConnection();
+                              pc.setRequestMethod("PATCH");
+                              pc.setRequestProperty("Authorization", "Bearer " + token);
+                              pc.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                              pc.setDoOutput(true);
+                              pc.getOutputStream().write(body);
+                              final int code = pc.getResponseCode();
+                              pc.disconnect();
+                              ((NotificationManager) app.getSystemService(Context.NOTIFICATION_SERVICE)).cancel(1001);
+                              if (code == 200 || code == 201) {
+                                  app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                                      .putString("lastRegisteredDate", regId).apply();
+                              }
+                              new Handler(Looper.getMainLooper()).post(() ->
+                                  Toast.makeText(app,
+                                      (code == 200 || code == 201)
+                                          ? "✅ " + horas + "h registradas (" + inicio + "–" + fin + ")"
+                                          : "❌ Error al registrar (" + code + ")",
+                                      Toast.LENGTH_LONG).show());
+                          } catch (Exception e) {
+                              new Handler(Looper.getMainLooper()).post(() ->
+                                  Toast.makeText(app, "❌ " + e.getMessage(), Toast.LENGTH_LONG).show());
+                          } finally { pr.finish(); }
+                      }).start();
+                  }
+              }
+          }
+          JAVAEOF
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Generate notification sound files
+        run: |
+          python3 << 'PYEOF'
+          import wave, struct, math, os
+          def gen_wav(path, segments, sr=44100):
+              frames = []
+              for seg in segments:
+                  freq = seg[0]; dur = seg[1]
+                  mode = seg[2] if len(seg) > 2 else 'tone'
+                  freq_end = seg[3] if len(seg) > 3 else freq
+                  n = int(sr * dur); phase = 0.0
+                  for i in range(n):
+                      t = i / sr
+                      if freq == 0:
+                          frames.append(struct.pack('<h', 0)); continue
+                      att = min(1.0, t / 0.012)
+                      if mode == 'bell':
+                          env = att * math.exp(-t * 4.0 / dur)
+                          f = freq
+                      elif mode == 'sweep':
+                          env = att * min(1.0, (dur - t) / 0.10)
+                          f = freq + (freq_end - freq) * t / dur
+                      else:
+                          env = att * min(1.0, (dur - t) / max(dur * 0.15, 0.05))
+                          f = freq
+                      phase += 2 * math.pi * f / sr
+                      frames.append(struct.pack('<h', int(32767 * 0.65 * env * math.sin(phase))))
+              with wave.open(path, 'w') as f:
+                  f.setnchannels(1); f.setsampwidth(2); f.setframerate(sr)
+                  f.writeframes(b''.join(frames))
+          os.makedirs('android/app/src/main/res/raw', exist_ok=True)
+          R = 'android/app/src/main/res/raw/'
+          gen_wav(R+'notif_ding.wav',    [(880, 1.0, 'bell')])
+          gen_wav(R+'notif_campana.wav', [(660, 0.5, 'bell'), (880, 0.75, 'bell')])
+          gen_wav(R+'notif_alerta.wav',  [(440, 0.20), (0, 0.05), (660, 0.20), (0, 0.05), (880, 0.30)])
+          gen_wav(R+'notif_silbido.wav', [(800, 0.42, 'sweep', 1400), (1400, 0.38, 'sweep', 800)])
+          gen_wav(R+'notif_doble.wav',   [(880, 0.30), (0, 0.12), (880, 0.30)])
+          gen_wav(R+'notif_fanfare.wav', [(440, 0.20), (550, 0.20), (660, 0.20), (880, 0.60, 'bell')])
+          gen_wav(R+'notif_suave.wav',   [(330, 1.2, 'bell')])
+          print("Sound files OK")
+          PYEOF
+
+      - name: Set Android launcher icon
+        run: |
+          sudo apt-get install -y --no-install-recommends imagemagick
+          SRC="icons/icon-512.png"
+          RES="android/app/src/main/res"
+          BG="#1565C0"
+          # Legacy icons + adaptive foreground/background for every density
+          # Adaptive canvas sizes: mdpi=108 hdpi=162 xhdpi=216 xxhdpi=324 xxxhdpi=432
+          for entry in "mipmap-mdpi:48:108" "mipmap-hdpi:72:162" "mipmap-xhdpi:96:216" "mipmap-xxhdpi:144:324" "mipmap-xxxhdpi:192:432"; do
+            dir="${entry%%:*}"; rest="${entry#*:}"; size="${rest%%:*}"; asize="${rest##*:}"
+            # Legacy launcher icons (solid background)
+            convert "$SRC" -background "$BG" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher.png"
+            convert "$SRC" -background "$BG" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher_round.png"
+            # Adaptive foreground: icon at 66 % of canvas, centered
+            fgsize=$((asize * 2 / 3))
+            convert -size ${asize}x${asize} "xc:${BG}" \
+              \( "$SRC" -resize ${fgsize}x${fgsize} \) \
+              -gravity center -composite "$RES/$dir/ic_launcher_foreground.png"
+            # Adaptive background: solid color
+            convert -size ${asize}x${asize} "xc:${BG}" "$RES/$dir/ic_launcher_background.png"
+          done
+          # Adaptive icon XML (Android 8+)
+          mkdir -p "$RES/mipmap-anydpi-v26"
+          cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" << 'ICONEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@mipmap/ic_launcher_background"/>
+              <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+          </adaptive-icon>
+          ICONEOF
+          cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: horas-emt-${{ github.run_number }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "Horas EMT — Build ${{ github.run_number }}"
+          body: "APK generado automáticamente en build #${{ github.run_number }}."
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true
