@@ -48,7 +48,7 @@ const app = {
         if (this.darkMode) this.aplicarDarkMode();
         this._buildAvatarGrid();
         this._setupDeepLinkListener();
-        this._setupNotificationActions(); // must register listener before any async
+        this._setupNotificationActions();
         this._initGoogleAuth();
         this._checkForUpdates();
     },
@@ -1229,7 +1229,6 @@ const app = {
                     title: '📍 Horas EMT',
                     body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
                     actionTypeId: 'TRABAJO_CERCANO',
-                    schedule: { at: new Date(Date.now() + 500) }
                 };
                 if (this.notifSound && this.notifSound !== 'default') {
                     notif.sound = this.notifSound;
@@ -1316,7 +1315,6 @@ const app = {
                 title: '📍 Horas EMT',
                 body: 'Parece que estás en el trabajo. ¿Registras la jornada de hoy?',
                 actionTypeId: 'TRABAJO_CERCANO',
-                schedule: { at: new Date(Date.now() + 500) }
             };
             if (this.notifSound && this.notifSound !== 'default') {
                 notif.sound = this.notifSound;
@@ -1415,7 +1413,6 @@ const app = {
                     id: 9999,
                     title: '🔔 Horas EMT — prueba',
                     body: 'Las notificaciones funcionan correctamente.',
-                    schedule: { at: new Date(Date.now() + 500) }
                 };
                 if (this.notifSound && this.notifSound !== 'default') {
                     notif.sound = this.notifSound;
@@ -1530,7 +1527,7 @@ const app = {
         const LN = window.Capacitor?.Plugins?.LocalNotifications;
         if (LN) {
             try {
-                await LN.schedule({ notifications: [{ id: 2001, title: titulo, body: cuerpo, schedule: { at: new Date(Date.now() + 300) } }] });
+                await LN.schedule({ notifications: [{ id: 2001, title: titulo, body: cuerpo }] });
                 return;
             } catch(e) {}
         }
