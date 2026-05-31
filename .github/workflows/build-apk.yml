@@ -441,6 +441,11 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Restore signing keystore
+        run: |
+          mkdir -p ~/.android
+          cp .github/debug.keystore ~/.android/debug.keystore
+
       - name: Generate notification sound files
         run: |
           python3 << 'PYEOF'
@@ -493,9 +498,9 @@ jobs:
           # Adaptive canvas sizes: mdpi=108 hdpi=162 xhdpi=216 xxhdpi=324 xxxhdpi=432
           for entry in "mipmap-mdpi:48:108" "mipmap-hdpi:72:162" "mipmap-xhdpi:96:216" "mipmap-xxhdpi:144:324" "mipmap-xxxhdpi:192:432"; do
             dir="${entry%%:*}"; rest="${entry#*:}"; size="${rest%%:*}"; asize="${rest##*:}"
-            # Legacy launcher icons (solid background)
-            convert "$SRC" -background "$BG" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher.png"
-            convert "$SRC" -background "$BG" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher_round.png"
+            # Legacy launcher icons (solid background, fully opaque)
+            convert -size ${size}x${size} "xc:${BG}" \( "$SRC" -resize ${size}x${size} \) -gravity center -composite -alpha off "$RES/$dir/ic_launcher.png"
+            convert -size ${size}x${size} "xc:${BG}" \( "$SRC" -resize ${size}x${size} \) -gravity center -composite -alpha off "$RES/$dir/ic_launcher_round.png"
             # Adaptive foreground: icon at 66 % of canvas, centered
             fgsize=$((asize * 2 / 3))
             convert -size ${asize}x${asize} "xc:${BG}" \
