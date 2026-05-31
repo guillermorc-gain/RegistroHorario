@@ -490,26 +490,59 @@ jobs:
 
       - name: Set Android launcher icon
         run: |
-          sudo apt-get install -y --no-install-recommends imagemagick
-          SRC="icons/icon-512.png"
+          python3 << 'PYEOF'
+          from PIL import Image
+          import os
+
+          src_path = 'www/icons/icon-512.png'
+          res_base = 'android/app/src/main/res'
+          BG = (21, 101, 192)  # #1565C0
+
+          # (legacy_size, adaptive_canvas_size)
+          sizes = {
+              'mipmap-mdpi':    (48,  108),
+              'mipmap-hdpi':    (72,  162),
+              'mipmap-xhdpi':   (96,  216),
+              'mipmap-xxhdpi':  (144, 324),
+              'mipmap-xxxhdpi': (192, 432),
+          }
+
+          from PIL import ImageDraw
+
+          src_full = Image.open(src_path).convert('RGBA')
+          sw, sh = src_full.size
+
+          # The source icon has grey checkerboard pixels embedded at the corners.
+          # Apply a circular mask so corners become the blue background color.
+          circ_mask = Image.new('L', (sw, sh), 0)
+          ImageDraw.Draw(circ_mask).ellipse([2, 2, sw-3, sh-3], fill=255)
+          src_full.putalpha(circ_mask)
+
+          for dir_name, (size, asize) in sizes.items():
+              path = f'{res_base}/{dir_name}'
+              os.makedirs(path, exist_ok=True)
+
+              # Legacy icon: circular clock on solid blue, fills full square
+              bg = Image.new('RGBA', (size, size), (*BG, 255))
+              fg = src_full.resize((size, size), Image.LANCZOS)
+              result = Image.alpha_composite(bg, fg).convert('RGB')
+              result.save(f'{path}/ic_launcher.png')
+              result.save(f'{path}/ic_launcher_round.png')
+
+              # Adaptive foreground: icon at 66% of canvas, centered
+              fg_sz = asize * 2 // 3
+              adapt = Image.new('RGBA', (asize, asize), (*BG, 255))
+              icon_fg = src_full.resize((fg_sz, fg_sz), Image.LANCZOS)
+              off = (asize - fg_sz) // 2
+              adapt.paste(icon_fg, (off, off), icon_fg.split()[3])
+              adapt.convert('RGB').save(f'{path}/ic_launcher_foreground.png')
+
+              Image.new('RGB', (asize, asize), BG).save(f'{path}/ic_launcher_background.png')
+
+          print("Icons generated OK")
+          PYEOF
+
           RES="android/app/src/main/res"
-          BG="#1565C0"
-          # Legacy icons + adaptive foreground/background for every density
-          # Adaptive canvas sizes: mdpi=108 hdpi=162 xhdpi=216 xxhdpi=324 xxxhdpi=432
-          for entry in "mipmap-mdpi:48:108" "mipmap-hdpi:72:162" "mipmap-xhdpi:96:216" "mipmap-xxhdpi:144:324" "mipmap-xxxhdpi:192:432"; do
-            dir="${entry%%:*}"; rest="${entry#*:}"; size="${rest%%:*}"; asize="${rest##*:}"
-            # Legacy launcher icons (solid background)
-            convert "$SRC" -background "$BG" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher.png"
-            convert "$SRC" -background "$BG" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher_round.png"
-            # Adaptive foreground: icon at 66 % of canvas, centered
-            fgsize=$((asize * 2 / 3))
-            convert -size ${asize}x${asize} "xc:${BG}" \
-              \( "$SRC" -resize ${fgsize}x${fgsize} \) \
-              -gravity center -composite "$RES/$dir/ic_launcher_foreground.png"
-            # Adaptive background: solid color
-            convert -size ${asize}x${asize} "xc:${BG}" "$RES/$dir/ic_launcher_background.png"
-          done
-          # Adaptive icon XML (Android 8+)
           mkdir -p "$RES/mipmap-anydpi-v26"
           cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" << 'ICONEOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -518,6 +551,7 @@ jobs:
               <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
           </adaptive-icon>
           ICONEOF
+          cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
           cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
 
       - name: Setup Java 17
