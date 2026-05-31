@@ -42,7 +42,7 @@ jobs:
       - name: Patch AndroidManifest — permissions + intent filter localhost
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|' "$MANIFEST"
+          sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>|' "$MANIFEST"
           sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
           sed -i 's|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />|' "$MANIFEST"
           sed -i 's|</application>|    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
@@ -349,6 +349,32 @@ jobs:
                           });
                       }
                   }, "AndroidBridge");
+              }
+
+              @Override
+              public void onBackPressed() {
+                  android.webkit.WebView wv = (getBridge() != null) ? getBridge().getWebView() : null;
+                  if (wv == null) { moveTaskToBack(true); return; }
+                  wv.evaluateJavascript(
+                      "(function(){" +
+                      "try{" +
+                      "var h=document.getElementById('historialModal');" +
+                      "if(h&&h.classList.contains('show')){h.classList.remove('show');return 'modal';}" +
+                      "var e=document.getElementById('editModal');" +
+                      "if(e&&e.classList.contains('show')){e.classList.remove('show');return 'modal';}" +
+                      "var a=document.getElementById('avatarModal');" +
+                      "if(a&&a.classList.contains('show')){a.classList.remove('show');return 'modal';}" +
+                      "var o=document.getElementById('optionsScreen');" +
+                      "if(o&&o.classList.contains('active')){app.mostrarApp();return 'main';}" +
+                      "}catch(ex){}" +
+                      "return 'exit';" +
+                      "})()",
+                      result -> {
+                          if (result == null || result.contains("exit")) {
+                              moveTaskToBack(true);
+                          }
+                      }
+                  );
               }
 
               // Registers hours directly from notification without opening the app
