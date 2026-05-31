@@ -507,30 +507,35 @@ jobs:
               'mipmap-xxxhdpi': (192, 432),
           }
 
-          src = Image.open(src_path).convert('RGBA')
-          # Crop transparent border so the clock fills the full icon canvas
-          bbox = src.getbbox()
-          if bbox:
-              src = src.crop(bbox)
+          from PIL import ImageDraw
+
+          src_full = Image.open(src_path).convert('RGBA')
+          sw, sh = src_full.size
+
+          # The source icon has grey checkerboard pixels embedded at the corners.
+          # Apply a circular mask so corners become the blue background color.
+          circ_mask = Image.new('L', (sw, sh), 0)
+          ImageDraw.Draw(circ_mask).ellipse([2, 2, sw-3, sh-3], fill=255)
+          src_full.putalpha(circ_mask)
 
           for dir_name, (size, asize) in sizes.items():
               path = f'{res_base}/{dir_name}'
               os.makedirs(path, exist_ok=True)
 
-              # Legacy icon: clock fills the entire square, no gaps/transparency
-              bg = Image.new('RGB', (size, size), BG)
-              fg = src.resize((size, size), Image.LANCZOS)
-              bg.paste(fg.convert('RGB'), (0, 0), fg.split()[3])
-              bg.save(f'{path}/ic_launcher.png')
-              bg.save(f'{path}/ic_launcher_round.png')
+              # Legacy icon: circular clock on solid blue, fills full square
+              bg = Image.new('RGBA', (size, size), (*BG, 255))
+              fg = src_full.resize((size, size), Image.LANCZOS)
+              result = Image.alpha_composite(bg, fg).convert('RGB')
+              result.save(f'{path}/ic_launcher.png')
+              result.save(f'{path}/ic_launcher_round.png')
 
               # Adaptive foreground: icon at 66% of canvas, centered
               fg_sz = asize * 2 // 3
-              adapt = Image.new('RGB', (asize, asize), BG)
-              icon_fg = src.resize((fg_sz, fg_sz), Image.LANCZOS)
+              adapt = Image.new('RGBA', (asize, asize), (*BG, 255))
+              icon_fg = src_full.resize((fg_sz, fg_sz), Image.LANCZOS)
               off = (asize - fg_sz) // 2
-              adapt.paste(icon_fg.convert('RGB'), (off, off), icon_fg.split()[3])
-              adapt.save(f'{path}/ic_launcher_foreground.png')
+              adapt.paste(icon_fg, (off, off), icon_fg.split()[3])
+              adapt.convert('RGB').save(f'{path}/ic_launcher_foreground.png')
 
               Image.new('RGB', (asize, asize), BG).save(f'{path}/ic_launcher_background.png')
 
