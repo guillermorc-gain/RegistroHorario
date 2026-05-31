@@ -490,26 +490,54 @@ jobs:
 
       - name: Set Android launcher icon
         run: |
-          sudo apt-get install -y --no-install-recommends imagemagick
-          SRC="icons/icon-512.png"
+          python3 << 'PYEOF'
+          from PIL import Image
+          import os
+
+          src_path = 'www/icons/icon-512.png'
+          res_base = 'android/app/src/main/res'
+          BG = (21, 101, 192)  # #1565C0
+
+          # (legacy_size, adaptive_canvas_size)
+          sizes = {
+              'mipmap-mdpi':    (48,  108),
+              'mipmap-hdpi':    (72,  162),
+              'mipmap-xhdpi':   (96,  216),
+              'mipmap-xxhdpi':  (144, 324),
+              'mipmap-xxxhdpi': (192, 432),
+          }
+
+          src = Image.open(src_path).convert('RGBA')
+          # Crop transparent border so the clock fills the full icon canvas
+          bbox = src.getbbox()
+          if bbox:
+              src = src.crop(bbox)
+
+          for dir_name, (size, asize) in sizes.items():
+              path = f'{res_base}/{dir_name}'
+              os.makedirs(path, exist_ok=True)
+
+              # Legacy icon: clock fills the entire square, no gaps/transparency
+              bg = Image.new('RGB', (size, size), BG)
+              fg = src.resize((size, size), Image.LANCZOS)
+              bg.paste(fg.convert('RGB'), (0, 0), fg.split()[3])
+              bg.save(f'{path}/ic_launcher.png')
+              bg.save(f'{path}/ic_launcher_round.png')
+
+              # Adaptive foreground: icon at 66% of canvas, centered
+              fg_sz = asize * 2 // 3
+              adapt = Image.new('RGB', (asize, asize), BG)
+              icon_fg = src.resize((fg_sz, fg_sz), Image.LANCZOS)
+              off = (asize - fg_sz) // 2
+              adapt.paste(icon_fg.convert('RGB'), (off, off), icon_fg.split()[3])
+              adapt.save(f'{path}/ic_launcher_foreground.png')
+
+              Image.new('RGB', (asize, asize), BG).save(f'{path}/ic_launcher_background.png')
+
+          print("Icons generated OK")
+          PYEOF
+
           RES="android/app/src/main/res"
-          BG="#1565C0"
-          # Legacy icons + adaptive foreground/background for every density
-          # Adaptive canvas sizes: mdpi=108 hdpi=162 xhdpi=216 xxhdpi=324 xxxhdpi=432
-          for entry in "mipmap-mdpi:48:108" "mipmap-hdpi:72:162" "mipmap-xhdpi:96:216" "mipmap-xxhdpi:144:324" "mipmap-xxxhdpi:192:432"; do
-            dir="${entry%%:*}"; rest="${entry#*:}"; size="${rest%%:*}"; asize="${rest##*:}"
-            # Legacy launcher icons (solid background)
-            convert "$SRC" -background "$BG" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher.png"
-            convert "$SRC" -background "$BG" -alpha remove -resize "${size}x${size}" "$RES/$dir/ic_launcher_round.png"
-            # Adaptive foreground: icon at 66 % of canvas, centered
-            fgsize=$((asize * 2 / 3))
-            convert -size ${asize}x${asize} "xc:${BG}" \
-              \( "$SRC" -resize ${fgsize}x${fgsize} \) \
-              -gravity center -composite "$RES/$dir/ic_launcher_foreground.png"
-            # Adaptive background: solid color
-            convert -size ${asize}x${asize} "xc:${BG}" "$RES/$dir/ic_launcher_background.png"
-          done
-          # Adaptive icon XML (Android 8+)
           mkdir -p "$RES/mipmap-anydpi-v26"
           cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" << 'ICONEOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -518,6 +546,7 @@ jobs:
               <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
           </adaptive-icon>
           ICONEOF
+          cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
           cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
 
       - name: Setup Java 17
