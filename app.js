@@ -1825,6 +1825,10 @@ const app = {
             const latestTag = release.tag_name || '';
             const latestNum = parseInt(latestTag.replace('build-', '')) || 0;
             const currentNum = parseInt(String(APP_VERSION).replace('build-', '')) || 0;
+            if (latestNum === 0) {
+                if (showFeedback) this._mostrarToast('❌ No se pudo leer la versión de GitHub (' + latestTag + ')');
+                return;
+            }
             if (latestNum > currentNum) {
                 const asset = release.assets?.find(a => a.name.endsWith('.apk'));
                 this._updateApkUrl = asset?.browser_download_url || release.html_url;
@@ -1834,7 +1838,11 @@ const app = {
                 if (banner) banner.style.display = 'flex';
                 if (showFeedback) this._mostrarToast('🔄 ' + this._buildNumToVersion(latestNum) + ' disponible');
             } else if (showFeedback) {
-                this._mostrarToast('✅ Tienes la versión más reciente (' + this._buildNumToVersion(currentNum) + ')');
+                if (currentNum > latestNum) {
+                    this._mostrarToast('⚙️ Build de desarrollo ' + this._buildNumToVersion(currentNum) + ' (release oficial: ' + this._buildNumToVersion(latestNum) + ')');
+                } else {
+                    this._mostrarToast('✅ Tienes la versión más reciente (' + this._buildNumToVersion(currentNum) + ')');
+                }
             }
         } catch(_) {
             if (showFeedback) this._mostrarToast('❌ No se pudo comprobar la versión');
