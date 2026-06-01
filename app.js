@@ -24,6 +24,7 @@ const app = {
     modalCallback: null,
     editingId: null,
     prActivo: false,
+    _allowedUsersLocal: null,
     tema: localStorage.getItem('tema') || 'azul',
     _historialMap: {},
     _historialFull: {},
@@ -189,6 +190,12 @@ const app = {
             if (!resp.ok) { this.mostrarAuth(); this.mostrarMensaje('Error al obtener perfil: ' + resp.status, 'error'); return; }
             this.usuarioActual = await resp.json();
             localStorage.setItem('gUserEmail', this.usuarioActual.email);
+            const authorized = await this._checkUserAuthorized(this.usuarioActual.email);
+            if (!authorized) {
+                this.mostrarAuth();
+                this.mostrarMensaje('❌ La cuenta ' + this.usuarioActual.email + ' no tiene acceso a esta aplicación.', 'error');
+                return;
+            }
             this.mostrarApp();
             this.actualizarBotonesPerfil();
             setTimeout(() => this._autoRellenarFormulario(), 50);
@@ -1798,6 +1805,118 @@ const app = {
             document.getElementById('horasInput').focus();
         }
     },
+
+    // ── CONTROL DE ACCESO ──────────────────────────────────────────────────────
+
+    async _checkUserAuthorized(email) {
+        try {
+            const cached = sessionStorage.getItem('allowedUsersCache');
+            let allowed = cached ? JSON.parse(cached) : null;
+            if (!allowed) {
+                const resp = await fetch('https://raw.githubusercontent.com/guillermorc-gain/RegistroHorario/main/allowed-users.json?t=' + Date.now());
+                if (!resp.ok) return true; // no se puede leer → permitir
+                allowed = await resp.json();
+                sessionStorage.setItem('allowedUsersCache', JSON.stringify(allowed));
+            }
+            if (!Array.isArray(allowed) || allowed.length === 0) return true;
+            return allowed.map(e => e.toLowerCase()).includes(email.toLowerCase());
+        } catch(e) { return true; } // error de red → permitir
+    },
+
+    async _cargarUsuariosAcceso() {
+        const patStatus = document.getElementById('githubPatStatus');
+        if (patStatus) {
+            const hasPat = !!localStorage.getItem('githubPat');
+            patStatus.textContent = hasPat ? '✅ Token configurado' : '⚠️ Sin token — no podrás guardar cambios';
+            patStatus.style.color = hasPat ? '#27ae60' : '#e67e22';
+        }
+        const el = document.getElementById('allowedUsersList');
+        if (!el) return;
+        el.innerHTML = '<div style="color:#888;font-size:12px;padding:4px 0;">Cargando...</div>';
+        try {
+            const resp = await fetch('https://raw.githubusercontent.com/guillermorc-gain/RegistroHorario/main/allowed-users.json?t=' + Date.now());
+            if (!resp.ok) throw new Error(resp.status);
+            this._allowedUsersLocal = await resp.json();
+            this._renderAllowedUsers();
+        } catch(e) {
+            el.innerHTML = '<div style="color:#e74c3c;font-size:12px;">Error al cargar lista</div>';
+        }
+    },
+
+    _renderAllowedUsers() {
+        const el = document.getElementById('allowedUsersList');
+        if (!el) return;
+        const emails = this._allowedUsersLocal || [];
+        if (emails.length === 0) {
+            el.innerHTML = '<div style="color:#888;font-size:12px;padding:4px 0;">Lista vacía — cualquier cuenta puede entrar</div>';
+            return;
+        }
+        el.innerHTML = emails.map((email, i) =>
+            `<div class="access-user-item">
+                <span class="access-user-email">${email}</span>
+                <button class="access-user-remove" onclick="app._removeUserAcceso(${i})" title="Eliminar">✕</button>
+            </div>`
+        ).join('');
+    },
+
+    _addUserAcceso() {
+        const input = document.getElementById('newUserEmail');
+        const email = (input?.value || '').trim().toLowerCase();
+        if (!email || !email.includes('@')) { this._mostrarToast('❌ Introduce un correo válido'); return; }
+        if (!this._allowedUsersLocal) this._allowedUsersLocal = [];
+        if (this._allowedUsersLocal.map(e => e.toLowerCase()).includes(email)) { this._mostrarToast('Ya está en la lista'); return; }
+        this._allowedUsersLocal.push(email);
+        this._renderAllowedUsers();
+        if (input) input.value = '';
+    },
+
+    _removeUserAcceso(i) {
+        if (!this._allowedUsersLocal) return;
+        this._allowedUsersLocal.splice(i, 1);
+        this._renderAllowedUsers();
+    },
+
+    async _guardarUsuariosAcceso() {
+        const pat = localStorage.getItem('githubPat') || '';
+        if (!pat) { this._mostrarToast('❌ Configura el token de GitHub primero'); return; }
+        const emails = this._allowedUsersLocal || [];
+        try {
+            const infoResp = await fetch('https://api.github.com/repos/guillermorc-gain/RegistroHorario/contents/allowed-users.json', {
+                headers: { Authorization: 'token ' + pat, Accept: 'application/vnd.github+json' }
+            });
+            if (!infoResp.ok) { this._mostrarToast('❌ Token inválido o sin permisos'); return; }
+            const info = await infoResp.json();
+            const body = JSON.stringify(emails, null, 2) + '\n';
+            const content = btoa(unescape(encodeURIComponent(body)));
+            const putResp = await fetch('https://api.github.com/repos/guillermorc-gain/RegistroHorario/contents/allowed-users.json', {
+                method: 'PUT',
+                headers: { Authorization: 'token ' + pat, 'Content-Type': 'application/json', Accept: 'application/vnd.github+json' },
+                body: JSON.stringify({ message: 'Actualizar usuarios con acceso', content, sha: info.sha })
+            });
+            if (putResp.ok) {
+                sessionStorage.removeItem('allowedUsersCache');
+                this._mostrarToast('✅ Lista de acceso guardada');
+            } else {
+                const err = await putResp.json().catch(() => ({}));
+                this._mostrarToast('❌ Error al guardar: ' + (err.message || putResp.status));
+            }
+        } catch(e) { this._mostrarToast('❌ Error: ' + e.message); }
+    },
+
+    _guardarGithubPat() {
+        const input = document.getElementById('githubPatInput');
+        const pat = (input?.value || '').trim();
+        if (!pat) { localStorage.removeItem('githubPat'); this._mostrarToast('Token eliminado'); }
+        else { localStorage.setItem('githubPat', pat); this._mostrarToast('✅ Token guardado'); }
+        if (input) input.value = '';
+        const patStatus = document.getElementById('githubPatStatus');
+        if (patStatus) {
+            patStatus.textContent = pat ? '✅ Token configurado' : '⚠️ Sin token — no podrás guardar cambios';
+            patStatus.style.color = pat ? '#27ae60' : '#e67e22';
+        }
+    },
+
+    // ────────────────────────────────────────────────────────────────────────────
 
     _buildNumToVersion(n) {
         return 'v' + Math.floor(n / 100) + '.' + String(n % 100).padStart(2, '0');
