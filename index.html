@@ -250,6 +250,11 @@
         .avatar-photo-btn{width:100%;padding:11px;background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:8px;}
         .avatar-cancel-btn{width:100%;padding:10px;background:#f0f0f0;color:#555;border:none;border-radius:10px;font-size:13px;cursor:pointer;font-family:inherit;}
         .options-content.dark .avatar-cancel-btn,.modal-card.dark .avatar-cancel-btn{background:#3d4571;color:#e0e0e0;}
+        .access-user-item{display:flex;align-items:center;padding:7px 8px;background:#f4f6fa;border-radius:8px;gap:6px;}
+        .options-content.dark .access-user-item{background:#1a2035;}
+        .access-user-email{font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#2c3e50;}
+        .options-content.dark .access-user-email{color:#e0e0e0;}
+        .access-user-remove{background:transparent;border:none;color:#e74c3c;font-size:16px;cursor:pointer;padding:0 4px;line-height:1;flex-shrink:0;}
 
         /* ── INSTALL BANNER ── */
         .install-banner{display:none;background:#0052CC;color:white;padding:12px 15px;flex-shrink:0;align-items:center;gap:10px;box-shadow:0 -2px 6px rgba(0,0,0,0.25);}
@@ -578,6 +583,28 @@
                 <button class="ops-title" onclick="app.toggleSection(this)">📲 Aplicación <span class="ops-chevron">›</span></button>
                 <div class="ops-body">
                     <button class="ops-btn" onclick="app.instalarApp()">📲 Instalar aplicación <span class="ops-arrow">›</span></button>
+                </div>
+            </div>
+
+            <!-- Usuarios con acceso -->
+            <div class="ops-section">
+                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._cargarUsuariosAcceso()">👥 Usuarios con acceso <span class="ops-chevron">›</span></button>
+                <div class="ops-body">
+                    <div style="font-size:11px;color:#7f8c8d;margin-bottom:10px;line-height:1.5;">Solo las cuentas de Google añadidas aquí podrán iniciar sesión. Si la lista está vacía, cualquier cuenta puede entrar.</div>
+                    <div id="allowedUsersList" style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;min-height:24px;"></div>
+                    <div style="display:flex;gap:6px;margin-bottom:10px;">
+                        <input type="email" id="newUserEmail" class="ops-input" placeholder="correo@gmail.com" style="flex:1;font-size:13px;" />
+                        <button onclick="app._addUserAcceso()" style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">Añadir</button>
+                    </div>
+                    <button class="ops-btn primary-blue" onclick="app._guardarUsuariosAcceso()">💾 Guardar lista <span class="ops-arrow">›</span></button>
+                    <div style="margin-top:14px;padding-top:12px;border-top:1px solid #e8eaf0;">
+                        <div style="font-size:11px;color:#7f8c8d;margin-bottom:4px;">Token de GitHub <span style="opacity:0.7;">(necesario para guardar)</span></div>
+                        <div id="githubPatStatus" style="font-size:11px;margin-bottom:6px;"></div>
+                        <div style="display:flex;gap:6px;">
+                            <input type="password" id="githubPatInput" class="ops-input" placeholder="ghp_xxxxxxxxxxxx" style="flex:1;font-size:12px;" />
+                            <button onclick="app._guardarGithubPat()" style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">OK</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
