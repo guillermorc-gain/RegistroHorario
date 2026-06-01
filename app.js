@@ -78,8 +78,9 @@ const app = {
                 if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
                     const exp = hashParams?.get('expires_in') || '3600';
                     const intentUrl = `intent://localhost/?access_token=${encodeURIComponent(token)}&expires_in=${exp}#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
-                    document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Abriendo la app...</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir Horas EMT ›</a></div>`;
+                    document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Volviendo a la app...</p><p style="margin:0;font-size:12px;opacity:0.6;">Puedes cerrar esta pestaña</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir Horas EMT ›</a></div>`;
                     setTimeout(() => document.getElementById('_oauthReturnBtn')?.click(), 300);
+                    setTimeout(() => { try { window.close(); } catch(e) {} }, 1200);
                     return;
                 }
                 const expiresIn = parseInt(hashParams?.get('expires_in') || searchParams?.get('expires_in') || '3600');
@@ -227,9 +228,11 @@ const app = {
         this.login(true);
     },
 
-    _onOAuthResult(token, expiresIn) {
+    _onOAuthResult(token, expiresIn, wasSilent = false) {
         if (!token) {
-            sessionStorage.setItem('oauthWebViewFailed', '1');
+            // Solo marcar fallo de WebView si era login interactivo (no reauth silencioso).
+            // El fallo silencioso es normal; no queremos redirigir a Chrome para futuros logins.
+            if (!wasSilent) sessionStorage.setItem('oauthWebViewFailed', '1');
             sessionStorage.removeItem('silentReauthAttempted');
             this.mostrarAuth();
             return;
@@ -246,10 +249,23 @@ const app = {
         const onBackground = () => {
             if (this.accessToken && Date.now() < this.tokenExpiry) this._autoBackup();
         };
+        const onForeground = () => {
+            // If RegistrarReceiver updated Drive while in background, refresh the data
+            const flag = window.AndroidBridge?.getPref?.('pendingRefresh');
+            if (flag === '1' && this.usuarioActual) {
+                window.AndroidBridge?.removePref?.('pendingRefresh');
+                this.cargarDatos();
+            }
+            // Also re-run update check (at most once every 30 min)
+            const lastCheck = parseInt(sessionStorage.getItem('lastUpdateCheck') || '0');
+            if (Date.now() - lastCheck > 30 * 60 * 1000) {
+                this._checkForUpdates();
+            }
+        };
         if (window.Capacitor?.isNativePlatform?.()) {
             try {
                 window.Capacitor.Plugins.App?.addListener('appStateChange', ({ isActive }) => {
-                    if (!isActive) onBackground();
+                    if (!isActive) onBackground(); else onForeground();
                 });
             } catch (_) {}
         }
@@ -684,6 +700,36 @@ const app = {
     mostrarAvatarPicker() {
         document.getElementById('avatarPickerModal').classList.add('show');
         if (this.darkMode) document.getElementById('avatarModalContent').classList.add('dark');
+        const btn = document.getElementById('googlePhotoBtn');
+        if (btn) btn.style.display = this.usuarioActual?.picture ? '' : 'none';
+    },
+
+    async usarFotoGoogle() {
+        const url = this.usuarioActual?.picture;
+        if (!url) return;
+        try {
+            const largeUrl = url.replace(/=s\d+(-c)?$/, '=s200-c');
+            const resp = await fetch(largeUrl);
+            if (!resp.ok) throw new Error(resp.status);
+            const blob = await resp.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 80; canvas.height = 80;
+                canvas.getContext('2d').drawImage(img, 0, 0, 80, 80);
+                URL.revokeObjectURL(blobUrl);
+                localStorage.setItem('avatarPhoto', canvas.toDataURL('image/jpeg', 0.85));
+                localStorage.removeItem('avatarEmoji');
+                document.getElementById('avatarPickerModal').classList.remove('show');
+                this.actualizarBotonesPerfil(); this._actualizarAvatarPreview();
+                this._guardarPreferencias();
+            };
+            img.onerror = () => { URL.revokeObjectURL(blobUrl); this._mostrarToast('❌ No se pudo cargar la foto'); };
+            img.src = blobUrl;
+        } catch(e) {
+            this._mostrarToast('❌ Error al obtener la foto de Google');
+        }
     },
 
     subirFotoPerfil() {
@@ -1051,6 +1097,12 @@ const app = {
         const restantes = Math.max(0, this.horasAnualesCustom - horas);
         const pct       = (horas / this.horasAnualesCustom) * 100;
         this._historialFull = datos.historial || {};
+        // Ocultar el banner de proximidad si ya hay registro hoy
+        const _todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        if (this._historialFull[_todayId]) {
+            document.getElementById('workBanner')?.classList.remove('show');
+            localStorage.setItem('lastRegisteredDate', _todayId);
+        }
         document.getElementById('horasTrabajadas').textContent = horas.toFixed(1);
         document.getElementById('horasRestantes').textContent  = restantes.toFixed(1);
         document.getElementById('porcentaje').textContent = Math.min(Math.round(pct), 100);
@@ -1759,16 +1811,24 @@ const app = {
         if (el) el.textContent = 'Versión ' + this._buildNumToVersion(n);
     },
 
-    async _checkForUpdates() {
+    async _checkForUpdates(showFeedback = false) {
         if (!window.Capacitor?.isNativePlatform?.()) return;
         if (typeof APP_VERSION === 'undefined' || APP_VERSION === '0') return;
+        sessionStorage.setItem('lastUpdateCheck', String(Date.now()));
         try {
             const resp = await fetch('https://api.github.com/repos/guillermorc-gain/RegistroHorario/releases/latest');
-            if (!resp.ok) return;
+            if (!resp.ok) {
+                if (showFeedback) this._mostrarToast('❌ No se pudo comprobar (error ' + resp.status + ')');
+                return;
+            }
             const release = await resp.json();
             const latestTag = release.tag_name || '';
             const latestNum = parseInt(latestTag.replace('build-', '')) || 0;
             const currentNum = parseInt(String(APP_VERSION).replace('build-', '')) || 0;
+            if (latestNum === 0) {
+                if (showFeedback) this._mostrarToast('❌ No se pudo leer la versión de GitHub (' + latestTag + ')');
+                return;
+            }
             if (latestNum > currentNum) {
                 const asset = release.assets?.find(a => a.name.endsWith('.apk'));
                 this._updateApkUrl = asset?.browser_download_url || release.html_url;
@@ -1776,8 +1836,17 @@ const app = {
                 const msg    = document.getElementById('updateBannerMsg');
                 if (msg) msg.textContent = `${this._buildNumToVersion(latestNum)} disponible (tienes ${this._buildNumToVersion(currentNum)})`;
                 if (banner) banner.style.display = 'flex';
+                if (showFeedback) this._mostrarToast('🔄 ' + this._buildNumToVersion(latestNum) + ' disponible');
+            } else if (showFeedback) {
+                if (currentNum > latestNum) {
+                    this._mostrarToast('⚙️ Build de desarrollo ' + this._buildNumToVersion(currentNum) + ' (release oficial: ' + this._buildNumToVersion(latestNum) + ')');
+                } else {
+                    this._mostrarToast('✅ Tienes la versión más reciente (' + this._buildNumToVersion(currentNum) + ')');
+                }
             }
-        } catch(_) {}
+        } catch(_) {
+            if (showFeedback) this._mostrarToast('❌ No se pudo comprobar la versión');
+        }
     },
 
     _descargarActualizacion() {
