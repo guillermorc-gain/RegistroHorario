@@ -78,8 +78,9 @@ const app = {
                 if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
                     const exp = hashParams?.get('expires_in') || '3600';
                     const intentUrl = `intent://localhost/?access_token=${encodeURIComponent(token)}&expires_in=${exp}#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
-                    document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Abriendo la app...</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir Horas EMT ›</a></div>`;
+                    document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Volviendo a la app...</p><p style="margin:0;font-size:12px;opacity:0.6;">Puedes cerrar esta pestaña</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir Horas EMT ›</a></div>`;
                     setTimeout(() => document.getElementById('_oauthReturnBtn')?.click(), 300);
+                    setTimeout(() => { try { window.close(); } catch(e) {} }, 1200);
                     return;
                 }
                 const expiresIn = parseInt(hashParams?.get('expires_in') || searchParams?.get('expires_in') || '3600');
@@ -227,9 +228,11 @@ const app = {
         this.login(true);
     },
 
-    _onOAuthResult(token, expiresIn) {
+    _onOAuthResult(token, expiresIn, wasSilent = false) {
         if (!token) {
-            sessionStorage.setItem('oauthWebViewFailed', '1');
+            // Solo marcar fallo de WebView si era login interactivo (no reauth silencioso).
+            // El fallo silencioso es normal; no queremos redirigir a Chrome para futuros logins.
+            if (!wasSilent) sessionStorage.setItem('oauthWebViewFailed', '1');
             sessionStorage.removeItem('silentReauthAttempted');
             this.mostrarAuth();
             return;
@@ -1064,6 +1067,12 @@ const app = {
         const restantes = Math.max(0, this.horasAnualesCustom - horas);
         const pct       = (horas / this.horasAnualesCustom) * 100;
         this._historialFull = datos.historial || {};
+        // Ocultar el banner de proximidad si ya hay registro hoy
+        const _todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        if (this._historialFull[_todayId]) {
+            document.getElementById('workBanner')?.classList.remove('show');
+            localStorage.setItem('lastRegisteredDate', _todayId);
+        }
         document.getElementById('horasTrabajadas').textContent = horas.toFixed(1);
         document.getElementById('horasRestantes').textContent  = restantes.toFixed(1);
         document.getElementById('porcentaje').textContent = Math.min(Math.round(pct), 100);

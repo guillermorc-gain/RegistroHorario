@@ -316,8 +316,8 @@ jobs:
                                                           }
                                                       }
                                                       final String js = tk != null
-                                                          ? "app._onOAuthResult('" + tk.replace("'", "\\'") + "'," + exp + ")"
-                                                          : "app._onOAuthResult(null,0)";
+                                                          ? "app._onOAuthResult('" + tk.replace("'", "\\'") + "'," + exp + ",false)"
+                                                          : "app._onOAuthResult(null,0," + isSilent + ")";
                                                       ((BridgeActivity) ctx).getBridge().getWebView().evaluateJavascript(js, null);
                                                   } catch (Exception e) {}
                                               }
@@ -436,12 +436,23 @@ jobs:
                                       Toast.makeText(app, "⚠️ Ya hay un registro para hoy", Toast.LENGTH_LONG).show());
                                   pr.finish(); return;
                               }
+                              // Calculate nocturnal hours (22:00–06:00 range)
+                              int startMin = Integer.parseInt(p1[0]) * 60 + Integer.parseInt(p1[1]);
+                              int endMin   = Integer.parseInt(p2[0]) * 60 + Integer.parseInt(p2[1]);
+                              if (endMin <= startMin) endMin += 1440;
+                              int noctStart = 22 * 60, noctEnd = 6 * 60 + 1440;
+                              int overlapStart = Math.max(startMin, noctStart);
+                              int overlapEnd   = Math.min(endMin, noctEnd);
+                              double horasNoct = (overlapEnd > overlapStart)
+                                  ? Math.round((overlapEnd - overlapStart) / 6.0) / 10.0 : 0.0;
+                              boolean esNoche  = horasNoct > 0;
                               double total = Math.round((data.getDouble("horasTrabajadas") + horas) * 10) / 10.0;
                               data.put("horasTrabajadas", total);
                               org.json.JSONObject reg = new org.json.JSONObject();
                               reg.put("fecha", fechaES); reg.put("horas", horas);
                               reg.put("timestamp", System.currentTimeMillis());
                               reg.put("horaInicio", inicio); reg.put("horaFin", fin);
+                              if (esNoche) { reg.put("esNoche", true); reg.put("horasNocturnas", horasNoct); }
                               hist.put(regId, reg);
                               // PATCH Drive file
                               byte[] body = data.toString().getBytes("UTF-8");
