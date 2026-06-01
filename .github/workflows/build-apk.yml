@@ -42,7 +42,7 @@ jobs:
       - name: Patch AndroidManifest — permissions + intent filter localhost
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|' "$MANIFEST"
+          sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>|' "$MANIFEST"
           sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
           sed -i 's|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />|' "$MANIFEST"
           sed -i 's|</application>|    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
@@ -211,6 +211,18 @@ jobs:
                           }
                       }
                       @JavascriptInterface
+                      public String getPref(String key) {
+                          return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                              .getString(key, null);
+                      }
+
+                      @JavascriptInterface
+                      public void removePref(String key) {
+                          ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                              .edit().remove(key).apply();
+                      }
+
+                      @JavascriptInterface
                       public void openExternalUrl(String url) {
                           try {
                               Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
@@ -304,8 +316,8 @@ jobs:
                                                           }
                                                       }
                                                       final String js = tk != null
-                                                          ? "app._onOAuthResult('" + tk.replace("'", "\\'") + "'," + exp + ")"
-                                                          : "app._onOAuthResult(null,0)";
+                                                          ? "app._onOAuthResult('" + tk.replace("'", "\\'") + "'," + exp + ",false)"
+                                                          : "app._onOAuthResult(null,0," + isSilent + ")";
                                                       ((BridgeActivity) ctx).getBridge().getWebView().evaluateJavascript(js, null);
                                                   } catch (Exception e) {}
                                               }
@@ -349,6 +361,32 @@ jobs:
                           });
                       }
                   }, "AndroidBridge");
+              }
+
+              @Override
+              public void onBackPressed() {
+                  android.webkit.WebView wv = (getBridge() != null) ? getBridge().getWebView() : null;
+                  if (wv == null) { moveTaskToBack(true); return; }
+                  wv.evaluateJavascript(
+                      "(function(){" +
+                      "try{" +
+                      "var h=document.getElementById('historialModal');" +
+                      "if(h&&h.classList.contains('show')){h.classList.remove('show');return 'modal';}" +
+                      "var e=document.getElementById('editModal');" +
+                      "if(e&&e.classList.contains('show')){e.classList.remove('show');return 'modal';}" +
+                      "var a=document.getElementById('avatarModal');" +
+                      "if(a&&a.classList.contains('show')){a.classList.remove('show');return 'modal';}" +
+                      "var o=document.getElementById('optionsScreen');" +
+                      "if(o&&o.classList.contains('active')){app.mostrarApp();return 'main';}" +
+                      "}catch(ex){}" +
+                      "return 'exit';" +
+                      "})()",
+                      result -> {
+                          if (result == null || result.contains("exit")) {
+                              moveTaskToBack(true);
+                          }
+                      }
+                  );
               }
 
               // Registers hours directly from notification without opening the app
@@ -398,12 +436,23 @@ jobs:
                                       Toast.makeText(app, "⚠️ Ya hay un registro para hoy", Toast.LENGTH_LONG).show());
                                   pr.finish(); return;
                               }
+                              // Calculate nocturnal hours (22:00–06:00 range)
+                              int startMin = Integer.parseInt(p1[0]) * 60 + Integer.parseInt(p1[1]);
+                              int endMin   = Integer.parseInt(p2[0]) * 60 + Integer.parseInt(p2[1]);
+                              if (endMin <= startMin) endMin += 1440;
+                              int noctStart = 22 * 60, noctEnd = 6 * 60 + 1440;
+                              int overlapStart = Math.max(startMin, noctStart);
+                              int overlapEnd   = Math.min(endMin, noctEnd);
+                              double horasNoct = (overlapEnd > overlapStart)
+                                  ? Math.round((overlapEnd - overlapStart) / 6.0) / 10.0 : 0.0;
+                              boolean esNoche  = horasNoct > 0;
                               double total = Math.round((data.getDouble("horasTrabajadas") + horas) * 10) / 10.0;
                               data.put("horasTrabajadas", total);
                               org.json.JSONObject reg = new org.json.JSONObject();
                               reg.put("fecha", fechaES); reg.put("horas", horas);
                               reg.put("timestamp", System.currentTimeMillis());
                               reg.put("horaInicio", inicio); reg.put("horaFin", fin);
+                              if (esNoche) { reg.put("esNoche", true); reg.put("horasNocturnas", horasNoct); }
                               hist.put(regId, reg);
                               // PATCH Drive file
                               byte[] body = data.toString().getBytes("UTF-8");
@@ -420,7 +469,9 @@ jobs:
                               ((NotificationManager) app.getSystemService(Context.NOTIFICATION_SERVICE)).cancel(1001);
                               if (code == 200 || code == 201) {
                                   app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                                      .putString("lastRegisteredDate", regId).apply();
+                                      .putString("lastRegisteredDate", regId)
+                                      .putString("pendingRefresh", "1")
+                                      .apply();
                               }
                               new Handler(Looper.getMainLooper()).post(() ->
                                   Toast.makeText(app,
@@ -490,6 +541,7 @@ jobs:
 
       - name: Set Android launcher icon
         run: |
+          pip install Pillow -q
           python3 << 'PYEOF'
           from PIL import Image
           import os
@@ -551,7 +603,6 @@ jobs:
               <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
           </adaptive-icon>
           ICONEOF
-          cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
           cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
 
       - name: Setup Java 17
