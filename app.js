@@ -700,6 +700,36 @@ const app = {
     mostrarAvatarPicker() {
         document.getElementById('avatarPickerModal').classList.add('show');
         if (this.darkMode) document.getElementById('avatarModalContent').classList.add('dark');
+        const btn = document.getElementById('googlePhotoBtn');
+        if (btn) btn.style.display = this.usuarioActual?.picture ? '' : 'none';
+    },
+
+    async usarFotoGoogle() {
+        const url = this.usuarioActual?.picture;
+        if (!url) return;
+        try {
+            const largeUrl = url.replace(/=s\d+(-c)?$/, '=s200-c');
+            const resp = await fetch(largeUrl);
+            if (!resp.ok) throw new Error(resp.status);
+            const blob = await resp.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 80; canvas.height = 80;
+                canvas.getContext('2d').drawImage(img, 0, 0, 80, 80);
+                URL.revokeObjectURL(blobUrl);
+                localStorage.setItem('avatarPhoto', canvas.toDataURL('image/jpeg', 0.85));
+                localStorage.removeItem('avatarEmoji');
+                document.getElementById('avatarPickerModal').classList.remove('show');
+                this.actualizarBotonesPerfil(); this._actualizarAvatarPreview();
+                this._guardarPreferencias();
+            };
+            img.onerror = () => { URL.revokeObjectURL(blobUrl); this._mostrarToast('❌ No se pudo cargar la foto'); };
+            img.src = blobUrl;
+        } catch(e) {
+            this._mostrarToast('❌ Error al obtener la foto de Google');
+        }
     },
 
     subirFotoPerfil() {
