@@ -435,7 +435,7 @@
                         <div id="perfilNombre" style="font-size:14px;font-weight:600;color:#2c3e50;padding:2px 0;"></div>
                         <div id="perfilEmail" style="font-size:12px;color:#7f8c8d;padding:2px 0;"></div>
                         <div style="padding-top:10px;">
-                            <button class="btn-main" onclick="app.cerrarSesion()" style="background:linear-gradient(135deg,#e74c3c,#c0392b);width:100%;">🚹 Cerrar sesión de Google</button>
+                            <button class="btn-main" onclick="app.cerrarSesion()" style="background:linear-gradient(135deg,#e74c3c,#c0392b);width:100%;">🚪 Cerrar sesión de Google</button>
                         </div>
                     </div>
                 </div>
@@ -585,14 +585,17 @@
             <div class="ops-section">
                 <button class="ops-title" onclick="app.toggleSection(this)">🔑 Cuenta <span class="ops-chevron">›</span></button>
                 <div class="ops-body">
-                    <button class="ops-btn primary-blue" onclick="app.cerrarSesion()">🚹 Cerrar Sesión <span class="ops-arrow">›</span></button>
+                    <button class="ops-btn primary-blue" onclick="app.cerrarSesion()">🚪 Cerrar Sesión <span class="ops-arrow">›</span></button>
                     <button class="ops-btn danger" onclick="app.confirmarResetear()">🔄 Resetear Contador <span class="ops-arrow">›</span></button>
                     <button class="ops-btn danger" onclick="app.confirmarBorrarCuenta()">🗑️ Borrar datos y cerrar sesión <span class="ops-arrow">›</span></button>
                 </div>
             </div>
 
             <div class="footer">Aplicación desarrollada por Guillermo Ríos Correa</div>
-            <div id="versionDisplay" style="text-align:center;font-size:11px;color:var(--text-secondary);padding-bottom:8px;opacity:0.6;"></div>
+            <div id="versionDisplay" style="text-align:center;font-size:11px;color:var(--text-secondary);padding-top:4px;opacity:0.6;"></div>
+            <div style="text-align:center;padding:6px 16px 16px;">
+                <button onclick="app._checkForUpdates(true)" style="background:transparent;border:1px solid var(--border);color:var(--text-secondary);border-radius:8px;padding:6px 16px;font-size:11px;cursor:pointer;">🔄 Comprobar actualizaciones</button>
+            </div>
         </div>
     </div>
 
@@ -710,6 +713,7 @@
     <div class="avatar-modal-content" id="avatarModalContent">
         <h2>Elige tu avatar</h2>
         <div class="avatar-grid" id="avatarGrid"></div>
+        <button class="avatar-photo-btn" id="googlePhotoBtn" onclick="app.usarFotoGoogle()" style="display:none">🖼️ Usar foto de Google</button>
         <button class="avatar-photo-btn" onclick="app.subirFotoPerfil()">📷 Subir foto</button>
         <button class="avatar-cancel-btn" onclick="document.getElementById('avatarPickerModal').classList.remove('show')">Cancelar</button>
     </div>
