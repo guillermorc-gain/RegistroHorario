@@ -724,13 +724,22 @@ const app = {
     usarFotoGoogle() {
         const url = this.usuarioActual?.picture;
         if (!url) return;
-        // Pedir tamaño 200px; los <img> cargan URLs de Google sin restricciones CORS
         const largeUrl = url.replace(/=s\d+(-c)?$/, '=s200-c');
-        localStorage.setItem('avatarPhoto', largeUrl);
-        localStorage.removeItem('avatarEmoji');
-        document.getElementById('avatarPickerModal').classList.remove('show');
-        this.actualizarBotonesPerfil(); this._actualizarAvatarPreview();
-        this._guardarPreferencias();
+        const apply = (src) => {
+            localStorage.setItem('avatarPhoto', src);
+            localStorage.removeItem('avatarEmoji');
+            document.getElementById('avatarPickerModal').classList.remove('show');
+            this.actualizarBotonesPerfil(); this._actualizarAvatarPreview();
+            this._guardarPreferencias();
+        };
+        if (window.AndroidBridge?.fetchImageBase64) {
+            // Descarga via Java para evitar restricciones CORS del WebView
+            const cb = '_gphoto_' + Date.now();
+            window[cb] = (data) => { delete window[cb]; apply(data || largeUrl); };
+            window.AndroidBridge.fetchImageBase64(largeUrl, cb);
+        } else {
+            apply(largeUrl);
+        }
     },
 
     subirFotoPerfil() {

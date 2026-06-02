@@ -281,6 +281,30 @@ jobs:
                       }
 
                       @JavascriptInterface
+                      public void fetchImageBase64(final String imgUrl, final String callbackFn) {
+                          new Thread(() -> {
+                              String result = null;
+                              try {
+                                  java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(imgUrl).openConnection();
+                                  conn.setConnectTimeout(10000); conn.setReadTimeout(10000);
+                                  conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+                                  conn.connect();
+                                  java.io.InputStream is = conn.getInputStream();
+                                  java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+                                  byte[] tmp = new byte[4096]; int n;
+                                  while ((n = is.read(tmp)) != -1) buf.write(tmp, 0, n);
+                                  String mime = conn.getContentType() != null ? conn.getContentType().split(";")[0] : "image/jpeg";
+                                  result = "data:" + mime + ";base64," + android.util.Base64.encodeToString(buf.toByteArray(), android.util.Base64.NO_WRAP);
+                              } catch (Exception e) {}
+                              final String r = result;
+                              new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                                  if (getBridge() != null)
+                                      getBridge().getWebView().evaluateJavascript(callbackFn + "(" + (r != null ? "'" + r + "'" : "null") + ")", null);
+                              });
+                          }).start();
+                      }
+
+                      @JavascriptInterface
                       public void performOAuthInWebView(final String authUrl, final boolean isSilent) {
                           ((android.app.Activity) ctx).runOnUiThread(new Runnable() {
                               @Override public void run() {
