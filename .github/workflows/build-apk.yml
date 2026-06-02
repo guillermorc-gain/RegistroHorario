@@ -492,6 +492,24 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Set native splash background color
+        run: |
+          COLORS="android/app/src/main/res/values/colors.xml"
+          STYLES="android/app/src/main/res/values/styles.xml"
+          # Add colorPrimary to colors.xml
+          if [ -f "$COLORS" ]; then
+            grep -q 'colorPrimary' "$COLORS" || \
+              sed -i 's|</resources>|    <color name="colorPrimary">#1565C0</color>\n</resources>|' "$COLORS"
+          else
+            mkdir -p "$(dirname "$COLORS")"
+            printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="colorPrimary">#1565C0</color>\n</resources>\n' > "$COLORS"
+          fi
+          # Add windowBackground to the NoActionBar theme so launch shows blue instead of white/black
+          if [ -f "$STYLES" ]; then
+            grep -q 'windowBackground' "$STYLES" || \
+              sed -i 's|<style name="AppTheme.NoActionBar">|<style name="AppTheme.NoActionBar">\n        <item name="android:windowBackground">@color/colorPrimary</item>|' "$STYLES"
+          fi
+
       - name: Restore signing keystore
         run: |
           mkdir -p ~/.android
