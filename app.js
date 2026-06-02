@@ -237,13 +237,23 @@ const app = {
 
     _onOAuthResult(token, expiresIn, wasSilent = false) {
         if (!token) {
-            // Solo marcar fallo de WebView si era login interactivo (no reauth silencioso).
-            // El fallo silencioso es normal; no queremos redirigir a Chrome para futuros logins.
             if (!wasSilent) sessionStorage.setItem('oauthWebViewFailed', '1');
             sessionStorage.removeItem('silentReauthAttempted');
+            // En nativo: si el reauth silencioso falló, lanzar login interactivo
+            // automáticamente sin mostrar la pantalla de inicio de sesión.
+            if (wasSilent && window.Capacitor?.isNativePlatform?.()
+                    && !sessionStorage.getItem('autoLoginAttempted')) {
+                sessionStorage.setItem('autoLoginAttempted', '1');
+                const msg = document.getElementById('splashMsg');
+                if (msg) msg.textContent = 'Conectando con Google...';
+                this.login(false);
+                return;
+            }
+            sessionStorage.removeItem('autoLoginAttempted');
             this.mostrarAuth();
             return;
         }
+        sessionStorage.removeItem('autoLoginAttempted');
         sessionStorage.removeItem('oauthWebViewFailed');
         sessionStorage.removeItem('silentReauthAttempted');
         this.driveFileId = null;
@@ -793,13 +803,22 @@ const app = {
         setTimeout(() => el.classList.remove('show'), 5000);
     },
 
+    _hideSplash() {
+        const el = document.getElementById('splashScreen');
+        if (!el) return;
+        el.classList.add('fade-out');
+        setTimeout(() => el.remove(), 380);
+    },
+
     mostrarAuth() {
+        this._hideSplash();
         document.getElementById('authScreen').classList.remove('hidden');
         document.getElementById('appScreen').classList.remove('active');
         document.getElementById('optionsScreen').classList.remove('active');
     },
 
     mostrarApp() {
+        this._hideSplash();
         document.getElementById('authScreen').classList.add('hidden');
         document.getElementById('appScreen').classList.add('active');
         document.getElementById('optionsScreen').classList.remove('active');
