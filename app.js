@@ -18,6 +18,7 @@ const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agos
 const app = {
     accessToken: localStorage.getItem('gAccessToken') || null,
     tokenExpiry: parseInt(localStorage.getItem('gTokenExpiry') || '0'),
+    refreshToken: localStorage.getItem('gRefreshToken') || null,
     driveFileId: localStorage.getItem('driveFileId') || null,
     usuarioActual: null,
     darkMode: localStorage.getItem('darkMode') === 'true',
@@ -72,8 +73,25 @@ const app = {
             ? new URLSearchParams(window.location.hash.slice(1)) : null;
         const searchParams = window.location.search.length > 1
             ? new URLSearchParams(window.location.search.slice(1)) : null;
+
+        const code  = searchParams?.get('code');
         const token = hashParams?.get('access_token') || searchParams?.get('access_token');
         const error = hashParams?.get('error') || searchParams?.get('error');
+
+        if (code) {
+            history.replaceState(null, '', window.location.pathname);
+            // PKCE: exchange code for tokens via Vercel endpoint
+            if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
+                // External Chrome on Android — bounce code back to native app via intent
+                const intentUrl = `intent://localhost/?code=${encodeURIComponent(code)}#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
+                document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Volviendo a la app...</p><p style="margin:0;font-size:12px;opacity:0.6;">Puedes cerrar esta pestaña</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir Horas EMT ›</a></div>`;
+                setTimeout(() => document.getElementById('_oauthReturnBtn')?.click(), 300);
+                setTimeout(() => { try { window.close(); } catch(e) {} }, 1200);
+                return;
+            }
+            this._exchangeCode(code);
+            return;
+        }
 
         if (token || error) {
             history.replaceState(null, '', window.location.pathname);
@@ -94,7 +112,6 @@ const app = {
                 this._loadUserAndStart();
                 return;
             }
-            // error param: if on Chrome/Android, bounce back to app so it can show login
             if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
                 const failUrl = `intent://localhost/?silent_failed=1#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
                 setTimeout(() => { window.location.href = failUrl; }, 100);
@@ -104,13 +121,15 @@ const app = {
             this.mostrarMensaje('Error Google: ' + error, 'error');
             return;
         }
+
         if (this.accessToken && Date.now() < this.tokenExpiry) {
             this._loadUserAndStart();
         } else {
             const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
-            if (isAndroidNative && localStorage.getItem('gUserEmail') && !sessionStorage.getItem('silentReauthAttempted')) {
+            const hasSession = !!(localStorage.getItem('gUserEmail') && (this.refreshToken || localStorage.getItem('gUserEmail')));
+            if (hasSession && !sessionStorage.getItem('silentReauthAttempted')) {
                 sessionStorage.setItem('silentReauthAttempted', '1');
-                document.getElementById('authScreen').classList.add('hidden');
+                document.getElementById('authScreen')?.classList.add('hidden');
                 this._silentReauth();
             } else {
                 sessionStorage.removeItem('silentReauthAttempted');
@@ -152,6 +171,14 @@ const app = {
                 this.mostrarAuth();
                 return;
             }
+            const code = u.searchParams.get('code');
+            if (code) {
+                this.driveFileId = null;
+                localStorage.removeItem('driveFileId');
+                sessionStorage.removeItem('silentReauthAttempted');
+                this._exchangeCode(code);
+                return;
+            }
             const token = u.searchParams.get('access_token');
             if (!token) return;
             const expiresIn = parseInt(u.searchParams.get('expires_in') || '3600');
@@ -171,6 +198,10 @@ const app = {
         this.tokenExpiry = Date.now() + (parseInt(response.expires_in) - 60) * 1000;
         localStorage.setItem('gAccessToken', this.accessToken);
         localStorage.setItem('gTokenExpiry', this.tokenExpiry);
+        if (response.refresh_token) {
+            this.refreshToken = response.refresh_token;
+            localStorage.setItem('gRefreshToken', this.refreshToken);
+        }
         window.AndroidBridge?.saveToPrefs('accessToken', this.accessToken);
         this._scheduleTokenRefresh();
     },
@@ -191,6 +222,12 @@ const app = {
             });
             if (!resp.ok) { this.mostrarAuth(); this.mostrarMensaje('Error al obtener perfil: ' + resp.status, 'error'); return; }
             this.usuarioActual = await resp.json();
+            const prevEmail = localStorage.getItem('gUserEmail');
+            if (prevEmail && prevEmail.toLowerCase() !== this.usuarioActual.email.toLowerCase()) {
+                localStorage.removeItem('avatarPhoto');
+                localStorage.removeItem('avatarEmoji');
+                localStorage.removeItem('avatarBg');
+            }
             localStorage.setItem('gUserEmail', this.usuarioActual.email);
             const authorized = await this._checkUserAuthorized(this.usuarioActual.email);
             if (!authorized) {
@@ -209,19 +246,39 @@ const app = {
         }
     },
 
-    login(silent = false) {
+    _generateVerifier() {
+        const arr = new Uint8Array(32);
+        crypto.getRandomValues(arr);
+        return btoa(String.fromCharCode(...arr))
+            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    },
+
+    async _deriveChallenge(verifier) {
+        const enc = new TextEncoder().encode(verifier);
+        const hash = await crypto.subtle.digest('SHA-256', enc);
+        return btoa(String.fromCharCode(...new Uint8Array(hash)))
+            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    },
+
+    async login(silent = false) {
         const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
         const redirectUri = isAndroidNative
             ? 'https://registro-horario-emt.vercel.app/'
             : window.location.origin + '/';
         const email = this.usuarioActual?.email || localStorage.getItem('gUserEmail') || '';
+        const verifier = this._generateVerifier();
+        localStorage.setItem('pkceVerifier', verifier);
+        const challenge = await this._deriveChallenge(verifier);
         const params = new URLSearchParams({
             client_id: GOOGLE_CLIENT_ID,
             redirect_uri: redirectUri,
-            response_type: 'token',
+            response_type: 'code',
             scope: DRIVE_SCOPE,
-            prompt: silent ? 'none' : 'select_account',
-            ...(silent && email ? { login_hint: email } : {})
+            code_challenge: challenge,
+            code_challenge_method: 'S256',
+            access_type: 'offline',
+            prompt: silent ? 'none' : 'consent',
+            ...(email ? { login_hint: email } : {})
         });
         const url = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
         if (isAndroidNative && window.AndroidBridge?.performOAuthInWebView
@@ -232,9 +289,95 @@ const app = {
         }
     },
 
-    _silentReauth() {
-        if (!window.Capacitor?.isNativePlatform?.()) return;
+    async _exchangeCode(code, isSilent = false) {
+        const verifier = localStorage.getItem('pkceVerifier');
+        localStorage.removeItem('pkceVerifier');
+        if (!verifier) { this.mostrarAuth(); return; }
+        const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
+        const redirectUri = isAndroidNative
+            ? 'https://registro-horario-emt.vercel.app/'
+            : window.location.origin + '/';
+        try {
+            const resp = await fetch('https://registro-horario-emt.vercel.app/api/auth/exchange', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, code_verifier: verifier, redirect_uri: redirectUri })
+            });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                if (!isSilent) {
+                    this.mostrarAuth();
+                    this.mostrarMensaje('Error al iniciar sesión: ' + (err.error || resp.status), 'error');
+                } else {
+                    sessionStorage.removeItem('silentReauthAttempted');
+                    this.mostrarAuth();
+                }
+                return;
+            }
+            const data = await resp.json();
+            this.driveFileId = null;
+            localStorage.removeItem('driveFileId');
+            sessionStorage.removeItem('silentReauthAttempted');
+            sessionStorage.removeItem('autoLoginAttempted');
+            sessionStorage.removeItem('oauthWebViewFailed');
+            this._saveToken(data);
+            this._loadUserAndStart();
+        } catch(e) {
+            if (!isSilent) {
+                this.mostrarAuth();
+                this.mostrarMensaje('Error de red: ' + e.message, 'error');
+            } else {
+                sessionStorage.removeItem('silentReauthAttempted');
+                this.mostrarAuth();
+            }
+        }
+    },
+
+    async _silentReauth() {
+        if (this.refreshToken) {
+            try {
+                const resp = await fetch('https://registro-horario-emt.vercel.app/api/auth/refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ refresh_token: this.refreshToken })
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this._saveToken(data);
+                    if (!this.usuarioActual) this._loadUserAndStart();
+                    return;
+                }
+                // Refresh token expired/revoked — clear it and fall through to interactive login
+                this.refreshToken = null;
+                localStorage.removeItem('gRefreshToken');
+            } catch (_) {}
+        }
+        if (!window.Capacitor?.isNativePlatform?.()) { this.mostrarAuth(); return; }
         this.login(true);
+    },
+
+    _onOAuthCode(code, isSilent = false) {
+        if (!code) {
+            if (!isSilent) sessionStorage.setItem('oauthWebViewFailed', '1');
+            sessionStorage.removeItem('silentReauthAttempted');
+            if (isSilent && window.Capacitor?.isNativePlatform?.()
+                    && !sessionStorage.getItem('autoLoginAttempted')) {
+                sessionStorage.setItem('autoLoginAttempted', '1');
+                const msg = document.getElementById('splashMsg');
+                if (msg) msg.textContent = 'Conectando con Google...';
+                this.login(false);
+                return;
+            }
+            sessionStorage.removeItem('autoLoginAttempted');
+            this.mostrarAuth();
+            return;
+        }
+        sessionStorage.removeItem('autoLoginAttempted');
+        sessionStorage.removeItem('oauthWebViewFailed');
+        sessionStorage.removeItem('silentReauthAttempted');
+        this.driveFileId = null;
+        localStorage.removeItem('driveFileId');
+        this._exchangeCode(code, isSilent);
     },
 
     _onOAuthResult(token, expiresIn, wasSilent = false) {
@@ -664,13 +807,19 @@ const app = {
         if (this.accessToken) {
             fetch('https://oauth2.googleapis.com/revoke?token=' + this.accessToken, { method: 'POST' }).catch(() => {});
         }
-        this.accessToken  = null;
-        this.tokenExpiry  = 0;
+        this.accessToken   = null;
+        this.tokenExpiry   = 0;
+        this.refreshToken  = null;
         this.usuarioActual = null;
         localStorage.removeItem('gAccessToken');
         localStorage.removeItem('gTokenExpiry');
+        localStorage.removeItem('gRefreshToken');
         localStorage.removeItem('gUserEmail');
         localStorage.removeItem('driveFileId');
+        localStorage.removeItem('pkceVerifier');
+        localStorage.removeItem('avatarPhoto');
+        localStorage.removeItem('avatarEmoji');
+        localStorage.removeItem('avatarBg');
         this.driveFileId = null;
         this.mostrarAuth();
     },
