@@ -7,6 +7,10 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).end();
 
+  if (!process.env.GOOGLE_CLIENT_SECRET) {
+    return res.status(500).json({ error: 'Falta configurar GOOGLE_CLIENT_SECRET en Vercel' });
+  }
+
   const { code, code_verifier, redirect_uri } = req.body || {};
   if (!code || !code_verifier || !redirect_uri) {
     return res.status(400).json({ error: 'Faltan parámetros' });
