@@ -79,6 +79,7 @@ jobs:
           import android.provider.MediaStore;
           import android.webkit.JavascriptInterface;
           import android.widget.Toast;
+          import androidx.core.app.ActivityCompat;
           import androidx.core.app.NotificationCompat;
           import androidx.core.content.FileProvider;
           import com.getcapacitor.BridgeActivity;
@@ -93,8 +94,19 @@ jobs:
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   createNotificationChannel();
+                  requestNotificationPermission();
                   handleOAuthIntent(getIntent());
                   setupJavascriptInterface();
+              }
+
+              private void requestNotificationPermission() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
+                              != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                          ActivityCompat.requestPermissions(this,
+                              new String[]{ android.Manifest.permission.POST_NOTIFICATIONS }, 1);
+                      }
+                  }
               }
 
               @Override

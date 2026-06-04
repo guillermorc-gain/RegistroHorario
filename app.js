@@ -1823,18 +1823,18 @@ const app = {
     // ── CONTROL DE ACCESO ──────────────────────────────────────────────────────
 
     async _checkUserAuthorized(email) {
+        if (email.toLowerCase() === SUPER_USER_EMAIL.toLowerCase()) return true;
         try {
-            const cached = sessionStorage.getItem('allowedUsersCache');
-            let allowed = cached ? JSON.parse(cached) : null;
-            if (!allowed) {
-                const resp = await fetch('https://raw.githubusercontent.com/guillermorc-gain/RegistroHorario/main/allowed-users.json?t=' + Date.now());
-                if (!resp.ok) return true; // no se puede leer → permitir
-                allowed = await resp.json();
-                sessionStorage.setItem('allowedUsersCache', JSON.stringify(allowed));
-            }
+            const resp = await fetch(
+                'https://api.github.com/repos/guillermorc-gain/RegistroHorario/contents/allowed-users.json',
+                { cache: 'no-store', headers: { Accept: 'application/vnd.github+json' } }
+            );
+            if (!resp.ok) return true;
+            const info = await resp.json();
+            const allowed = JSON.parse(atob(info.content.replace(/\n/g, '')));
             if (!Array.isArray(allowed) || allowed.length === 0) return true;
             return allowed.map(e => e.toLowerCase()).includes(email.toLowerCase());
-        } catch(e) { return true; } // error de red → permitir
+        } catch(e) { return true; }
     },
 
     async _cargarUsuariosAcceso() {
