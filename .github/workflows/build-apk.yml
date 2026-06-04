@@ -129,6 +129,12 @@ jobs:
                   if (intent == null || getBridge() == null) return;
                   Uri data = intent.getData();
                   if (data == null) return;
+                  String code = data.getQueryParameter("code");
+                  if (code != null && !code.isEmpty()) {
+                      String url = "https://localhost/?code=" + Uri.encode(code);
+                      getBridge().getWebView().post(() -> getBridge().getWebView().loadUrl(url));
+                      return;
+                  }
                   String token = data.getQueryParameter("access_token");
                   if (token == null || token.isEmpty()) return;
                   String exp = data.getQueryParameter("expires_in");
@@ -335,25 +341,24 @@ jobs:
                                       dlgRef[0] = dlg;
                                   }
                                   wv.setWebViewClient(new android.webkit.WebViewClient() {
-                                      private void reportResult(final String fragment) {
+                                      private void reportResult(final String queryOrFragment) {
                                           if (handled[0]) return;
                                           handled[0] = true;
                                           if (dlgRef[0] != null) try { dlgRef[0].dismiss(); } catch (Exception e) {}
                                           ((android.app.Activity) ctx).runOnUiThread(new Runnable() {
                                               @Override public void run() {
                                                   try {
-                                                      String tk = null; int exp = 3600;
-                                                      if (fragment != null) {
-                                                          for (String p : fragment.split("&")) {
+                                                      String code = null;
+                                                      if (queryOrFragment != null) {
+                                                          for (String p : queryOrFragment.split("&")) {
                                                               String[] kv = p.split("=", 2);
                                                               if (kv.length < 2) continue;
-                                                              if ("access_token".equals(kv[0])) { try { tk = java.net.URLDecoder.decode(kv[1], "UTF-8"); } catch (Exception e) { tk = kv[1]; } }
-                                                              else if ("expires_in".equals(kv[0])) { try { exp = Integer.parseInt(kv[1]); } catch (Exception e) {} }
+                                                              if ("code".equals(kv[0])) { try { code = java.net.URLDecoder.decode(kv[1], "UTF-8"); } catch (Exception e) { code = kv[1]; } }
                                                           }
                                                       }
-                                                      final String js = tk != null
-                                                          ? "app._onOAuthResult('" + tk.replace("'", "\\'") + "'," + exp + ",false)"
-                                                          : "app._onOAuthResult(null,0," + isSilent + ")";
+                                                      final String js = code != null
+                                                          ? "app._onOAuthCode('" + code.replace("'", "\\'") + "'," + isSilent + ")"
+                                                          : "app._onOAuthCode(null," + isSilent + ")";
                                                       ((BridgeActivity) ctx).getBridge().getWebView().evaluateJavascript(js, null);
                                                   } catch (Exception e) {}
                                               }
@@ -363,11 +368,9 @@ jobs:
                                       public boolean shouldOverrideUrlLoading(android.webkit.WebView view, android.webkit.WebResourceRequest req) {
                                           if (handled[0]) return true;
                                           String u = req.getUrl().toString();
-                                          if (u.contains("registro-horario-emt.vercel.app") || u.contains("access_token=")) {
-                                              String frag = req.getUrl().getFragment();
-                                              String qry  = req.getUrl().getQuery();
-                                              String src  = (frag != null && frag.contains("access_token=")) ? frag : (qry != null ? qry : "");
-                                              reportResult(src);
+                                          if (u.contains("registro-horario-emt.vercel.app")) {
+                                              String qry = req.getUrl().getQuery();
+                                              reportResult(qry != null ? qry : "");
                                               return true;
                                           }
                                           if (u.contains("silent_failed=1") || u.contains("error=access_denied") || u.contains("error=interaction_required")) {
@@ -379,12 +382,12 @@ jobs:
                                       public void onPageFinished(android.webkit.WebView view, String pageUrl) {
                                           if (handled[0] || pageUrl == null || !pageUrl.contains("registro-horario-emt.vercel.app")) return;
                                           view.evaluateJavascript(
-                                              "(function(){var h=(window.location.hash||'').replace(/^#/,'');var q=(window.location.search||'').replace(/^\\?/,'');return h.indexOf('access_token=')>=0?h:q;})();",
+                                              "(function(){var q=(window.location.search||'').replace(/^\\?/,'');return q.indexOf('code=')>=0?q:'';})();",
                                               new android.webkit.ValueCallback<String>() {
                                                   @Override public void onReceiveValue(String val) {
-                                                      if (val != null && !val.equals("null") && val.length() > 4) {
+                                                      if (val != null && !val.equals("null") && !val.equals("\"\"") && val.length() > 4) {
                                                           String clean = val.startsWith("\"") ? val.substring(1, val.length()-1) : val;
-                                                          reportResult(clean.contains("access_token=") ? clean : null);
+                                                          reportResult(clean);
                                                       } else { reportResult(null); }
                                                   }
                                               }
