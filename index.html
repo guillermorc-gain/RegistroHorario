@@ -610,18 +610,9 @@
                 <div class="ops-body">
                     <div style="font-size:11px;color:#7f8c8d;margin-bottom:10px;line-height:1.5;">Solo las cuentas de Google añadidas aquí podrán iniciar sesión. Si la lista está vacía, cualquier cuenta puede entrar.</div>
                     <div id="allowedUsersList" style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;min-height:24px;"></div>
-                    <div style="display:flex;gap:6px;margin-bottom:10px;">
+                    <div style="display:flex;gap:6px;">
                         <input type="email" id="newUserEmail" class="ops-input" placeholder="correo@gmail.com" style="flex:1;font-size:13px;" />
                         <button onclick="app._addUserAcceso()" style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">Añadir</button>
-                    </div>
-                    <button class="ops-btn primary-blue" onclick="app._guardarUsuariosAcceso()">💾 Guardar lista <span class="ops-arrow">›</span></button>
-                    <div style="margin-top:14px;padding-top:12px;border-top:1px solid #e8eaf0;">
-                        <div style="font-size:11px;color:#7f8c8d;margin-bottom:4px;">Token de GitHub <span style="opacity:0.7;">(necesario para guardar)</span></div>
-                        <div id="githubPatStatus" style="font-size:11px;margin-bottom:6px;"></div>
-                        <div style="display:flex;gap:6px;">
-                            <input type="password" id="githubPatInput" class="ops-input" placeholder="ghp_xxxxxxxxxxxx" style="flex:1;font-size:12px;" />
-                            <button onclick="app._guardarGithubPat()" style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">OK</button>
-                        </div>
                     </div>
                 </div>
             </div>

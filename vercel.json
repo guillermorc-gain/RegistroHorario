@@ -43,7 +43,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!icons/|screenshots/|manifest\\.json|service-worker\\.js|app\\.js).*)",
+      "source": "/((?!api/|icons/|screenshots/|manifest\\.json|service-worker\\.js|app\\.js).*)",
       "destination": "/index.html"
     }
   ]
