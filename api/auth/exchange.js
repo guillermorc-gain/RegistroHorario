@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     body: new URLSearchParams({
       code,
       code_verifier,
-      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_id: process.env.GOOGLE_CLIENT_ID || '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.googleusercontent.com',
       client_secret: process.env.GOOGLE_CLIENT_SECRET,
       redirect_uri,
       grant_type: 'authorization_code',
