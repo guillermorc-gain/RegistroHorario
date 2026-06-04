@@ -222,6 +222,12 @@ const app = {
             });
             if (!resp.ok) { this.mostrarAuth(); this.mostrarMensaje('Error al obtener perfil: ' + resp.status, 'error'); return; }
             this.usuarioActual = await resp.json();
+            const prevEmail = localStorage.getItem('gUserEmail');
+            if (prevEmail && prevEmail.toLowerCase() !== this.usuarioActual.email.toLowerCase()) {
+                localStorage.removeItem('avatarPhoto');
+                localStorage.removeItem('avatarEmoji');
+                localStorage.removeItem('avatarBg');
+            }
             localStorage.setItem('gUserEmail', this.usuarioActual.email);
             const authorized = await this._checkUserAuthorized(this.usuarioActual.email);
             if (!authorized) {
@@ -811,6 +817,9 @@ const app = {
         localStorage.removeItem('gUserEmail');
         localStorage.removeItem('driveFileId');
         localStorage.removeItem('pkceVerifier');
+        localStorage.removeItem('avatarPhoto');
+        localStorage.removeItem('avatarEmoji');
+        localStorage.removeItem('avatarBg');
         this.driveFileId = null;
         this.mostrarAuth();
     },
