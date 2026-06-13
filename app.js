@@ -1516,6 +1516,8 @@ const app = {
     verificarUbicacion() {
         const locs = this._getWorkLocations();
         if (locs.length === 0 || !navigator.geolocation) return;
+        if (this.gpsMode === 'off') return;
+        if (this.gpsMode === 'schedule' && !this._isInGpsSchedule()) return;
         const todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
         if (localStorage.getItem('lastRegisteredDate') === todayId) return;
         if (this._historialFull[todayId]) return;
