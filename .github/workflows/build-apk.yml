@@ -45,7 +45,7 @@ jobs:
           sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>|' "$MANIFEST"
           sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
           sed -i 's|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />|' "$MANIFEST"
-          sed -i 's|</application>|    <receiver android:name=".MainActivity$GeofenceReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
+          sed -i 's|</application>|    <receiver android:name=".MainActivity$GeofenceReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$BootReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/></intent-filter></receiver>\n    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
 
       - name: Create FileProvider paths config
         run: |
@@ -424,7 +424,7 @@ jobs:
                                       .setRequestId("work_" + i)
                                       .setCircularRegion(loc.getDouble("lat"), loc.getDouble("lng"), 300)
                                       .setExpirationDuration(Geofence.NEVER_EXPIRE)
-                                      .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER)
+                                      .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_DWELL)
                                       .setLoiteringDelay(60000)
                                       .build());
                               }
@@ -488,7 +488,8 @@ jobs:
                   public void onReceive(Context ctx, Intent intent) {
                       GeofencingEvent event = GeofencingEvent.fromIntent(intent);
                       if (event == null || event.hasError()) return;
-                      if (event.getGeofenceTransition() != Geofence.GEOFENCE_TRANSITION_ENTER) return;
+                      int transition = event.getGeofenceTransition();
+                      if (transition != Geofence.GEOFENCE_TRANSITION_ENTER && transition != Geofence.GEOFENCE_TRANSITION_DWELL) return;
                       SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
                       String gpsMode = prefs.getString("gpsMode", "always");
                       if ("off".equals(gpsMode)) return;
@@ -530,6 +531,46 @@ jobs:
                           .addAction(0, "✅ Registrar jornada", broadcastPI)
                           .addAction(0, "🕐 Otro horario", openPI)
                           .build());
+                  }
+              }
+
+              // Re-register geofences after phone reboot
+              public static class BootReceiver extends BroadcastReceiver {
+                  @Override
+                  public void onReceive(Context ctx, Intent intent) {
+                      if (intent == null || !Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) return;
+                      SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                      String locJson = prefs.getString("geofenceLocations", null);
+                      String gpsMode = prefs.getString("gpsMode", "always");
+                      if (locJson == null || "off".equals(gpsMode)) return;
+                      try {
+                          org.json.JSONArray arr = new org.json.JSONArray(locJson);
+                          if (arr.length() == 0) return;
+                          GeofencingClient client = LocationServices.getGeofencingClient(ctx);
+                          Intent gi = new Intent(ctx, GeofenceReceiver.class);
+                          int piFlags = PendingIntent.FLAG_UPDATE_CURRENT
+                              | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_MUTABLE : 0);
+                          PendingIntent gpi = PendingIntent.getBroadcast(ctx, 9999, gi, piFlags);
+                          List<Geofence> fences = new ArrayList<>();
+                          for (int i = 0; i < arr.length(); i++) {
+                              org.json.JSONObject loc = arr.getJSONObject(i);
+                              fences.add(new Geofence.Builder()
+                                  .setRequestId("work_" + i)
+                                  .setCircularRegion(loc.getDouble("lat"), loc.getDouble("lng"), 300)
+                                  .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                                  .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_DWELL)
+                                  .setLoiteringDelay(60000)
+                                  .build());
+                          }
+                          GeofencingRequest request = new GeofencingRequest.Builder()
+                              .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER | GeofencingRequest.INITIAL_TRIGGER_DWELL)
+                              .addGeofences(fences)
+                              .build();
+                          if (ActivityCompat.checkSelfPermission(ctx, android.Manifest.permission.ACCESS_FINE_LOCATION)
+                                  == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                              client.addGeofences(request, gpi);
+                          }
+                      } catch (Exception e) {}
                   }
               }
 
