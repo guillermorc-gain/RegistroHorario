@@ -1853,6 +1853,14 @@ const app = {
 
     _updateGpsState() {
         const locs = this._getWorkLocations();
+        if (window.AndroidBridge?.registerGeofences) {
+            if (locs.length === 0 || this.gpsMode === 'off') {
+                window.AndroidBridge.removeGeofences();
+            } else {
+                window.AndroidBridge.registerGeofences(JSON.stringify(locs));
+            }
+            return;
+        }
         if (locs.length === 0 || this.gpsMode === 'off') { this._detenerGeofencingNativo(); return; }
         if (this.gpsMode === 'schedule' && !this._isInGpsSchedule()) { this._detenerGeofencingNativo(); return; }
         if (!this._bgGeoStarted) this._iniciarGeofencingNativo();
@@ -1882,6 +1890,9 @@ const app = {
         localStorage.setItem('gpsInterval', String(interval));
         localStorage.setItem('gpsScheduleFrom', from);
         localStorage.setItem('gpsScheduleTo', to);
+        window.AndroidBridge?.saveToPrefs('gpsMode', mode);
+        window.AndroidBridge?.saveToPrefs('gpsScheduleFrom', from);
+        window.AndroidBridge?.saveToPrefs('gpsScheduleTo', to);
         this._renderGpsSettings();
         this._updateGpsState();
         this._guardarPreferencias();

@@ -45,7 +45,7 @@ jobs:
           sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>|' "$MANIFEST"
           sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
           sed -i 's|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />|' "$MANIFEST"
-          sed -i 's|</application>|    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
+          sed -i 's|</application>|    <receiver android:name=".MainActivity$GeofenceReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
 
       - name: Create FileProvider paths config
         run: |
@@ -83,7 +83,14 @@ jobs:
           import androidx.core.app.NotificationCompat;
           import androidx.core.content.FileProvider;
           import com.getcapacitor.BridgeActivity;
+          import com.google.android.gms.location.Geofence;
+          import com.google.android.gms.location.GeofencingClient;
+          import com.google.android.gms.location.GeofencingEvent;
+          import com.google.android.gms.location.GeofencingRequest;
+          import com.google.android.gms.location.LocationServices;
           import java.io.OutputStream;
+          import java.util.ArrayList;
+          import java.util.List;
 
           public class MainActivity extends BridgeActivity {
 
@@ -399,6 +406,53 @@ jobs:
                               }
                           });
                       }
+                      @JavascriptInterface
+                      public void registerGeofences(String locationsJson) {
+                          try {
+                              org.json.JSONArray arr = new org.json.JSONArray(locationsJson);
+                              GeofencingClient client = LocationServices.getGeofencingClient(ctx);
+                              Intent gi = new Intent(ctx, GeofenceReceiver.class);
+                              int piFlags = PendingIntent.FLAG_UPDATE_CURRENT
+                                  | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_MUTABLE : 0);
+                              PendingIntent gpi = PendingIntent.getBroadcast(ctx, 9999, gi, piFlags);
+                              client.removeGeofences(gpi);
+                              if (arr.length() == 0) return;
+                              List<Geofence> fences = new ArrayList<>();
+                              for (int i = 0; i < arr.length(); i++) {
+                                  org.json.JSONObject loc = arr.getJSONObject(i);
+                                  fences.add(new Geofence.Builder()
+                                      .setRequestId("work_" + i)
+                                      .setCircularRegion(loc.getDouble("lat"), loc.getDouble("lng"), 300)
+                                      .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                                      .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER)
+                                      .setLoiteringDelay(60000)
+                                      .build());
+                              }
+                              GeofencingRequest request = new GeofencingRequest.Builder()
+                                  .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER | GeofencingRequest.INITIAL_TRIGGER_DWELL)
+                                  .addGeofences(fences)
+                                  .build();
+                              if (ActivityCompat.checkSelfPermission(ctx, android.Manifest.permission.ACCESS_FINE_LOCATION)
+                                      == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                  client.addGeofences(request, gpi);
+                              }
+                              ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                                  .edit().putString("geofenceLocations", locationsJson).apply();
+                          } catch (Exception e) {}
+                      }
+
+                      @JavascriptInterface
+                      public void removeGeofences() {
+                          try {
+                              GeofencingClient client = LocationServices.getGeofencingClient(ctx);
+                              Intent gi = new Intent(ctx, GeofenceReceiver.class);
+                              int piFlags = PendingIntent.FLAG_UPDATE_CURRENT
+                                  | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_MUTABLE : 0);
+                              client.removeGeofences(PendingIntent.getBroadcast(ctx, 9999, gi, piFlags));
+                              ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                                  .edit().remove("geofenceLocations").apply();
+                          } catch (Exception e) {}
+                      }
                   }, "AndroidBridge");
               }
 
@@ -426,6 +480,57 @@ jobs:
                           }
                       }
                   );
+              }
+
+              // Native geofencing — fires when user enters a work location, even with app killed
+              public static class GeofenceReceiver extends BroadcastReceiver {
+                  @Override
+                  public void onReceive(Context ctx, Intent intent) {
+                      GeofencingEvent event = GeofencingEvent.fromIntent(intent);
+                      if (event == null || event.hasError()) return;
+                      if (event.getGeofenceTransition() != Geofence.GEOFENCE_TRANSITION_ENTER) return;
+                      SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                      String gpsMode = prefs.getString("gpsMode", "always");
+                      if ("off".equals(gpsMode)) return;
+                      if ("schedule".equals(gpsMode)) {
+                          String from = prefs.getString("gpsScheduleFrom", "07:00");
+                          String to   = prefs.getString("gpsScheduleTo",   "09:00");
+                          java.util.Calendar cal = java.util.Calendar.getInstance();
+                          int cur = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE);
+                          String[] fp = from.split(":"); String[] tp = to.split(":");
+                          int f = Integer.parseInt(fp[0]) * 60 + Integer.parseInt(fp[1]);
+                          int t = Integer.parseInt(tp[0]) * 60 + Integer.parseInt(tp[1]);
+                          boolean ok = f <= t ? (cur >= f && cur <= t) : (cur >= f || cur <= t);
+                          if (!ok) return;
+                      }
+                      String today = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(new java.util.Date());
+                      if (today.equals(prefs.getString("lastRegisteredDate", ""))) return;
+                      String inicio = prefs.getString("lastHoraInicio", "");
+                      String fin    = prefs.getString("lastHoraFin", "");
+                      NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          nm.createNotificationChannel(new NotificationChannel(
+                              CHANNEL_ID, "Trabajo cercano", NotificationManager.IMPORTANCE_HIGH));
+                      }
+                      int flags = PendingIntent.FLAG_UPDATE_CURRENT
+                          | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
+                      Intent bi = new Intent("com.guillermorc.horasemt.REGISTRAR");
+                      bi.setPackage("com.guillermorc.horasemt");
+                      PendingIntent broadcastPI = PendingIntent.getBroadcast(ctx, 0, bi, flags);
+                      Intent oi = new Intent(ctx, MainActivity.class);
+                      oi.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                      PendingIntent openPI = PendingIntent.getActivity(ctx, 1, oi, flags);
+                      nm.notify(1001, new NotificationCompat.Builder(ctx, CHANNEL_ID)
+                          .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+                          .setContentTitle("📍 Horas EMT")
+                          .setContentText("Parece que estás en el trabajo. ¿Registras la jornada?")
+                          .setPriority(NotificationCompat.PRIORITY_HIGH)
+                          .setContentIntent(openPI)
+                          .setAutoCancel(false)
+                          .addAction(0, "✅ Registrar jornada", broadcastPI)
+                          .addAction(0, "🕐 Otro horario", openPI)
+                          .build());
+                  }
               }
 
               // Registers hours directly from notification without opening the app
@@ -530,6 +635,11 @@ jobs:
 
       - name: Sync Capacitor
         run: npx cap sync android
+
+      - name: Add play-services-location for native geofencing
+        run: |
+          GRADLE="android/app/build.gradle"
+          sed -i "/dependencies {/a\\    implementation 'com.google.android.gms:play-services-location:21.0.1'" "$GRADLE"
 
       - name: Set native splash background color
         run: |
