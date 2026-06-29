@@ -1857,6 +1857,9 @@ const app = {
             if (locs.length === 0 || this.gpsMode === 'off') {
                 window.AndroidBridge.removeGeofences();
             } else {
+                if (window.AndroidBridge.hasBackgroundLocationPermission?.() === false) {
+                    window.AndroidBridge.requestLocationPermissions?.();
+                }
                 window.AndroidBridge.registerGeofences(JSON.stringify(locs));
             }
             return;
@@ -1938,8 +1941,12 @@ const app = {
         const LN = window.Capacitor?.Plugins?.LocalNotifications;
         if (LN) { try { await LN.requestPermissions(); } catch(_) {} }
         this._crearCanalesNotificacion();
-        const Geo = window.Capacitor?.Plugins?.Geolocation;
-        if (Geo) { try { await Geo.requestPermissions({ permissions: ['location', 'coarseLocation'] }); } catch(_) {} }
+        if (window.AndroidBridge?.requestLocationPermissions) {
+            window.AndroidBridge.requestLocationPermissions();
+        } else {
+            const Geo = window.Capacitor?.Plugins?.Geolocation;
+            if (Geo) { try { await Geo.requestPermissions({ permissions: ['location', 'coarseLocation'] }); } catch(_) {} }
+        }
     },
 
     _crearCanalesNotificacion() {

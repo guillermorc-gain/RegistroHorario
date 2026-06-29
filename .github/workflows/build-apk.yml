@@ -102,6 +102,7 @@ jobs:
                   super.onCreate(savedInstanceState);
                   createNotificationChannel();
                   requestNotificationPermission();
+                  requestLocationPermissions();
                   handleOAuthIntent(getIntent());
                   setupJavascriptInterface();
               }
@@ -112,6 +113,41 @@ jobs:
                               != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                           ActivityCompat.requestPermissions(this,
                               new String[]{ android.Manifest.permission.POST_NOTIFICATIONS }, 1);
+                      }
+                  }
+              }
+
+              private void requestLocationPermissions() {
+                  List<String> perms = new ArrayList<>();
+                  if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
+                          != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                      perms.add(android.Manifest.permission.ACCESS_FINE_LOCATION);
+                      perms.add(android.Manifest.permission.ACCESS_COARSE_LOCATION);
+                  }
+                  if (!perms.isEmpty()) {
+                      ActivityCompat.requestPermissions(this, perms.toArray(new String[0]), 2);
+                  } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                      if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                              != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                          ActivityCompat.requestPermissions(this,
+                              new String[]{ android.Manifest.permission.ACCESS_BACKGROUND_LOCATION }, 3);
+                      }
+                  }
+              }
+
+              @Override
+              public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                  if (requestCode == 2 && grantResults.length > 0
+                          && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                          if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                                  != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                              new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                  ActivityCompat.requestPermissions(this,
+                                      new String[]{ android.Manifest.permission.ACCESS_BACKGROUND_LOCATION }, 3);
+                              }, 500);
+                          }
                       }
                   }
               }
@@ -154,6 +190,18 @@ jobs:
                   if (getBridge() == null || getBridge().getWebView() == null) return;
                   final Context ctx = this;
                   getBridge().getWebView().addJavascriptInterface(new Object() {
+
+                      @JavascriptInterface
+                      public boolean hasBackgroundLocationPermission() {
+                          if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true;
+                          return ActivityCompat.checkSelfPermission(ctx, android.Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                              == android.content.pm.PackageManager.PERMISSION_GRANTED;
+                      }
+
+                      @JavascriptInterface
+                      public void requestLocationPermissions() {
+                          ((MainActivity) ctx).requestLocationPermissions();
+                      }
 
                       @JavascriptInterface
                       public void saveToPrefs(String key, String value) {
