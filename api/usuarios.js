@@ -107,7 +107,7 @@ export default async function handler(req, res) {
       if (admin !== ADMIN_EMAIL.toLowerCase()) {
         return res.status(403).json({ error: 'Solo el gestor puede hacer esto' });
       }
-      const { email, puesto, ficticio } = req.body || {};
+      const { email, puesto, ficticio, baja } = req.body || {};
       const clave = (email || '').toLowerCase().trim();
       if (!clave) return res.status(400).json({ error: 'Falta el email' });
       // Los usuarios de prueba solo pueden vivir bajo este dominio, para que no
@@ -127,9 +127,15 @@ export default async function handler(req, res) {
             actualizado: new Date().toISOString(),
           };
         }
+        // La baja (BE) y el puesto son campos del gestor; una publicación del
+        // trabajador los conserva porque no los sobrescribe.
+        else if (data[clave] && baja !== undefined) data[clave].baja = !!baja;
         else if (data[clave]) data[clave].puesto = String(puesto || '').slice(0, 40);
         return data;
-      }, req.method === 'DELETE' ? `Quitar ${clave}` : (ficticio ? `Usuario de prueba ${clave}` : `Puesto de ${clave}`));
+      }, req.method === 'DELETE' ? `Quitar ${clave}`
+         : ficticio ? `Usuario de prueba ${clave}`
+         : baja !== undefined ? `${baja ? 'Baja' : 'Alta'} de ${clave}`
+         : `Puesto de ${clave}`);
 
       return nuevo ? res.status(200).json(nuevo) : res.status(500).json({ error: 'No se pudo guardar' });
     }

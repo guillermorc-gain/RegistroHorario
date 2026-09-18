@@ -275,17 +275,19 @@
         .app-content.dark .cond-title{color:#a0a0a0;}
         .sec{flex-shrink:0;}
         .sec-head{display:flex;align-items:center;gap:7px;padding:4px 2px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
-        .sec-head .cond-title{flex:1;}
+        .sec-head .cond-title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
         .sec-chev{margin-left:4px;transition:transform .2s;}
+        .sec-cnt{font-size:9.5px;font-weight:800;color:var(--g1);background:#eaf2fd;padding:2px 6px;border-radius:9px;white-space:nowrap;flex-shrink:0;}
+        .app-content.dark .sec-cnt{background:#14283f;}
         .sec.cerrada .sec-chev{transform:rotate(-90deg);}
         .sec.cerrada .sec-body{display:none;}
         .sec-body{padding-top:4px;}
         .cond-orden{display:flex;gap:0;background:#e8eaf0;border-radius:8px;padding:2px;}
         .app-content.dark .cond-orden{background:#16202e;}
-        .orden-btn{border:none;background:transparent;color:#7f8c8d;font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:inherit;}
+        .orden-btn{border:none;background:transparent;color:#7f8c8d;font-size:11px;font-weight:700;padding:4px 8px;border-radius:6px;cursor:pointer;font-family:inherit;}
         .orden-btn.activo{background:white;color:var(--g1);box-shadow:0 1px 2px rgba(0,0,0,.08);}
         .app-content.dark .orden-btn.activo{background:#1e2a3a;}
-        .cond-refresh{width:30px;height:30px;background:linear-gradient(135deg,var(--g1),var(--g2));border:none;border-radius:8px;color:#fff;font-size:16px;cursor:pointer;}
+        .cond-refresh{flex-shrink:0;width:30px;height:30px;background:linear-gradient(135deg,var(--g1),var(--g2));border:none;border-radius:8px;color:#fff;font-size:16px;cursor:pointer;}
         .cond-list{flex:none;display:flex;flex-direction:column;gap:8px;}
         .cond-card{background:white;border-radius:12px;padding:11px 13px;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
         .app-content.dark .cond-card{background:#1e2a3a;}
@@ -373,6 +375,23 @@
         .pr-badge2{font-size:9px;font-weight:800;background:#8e44ad;color:#fff;padding:2px 6px;border-radius:9px;}
         .pr-ed{background:#3498db;color:#fff;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;}
         .pr-del{background:#e74c3c;color:#fff;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;}
+        /* Barra de día: el bloque entero acepta swipe horizontal */
+        .pst-dia{display:flex;align-items:center;gap:6px;margin-bottom:8px;}
+        .pst-dia-txt{flex:1;text-align:center;font-size:11.5px;font-weight:800;color:#2c3e50;text-transform:capitalize;}
+        .app-content.dark .pst-dia-txt{color:#e0e0e0;}
+        .pst-nav{width:28px;height:28px;flex-shrink:0;border:none;border-radius:8px;background:#e8eaf0;color:#2c3e50;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit;line-height:1;}
+        .app-content.dark .pst-nav{background:#16202e;color:#e0e0e0;}
+        .pst-nav:disabled{opacity:.3;}
+        .pst-dot.baja{background:#95a5a6;box-shadow:none;}
+        .pst-fila.baja .pst-quien,.pst-fila.baja .pst-horario{opacity:.5;filter:grayscale(1);}
+        /* BE = baja del trabajador: la tarjeta se apaga pero el botón sigue legible */
+        .be-btn{flex-shrink:0;border:1.5px solid #d5dbe3;background:transparent;color:#95a5a6;font-size:10.5px;font-weight:800;letter-spacing:.6px;padding:4px 9px;border-radius:8px;cursor:pointer;font-family:inherit;}
+        .app-content.dark .be-btn{border-color:#2d3561;}
+        .be-btn.on{background:#7f8c8d;border-color:#7f8c8d;color:#fff;}
+        .cond-card.baja{background:#e9edf2;}
+        .app-content.dark .cond-card.baja{background:#151d29;}
+        .cond-card.baja .cond-avatar,.cond-card.baja .cond-id,
+        .cond-card.baja .cond-cuerpo,.cond-card.baja .cond-chev{filter:grayscale(1);opacity:.45;}
         .pst-card{background:white;border-radius:12px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);margin-bottom:8px;}
         .app-content.dark .pst-card{background:#1e2a3a;}
         .pst-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;}
@@ -611,14 +630,23 @@
             <div class="sec" id="secPuestos">
                 <div class="sec-head" onclick="app.toggleSeccion('secPuestos')">
                     <span class="cond-title">🧩 Puestos de trabajo</span>
+                    <span class="sec-cnt" id="puestosCnt"></span>
                     <button class="mensual-toggle sec-chev">▼</button>
                 </div>
-                <div class="sec-body"><div id="puestosList"></div></div>
+                <div class="sec-body" id="puestosBody">
+                    <div class="pst-dia">
+                        <button class="pst-nav" onclick="app.cambiarDiaPuestos(-1)">‹</button>
+                        <span class="pst-dia-txt" id="pstDiaTxt">Hoy</span>
+                        <button class="pst-nav" id="pstNavNext" onclick="app.cambiarDiaPuestos(1)">›</button>
+                    </div>
+                    <div id="puestosList"></div>
+                </div>
             </div>
 
             <div class="sec" id="secTrabajadores">
                 <div class="sec-head" onclick="app.toggleSeccion('secTrabajadores')">
                     <span class="cond-title">👥 Trabajadores</span>
+                    <span class="sec-cnt" id="trabajCnt"></span>
                     <div class="cond-orden" onclick="event.stopPropagation()">
                         <button id="ordenNombre" class="orden-btn activo" onclick="app.ordenarTrabajadores('nombre')">Nombre</button>
                         <button id="ordenNumero" class="orden-btn" onclick="app.ordenarTrabajadores('numero')">Nº</button>
