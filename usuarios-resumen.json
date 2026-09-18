@@ -22,15 +22,16 @@
     "conductor": "1234-5",
     "avatar": null,
     "version": "build-188",
-    "horasMes": 4,
-    "horasTotales": 4,
-    "diasMes": 1,
+    "horasMes": 9,
+    "horasTotales": 9,
+    "diasMes": 2,
     "turno": "T",
     "puesto": "Son Rossinyol",
-    "actualizado": "2026-09-18T18:42:55.078Z",
+    "actualizado": "2026-09-18T19:34:15.835Z",
     "horaInicio": "18:00",
     "horaFin": "22:00",
-    "horarioDe": "hoy"
+    "horarioDe": "hoy",
+    "jornadas": []
   },
   "prueba-1789758756867@prueba.local": {
     "nombre": "Toni Rodríguez",
