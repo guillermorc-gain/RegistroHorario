@@ -2330,8 +2330,6 @@ const app = {
                 filas.push({
                     fecha: `${j.f.slice(6,8)}/${j.f.slice(4,6)}/${j.f.slice(0,4)}`,
                     orden: j.f,
-                    dia: j.f.slice(6,8), mes: MESES_ES[parseInt(j.f.slice(4,6),10) - 1] || '',
-                    anio: j.f.slice(0,4),
                     email: u.email, clugar: this._clavePuesto(lugar),
                     num: u.conductor || '', nombre: u.nombre || u.email,
                     puesto: lugar, turno: { M:'Mañana', T:'Tarde', N:'Noche' }[t] || '',
@@ -2344,7 +2342,12 @@ const app = {
                 });
             });
         });
-        filas.sort((a, b) => a.orden.localeCompare(b.orden) || a.num.localeCompare(b.num));
+        // Por fecha y, dentro del mismo día, por hora de entrada. Las jornadas
+        // sin horario (vacaciones, festivos no trabajados) van al final del día.
+        const entrada = r => r.ini || '99:99';
+        filas.sort((a, b) => a.orden.localeCompare(b.orden)
+            || entrada(a).localeCompare(entrada(b))
+            || a.num.localeCompare(b.num, 'es', { numeric: true }));
         const f = this._filtrosExport();
         return filas.filter(r =>
                (!f.desde || r.orden >= f.desde)
@@ -2384,12 +2387,9 @@ const app = {
     // Cada opción del selector es una o varias columnas de la hoja
     COLUMNAS_EXPORT: [
         { id:'fecha',      etiqueta:'Fecha completa',        cabeceras:['Fecha'],                  valores:f => [f.fecha] },
-        { id:'dia',        etiqueta:'Día',                   cabeceras:['Día'],                    valores:f => [f.dia] },
-        { id:'mes',        etiqueta:'Mes',                   cabeceras:['Mes'],                    valores:f => [f.mes] },
-        { id:'anio',       etiqueta:'Año',                   cabeceras:['Año'],                    valores:f => [f.anio] },
         { id:'trabajador', etiqueta:'Trabajador',            cabeceras:['Nº trabajador','Nombre'], valores:f => [f.num, f.nombre] },
-        { id:'lugar',      etiqueta:'Lugar de trabajo',      cabeceras:['Lugar de trabajo'],       valores:f => [f.puesto] },
         { id:'turno',      etiqueta:'Mañana, tarde o noche', cabeceras:['Turno'],                  valores:f => [f.turno] },
+        { id:'lugar',      etiqueta:'Lugar de trabajo',      cabeceras:['Lugar de trabajo'],       valores:f => [f.puesto] },
         { id:'horarios',   etiqueta:'Horarios',              cabeceras:['Entrada','Salida'],       valores:f => [f.ini, f.fin] },
         { id:'horas',      etiqueta:'Horas',                 cabeceras:['Horas'],                  valores:f => [f.horas] },
         { id:'nocturnas',  etiqueta:'Horas nocturnas',       cabeceras:['Nocturnas'],              valores:f => [f.noct] },
