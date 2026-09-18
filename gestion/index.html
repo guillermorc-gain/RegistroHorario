@@ -347,6 +347,26 @@
         .rg-x{font-size:9.5px;font-weight:800;color:#d35400;background:#fdebd0;border-radius:9px;padding:1px 6px;}
         .rg-pt{font-size:10px;color:var(--g1);font-weight:700;}
         .rg-vacio{padding:26px 16px;text-align:center;color:#95a5a6;font-size:12.5px;}
+        .f-sel{width:100%;padding:8px;border:1.5px solid #e8eaf0;border-radius:7px;font-size:13px;font-family:inherit;background:white;color:#2c3e50;}
+        .modal-card.dark .f-sel{background:#111827;color:#e0e0e0;border-color:#2d3561;}
+        .f-sep{font-size:10px;font-weight:800;color:var(--g1);text-transform:uppercase;letter-spacing:.7px;margin:12px 0 6px;}
+        .fj{border:1px solid #e8eaf0;border-radius:9px;padding:8px;margin-bottom:7px;}
+        .modal-card.dark .fj{border-color:#2d3561;}
+        .fj-row{display:flex;gap:5px;align-items:flex-end;}
+        .fj-row input{width:100%;padding:6px;border:1.5px solid #e8eaf0;border-radius:6px;font-size:12px;font-family:inherit;background:white;color:#2c3e50;}
+        .modal-card.dark .fj-row input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
+        .fj-row label{font-size:9.5px;color:#95a5a6;display:block;margin-bottom:2px;}
+        .fj-del{background:#e74c3c;color:#fff;border:none;border-radius:6px;width:28px;height:30px;cursor:pointer;flex-shrink:0;}
+        .fj-flags{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;}
+        .fj-flags label{display:flex;align-items:center;gap:4px;font-size:11px;color:#2c3e50;cursor:pointer;}
+        .modal-card.dark .fj-flags label{color:#e0e0e0;}
+        .pr-item{display:flex;align-items:center;gap:9px;padding:9px 14px;border-bottom:1px solid #f0f0f0;font-size:13px;}
+        .options-content.dark .pr-item{border-color:#2d3561;}
+        .pr-item-t{flex:1;color:#2c3e50;}
+        .options-content.dark .pr-item-t{color:#e0e0e0;}
+        .pr-badge2{font-size:9px;font-weight:800;background:#8e44ad;color:#fff;padding:2px 6px;border-radius:9px;}
+        .pr-ed{background:#3498db;color:#fff;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;}
+        .pr-del{background:#e74c3c;color:#fff;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;}
         .pst-card{background:white;border-radius:12px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);margin-bottom:8px;}
         .app-content.dark .pst-card{background:#1e2a3a;}
         .pst-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;}
@@ -926,6 +946,18 @@
                 </div>
             </div>
 
+            <!-- Usuarios de prueba -->
+            <div class="ops-section" id="sectionPrueba">
+                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._renderPrueba()">🧪 Usuarios de prueba <span class="ops-chevron">›</span></button>
+                <div class="ops-body">
+                    <div class="ops-field">
+                        <span class="ops-field-sub">Trabajadores inventados para probar las pantallas. Se ven igual que los reales pero llevan la marca PRUEBA, y puedes borrarlos cuando quieras.</span>
+                    </div>
+                    <div id="pruebaList"></div>
+                    <button class="ops-btn" onclick="app._nuevoFicticio()">➕ Añadir usuario de prueba <span class="ops-arrow">›</span></button>
+                </div>
+            </div>
+
             <!-- Copia de Seguridad -->
             <div class="ops-section" id="sectionBackup">
                 <button class="ops-title" onclick="app.toggleSection(this)">☁️ Copia de Seguridad <span class="ops-chevron">›</span></button>
@@ -1138,6 +1170,30 @@
         <div class="modal-body" style="padding:0;">
             <div id="puestoModalQuien" class="pm-quien"></div>
             <div id="puestoModalLista"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Editor de usuario de prueba -->
+<div class="modal" id="fictModal">
+    <div class="modal-card" id="fictModalContent">
+        <div class="modal-header">
+            <h3>🧪 Usuario de prueba</h3>
+            <button class="modal-close" onclick="document.getElementById('fictModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="edit-row">
+                <div class="edit-field"><label>Nº trabajador</label><input type="text" id="fNum" inputmode="numeric" placeholder="14183"></div>
+                <div class="edit-field"><label>Nombre</label><input type="text" id="fNombre" placeholder="Ana López"></div>
+            </div>
+            <div class="edit-field"><label>Puesto</label><select id="fPuesto" class="f-sel"></select></div>
+            <div class="f-sep">Jornadas</div>
+            <div id="fJornadas"></div>
+            <button class="ops-btn" style="border-radius:8px;" onclick="app._addJornadaFict()">➕ Añadir jornada</button>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('fictModal').classList.remove('show')">Cancelar</button>
+            <button class="modal-btn modal-btn-confirm" onclick="app._guardarFicticio()">Guardar</button>
         </div>
     </div>
 </div>
