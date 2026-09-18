@@ -6,7 +6,8 @@ const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.goo
 // folder, so the monthly export could not create a visible "Movilidad Emt".
 const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file profile email';
 const AUTH_SCOPE       = 'profile email';
-const SUPER_USER_EMAIL = 'guillermo.rc82@gmail.com';
+const SUPER_USER_EMAIL = 'g.rioscorrea@gmail.com';
+const ALLOWLIST_APP    = 'gestion';
 const ANDROID_PACKAGE  = 'com.guillermorc.gestionemt';
 const RELEASE_PREFIX   = 'gestion-build-';
 const DRIVE_FILE_NAME  = 'gestion-emt-movilidad.json';
@@ -2697,15 +2698,18 @@ const app = {
 
     // ── CONTROL DE ACCESO ──────────────────────────────────────────────────────
 
+    // A management app must not fall open: if the list cannot be read, only the
+    // gestor gets in. That check runs first and needs no network, so an outage
+    // can never lock the gestor out.
     async _checkUserAuthorized(email) {
         if (email.toLowerCase() === SUPER_USER_EMAIL.toLowerCase()) return true;
         try {
-            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist', { cache: 'no-store' });
-            if (!resp.ok) return true;
+            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, { cache: 'no-store' });
+            if (!resp.ok) return false;
             const allowed = await resp.json();
-            if (!Array.isArray(allowed) || allowed.length === 0) return true;
+            if (!Array.isArray(allowed)) return false;
             return allowed.map(e => e.toLowerCase()).includes(email.toLowerCase());
-        } catch(e) { return true; }
+        } catch(e) { return false; }
     },
 
     async _cargarUsuariosAcceso() {
@@ -2713,7 +2717,7 @@ const app = {
         if (!el) return;
         el.innerHTML = '<div style="color:#888;font-size:12px;padding:4px 0;">Cargando...</div>';
         try {
-            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist', { cache: 'no-store' });
+            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, { cache: 'no-store' });
             if (!resp.ok) throw new Error(resp.status);
             this._allowedUsersLocal = await resp.json();
             this._renderAllowedUsers();
@@ -2745,10 +2749,10 @@ const app = {
         const btn = document.querySelector('#sectionAcceso .ops-body button[onclick*="_addUserAcceso"]');
         if (btn) btn.disabled = true;
         try {
-            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist', {
+            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ email })
+                body: JSON.stringify({ email, app: ALLOWLIST_APP })
             });
             const data = await resp.json();
             if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status)); return; }
@@ -2762,10 +2766,10 @@ const app = {
 
     async _removeUserAcceso(email) {
         try {
-            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist', {
+            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json', 'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ email })
+                body: JSON.stringify({ email, app: ALLOWLIST_APP })
             });
             const data = await resp.json();
             if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status)); return; }
