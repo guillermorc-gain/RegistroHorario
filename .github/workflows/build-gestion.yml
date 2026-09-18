@@ -865,7 +865,7 @@ jobs:
           from PIL import Image
           import os
 
-          src_path = 'www/icons/icon-512.png'
+          src_path = 'www-gestion/icons/icon-512.png'
           res_base = 'android/app/src/main/res'
           BG = (21, 101, 192)  # #1565C0
 

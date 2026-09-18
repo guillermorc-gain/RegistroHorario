@@ -11,7 +11,6 @@ const urlsToCache = [
   BASE_PATH + 'manifest.json',
   BASE_PATH + 'icons/icon-192.png',
   BASE_PATH + 'icons/icon-512.png',
-  BASE_PATH + 'icons/icon.svg',
   BASE_PATH + 'icons/badge.svg'
 ];
 
