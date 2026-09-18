@@ -101,8 +101,22 @@
         .input-group input{width:100%;padding:8px;border:1.5px solid #e8eaf0;border-radius:7px;font-size:13px;font-family:inherit;background:white;color:#2c3e50;}
         .app-content.dark .input-group input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
         .input-group input:focus{outline:none;border-color:var(--g1);}
-        .noche-compact{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 10px;background:#fff3cd;border-radius:8px;border:1.5px solid #ffc107;cursor:pointer;flex-shrink:0;touch-action:manipulation;user-select:none;}
+        /* ── TAB BAR ── */
+        .tab-bar{display:flex;gap:2px;padding:6px 12px 0;background:transparent;flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
+        .tab-bar::-webkit-scrollbar{display:none;}
+        .tab-btn{padding:8px 16px;border-radius:10px 10px 0 0;font-size:12px;font-weight:700;color:#7f8c8d;background:#e8eaf0;border:1.5px solid #e8eaf0;border-bottom:none;cursor:pointer;white-space:nowrap;user-select:none;transition:background 0.15s,color 0.15s;flex-shrink:0;}
+        .tab-btn.active{background:white;color:var(--g1);border-color:#dde1e9;box-shadow:0 -2px 6px rgba(0,0,0,0.05);}
+        .tab-btn.drag-over{background:#dce6ff;border-color:var(--g1);}
+        .app-content.dark .tab-btn{background:#1a2230;color:#a0a0a0;border-color:#1a2230;}
+        .app-content.dark .tab-btn.active{background:#1e2a3a;color:var(--g1);border-color:#2d3561;}
+        .tab-panel{display:none;flex-direction:column;gap:8px;}
+        .tab-panel.active{display:flex;}
+
+        .noche-compact{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 10px;background:#fff3cd;border-radius:8px;border:1.5px solid #ffc107;cursor:pointer;flex-shrink:0;touch-action:manipulation;user-select:none;transition:background 0.15s;}
+        .noche-compact.active{background:#f39c12;border-color:#e67e00;}
+        .noche-compact.active span{filter:brightness(10);}
         .app-content.dark .noche-compact{background:#2a2500;border-color:#665500;}
+        .app-content.dark .noche-compact.active{background:#a06000;border-color:#f39c12;}
         .noche-compact span{font-size:15px;line-height:1;pointer-events:none;}
         .noche-compact input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#f39c12;}
         .pr-compact{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 8px;background:#e8f4fd;border-radius:8px;border:1.5px solid #3498db;cursor:pointer;flex-shrink:0;touch-action:manipulation;user-select:none;}
@@ -113,6 +127,19 @@
         .pr-compact span{font-size:11px;font-weight:800;color:#2980b9;line-height:1;letter-spacing:0.5px;pointer-events:none;}
         .pr-compact input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#3498db;}
         .pr-badge{display:inline-block;background:#3498db;color:white;font-size:9px;font-weight:800;padding:2px 6px;border-radius:10px;letter-spacing:0.5px;vertical-align:middle;}
+        /* ── FESTIVO ── */
+        .festivo-compact{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 8px;background:#fef3e2;border-radius:8px;border:1.5px solid #e67e22;cursor:pointer;flex-shrink:0;touch-action:manipulation;user-select:none;}
+        .festivo-compact.active{background:#e67e22;border-color:#d35400;}
+        .festivo-compact.active span{filter:brightness(10);}
+        .app-content.dark .festivo-compact{background:#2a1500;border-color:#d35400;}
+        .app-content.dark .festivo-compact.active{background:#c0390b;}
+        .festivo-compact span{font-size:15px;line-height:1;pointer-events:none;}
+        .festivo-compact input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#e67e22;}
+        .festivo-badge{display:inline-block;background:#e67e22;color:white;font-size:9px;font-weight:800;padding:2px 6px;border-radius:10px;letter-spacing:0.5px;vertical-align:middle;}
+        /* ── HISTORY ENTRY STRIPES ── */
+        .hm-stripe-festivo{border-left:4px solid #e67e22!important;padding-left:10px!important;}
+        .hm-stripe-pr{border-left:4px solid #3498db!important;padding-left:10px!important;}
+        .hm-stripe-noche{border-left:4px solid #9b59b6!important;padding-left:10px!important;}
         .noche-extra{display:none;margin-bottom:7px;padding:8px 9px;background:#fff8e1;border-radius:8px;border:1px solid #ffc107;}
         .noche-extra.visible{display:block;}
         .app-content.dark .noche-extra{background:#1a1500;border-color:#665500;}
@@ -326,7 +353,27 @@
             </div>
             <button class="profile-btn" id="profileBtn" onclick="app.mostrarOpciones()"></button>
         </div>
+
+        <!-- Tab bar -->
+        <div class="tab-bar" id="tabBar">
+            <div class="tab-btn active" data-tab="0" draggable="true"
+                 onclick="app.switchTab(0)"
+                 ondragstart="app._tabDragStart(event)"
+                 ondragover="app._tabDragOver(event)"
+                 ondrop="app._tabDrop(event)"
+                 ondragleave="app._tabDragLeave(event)">Registro Horario</div>
+            <div class="tab-btn" data-tab="1" draggable="true"
+                 onclick="app.switchTab(1)"
+                 ondragstart="app._tabDragStart(event)"
+                 ondragover="app._tabDragOver(event)"
+                 ondrop="app._tabDrop(event)"
+                 ondragleave="app._tabDragLeave(event)">📋 Notas</div>
+        </div>
+
         <div class="app-content" id="appContent">
+
+        <!-- ── TAB 0: Registro Horario ── -->
+        <div class="tab-panel active" id="tabPanel0">
 
             <!-- Stats 2x2 -->
             <div class="stats-grid">
@@ -401,6 +448,10 @@
                         <span>PR</span>
                         <input type="checkbox" id="prToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#3498db;cursor:pointer;">
                     </div>
+                    <div class="festivo-compact" id="festivoCompact" ontouchend="event.preventDefault();app.clickFestivo()" onclick="app.clickFestivo()" title="Festivo">
+                        <span>🎉</span>
+                        <input type="checkbox" id="festivoToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#e67e22;cursor:pointer;">
+                    </div>
                 </div>
                 <div class="noche-extra" id="nocheExtra">
                     <div class="input-row" style="margin-bottom:0;">
@@ -434,7 +485,18 @@
                 <button class="historial-toggle" title="Ver registros">▼</button>
             </div>
 
+        </div><!-- end tabPanel0 -->
+
+        <!-- ── TAB 1: Notas (placeholder) ── -->
+        <div class="tab-panel" id="tabPanel1">
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;color:#95a5a6;text-align:center;gap:10px;">
+                <span style="font-size:40px;">📋</span>
+                <span style="font-size:14px;font-weight:700;">Próximamente</span>
+                <span style="font-size:12px;">Esta sección está en desarrollo</span>
+            </div>
         </div>
+
+        </div><!-- end appContent -->
     </div>
 
     <!-- ── OPTIONS SCREEN ── -->
@@ -732,9 +794,15 @@
                 </div>
             </div>
             <div class="extra-label" id="editModalExtraLabel"></div>
-            <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
-                <input type="checkbox" id="editModalPR" style="width:16px;height:16px;accent-color:#3498db;cursor:pointer;">
-                <label for="editModalPR" style="font-size:13px;font-weight:600;color:#2980b9;cursor:pointer;">PR — Prolongación de Ruta</label>
+            <div style="display:flex;align-items:center;gap:16px;margin-top:6px;flex-wrap:wrap;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <input type="checkbox" id="editModalPR" style="width:16px;height:16px;accent-color:#3498db;cursor:pointer;">
+                    <label for="editModalPR" style="font-size:13px;font-weight:600;color:#2980b9;cursor:pointer;">PR</label>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <input type="checkbox" id="editModalFestivo" style="width:16px;height:16px;accent-color:#e67e22;cursor:pointer;">
+                    <label for="editModalFestivo" style="font-size:13px;font-weight:600;color:#d35400;cursor:pointer;">🎉 Festivo</label>
+                </div>
             </div>
         </div>
         <div class="modal-footer">
