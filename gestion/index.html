@@ -273,6 +273,11 @@
         .cond-head{display:flex;align-items:center;justify-content:space-between;padding:2px 2px 0;flex-shrink:0;}
         .cond-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:#7f8c8d;}
         .app-content.dark .cond-title{color:#a0a0a0;}
+        .cond-orden{display:flex;gap:0;background:#e8eaf0;border-radius:8px;padding:2px;margin-left:auto;margin-right:7px;}
+        .app-content.dark .cond-orden{background:#16202e;}
+        .orden-btn{border:none;background:transparent;color:#7f8c8d;font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:inherit;}
+        .orden-btn.activo{background:white;color:var(--g1);box-shadow:0 1px 2px rgba(0,0,0,.08);}
+        .app-content.dark .orden-btn.activo{background:#1e2a3a;}
         .cond-refresh{width:30px;height:30px;background:linear-gradient(135deg,var(--g1),var(--g2));border:none;border-radius:8px;color:#fff;font-size:16px;cursor:pointer;}
         .cond-list{flex:none;display:flex;flex-direction:column;gap:8px;}
         .cond-card{background:white;border-radius:12px;padding:11px 13px;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
@@ -530,6 +535,10 @@
         <div class="tab-panel active" id="tabPanel0">
             <div class="cond-head">
                 <span class="cond-title">👥 Trabajadores</span>
+                <div class="cond-orden">
+                    <button id="ordenNombre" class="orden-btn activo" onclick="app.ordenarTrabajadores('nombre')">Nombre</button>
+                    <button id="ordenNumero" class="orden-btn" onclick="app.ordenarTrabajadores('numero')">Nº</button>
+                </div>
                 <button class="cond-refresh" onclick="app._cargarConductores()" title="Actualizar">⟳</button>
             </div>
             <div id="condList" class="cond-list"></div>

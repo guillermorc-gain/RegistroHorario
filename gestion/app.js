@@ -2310,8 +2310,13 @@ const app = {
 
     _renderConductores() {
         const cont = document.getElementById('condList');
-        const lista = Object.values(this._conductores || {})
-            .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+        const orden = localStorage.getItem('ordenTrabajadores') || 'nombre';
+        const lista = Object.values(this._conductores || {}).sort((a, b) =>
+            orden === 'numero'
+                // Sin número al final, y comparación numérica para que 209 no
+                // quede antes que 1418
+                ? ((a.conductor || '\uffff').localeCompare(b.conductor || '\uffff', 'es', { numeric: true }))
+                : (a.nombre || '').localeCompare(b.nombre || '', 'es'));
         if (!lista.length) {
             cont.innerHTML = '<div class="tab-empty"><span class="tab-empty-ico">👥</span>'
                 + '<span class="tab-empty-t">Sin trabajadores</span>'
@@ -2343,7 +2348,16 @@ const app = {
                 <div class="cond-ver">${ver} · ${u.actualizado ? new Date(u.actualizado).toLocaleDateString('es-ES') : ''}</div>
             </div>`;
         }).join('');
+        document.getElementById('ordenNombre')?.classList.toggle('activo', orden === 'nombre');
+        document.getElementById('ordenNumero')?.classList.toggle('activo', orden === 'numero');
         this._renderPuestos();
+    },
+
+    ordenarTrabajadores(modo) {
+        localStorage.setItem('ordenTrabajadores', modo);
+        document.getElementById('ordenNombre')?.classList.toggle('activo', modo === 'nombre');
+        document.getElementById('ordenNumero')?.classList.toggle('activo', modo === 'numero');
+        this._renderConductores();
     },
 
     async _editarPuesto(email) {
