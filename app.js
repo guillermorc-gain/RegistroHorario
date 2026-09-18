@@ -28,6 +28,8 @@ const app = {
     editingId: null,
     prActivo: false,
     festivoActivo: false,
+    extraActivo: false,
+    jornadaHoras: parseFloat(localStorage.getItem('jornadaHoras')) || 7.5,
     _activeTab: 0,
     _dragSrcTab: null,
     _allowedUsersLocal: null,
@@ -611,14 +613,21 @@ const app = {
 
     async registrarHoras() {
         if (!this.usuarioActual) { alert('❌ No hay sesión activa'); return; }
-        const horas = parseFloat(document.getElementById('horasInput').value);
+        const horasRaw = document.getElementById('horasInput').value;
+        const horas = parseFloat(horasRaw) || 0;
         const fecha = document.getElementById('fechaInput').value;
-        if (!fecha || isNaN(horas) || horas <= 0) { alert('❌ Introduce fecha y horas válidas'); return; }
+        const esFestivo      = this.festivoActivo;
+        // A holiday may be registered with no hours worked; anything else needs hours
+        if (!fecha || (!esFestivo && (isNaN(parseFloat(horasRaw)) || horas <= 0))) {
+            alert('❌ Introduce fecha y horas válidas'); return;
+        }
+        if (horas < 0) { alert('❌ Las horas no pueden ser negativas'); return; }
         const horaInicio     = document.getElementById('horaInicio').value;
         const horaFin        = document.getElementById('horaFin').value;
         const esNoche        = document.getElementById('nocheToggle').checked;
         const esPR           = this.prActivo;
-        const esFestivo      = this.festivoActivo;
+        const esExtra        = this.extraActivo;
+        const extraDestino   = esExtra ? this._extraDestino() : null;
         const horasNocturnas = esNoche ? (parseFloat(document.getElementById('horasNocturnas').value) || 0) : 0;
         const precioNoche    = esNoche ? (parseFloat(document.getElementById('precioNoche').value) || 0) : 0;
         const extraNoche     = Math.round(horasNocturnas * precioNoche * 100) / 100;
@@ -630,23 +639,27 @@ const app = {
             if (!datos.historial) datos.historial = {};
 
             if (this.editingId && datos.historial[this.editingId]) {
-                datos.horasTrabajadas = Math.round((datos.horasTrabajadas - datos.historial[this.editingId].horas) * 10) / 10;
                 delete datos.historial[this.editingId];
             }
-            if (datos.horasTrabajadas + horas > this.horasAnualesCustom) {
-                alert(`❌ Solo tienes ${(this.horasAnualesCustom - datos.horasTrabajadas).toFixed(1)}h disponibles`); return;
-            }
-            datos.horasTrabajadas = Math.round((datos.horasTrabajadas + horas) * 10) / 10;
             const fechaFormato = new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            const registroId   = fecha.replace(/-/g, '');
+            const fechaKey     = fecha.replace(/-/g, '');
+            const registroId   = this.editingId || this._nuevoRegistroId(datos.historial, fechaKey);
             datos.historial[registroId] = {
                 fecha: fechaFormato, horas,
                 timestamp: new Date(fecha + 'T12:00:00').getTime(),
                 ...(horaInicio && horaFin ? { horaInicio, horaFin } : {}),
                 ...(esNoche && horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
                 ...(esPR ? { pr: true } : {}),
-                ...(esFestivo ? { festivo: true } : {})
+                ...(esFestivo ? { festivo: true } : {}),
+                ...(esExtra ? { extraManual: true, extraDestino } : {})
             };
+            const tot = this._calcTotales(datos.historial);
+            if (tot.anualReal > this.horasAnualesCustom + tot.topeExtras) {
+                delete datos.historial[registroId];
+                alert(`❌ Superarías el tope anual + 30% de extras (${(this.horasAnualesCustom + tot.topeExtras).toFixed(1)}h)`);
+                return;
+            }
+            datos.horasTrabajadas = tot.anualReal;
 
             if (horaInicio && horaFin) {
                 if (!datos.prefs) datos.prefs = {};
@@ -654,8 +667,8 @@ const app = {
                 datos.prefs.horaFin = horaFin;
             }
             await this._writeDriveFile(datos);
-            localStorage.setItem('lastRegisteredDate', registroId);
-            window.AndroidBridge?.saveToPrefs('lastRegisteredDate', registroId);
+            localStorage.setItem('lastRegisteredDate', fechaKey);
+            window.AndroidBridge?.saveToPrefs('lastRegisteredDate', fechaKey);
             if (horaInicio) localStorage.setItem('lastHoraInicio', horaInicio);
             const horaFinVal = document.getElementById('horaFin').value;
             if (horaFinVal) localStorage.setItem('lastHoraFin', horaFinVal);
@@ -678,27 +691,28 @@ const app = {
         const precioN   = parseFloat(document.getElementById('editModalPrecioN').value) || 0;
         const esPR      = document.getElementById('editModalPR').checked;
         const esFestivo = document.getElementById('editModalFestivo').checked;
-        if (!fecha || isNaN(horas) || horas <= 0) { alert('❌ Introduce fecha y horas válidas'); return; }
+        const prev      = this._historialMap?.[this.editingId] || {};
+        if (!fecha || (!esFestivo && (isNaN(horas) || horas <= 0))) { alert('❌ Introduce fecha y horas válidas'); return; }
 
         const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
-        datos.horasTrabajadas = parseFloat(datos.horasTrabajadas) || 0;
         if (!datos.historial) datos.historial = {};
 
-        if (datos.historial[this.editingId]) {
-            datos.horasTrabajadas = Math.round((datos.horasTrabajadas - datos.historial[this.editingId].horas) * 10) / 10;
-            delete datos.historial[this.editingId];
-        }
-        datos.horasTrabajadas = Math.round((datos.horasTrabajadas + horas) * 10) / 10;
+        delete datos.historial[this.editingId];
         const fechaFormato = new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const registroId   = fecha.replace(/-/g, '');
+        const fechaKey     = fecha.replace(/-/g, '');
+        // Keep the same id when the date is unchanged, otherwise allocate a fresh one
+        const registroId   = this._fechaDeId(this.editingId) === fechaKey
+            ? this.editingId : this._nuevoRegistroId(datos.historial, fechaKey);
         datos.historial[registroId] = {
-            fecha: fechaFormato, horas,
+            fecha: fechaFormato, horas: horas || 0,
             timestamp: new Date(fecha + 'T12:00:00').getTime(),
             ...(horaInicio && horaFin ? { horaInicio, horaFin } : {}),
             ...(horasN > 0 ? { horasNocturnas: horasN, precioNoche: precioN, extraNoche: Math.round(horasN * precioN * 100) / 100 } : {}),
             ...(esPR ? { pr: true } : {}),
-            ...(esFestivo ? { festivo: true } : {})
+            ...(esFestivo ? { festivo: true } : {}),
+            ...(prev.extraManual ? { extraManual: true, extraDestino: prev.extraDestino } : {})
         };
+        datos.horasTrabajadas = this._calcTotales(datos.historial).anualReal;
 
         await this._writeDriveFile(datos);
         this.editingId = null;
@@ -711,8 +725,8 @@ const app = {
         if (!confirm('¿Borrar este registro?')) return;
         const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
         if (datos.historial && datos.historial[id]) {
-            datos.horasTrabajadas = Math.round((datos.horasTrabajadas - datos.historial[id].horas) * 10) / 10;
             delete datos.historial[id];
+            datos.horasTrabajadas = this._calcTotales(datos.historial).anualReal;
             await this._writeDriveFile(datos);
             this.actualizarUI(datos);
             if (this.editingId === id) this.editingId = null;
@@ -999,6 +1013,7 @@ const app = {
         document.getElementById('optionsScreen').classList.add('active');
         document.getElementById('darkModeToggle').checked = this.darkMode;
         document.getElementById('horasAnualesDisplay').textContent = this.horasAnualesCustom + 'h';
+        this._actualizarJornadaDisplay();
         document.getElementById('perfilEmail').textContent = this.usuarioActual?.email || '';
         document.getElementById('perfilNombre').textContent = this.usuarioActual?.name || '';
         this.actualizarEstadoGPS();
@@ -1075,6 +1090,75 @@ const app = {
         this.festivoActivo = !this.festivoActivo;
         document.getElementById('festivoCompact').classList.toggle('active', this.festivoActivo);
         document.getElementById('festivoToggle').checked = this.festivoActivo;
+    },
+
+    clickExtra() {
+        this.extraActivo = !this.extraActivo;
+        document.getElementById('extraCompact').classList.toggle('active', this.extraActivo);
+        document.getElementById('extraToggle').checked = this.extraActivo;
+        document.getElementById('extraPanel').classList.toggle('visible', this.extraActivo);
+        const lbl = document.getElementById('extraOptAnual');
+        if (lbl) lbl.textContent = this.horasAnualesCustom + 'h';
+    },
+
+    _extraDestino() {
+        return document.querySelector('input[name="extraDestino"]:checked')?.value || 'anual';
+    },
+
+    mostrarCambiarJornada() {
+        const v = prompt('¿Cuántas horas tiene tu jornada?\n\nSe usará para contar los festivos que no trabajas.', this.jornadaHoras);
+        if (v !== null && !isNaN(parseFloat(v)) && parseFloat(v) > 0) {
+            this.jornadaHoras = parseFloat(v);
+            localStorage.setItem('jornadaHoras', String(this.jornadaHoras));
+            this._actualizarJornadaDisplay();
+            this._guardarPreferencias();
+            this.cargarDatos();
+        }
+    },
+
+    _actualizarJornadaDisplay() {
+        const el = document.getElementById('jornadaHorasDisplay');
+        if (el) el.textContent = this.jornadaHoras + 'h';
+    },
+
+    // Record ids are YYYYMMDD for the first entry of a day, then YYYYMMDD-2, -3…
+    _nuevoRegistroId(historial, fechaKey) {
+        if (!historial[fechaKey]) return fechaKey;
+        let n = 2;
+        while (historial[`${fechaKey}-${n}`]) n++;
+        return `${fechaKey}-${n}`;
+    },
+
+    _fechaDeId(id) { return String(id).slice(0, 8); },
+
+    _hayRegistroEnFecha(fechaKey) {
+        return Object.keys(this._historialFull || {}).some(id => this._fechaDeId(id) === fechaKey);
+    },
+
+    // Single source of truth for all hour totals, derived from the history
+    _calcTotales(historial) {
+        let anual = 0, extrasManual = 0, festivo = 0, diasFestivos = 0;
+        Object.values(historial || {}).forEach(r => {
+            const h = parseFloat(r.horas) || 0;
+            if (r.extraDestino === 'extras') { extrasManual += h; return; }
+            // A holiday you did not work still counts as a full standard shift
+            const efectivas = (r.festivo && h === 0) ? this.jornadaHoras : h;
+            if (r.festivo) { festivo += efectivas; diasFestivos++; }
+            anual += efectivas;
+        });
+        const tope    = this.horasAnualesCustom;
+        const topeExt = Math.round(tope * 0.30 * 10) / 10;
+        const exceso  = Math.max(0, anual - tope);
+        const r1 = n => Math.round(n * 10) / 10;
+        return {
+            anual:     r1(Math.min(anual, tope)),
+            anualReal: r1(anual),
+            extras:    r1(extrasManual + exceso),
+            topeExtras: topeExt,
+            festivo:   r1(festivo),
+            diasFestivos,
+            restantes: r1(Math.max(0, tope - anual))
+        };
     },
 
     // Easter Sunday (Meeus/Jones/Butcher algorithm)
@@ -1320,6 +1404,10 @@ const app = {
         this.festivoActivo = false;
         document.getElementById('festivoCompact').classList.remove('active');
         document.getElementById('festivoToggle').checked = false;
+        this.extraActivo = false;
+        document.getElementById('extraCompact')?.classList.remove('active');
+        const et = document.getElementById('extraToggle'); if (et) et.checked = false;
+        document.getElementById('extraPanel')?.classList.remove('visible');
         document.querySelector('.noche-compact')?.classList.remove('active');
         if (lastInicio && lastFin) this.calcularHorasPorTiempo();
         else document.getElementById('horasInput').value = '';
@@ -1342,11 +1430,27 @@ const app = {
             list.innerHTML = '<li style="text-align:center;padding:24px;color:#95a5a6;font-size:13px;">Sin registros</li>';
             return;
         }
+        let mesActual = null;
         registros.forEach(([id, reg]) => {
+            // Month separator
+            const d = new Date(reg.timestamp);
+            const mesKey = `${d.getFullYear()}-${d.getMonth()}`;
+            if (mesKey !== mesActual) {
+                mesActual = mesKey;
+                const totMes = registros
+                    .filter(([, r]) => { const x = new Date(r.timestamp); return `${x.getFullYear()}-${x.getMonth()}` === mesKey; })
+                    .reduce((s, [, r]) => s + (parseFloat(r.horas) || 0), 0);
+                const cab = document.createElement('li');
+                cab.className = 'hm-mes';
+                cab.innerHTML = `<span>${MESES_ES[d.getMonth()]} ${d.getFullYear()}</span>`
+                    + `<span class="hm-mes-tot">${(Math.round(totMes * 10) / 10).toFixed(1)}h</span>`;
+                list.appendChild(cab);
+            }
             const li = document.createElement('li');
-            // Colored left stripe: festivo > nocturno > PR
+            // Colored left stripe: festivo > extra > nocturno > PR
             let stripeClass = '';
             if (reg.festivo) stripeClass = 'hm-stripe-festivo';
+            else if (reg.extraManual) stripeClass = 'hm-stripe-extra';
             else if (reg.horasNocturnas) stripeClass = 'hm-stripe-noche';
             else if (reg.pr) stripeClass = 'hm-stripe-pr';
             li.className = stripeClass;
@@ -1357,13 +1461,15 @@ const app = {
                 ? `<span style="color:#95a5a6;font-size:10px;font-style:italic;">${reg.horaInicio}–${reg.horaFin}</span>` : '';
             const prBadge     = reg.pr      ? `<span class="pr-badge">PR</span>` : '';
             const festivoBadge= reg.festivo ? `<span class="festivo-badge">🎉 Festivo</span>` : '';
+            const extraBadge  = reg.extraManual
+                ? `<span class="extra-badge">⏱️ ${reg.extraDestino === 'extras' ? 'Extra' : 'Anual'}</span>` : '';
             li.innerHTML = `
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                         <span style="color:#7f8c8d;font-weight:700;font-size:12px;">${reg.fecha}</span>
                         ${horario}
                         <span style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;padding:3px 9px;border-radius:20px;font-weight:700;font-size:10px;">${reg.horas}h</span>
-                        ${prBadge}${festivoBadge}
+                        ${prBadge}${festivoBadge}${extraBadge}
                     </div>
                     ${nocheStr}
                 </div>
@@ -1384,7 +1490,8 @@ const app = {
         const reg = this._historialMap[id];
         if (!reg) return;
         this.editingId = id;
-        const fecha = `${id.slice(0,4)}-${id.slice(4,6)}-${id.slice(6,8)}`;
+        const f = this._fechaDeId(id);
+        const fecha = `${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6,8)}`;
         document.getElementById('editModalFecha').value    = fecha;
         document.getElementById('editModalHoras').value    = reg.horas;
         document.getElementById('editModalInicio').value   = reg.horaInicio || '';
@@ -1429,13 +1536,14 @@ const app = {
     },
 
     actualizarUI(datos) {
-        const horas     = parseFloat(datos.horasTrabajadas) || 0;
-        const restantes = Math.max(0, this.horasAnualesCustom - horas);
-        const pct       = (horas / this.horasAnualesCustom) * 100;
         this._historialFull = datos.historial || {};
+        const t         = this._calcTotales(this._historialFull);
+        const horas     = t.anual;
+        const restantes = t.restantes;
+        const pct       = (t.anualReal / this.horasAnualesCustom) * 100;
         // Ocultar el banner de proximidad si ya hay registro hoy
         const _todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-        if (this._historialFull[_todayId]) {
+        if (this._hayRegistroEnFecha(_todayId)) {
             document.getElementById('workBanner')?.classList.remove('show');
             localStorage.setItem('lastRegisteredDate', _todayId);
         }
@@ -1444,6 +1552,20 @@ const app = {
         document.getElementById('porcentaje').textContent = Math.min(Math.round(pct), 100);
         document.getElementById('progressFill').style.width = Math.min(pct, 100) + '%';
         if (pct >= 100) document.getElementById('progressFill').style.background = 'linear-gradient(90deg,#27ae60,#229954)';
+        // Festivos + horas extras
+        const pctExt = t.topeExtras > 0 ? (t.extras / t.topeExtras) * 100 : 0;
+        const elF = document.getElementById('statFestivos');
+        const elFS= document.getElementById('statFestivosSub');
+        const elE = document.getElementById('statExtras');
+        const elES= document.getElementById('statExtrasSub');
+        if (elF)  elF.textContent  = t.festivo.toFixed(1);
+        if (elFS) elFS.textContent = t.diasFestivos === 1 ? '1 día festivo' : `${t.diasFestivos} días festivos`;
+        if (elE)  elE.textContent  = t.extras.toFixed(1);
+        if (elES) elES.textContent = `de ${t.topeExtras.toFixed(1)}h`;
+        const barExt = document.getElementById('progressFillExtra');
+        if (barExt) barExt.style.width = Math.min(pctExt, 100) + '%';
+        const pctExtEl = document.getElementById('porcentajeExtra');
+        if (pctExtEl) pctExtEl.textContent = Math.min(Math.round(pctExt), 100);
         const ahora = new Date();
         const mesStats = this._calcMesStats(this._historialFull, ahora.getFullYear(), ahora.getMonth() + 1);
         const elMesH = document.getElementById('statMesHoras');
@@ -1938,6 +2060,7 @@ const app = {
             gpsScheduleTo: this.gpsScheduleTo,
             precioNocheDefault: this.precioNocheDefault,
             horasAnualesCustom: this.horasAnualesCustom,
+            jornadaHoras: this.jornadaHoras,
             workLocations: this._getWorkLocations(),
             notifSound: this.notifSound
         };
@@ -1973,6 +2096,10 @@ const app = {
             localStorage.setItem('precioNoche', String(prefs.precioNocheDefault));
             const el = document.getElementById('precioNocheGlobal');
             if (el) el.value = prefs.precioNocheDefault;
+        }
+        if (prefs.jornadaHoras) {
+            this.jornadaHoras = prefs.jornadaHoras;
+            localStorage.setItem('jornadaHoras', String(prefs.jornadaHoras));
         }
         if (prefs.horasAnualesCustom) {
             this.horasAnualesCustom = prefs.horasAnualesCustom;
