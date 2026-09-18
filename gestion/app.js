@@ -2332,6 +2332,7 @@ const app = {
                     orden: j.f,
                     dia: j.f.slice(6,8), mes: MESES_ES[parseInt(j.f.slice(4,6),10) - 1] || '',
                     anio: j.f.slice(0,4),
+                    email: u.email, clugar: this._clavePuesto(lugar),
                     num: u.conductor || '', nombre: u.nombre || u.email,
                     puesto: lugar, turno: { M:'Mañana', T:'Tarde', N:'Noche' }[t] || '',
                     ini: j.i || '', fin: j.o || '',
@@ -2344,7 +2345,40 @@ const app = {
             });
         });
         filas.sort((a, b) => a.orden.localeCompare(b.orden) || a.num.localeCompare(b.num));
-        return filas;
+        const f = this._filtrosExport();
+        return filas.filter(r =>
+               (!f.desde || r.orden >= f.desde)
+            && (!f.hasta || r.orden <= f.hasta)
+            && (!f.trabajadores || f.trabajadores.includes(r.email))
+            && (!f.lugares || f.lugares.includes(r.clugar)));
+    },
+
+    // Todas las jornadas, sin filtrar: es contra lo que se ofrecen las opciones
+    _filasTodas() {
+        const guardado = this._filtros;
+        this._filtros = { desde:'', hasta:'', trabajadores:null, lugares:null };
+        try { return this._filasExport(); } finally { this._filtros = guardado; }
+    },
+
+    // Lista vacía = sin jornadas; null = sin filtro (todas)
+    _filtrosExport() {
+        if (this._filtros) return this._filtros;
+        let g = null;
+        try { g = JSON.parse(localStorage.getItem('filtrosExport') || 'null'); } catch (_) {}
+        this._filtros = {
+            desde: typeof g?.desde === 'string' ? g.desde : '',
+            hasta: typeof g?.hasta === 'string' ? g.hasta : '',
+            trabajadores: Array.isArray(g?.trabajadores) ? g.trabajadores : null,
+            lugares:      Array.isArray(g?.lugares)      ? g.lugares      : null,
+        };
+        return this._filtros;
+    },
+
+    _guardarFiltros(cambios) {
+        this._filtros = { ...this._filtrosExport(), ...cambios };
+        localStorage.setItem('filtrosExport', JSON.stringify(this._filtros));
+        this._renderFiltrosExport();
+        this._renderColsExport();
     },
 
     // Cada opción del selector es una o varias columnas de la hoja
@@ -2386,6 +2420,103 @@ const app = {
 
     _valoresFila(f) { return this._colsActivas().flatMap(c => c.valores(f)); },
 
+    // Los tres filtros comparten estructura: cabecera plegable con un resumen
+    // de lo elegido, y dentro las opciones.
+    _renderFiltrosExport() {
+        const cont = document.getElementById('expFiltros');
+        if (!cont) return;
+        const f = this._filtrosExport();
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const iso = v => v ? `${v.slice(0,4)}-${v.slice(4,6)}-${v.slice(6,8)}` : '';
+        const corta = v => v ? `${v.slice(6,8)}/${v.slice(4,6)}/${v.slice(0,4)}` : '';
+
+        const todas = this._filasTodas();
+        const trabajadores = [...new Map(todas.map(r =>
+            [r.email, { email: r.email, etiqueta: `${r.num ? r.num + ' · ' : ''}${r.nombre}` }])).values()]
+            .sort((a, b) => a.etiqueta.localeCompare(b.etiqueta, 'es', { numeric: true }));
+        const lugares = [...new Map(todas.map(r => [r.clugar, r.puesto || 'Sin lugar'])).entries()]
+            .sort((a, b) => a[1].localeCompare(b[1], 'es'));
+
+        const resumenFechas = (!f.desde && !f.hasta) ? 'Todas'
+            : `${corta(f.desde) || '…'} – ${corta(f.hasta) || '…'}`;
+        const resumen = (sel, total) => !sel ? 'Todos'
+            : sel.length === total ? 'Todos' : `${sel.length} de ${total}`;
+
+        const casillas = (grupo, items) => {
+            const sel = f[grupo];
+            const todo = !sel || sel.length === items.length;
+            return `<label class="exp-col exp-todo">
+                    <input type="checkbox" ${todo ? 'checked' : ''}
+                           onchange="app._todoFiltro('${grupo}', this.checked)"><span>Todos</span></label>`
+                + items.map(([valor, etiqueta]) => `<label class="exp-col">
+                    <input type="checkbox" data-grupo="${grupo}" value="${esc(valor)}"
+                           ${(!sel || sel.includes(valor)) ? 'checked' : ''}
+                           onchange="app._marcarFiltro('${grupo}')"><span>${esc(etiqueta)}</span></label>`).join('');
+        };
+
+        cont.innerHTML = `
+        <div class="exp-sec${this._secExp === 'fechas' ? ' abierta' : ''}">
+            <div class="exp-sec-h" onclick="app._abrirSecExport('fechas')">
+                <span class="exp-sec-t">📅 Días</span>
+                <span class="exp-sec-r">${esc(resumenFechas)}</span><span class="exp-sec-c">▾</span>
+            </div>
+            <div class="exp-sec-b">
+                <div class="exp-fechas">
+                    <label>Desde<input type="date" value="${iso(f.desde)}"
+                        onchange="app._guardarFiltros({desde:this.value.replace(/-/g,'')})"></label>
+                    <label>Hasta<input type="date" value="${iso(f.hasta)}"
+                        onchange="app._guardarFiltros({hasta:this.value.replace(/-/g,'')})"></label>
+                </div>
+                <div class="exp-chips">
+                    <button onclick="app._rangoRapido('todo')">Todo</button>
+                    <button onclick="app._rangoRapido('mes')">Este mes</button>
+                    <button onclick="app._rangoRapido('anterior')">Mes anterior</button>
+                    <button onclick="app._rangoRapido('anio')">Este año</button>
+                </div>
+            </div>
+        </div>
+        <div class="exp-sec${this._secExp === 'trab' ? ' abierta' : ''}">
+            <div class="exp-sec-h" onclick="app._abrirSecExport('trab')">
+                <span class="exp-sec-t">👥 Trabajadores</span>
+                <span class="exp-sec-r">${resumen(f.trabajadores, trabajadores.length)}</span><span class="exp-sec-c">▾</span>
+            </div>
+            <div class="exp-sec-b">${casillas('trabajadores', trabajadores.map(t => [t.email, t.etiqueta]))}</div>
+        </div>
+        <div class="exp-sec${this._secExp === 'lugar' ? ' abierta' : ''}">
+            <div class="exp-sec-h" onclick="app._abrirSecExport('lugar')">
+                <span class="exp-sec-t">🧩 Lugares de trabajo</span>
+                <span class="exp-sec-r">${resumen(f.lugares, lugares.length)}</span><span class="exp-sec-c">▾</span>
+            </div>
+            <div class="exp-sec-b">${casillas('lugares', lugares)}</div>
+        </div>`;
+    },
+
+    _abrirSecExport(id) {
+        this._secExp = this._secExp === id ? null : id;   // solo una abierta a la vez
+        this._renderFiltrosExport();
+    },
+
+    _rangoRapido(cual) {
+        const hoy = new Date();
+        const cl = d => `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+        if (cual === 'todo')  return this._guardarFiltros({ desde:'', hasta:'' });
+        if (cual === 'anio')  return this._guardarFiltros({
+            desde: cl(new Date(hoy.getFullYear(), 0, 1)), hasta: cl(new Date(hoy.getFullYear(), 11, 31)) });
+        const m = hoy.getMonth() - (cual === 'anterior' ? 1 : 0);
+        this._guardarFiltros({
+            desde: cl(new Date(hoy.getFullYear(), m, 1)),
+            hasta: cl(new Date(hoy.getFullYear(), m + 1, 0)) });
+    },
+
+    _marcarFiltro(grupo) {
+        const todos = [...document.querySelectorAll(`#expFiltros input[data-grupo="${grupo}"]`)];
+        const sel = todos.filter(i => i.checked).map(i => i.value);
+        // Marcado entero equivale a "sin filtro": así una lista que crezca sigue entrando
+        this._guardarFiltros({ [grupo]: sel.length === todos.length ? null : sel });
+    },
+
+    _todoFiltro(grupo, marcar) { this._guardarFiltros({ [grupo]: marcar ? null : [] }); },
+
     _renderColsExport() {
         const cont = document.getElementById('expCols');
         if (!cont) return;
@@ -2398,6 +2529,9 @@ const app = {
                 <input type="checkbox" value="${c.id}" ${elegidas.includes(c.id) ? 'checked' : ''}
                        onchange="app._guardarColsExport()">
                 <span>${c.etiqueta}</span></label>`).join('');
+        const n = this._filasExport().length;
+        const pie = document.getElementById('expResumen');
+        if (pie) pie.textContent = n === 1 ? '1 jornada seleccionada' : `${n} jornadas seleccionadas`;
     },
 
     _guardarColsExport() {
@@ -2415,13 +2549,19 @@ const app = {
 
     // Una hoja sin columnas no sirve de nada: mejor avisar que generarla vacía
     _hayColumnas() {
-        if (this._colsElegidas().length) return true;
-        this._mostrarToast('Elige al menos un dato que exportar', 3000);
-        return false;
+        if (!this._colsElegidas().length) {
+            this._mostrarToast('Elige al menos un dato que exportar', 3000); return false;
+        }
+        if (!this._filasExport().length) {
+            this._mostrarToast('Ninguna jornada pasa los filtros', 3000); return false;
+        }
+        return true;
     },
 
     exportarRegistro() {
         if (!this._filasExport().length) { this._mostrarToast('No hay jornadas que exportar', 3000); return; }
+        this._secExp = null;
+        this._renderFiltrosExport();
         this._renderColsExport();
         document.getElementById('expModal').classList.add('show');
         if (this.darkMode) document.getElementById('expModalContent').classList.add('dark');
