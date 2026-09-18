@@ -1404,13 +1404,15 @@ const app = {
     },
 
     mostrarCambiarConductor() {
-        const v = prompt('Número de conductor (4 dígitos, guión y otro número).\n\nEjemplo: 1418-3', this.numConductor || '');
+        const v = prompt('Número de trabajador (5 dígitos).\n\nPuedes escribirlo con o sin guión: 14183 o 1418-3', this.numConductor || '');
         if (v === null) return;
-        const val = v.trim();
-        if (val && !/^\d{4}-\d$/.test(val)) {
-            alert('❌ Formato incorrecto. Debe ser 4 dígitos, un guión y otro número.\nEjemplo: 1418-3');
+        // Accept it typed either way and always store it as 1418-3
+        const digitos = v.replace(/\D/g, '');
+        if (v.trim() && digitos.length !== 5) {
+            alert('❌ Formato incorrecto. Deben ser 5 dígitos.\nEjemplo: 14183 o 1418-3');
             return;
         }
+        const val = digitos ? digitos.slice(0, 4) + '-' + digitos.slice(4) : '';
         this.numConductor = val;
         localStorage.setItem('numConductor', val);
         this._actualizarConductorDisplay();
