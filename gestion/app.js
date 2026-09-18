@@ -7,6 +7,7 @@ const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.goo
 const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file profile email';
 const AUTH_SCOPE       = 'profile email';
 const SUPER_USER_EMAIL = 'guillermo.rc82@gmail.com';
+const ANDROID_PACKAGE  = 'com.guillermorc.gestionemt';
 const RELEASE_PREFIX   = 'gestion-build-';
 const DRIVE_FILE_NAME  = 'gestion-emt-movilidad.json';
 const HORAS_ANUALES    = 777;
@@ -96,12 +97,13 @@ const app = {
         const error = hashParams?.get('error') || searchParams?.get('error');
 
         if (code) {
+            const pkgDestino = this._paqueteDestino(searchParams);
             history.replaceState(null, '', window.location.pathname);
             // PKCE: exchange code for tokens via Vercel endpoint
             if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
                 // External Chrome on Android — bounce code back to native app via intent
-                const intentUrl = `intent://localhost/?code=${encodeURIComponent(code)}#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
-                document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Volviendo a la app...</p><p style="margin:0;font-size:12px;opacity:0.6;">Puedes cerrar esta pestaña</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir Gestión EMT Movilidad ›</a></div>`;
+                const intentUrl = `intent://localhost/?code=${encodeURIComponent(code)}#Intent;scheme=https;package=${pkgDestino};end`;
+                document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Volviendo a la app...</p><p style="margin:0;font-size:12px;opacity:0.6;">Puedes cerrar esta pestaña</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir la aplicación ›</a></div>`;
                 setTimeout(() => document.getElementById('_oauthReturnBtn')?.click(), 300);
                 setTimeout(() => { try { window.close(); } catch(e) {} }, 1200);
                 return;
@@ -111,12 +113,13 @@ const app = {
         }
 
         if (token || error) {
+            const pkgDestino = this._paqueteDestino(searchParams);
             history.replaceState(null, '', window.location.pathname);
             if (token) {
                 if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
                     const exp = hashParams?.get('expires_in') || '3600';
-                    const intentUrl = `intent://localhost/?access_token=${encodeURIComponent(token)}&expires_in=${exp}#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
-                    document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Volviendo a la app...</p><p style="margin:0;font-size:12px;opacity:0.6;">Puedes cerrar esta pestaña</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir Gestión EMT Movilidad ›</a></div>`;
+                    const intentUrl = `intent://localhost/?access_token=${encodeURIComponent(token)}&expires_in=${exp}#Intent;scheme=https;package=${pkgDestino};end`;
+                    document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Volviendo a la app...</p><p style="margin:0;font-size:12px;opacity:0.6;">Puedes cerrar esta pestaña</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir la aplicación ›</a></div>`;
                     setTimeout(() => document.getElementById('_oauthReturnBtn')?.click(), 300);
                     setTimeout(() => { try { window.close(); } catch(e) {} }, 1200);
                     return;
@@ -130,7 +133,7 @@ const app = {
                 return;
             }
             if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
-                const failUrl = `intent://localhost/?silent_failed=1#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
+                const failUrl = `intent://localhost/?silent_failed=1#Intent;scheme=https;package=${pkgDestino};end`;
                 setTimeout(() => { window.location.href = failUrl; }, 100);
                 return;
             }
@@ -298,6 +301,7 @@ const app = {
             code_challenge: challenge,
             code_challenge_method: 'S256',
             access_type: 'offline',
+            state: ANDROID_PACKAGE,
             prompt: silent ? 'none' : 'consent',
             ...(email ? { login_hint: email } : {})
         });
@@ -308,6 +312,15 @@ const app = {
         } else {
             window.location.assign(url);
         }
+    },
+
+    // The return page is served by the shared Vercel deployment, which runs apk2's
+    // code, so without this every login would come back to apk2. Google echoes
+    // `state` verbatim, so it tells us which app to reopen.
+    _paqueteDestino(searchParams) {
+        const permitidos = ['com.guillermorc.horasemt','com.guillermorc.gestionemt'];
+        const s = searchParams?.get('state');
+        return permitidos.includes(s) ? s : ANDROID_PACKAGE;
     },
 
     async _exchangeCode(code, isSilent = false) {
