@@ -2116,9 +2116,6 @@ const app = {
 
     async _publicarResumen() {
         if (!this.usuarioActual?.email) return;
-        // Una vez al día basta: es lo que necesita gestión y evita escrituras
-        const hoy = new Date().toISOString().slice(0, 10);
-        if (localStorage.getItem('resumenPublicado') === hoy) return;
         try {
             const hist = this._historialFull || {};
             const ahora = new Date();
@@ -2127,23 +2124,31 @@ const app = {
                 return d.getFullYear() === ahora.getFullYear() && d.getMonth() === ahora.getMonth();
             });
             const t = this._calcTotales(hist);
+            const payload = {
+                nombre:       this.usuarioActual.name || '',
+                conductor:    this.numConductor || '',
+                avatar:       localStorage.getItem('avatarPhoto') || null,
+                version:      (typeof APP_VERSION !== 'undefined') ? APP_VERSION : '',
+                horasMes:     Math.round(delMes.reduce((s, r) => s + (parseFloat(r.horas) || 0), 0) * 10) / 10,
+                horasTotales: t.anualReal,
+                diasMes:      delMes.length,
+                turno:        this._turnoHabitual(delMes),
+            };
+            // Publicar cuando algo cambie de verdad, no una vez al día: si no, al
+            // actualizar la app el nuevo número de versión no llegaba a gestión
+            // hasta el día siguiente. Sin cambios no se escribe nada.
+            const huella = JSON.stringify([payload.version, payload.horasMes, payload.horasTotales,
+                                           payload.diasMes, payload.turno, payload.conductor,
+                                           payload.nombre, new Date().toISOString().slice(0, 10)]);
+            if (localStorage.getItem('resumenHuella') === huella) return;
             const resp = await fetch(this.USUARIOS_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json',
                            'X-User-Email': this.usuarioActual.email },
-                body: JSON.stringify({
-                    nombre:       this.usuarioActual.name || '',
-                    conductor:    this.numConductor || '',
-                    avatar:       localStorage.getItem('avatarPhoto') || null,
-                    version:      (typeof APP_VERSION !== 'undefined') ? APP_VERSION : '',
-                    horasMes:     Math.round(delMes.reduce((s, r) => s + (parseFloat(r.horas) || 0), 0) * 10) / 10,
-                    horasTotales: t.anualReal,
-                    diasMes:      delMes.length,
-                    turno:        this._turnoHabitual(delMes),
-                })
+                body: JSON.stringify(payload)
             });
             if (resp.ok) {
-                localStorage.setItem('resumenPublicado', hoy);
+                localStorage.setItem('resumenHuella', huella);
                 const mio = await resp.json();
                 if (mio?.puesto !== undefined) {
                     this.puestoTrabajo = mio.puesto || '';
