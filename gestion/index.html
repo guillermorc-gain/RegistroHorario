@@ -514,6 +514,163 @@
             </div>
             <div id="condList" class="cond-list"></div>
 
+            <!-- Formulario heredado: oculto en gestión, pero presente para que
+                 el código compartido siga encontrando sus campos. -->
+            <div id="legacyRegistro" hidden>
+            <!-- Vacaciones -->
+            <div class="vac-banner" id="vacBanner">
+                <span class="vac-banner-ico">🏖️</span>
+                <div style="flex:1;min-width:0;">
+                    <span class="vac-banner-t">¡Estás de vacaciones!</span>
+                    <span class="vac-banner-s" id="vacBannerSub"></span>
+                </div>
+            </div>
+            <!-- Stats 2x2 -->
+            <div class="stats-grid">
+                <div class="stat-card accent">
+                    <div class="stat-label">Restantes</div>
+                    <div class="stat-value" id="horasRestantes">777</div>
+                    <div class="stat-sub">horas del año</div>
+                </div>
+                <div class="stat-card accent">
+                    <div class="stat-label">Trabajadas</div>
+                    <div class="stat-value" id="horasTrabajadas">0</div>
+                    <div class="stat-sub">horas totales</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Este mes</div>
+                    <div class="stat-value" id="statMesHoras">0</div>
+                    <div class="stat-sub">horas trabajadas</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">🌙 Nocturnas</div>
+                    <div class="stat-value" id="statMesNoche">0</div>
+                    <div class="stat-sub">horas este mes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">🎉 Festivos</div>
+                    <div class="stat-value" id="statFestivos">0</div>
+                    <div class="stat-sub" id="statFestivosSub">horas del año</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">⏱️ Horas extras</div>
+                    <div class="stat-value" id="statExtras">0</div>
+                    <div class="stat-sub" id="statExtrasSub">de 0h</div>
+                </div>
+            </div>
+            <!-- Progress -->
+            <div class="progress-section">
+                <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+                <div class="progress-labels">
+                    <span class="progress-pct"><span id="porcentaje">0</span>% completado</span>
+                    <span class="progress-sub" id="progressSub">del objetivo anual</span>
+                </div>
+                <div class="progress-bar" style="margin-top:10px;"><div class="progress-fill progress-fill-extra" id="progressFillExtra"></div></div>
+                <div class="progress-labels">
+                    <span class="progress-pct" style="color:#e67e22;"><span id="porcentajeExtra">0</span>% horas extras</span>
+                    <span class="progress-sub" id="progressSubExtra">del 30% permitido</span>
+                </div>
+            </div>
+            <!-- GPS Banner -->
+            <div class="work-banner" id="workBanner">
+                <div style="flex:1;">
+                    <strong style="font-size:13px;display:block;">📍 Parece que estás en el trabajo</strong>
+                    <span style="font-size:11px;opacity:0.9;">¿Registras la jornada de hoy?</span>
+                </div>
+                <button onclick="app.registrarJornadaHoy()" style="background:white;color:#27ae60;border:none;border-radius:6px;padding:7px 11px;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;">Registrar</button>
+                <button class="work-banner-close" onclick="document.getElementById('workBanner').classList.remove('show')">×</button>
+            </div>
+            <!-- Input -->
+            <div class="input-section" id="inputSection">
+                <div id="editLabel" class="edit-label" style="display:none;">✏️ Editando en pantalla</div>
+                <div class="input-row" style="margin-bottom:6px;">
+                    <div class="input-group" style="flex:1;">
+                        <label>Fecha <span id="festivoHint" style="display:none;color:#e67e22;font-weight:800;"></span></label>
+                        <input type="date" id="fechaInput" oninput="app.calcularHorasPorTiempo();app.comprobarFestivo()" onchange="app.calcularHorasPorTiempo();app.comprobarFestivo()">
+                    </div>
+                </div>
+                <div class="input-row">
+                    <div class="input-group">
+                        <label>Inicio</label>
+                        <input type="time" id="horaInicio" oninput="app.calcularHorasPorTiempo();app.guardarUltimaHoraInicio()">
+                    </div>
+                    <div class="input-group">
+                        <label>Fin</label>
+                        <input type="time" id="horaFin" oninput="app.calcularHorasPorTiempo();app.guardarUltimaHoraFin()">
+                    </div>
+                    <div class="input-group" style="flex:0.7;">
+                        <label>Horas</label>
+                        <input type="number" id="horasInput" min="0" step="0.5" placeholder="8">
+                    </div>
+                </div>
+                <div class="toggle-row">
+                    <div class="noche-compact" onclick="app.clickNocheCompact()" title="Nocturno">
+                        <span>🌙</span>
+                        <input type="checkbox" id="nocheToggle" onclick="event.stopPropagation();app.toggleNoche()">
+                    </div>
+                    <div class="pr-compact" id="prCompact" ontouchend="event.preventDefault();app.clickPrCompact()" onclick="app.clickPrCompact()" title="Permiso Retribuido">
+                        <span>PR</span>
+                        <span class="pr-restantes" id="prRestantes">2</span>
+                        <input type="checkbox" id="prToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#3498db;cursor:pointer;">
+                    </div>
+                    <div class="festivo-compact" id="festivoCompact" ontouchend="event.preventDefault();app.clickFestivo()" onclick="app.clickFestivo()" title="Festivo">
+                        <span>🎉</span>
+                        <input type="checkbox" id="festivoToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#e67e22;cursor:pointer;">
+                    </div>
+                    <div class="extra-compact" id="extraCompact" ontouchend="event.preventDefault();app.clickExtra()" onclick="app.clickExtra()" title="Horas extras">
+                        <span>⏱️</span>
+                        <input type="checkbox" id="extraToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#8e44ad;cursor:pointer;">
+                    </div>
+                    <div class="vacaciones-compact" id="vacacionesCompact" ontouchend="event.preventDefault();app.clickVacaciones()" onclick="app.clickVacaciones()" title="Vacaciones (registra 0 horas)">
+                        <span>🏖️</span>
+                        <input type="checkbox" id="vacacionesToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#16a085;cursor:pointer;">
+                    </div>
+                </div>
+                <div class="extra-panel" id="extraPanel">
+                    <div class="extra-panel-t">¿Dónde van estas horas?</div>
+                    <label class="extra-opt">
+                        <input type="radio" name="extraDestino" value="anual" checked>
+                        <span>Descontar de las <b id="extraOptAnual">777h</b> anuales</span>
+                    </label>
+                    <label class="extra-opt">
+                        <input type="radio" name="extraDestino" value="extras">
+                        <span>Sumar a <b>horas extras</b></span>
+                    </label>
+                </div>
+                <div class="noche-extra" id="nocheExtra">
+                    <div class="input-row" style="margin-bottom:0;">
+                        <div class="input-group">
+                            <label>Hrs. noct. (auto)</label>
+                            <input type="number" id="horasNocturnas" min="0" step="0.5" placeholder="2" oninput="app.calcularExtra()">
+                        </div>
+                        <div class="input-group">
+                            <label>€/h noct.</label>
+                            <input type="number" id="precioNoche" min="0" step="0.01" placeholder="1.50" oninput="app.calcularExtra()">
+                        </div>
+                    </div>
+                    <div class="noche-resumen" id="nocheResumen"></div>
+                </div>
+                <div class="btn-row">
+                    <button type="button" class="btn-main" id="registrarBtn" onclick="app.registrarHoras()">Registrar</button>
+                    <button type="button" class="btn-secondary" onclick="app.limpiarInput()">Limpiar</button>
+                </div>
+            </div>
+            <!-- Monthly breakdown -->
+            <div class="mensual-section" id="mensualSection">
+                <div class="mensual-head" onclick="app.toggleMensual()">
+                    <span class="mensual-title">📊 Por mes</span>
+                    <button class="mensual-toggle" id="mensualToggle" title="Mostrar/ocultar">▼</button>
+                </div>
+                <div id="mensualTable"><div style="text-align:center;color:#95a5a6;font-size:12px;padding:6px;">Sin datos</div></div>
+            </div>
+            <!-- History bar (collapsed by default) -->
+            <div class="historial-bar" onclick="app.mostrarHistorialModal()">
+                <span class="historial-bar-title">Jornadas anteriores</span>
+                <span class="historial-count" id="historialCount">—</span>
+                <button class="historial-toggle" title="Ver registros">▼</button>
+            </div>
+            </div>
+
 
         </div><!-- end tabPanel0 -->
 
