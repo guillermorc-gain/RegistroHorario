@@ -1524,21 +1524,17 @@ const app = {
 
     _fechaDeId(id) { return String(id).slice(0, 8); },
 
-    _esFinDeSemana(fecha) {
-        const d = new Date(+fecha.slice(0, 4), +fecha.slice(4, 6) - 1, +fecha.slice(6, 8), 12).getDay();
-        return d === 0 || d === 6;
-    },
-
     // Horas que cuentan para las anuales. Un festivo trabajado cuenta sus horas
-    // como cualquier otro día. Uno sin trabajar cuenta como jornada entera, y
-    // así se descuenta de las horas que hay que hacer al año — pero solo si era
-    // día de trabajo: quien hace media jornada no trabaja festivos, y únicamente
-    // le descuenta el que cae en fin de semana.
+    // como cualquier otro día; uno sin trabajar cuenta como jornada entera.
+    //
+    // De ahí sale, sin hacer nada especial, lo que marca la ley para la media
+    // jornada: trabaja de lunes a viernes, y un festivo en miércoles le deja la
+    // semana en 14h trabajadas + 3,5h del festivo = 17,5h, mientras que uno en
+    // sábado le suma 3,5h encima de la semana entera = 21h.
     _horasEfectivas(fecha, reg) {
         const h = parseFloat(reg.horas) || 0;
-        if (!reg.festivo || h > 0) return h;
-        if (this.jornadaHoras >= this.JORNADA_COMPLETA) return this.jornadaHoras;
-        return (fecha && this._esFinDeSemana(fecha)) ? this.jornadaHoras : 0;
+        if (reg.festivo && h === 0) return this.jornadaHoras;
+        return h;
     },
 
     _hayRegistroEnFecha(fechaKey) {
@@ -1547,12 +1543,14 @@ const app = {
 
     // Single source of truth for all hour totals, derived from the history
     _calcTotales(historial) {
-        let anual = 0, extrasManual = 0, festivo = 0, diasFestivos = 0, festivosTrabajados = 0;
+        let anual = 0, extrasManual = 0, festivo = 0, diasFestivos = 0, diasExtra = 0;
         Object.entries(historial || {}).forEach(([id, r]) => {
             const h = parseFloat(r.horas) || 0;
+            // Venir a trabajar un festivo o un libre se cobra como día extra
+            if (h > 0 && (r.festivo || r.extraDestino === 'extras')) diasExtra++;
             if (r.extraDestino === 'extras') { extrasManual += h; return; }
             const efectivas = this._horasEfectivas(this._fechaDeId(id), r);
-            if (r.festivo) { festivo += efectivas; diasFestivos++; if (h > 0) festivosTrabajados++; }
+            if (r.festivo) { festivo += efectivas; diasFestivos++; }
             anual += efectivas;
         });
         const tope    = this.horasAnualesCustom;
@@ -1566,8 +1564,8 @@ const app = {
             topeExtras: topeExt,
             festivo:   r1(festivo),
             diasFestivos,
-            festivosTrabajados,
-            importeFestivos: r1(festivosTrabajados * this.precioFestivoDefault),
+            diasExtra,
+            importeDiasExtra: r1(diasExtra * this.precioFestivoDefault),
             restantes: r1(Math.max(0, tope - anual))
         };
     },
@@ -2083,8 +2081,8 @@ const app = {
         if (elF)  elF.textContent  = t.festivo.toFixed(1);
         if (elFS) {
             const dias = t.diasFestivos === 1 ? '1 día festivo' : `${t.diasFestivos} días festivos`;
-            elFS.textContent = t.importeFestivos > 0
-                ? `${dias} · ${t.festivosTrabajados} trabajado${t.festivosTrabajados === 1 ? '' : 's'}: ${t.importeFestivos.toFixed(2)}€`
+            elFS.textContent = t.importeDiasExtra > 0
+                ? `${dias} · ${t.diasExtra} día${t.diasExtra === 1 ? '' : 's'} extra: ${t.importeDiasExtra.toFixed(2)}€`
                 : dias;
         }
         if (elE)  elE.textContent  = t.extras.toFixed(1);

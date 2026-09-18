@@ -3178,19 +3178,11 @@ const app = {
                  realizadas: r1(anual), restantes: r1(Math.max(0, tope - anual)) };
     },
 
-    _esFinDeSemana(fecha) {
-        const d = new Date(+fecha.slice(0, 4), +fecha.slice(4, 6) - 1, +fecha.slice(6, 8), 12).getDay();
-        return d === 0 || d === 6;
-    },
-
     // Misma regla que en la app del trabajador: un festivo sin trabajar cuenta
-    // como jornada entera, pero a quien hace media jornada solo le cuenta el
-    // que cae en fin de semana, porque entre semana no era día suyo.
+    // como jornada entera, y uno trabajado cuenta sus horas.
     _horasEfectivas(j, jornada) {
         const h = j.h || 0;
-        if (!j.fe || h > 0) return h;
-        if (jornada >= 7) return jornada;
-        return this._esFinDeSemana(j.f) ? jornada : 0;
+        return (j.fe && h === 0) ? jornada : h;
     },
 
     // Jornada de un trabajador en una fecha concreta (la última si hay varias)
