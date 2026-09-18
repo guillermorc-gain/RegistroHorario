@@ -951,7 +951,16 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          # Los repositorios de Maven fallan de vez en cuando y tiran el build
+          # entero sin que haya nada mal en el código. Reintentar lo absorbe.
+          for intento in 1 2 3; do
+            if ./gradlew assembleDebug --no-daemon; then exit 0; fi
+            echo "::warning::Build fallido (intento $intento). Reintentando en 20s…"
+            sleep 20
+          done
+          echo "::error::El build ha fallado tres veces"
+          exit 1
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
