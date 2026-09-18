@@ -6,6 +6,24 @@ const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.goo
 // folder, so the monthly export could not create a visible "Movilidad Emt".
 const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file profile email';
 const AUTH_SCOPE       = 'profile email';
+// Turnos de cada puesto. La hora de entrada registrada decide en cuál cae.
+const TURNOS_POR_PUESTO = {
+    'son rossinyol': [
+        { id: 'M', nombre: 'Mañana', desde: '03:45', hasta: '14:00' },
+        { id: 'T', nombre: 'Tarde',  desde: '14:00', hasta: '21:00' },
+        { id: 'N', nombre: 'Noche',  desde: '21:00', hasta: '04:00' },
+    ],
+    'control': [
+        { id: 'M', nombre: 'Mañana', desde: '05:00', hasta: '14:00' },
+        { id: 'T', nombre: 'Tarde',  desde: '14:00', hasta: '20:00' },
+        { id: 'N', nombre: 'Noche',  desde: '20:00', hasta: '24:00' },
+    ],
+    'calle': [
+        { id: 'M', nombre: 'Mañana', desde: '07:00', hasta: '14:00' },
+        { id: 'T', nombre: 'Tarde',  desde: '14:00', hasta: '21:00' },
+    ],
+};
+
 const SUPER_USER_EMAIL = 'g.rioscorrea@gmail.com';
 const ALLOWLIST_APP    = 'gestion';
 const VERSION_URL      = 'https://registro-horario-emt.vercel.app/api/version';
@@ -2253,6 +2271,29 @@ const app = {
     },
 
     // verde trabajando ahora, rojo ya terminado, gris aún sin empezar
+    // Normaliza "Son Rossinyol", "SON ROSSINYOL", "son rossinyol " al mismo valor
+    _clavePuesto(puesto) {
+        return String(puesto || '').trim().toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    },
+
+    // Turno según el puesto y la hora de entrada registrada. Si el puesto no
+    // está en la tabla, se cae al criterio antiguo (mañana antes de las 13h).
+    _turnoDe(puesto, horaInicio) {
+        const ini = this._minutos(horaInicio);
+        if (ini === null) return '';
+        const franjas = TURNOS_POR_PUESTO[this._clavePuesto(puesto)];
+        if (!franjas) return ini < 13 * 60 ? 'M' : 'T';
+        for (const f of franjas) {
+            let a = this._minutos(f.desde), b = this._minutos(f.hasta);
+            if (b <= a) b += 1440;                   // franja que cruza medianoche
+            let cur = ini;
+            if (cur < a && b > 1440) cur += 1440;
+            if (cur >= a && cur < b) return f.id;
+        }
+        return '';
+    },
+
     _estadoTurno(u) {
         if (u.horarioDe !== 'hoy') return { clase: 'gris', texto: 'sin registro hoy' };
         const ini = this._minutos(u.horaInicio), fin = this._minutos(u.horaFin);
@@ -2292,10 +2333,11 @@ const app = {
             const filas = gente.map(u => {
                 const e = this._estadoTurno(u);
                 const horario = (u.horaInicio && u.horaFin) ? `${esc(u.horaInicio)}–${esc(u.horaFin)}` : 'sin horario';
+                const t = this._turnoDe(u.puesto, u.horaInicio) || u.turno;
                 return `<div class="pst-fila">
                     <span class="pst-dot ${e.clase}" title="${esc(e.texto)}"></span>
                     <span class="pst-quien"><b>${esc(u.conductor) || '—'}</b> ${esc(u.nombre)}</span>
-                    ${u.turno ? `<span class="cond-turno ${u.turno}">${u.turno}</span>` : ''}
+                    ${t ? `<span class="cond-turno ${t}">${t}</span>` : ''}
                     <span class="pst-horario">${horario}</span>
                 </div>`;
             }).join('');
@@ -2327,6 +2369,7 @@ const app = {
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
         cont.innerHTML = lista.map(u => {
             const ini = (u.nombre || u.email || '?').trim()[0]?.toUpperCase() || '?';
+            const turno = this._turnoDe(u.puesto, u.horaInicio) || u.turno;
             const av = u.avatar
                 ? `<img class="cond-avatar" src="${esc(u.avatar)}">`
                 : `<div class="cond-avatar">${esc(ini)}</div>`;
@@ -2336,7 +2379,7 @@ const app = {
                     ${av}
                     <div class="cond-id" onclick="app._editarPuesto('${esc(u.email)}')">
                         <div class="cond-nombre">${esc(u.nombre) || esc(u.email)}
-                            ${u.turno ? `<span class="cond-turno ${u.turno}">${u.turno}</span>` : ''}</div>
+                            ${turno ? `<span class="cond-turno ${turno}">${turno}</span>` : ''}</div>
                         <div class="cond-num">${esc(u.conductor) || 'sin nº'}
                             ${u.puesto ? `<span class="cond-puesto">· ${esc(u.puesto)}</span>` : ''}</div>
                     </div>

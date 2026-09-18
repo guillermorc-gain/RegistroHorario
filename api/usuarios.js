@@ -84,7 +84,7 @@ export default async function handler(req, res) {
           horasMes:     Number(b.horasMes) || 0,
           horasTotales: Number(b.horasTotales) || 0,
           diasMes:      Number(b.diasMes) || 0,
-          turno:        b.turno === 'M' || b.turno === 'T' ? b.turno : (previo.turno || ''),
+          turno:        ['M','T','N'].includes(b.turno) ? b.turno : (previo.turno || ''),
           horaInicio:   typeof b.horaInicio === 'string' ? b.horaInicio.slice(0, 5) : previo.horaInicio || '',
           horaFin:      typeof b.horaFin === 'string' ? b.horaFin.slice(0, 5) : previo.horaFin || '',
           horarioDe:    b.horarioDe === 'hoy' ? 'hoy' : 'anterior',
