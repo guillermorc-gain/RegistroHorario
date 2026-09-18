@@ -2316,15 +2316,16 @@ const app = {
 
     // ── Registro diario de todos los trabajadores ────────────────────────────
 
-    // Exporta el registro a CSV: Excel y Google Sheets lo abren directamente.
-    exportarRegistro() {
+    // ── Exportación del registro ─────────────────────────────────────────────
+
+    _filasExport() {
         const filas = [];
         Object.values(this._conductores || {}).forEach(u => {
             (u.jornadas || []).forEach(j => filas.push({
                 fecha: `${j.f.slice(6,8)}/${j.f.slice(4,6)}/${j.f.slice(0,4)}`,
                 orden: j.f,
                 num: u.conductor || '', nombre: u.nombre || u.email,
-                puesto: u.puesto || '', turno: this._turnoDe(u.puesto, j.i) || '',
+                puesto: j.pu || u.puesto || '', turno: this._turnoDe(j.pu || u.puesto, j.i) || '',
                 ini: j.i || '', fin: j.o || '',
                 horas: j.h || 0, noct: j.n || 0,
                 extra: j.x === 1 ? 'Sí' : '', festivo: j.fe ? 'Sí' : '',
@@ -2332,34 +2333,102 @@ const app = {
                 prueba: u.ficticio ? 'Sí' : '',
             }));
         });
-        if (!filas.length) { this._mostrarToast('No hay jornadas que exportar', 3000); return; }
         filas.sort((a, b) => a.orden.localeCompare(b.orden) || a.num.localeCompare(b.num));
+        return filas;
+    },
 
-        const cab = ['Fecha','Nº trabajador','Nombre','Puesto','Turno','Entrada','Salida',
-                     'Horas','Nocturnas','Extra','Festivo','Vacaciones','PR','De prueba'];
-        // Separador ; y coma decimal: es lo que espera Excel en español
+    CABECERAS_EXPORT: ['Fecha','Nº trabajador','Nombre','Puesto','Turno','Entrada','Salida',
+                       'Horas','Nocturnas','Extra','Festivo','Vacaciones','PR','De prueba'],
+
+    _valoresFila(f) {
+        return [f.fecha, f.num, f.nombre, f.puesto, f.turno, f.ini, f.fin,
+                f.horas, f.noct, f.extra, f.festivo, f.vac, f.pr, f.prueba];
+    },
+
+    exportarRegistro() {
+        if (!this._filasExport().length) { this._mostrarToast('No hay jornadas que exportar', 3000); return; }
+        document.getElementById('expModal').classList.add('show');
+        if (this.darkMode) document.getElementById('expModalContent').classList.add('dark');
+    },
+
+    _nombreExport(ext) { return `registro-emt-${new Date().toISOString().slice(0,10)}.${ext}`; },
+
+    _descargar(contenido, nombre, tipo) {
+        if (window.AndroidBridge?.saveFile) { window.AndroidBridge.saveFile(contenido, nombre); return; }
+        const url = URL.createObjectURL(new Blob([contenido], { type: tipo }));
+        const a = document.createElement('a');
+        a.href = url; a.download = nombre; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+    },
+
+    // Separador ; y coma decimal: es lo que espera Excel en español.
+    // El BOM hace que reconozca los acentos.
+    _csvRegistro() {
         const esc = v => {
             const t = String(v ?? '');
             return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
         };
-        const num = n => String(n).replace('.', ',');
-        const lineas = [cab.join(';')];
-        filas.forEach(f => lineas.push([f.fecha, f.num, f.nombre, f.puesto, f.turno, f.ini, f.fin,
-            num(f.horas), num(f.noct), f.extra, f.festivo, f.vac, f.pr, f.prueba].map(esc).join(';')));
+        const lineas = [this.CABECERAS_EXPORT.join(';')];
+        this._filasExport().forEach(f => lineas.push(
+            this._valoresFila(f).map(v => esc(typeof v === 'number' ? String(v).replace('.', ',') : v)).join(';')));
+        return '﻿' + lineas.join('\r\n') + '\r\n';
+    },
 
-        // BOM para que Excel reconozca los acentos
-        const csv = '﻿' + lineas.join('\r\n') + '\r\n';
-        const nombre = `registro-emt-${new Date().toISOString().slice(0,10)}.csv`;
-        if (window.AndroidBridge?.saveFile) {
-            window.AndroidBridge.saveFile(csv, nombre);
-            this._mostrarToast(`📊 ${filas.length} jornadas en Descargas`, 4000);
-            return;
+    exportarCSV() {
+        document.getElementById('expModal').classList.remove('show');
+        const filas = this._filasExport();
+        this._descargar(this._csvRegistro(), this._nombreExport('csv'), 'text/csv;charset=utf-8;');
+        this._mostrarToast(`📊 ${filas.length} jornadas en CSV`, 4000);
+    },
+
+    // Excel abre una tabla HTML guardada como .xls, y así van con formato
+    exportarXLS() {
+        document.getElementById('expModal').classList.remove('show');
+        const filas = this._filasExport();
+        const esc = t => String(t ?? '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+        const th = this.CABECERAS_EXPORT.map(h => `<th>${esc(h)}</th>`).join('');
+        const tr = filas.map(f => `<tr>${this._valoresFila(f)
+            .map(v => `<td>${esc(v)}</td>`).join('')}</tr>`).join('');
+        const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head>
+<meta charset="utf-8">
+<style>th{background:#1565C0;color:#fff;font-weight:bold;border:1px solid #888;}
+td{border:1px solid #ccc;}</style></head>
+<body><table>${`<tr>${th}</tr>`}${tr}</table></body></html>`;
+        this._descargar('﻿' + html, this._nombreExport('xls'), 'application/vnd.ms-excel');
+        this._mostrarToast(`📗 ${filas.length} jornadas en Excel`, 4000);
+    },
+
+    // Drive convierte un CSV en hoja de cálculo si se le pide ese mimeType
+    async exportarSheets() {
+        document.getElementById('expModal').classList.remove('show');
+        const filas = this._filasExport();
+        this._mostrarToast('☁️ Creando hoja en Drive...', 3000);
+        try {
+            if (!await this._ensureToken()) throw new Error('Sin sesión de Google');
+            const frontera = '-------emt' + Date.now();
+            const meta = JSON.stringify({
+                name: `Registro EMT ${new Date().toISOString().slice(0,10)}`,
+                mimeType: 'application/vnd.google-apps.spreadsheet',
+            });
+            const cuerpo = `\r\n--${frontera}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}`
+                + `\r\n--${frontera}\r\nContent-Type: text/csv; charset=UTF-8\r\n\r\n${this._csvRegistro()}`
+                + `\r\n--${frontera}--`;
+            const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${this.accessToken}`,
+                           'Content-Type': `multipart/related; boundary=${frontera}` },
+                body: cuerpo,
+            });
+            if (!resp.ok) throw new Error('Drive ' + resp.status);
+            const r = await resp.json();
+            this._mostrarToast(`✅ ${filas.length} jornadas en Google Sheets`, 4000);
+            if (r.webViewLink) {
+                if (window.AndroidBridge?.openExternalUrl) window.AndroidBridge.openExternalUrl(r.webViewLink);
+                else window.open(r.webViewLink, '_blank');
+            }
+        } catch (e) {
+            this._mostrarToast('❌ No se pudo crear la hoja: ' + e.message, 4500);
         }
-        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-        const a = document.createElement('a');
-        a.href = url; a.download = nombre; a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 2000);
-        this._mostrarToast(`📊 ${filas.length} jornadas exportadas`, 4000);
     },
 
     ordenarRegistro(modo) {
@@ -2398,7 +2467,8 @@ const app = {
             (u.jornadas || []).forEach(j => filas.push({
                 f: j.f, horas: j.h || 0, ini: j.i || '', fin: j.o || '',
                 extra: j.x === 1, festivo: !!j.fe, vac: !!j.v, pr: !!j.p,
-                nombre: u.nombre || u.email, num: u.conductor || '', puesto: u.puesto || 'Sin puesto',
+                nombre: u.nombre || u.email, num: u.conductor || '',
+                puesto: j.pu || u.puesto || 'Sin puesto',
             }));
         });
         if (!filas.length) {
@@ -2452,7 +2522,9 @@ const app = {
                     : grupo.sort((a, b) => b.f.localeCompare(a.f));
                 const filasHtml = orden.map(r => modo === 'dia' ? pintaFila(r)
                     : `<div class="rg-fila">
-                        <span class="rg-quien">${diaDe(r.f)}${modo === 'puesto' ? ` · <b>${esc(r.num)}</b> ${esc(r.nombre)}` : ''}</span>
+                        <span class="rg-quien">${diaDe(r.f)}${
+                        modo === 'puesto' ? ` · <b>${esc(r.num)}</b> ${esc(r.nombre)}`
+                      : modo === 'numero' ? ` · <span class="rg-pt">${esc(r.puesto)}</span>` : ''}</span>
                         ${r.extra ? '<span class="rg-x">extra</span>' : ''}
                         ${r.festivo ? '<span class="festivo-badge">🎉</span>' : ''}
                         ${r.vac ? '<span class="vacaciones-badge">🏖️</span>' : ''}

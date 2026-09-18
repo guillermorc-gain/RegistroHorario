@@ -2221,6 +2221,7 @@ const app = {
                     i: r.horaInicio || '',
                     o: r.horaFin || '',
                     n: r.horasNocturnas || 0,
+                    pu: this.puestoTrabajo || '',
                     ...(r.extraManual ? { x: r.extraDestino === 'extras' ? 1 : 2 } : {}),
                     ...(r.festivo ? { fe: 1 } : {}),
                     ...(r.vacaciones ? { v: 1 } : {}),
