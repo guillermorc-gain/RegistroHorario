@@ -6,6 +6,24 @@ const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.goo
 // folder, so the monthly export could not create a visible "Movilidad Emt".
 const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file profile email';
 const AUTH_SCOPE       = 'profile email';
+// Turnos de cada puesto. La hora de entrada registrada decide en cuál cae.
+const TURNOS_POR_PUESTO = {
+    'son rossinyol': [
+        { id: 'M', nombre: 'Mañana', desde: '03:45', hasta: '14:00' },
+        { id: 'T', nombre: 'Tarde',  desde: '14:00', hasta: '21:00' },
+        { id: 'N', nombre: 'Noche',  desde: '21:00', hasta: '04:00' },
+    ],
+    'control': [
+        { id: 'M', nombre: 'Mañana', desde: '05:00', hasta: '14:00' },
+        { id: 'T', nombre: 'Tarde',  desde: '14:00', hasta: '20:00' },
+        { id: 'N', nombre: 'Noche',  desde: '20:00', hasta: '24:00' },
+    ],
+    'calle': [
+        { id: 'M', nombre: 'Mañana', desde: '07:00', hasta: '14:00' },
+        { id: 'T', nombre: 'Tarde',  desde: '14:00', hasta: '21:00' },
+    ],
+};
+
 const SUPER_USER_EMAIL = 'guillermo.rc82@gmail.com';
 const ALLOWLIST_APP    = 'movilidad';
 const VERSION_URL      = 'https://registro-horario-emt.vercel.app/api/version';
@@ -2129,12 +2147,40 @@ const app = {
     USUARIOS_URL: 'https://registro-horario-emt.vercel.app/api/usuarios',
 
     // Turno según la hora de entrada habitual: mañana 6–13, tarde 13–20
+    _minutos(hhmm) {
+        if (!hhmm || !/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
+        const [h, m] = hhmm.split(':').map(Number);
+        return h * 60 + m;
+    },
+
+    // Normaliza "Son Rossinyol", "SON ROSSINYOL", "son rossinyol " al mismo valor
+    _clavePuesto(puesto) {
+        return String(puesto || '').trim().toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    },
+
+    // Turno según el puesto y la hora de entrada registrada. Si el puesto no
+    // está en la tabla, se cae al criterio antiguo (mañana antes de las 13h).
+    _turnoDe(puesto, horaInicio) {
+        const ini = this._minutos(horaInicio);
+        if (ini === null) return '';
+        const franjas = TURNOS_POR_PUESTO[this._clavePuesto(puesto)];
+        if (!franjas) return ini < 13 * 60 ? 'M' : 'T';
+        for (const f of franjas) {
+            let a = this._minutos(f.desde), b = this._minutos(f.hasta);
+            if (b <= a) b += 1440;                   // franja que cruza medianoche
+            let cur = ini;
+            if (cur < a && b > 1440) cur += 1440;
+            if (cur >= a && cur < b) return f.id;
+        }
+        return '';
+    },
+
     _turnoHabitual(delMes) {
-        const horas = delMes.map(r => r.horaInicio).filter(Boolean)
-            .map(h => parseInt(h.split(':')[0], 10));
-        if (!horas.length) return '';
-        const media = horas.reduce((a, b) => a + b, 0) / horas.length;
-        return media < 13 ? 'M' : 'T';
+        // Turno del último día con horario registrado, según el puesto asignado
+        const conHora = delMes.filter(r => r.horaInicio).sort((a, b) => b.timestamp - a.timestamp);
+        if (!conHora.length) return '';
+        return this._turnoDe(this.puestoTrabajo, conHora[0].horaInicio);
     },
 
     async _publicarResumen() {
