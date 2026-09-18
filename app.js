@@ -3160,7 +3160,10 @@ const app = {
             });
             const currentNum = parseInt(String(APP_VERSION).replace('build-', '')) || 0;
             if (latestNum === 0) {
-                if (showFeedback) this._mostrarToast('❌ No se pudo leer la versión de GitHub (' + latestTag + ')');
+                // No hay ninguna versión aplicable: o no hay releases, o todas
+                // son posteriores a la que el gestor ha publicado. En ninguno de
+                // los dos casos hay nada que instalar, así que no es un error.
+                if (showFeedback) this._mostrarToast('✅ Tienes instalada la última versión disponible');
                 return;
             }
             if (latestNum > currentNum) {
@@ -3183,11 +3186,10 @@ const app = {
                     modal.style.display = 'flex';
                 }
             } else if (showFeedback) {
-                if (currentNum > latestNum) {
-                    this._mostrarToast('⚙️ Build de desarrollo ' + this._buildNumToVersion(currentNum) + ' (release oficial: ' + this._buildNumToVersion(latestNum) + ')');
-                } else {
-                    this._mostrarToast('✅ Tienes la versión más reciente (' + this._buildNumToVersion(currentNum) + ')');
-                }
+                // Tener una versión posterior a la publicada tampoco es un
+                // problema: simplemente no hay actualización que ofrecer.
+                this._mostrarToast('✅ Tienes instalada la última versión disponible ('
+                    + this._buildNumToVersion(currentNum) + ')');
             }
         } catch(_) {
             if (showFeedback) this._mostrarToast('❌ No se pudo comprobar la versión');
