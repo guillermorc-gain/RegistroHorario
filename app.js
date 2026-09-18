@@ -2404,14 +2404,16 @@ const app = {
                 const msg    = document.getElementById('updateBannerMsg');
                 if (msg) msg.textContent = texto;
                 if (banner) banner.style.display = 'flex';
-                // Auto-popup: only once per version, unless manually checked
+                // Auto-popup unless snoozed. "Más tarde" only postpones it for a
+                // few hours — never permanently, or a single dismissal would
+                // strand the user on an old build.
+                this._updateLatestNum = latestNum;
                 const modal    = document.getElementById('updateModal');
                 const modalMsg = document.getElementById('updateModalMsg');
-                const yaAvisado = localStorage.getItem('updatePromptedFor') === String(latestNum);
-                if (modal && (showFeedback || !yaAvisado)) {
+                const snooze   = parseInt(localStorage.getItem('updateSnooze_' + latestNum) || '0', 10);
+                if (modal && (showFeedback || Date.now() >= snooze)) {
                     if (modalMsg) modalMsg.textContent = texto;
                     modal.style.display = 'flex';
-                    localStorage.setItem('updatePromptedFor', String(latestNum));
                 }
             } else if (showFeedback) {
                 if (currentNum > latestNum) {
@@ -2422,6 +2424,15 @@ const app = {
             }
         } catch(_) {
             if (showFeedback) this._mostrarToast('❌ No se pudo comprobar la versión');
+        }
+    },
+
+    _posponerActualizacion() {
+        const modal = document.getElementById('updateModal');
+        if (modal) modal.style.display = 'none';
+        if (this._updateLatestNum) {
+            localStorage.setItem('updateSnooze_' + this._updateLatestNum,
+                String(Date.now() + 8 * 60 * 60 * 1000));
         }
     },
 
