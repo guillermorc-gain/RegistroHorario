@@ -2208,6 +2208,23 @@ const app = {
                 .map(([, r]) => r);
             const ultimo = deHoy.length ? deHoy[deHoy.length - 1]
                 : Object.values(hist).sort((a, b) => b.timestamp - a.timestamp)[0];
+            // Jornadas del año en curso, compactas: gestión las agrupa por mes.
+            // Claves cortas a propósito, son ~220 al año por trabajador.
+            const añoActual = ahora.getFullYear();
+            const jornadas = Object.entries(hist)
+                .filter(([, r]) => r.timestamp && new Date(r.timestamp).getFullYear() === añoActual)
+                .sort((a, b) => a[1].timestamp - b[1].timestamp)
+                .map(([id, r]) => ({
+                    f: this._fechaDeId(id),
+                    h: parseFloat(r.horas) || 0,
+                    i: r.horaInicio || '',
+                    o: r.horaFin || '',
+                    n: r.horasNocturnas || 0,
+                    ...(r.extraManual ? { x: r.extraDestino === 'extras' ? 1 : 2 } : {}),
+                    ...(r.festivo ? { fe: 1 } : {}),
+                    ...(r.vacaciones ? { v: 1 } : {}),
+                    ...(r.pr ? { p: 1 } : {}),
+                }));
             const payload = {
                 nombre:       this.usuarioActual.name || '',
                 conductor:    this.numConductor || '',
@@ -2220,6 +2237,7 @@ const app = {
                 horaInicio:   ultimo?.horaInicio || '',
                 horaFin:      ultimo?.horaFin || '',
                 horarioDe:    deHoy.length ? 'hoy' : 'anterior',
+                jornadas,
             };
             // Publicar cuando algo cambie de verdad, no una vez al día: si no, al
             // actualizar la app el nuevo número de versión no llegaba a gestión
@@ -2227,7 +2245,9 @@ const app = {
             const huella = JSON.stringify([payload.version, payload.horasMes, payload.horasTotales,
                                            payload.diasMes, payload.turno, payload.conductor,
                                            payload.nombre, payload.horaInicio, payload.horaFin,
-                                           payload.horarioDe, new Date().toISOString().slice(0, 10)]);
+                                           payload.horarioDe, jornadas.length,
+                                           jornadas.length ? jornadas[jornadas.length - 1].f : '',
+                                           new Date().toISOString().slice(0, 10)]);
             if (localStorage.getItem('resumenHuella') === huella) return;
             const resp = await fetch(this.USUARIOS_URL, {
                 method: 'POST',

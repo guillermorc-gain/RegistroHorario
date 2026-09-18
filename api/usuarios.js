@@ -4,6 +4,7 @@ const BRANCH       = 'main';
 const FILE_PATH    = 'usuarios-resumen.json';
 const ADMIN_EMAIL  = 'g.rioscorrea@gmail.com';
 const MAX_AVATAR   = 40 * 1024;   // el avatar va reescalado a 80px, no debe pasar de aquí
+const MAX_JORNADAS = 400;         // un año da ~220; el tope evita cargas absurdas
 
 const ghHeaders = () => ({
   'User-Agent': 'horasemt-app',
@@ -88,6 +89,7 @@ export default async function handler(req, res) {
           horaInicio:   typeof b.horaInicio === 'string' ? b.horaInicio.slice(0, 5) : previo.horaInicio || '',
           horaFin:      typeof b.horaFin === 'string' ? b.horaFin.slice(0, 5) : previo.horaFin || '',
           horarioDe:    b.horarioDe === 'hoy' ? 'hoy' : 'anterior',
+          jornadas:     Array.isArray(b.jornadas) ? b.jornadas.slice(0, MAX_JORNADAS) : (previo.jornadas || []),
           // el puesto lo pone el gestor: una publicación del conductor no lo pisa
           puesto:       previo.puesto || '',
           actualizado:  new Date().toISOString(),
