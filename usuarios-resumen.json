@@ -1305,11 +1305,11 @@
     "diasMes": 1,
     "horaInicio": "06:00",
     "horaFin": "13:00",
-    "horarioDe": "hoy",
+    "horarioDe": "anterior",
     "turno": "M",
     "jornadas": [
       {
-        "f": "20260918",
+        "f": "20260917",
         "i": "06:00",
         "o": "13:00",
         "h": 7,
@@ -1318,6 +1318,6 @@
     ],
     "email": "prueba-1789764004986@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-18T20:40:29.147Z"
+    "actualizado": "2026-09-18T20:40:40.088Z"
   }
 }
