@@ -71,6 +71,7 @@ const app = {
         this._restaurarTabs();
         this._initSwipeTabs();
         this._restaurarMensual();
+        this._restaurarSecciones();
         this._cargarCuadrante();
         this._aplicarModoVacaciones();
         this._buildAvatarGrid();
@@ -2351,6 +2352,20 @@ const app = {
         document.getElementById('ordenNombre')?.classList.toggle('activo', orden === 'nombre');
         document.getElementById('ordenNumero')?.classList.toggle('activo', orden === 'numero');
         this._renderPuestos();
+    },
+
+    toggleSeccion(id) {
+        const sec = document.getElementById(id);
+        if (!sec) return;
+        const cerrada = sec.classList.toggle('cerrada');
+        localStorage.setItem('sec_' + id, cerrada ? '1' : '0');
+    },
+
+    _restaurarSecciones() {
+        ['secPuestos', 'secTrabajadores'].forEach(id => {
+            if (localStorage.getItem('sec_' + id) === '1')
+                document.getElementById(id)?.classList.add('cerrada');
+        });
     },
 
     ordenarTrabajadores(modo) {
