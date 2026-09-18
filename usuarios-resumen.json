@@ -1300,12 +1300,12 @@
     "puesto": "Control",
     "avatar": null,
     "version": "build-40",
-    "horasMes": 7,
-    "horasTotales": 7,
-    "diasMes": 1,
+    "horasMes": 14,
+    "horasTotales": 14,
+    "diasMes": 2,
     "horaInicio": "06:00",
     "horaFin": "13:00",
-    "horarioDe": "anterior",
+    "horarioDe": "hoy",
     "turno": "M",
     "jornadas": [
       {
@@ -1314,10 +1314,17 @@
         "o": "13:00",
         "h": 7,
         "n": 0
+      },
+      {
+        "f": "20260918",
+        "i": "06:00",
+        "o": "13:00",
+        "h": 7,
+        "n": 0
       }
     ],
     "email": "prueba-1789764004986@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-18T20:42:20.950Z"
+    "actualizado": "2026-09-18T20:42:37.883Z"
   }
 }
