@@ -591,6 +591,43 @@ jobs:
                   }
               }
 
+              // Returns a usable access token, renewing it through the refresh
+              // token when the stored one has expired. Runs off the main thread.
+              static String obtenerTokenValido(Context ctx) {
+                  SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                  String token   = prefs.getString("accessToken", null);
+                  String refresh = prefs.getString("refreshToken", null);
+                  long   expiry  = 0L;
+                  try { expiry = Long.parseLong(prefs.getString("tokenExpiry", "0")); } catch (Exception ignored) {}
+                  // A minute of margin so it does not expire mid-request
+                  if (token != null && expiry > System.currentTimeMillis() + 60000L) return token;
+                  if (refresh == null) return token;
+                  try {
+                      java.net.URL u = new java.net.URL("https://registro-horario-emt.vercel.app/api/auth/refresh");
+                      java.net.HttpURLConnection c = (java.net.HttpURLConnection) u.openConnection();
+                      c.setRequestMethod("POST");
+                      c.setRequestProperty("Content-Type", "application/json");
+                      c.setConnectTimeout(15000); c.setReadTimeout(15000);
+                      c.setDoOutput(true);
+                      org.json.JSONObject body = new org.json.JSONObject();
+                      body.put("refresh_token", refresh);
+                      c.getOutputStream().write(body.toString().getBytes("UTF-8"));
+                      if (c.getResponseCode() != 200) { c.disconnect(); return null; }
+                      java.io.BufferedReader br = new java.io.BufferedReader(
+                          new java.io.InputStreamReader(c.getInputStream(), "UTF-8"));
+                      StringBuilder sb = new StringBuilder(); String l;
+                      while ((l = br.readLine()) != null) sb.append(l);
+                      c.disconnect();
+                      org.json.JSONObject r = new org.json.JSONObject(sb.toString());
+                      String nuevo = r.optString("access_token", null);
+                      if (nuevo == null || nuevo.isEmpty()) return null;
+                      long nuevaExp = System.currentTimeMillis() + (r.optLong("expires_in", 3600) - 60) * 1000L;
+                      prefs.edit().putString("accessToken", nuevo)
+                                  .putString("tokenExpiry", String.valueOf(nuevaExp)).apply();
+                      return nuevo;
+                  } catch (Exception e) { return null; }
+              }
+
               // Re-register geofences after phone reboot
               public static class BootReceiver extends BroadcastReceiver {
                   @Override
@@ -637,18 +674,25 @@ jobs:
                   public void onReceive(Context ctx, Intent intent) {
                       final PendingResult pr = goAsync();
                       SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-                      final String token  = prefs.getString("accessToken", null);
                       final String fileId = prefs.getString("driveFileId", null);
                       final String inicio = prefs.getString("lastHoraInicio", null);
                       final String fin    = prefs.getString("lastHoraFin", null);
                       final Context app   = ctx.getApplicationContext();
-                      if (token == null || inicio == null || fin == null || fileId == null || fileId.isEmpty()) {
+                      if (inicio == null || fin == null || fileId == null || fileId.isEmpty()) {
                           new Handler(Looper.getMainLooper()).post(() ->
                               Toast.makeText(app, "⚠️ Abre la app para registrar", Toast.LENGTH_LONG).show());
                           pr.finish(); return;
                       }
                       new Thread(() -> {
                           try {
+                              // The stored access token lasts an hour, so by the time the
+                              // geofence fires it is usually dead — renew it first.
+                              final String token = obtenerTokenValido(app);
+                              if (token == null) {
+                                  new Handler(Looper.getMainLooper()).post(() ->
+                                      Toast.makeText(app, "⚠️ Abre la app para renovar la sesión", Toast.LENGTH_LONG).show());
+                                  pr.finish(); return;
+                              }
                               String[] p1 = inicio.split(":"), p2 = fin.split(":");
                               int min = (Integer.parseInt(p2[0])*60 + Integer.parseInt(p2[1]))
                                       - (Integer.parseInt(p1[0])*60 + Integer.parseInt(p1[1]));
@@ -661,22 +705,29 @@ jobs:
                               java.net.URL getUrl = new java.net.URL("https://www.googleapis.com/drive/v3/files/" + fileId + "?alt=media");
                               java.net.HttpURLConnection gc = (java.net.HttpURLConnection) getUrl.openConnection();
                               gc.setRequestProperty("Authorization", "Bearer " + token);
-                              org.json.JSONObject data = new org.json.JSONObject("{}");
-                              if (gc.getResponseCode() == 200) {
-                                  java.io.BufferedReader br = new java.io.BufferedReader(
-                                      new java.io.InputStreamReader(gc.getInputStream(), "UTF-8"));
-                                  StringBuilder sb = new StringBuilder(); String line;
-                                  while ((line = br.readLine()) != null) sb.append(line);
-                                  data = new org.json.JSONObject(sb.toString());
+                              final int getCode = gc.getResponseCode();
+                              // Never fall through to the PATCH on a failed read: doing so
+                              // would upload an empty object and wipe the whole history.
+                              if (getCode != 200) {
+                                  gc.disconnect();
+                                  new Handler(Looper.getMainLooper()).post(() ->
+                                      Toast.makeText(app, "❌ No se pudo leer los datos (" + getCode + ")", Toast.LENGTH_LONG).show());
+                                  pr.finish(); return;
                               }
+                              java.io.BufferedReader br = new java.io.BufferedReader(
+                                  new java.io.InputStreamReader(gc.getInputStream(), "UTF-8"));
+                              StringBuilder sb = new StringBuilder(); String line;
+                              while ((line = br.readLine()) != null) sb.append(line);
+                              org.json.JSONObject data = new org.json.JSONObject(sb.toString());
                               gc.disconnect();
                               if (!data.has("historial")) data.put("historial", new org.json.JSONObject());
                               if (!data.has("horasTrabajadas")) data.put("horasTrabajadas", 0.0);
                               org.json.JSONObject hist = data.getJSONObject("historial");
+                              // Several shifts a day are allowed: ids are YYYYMMDD, -2, -3…
                               if (hist.has(regId)) {
-                                  new Handler(Looper.getMainLooper()).post(() ->
-                                      Toast.makeText(app, "⚠️ Ya hay un registro para hoy", Toast.LENGTH_LONG).show());
-                                  pr.finish(); return;
+                                  int n = 2;
+                                  while (hist.has(regId + "-" + n)) n++;
+                                  regId = regId + "-" + n;
                               }
                               // Calculate nocturnal hours (22:00–06:00 range)
                               int startMin = Integer.parseInt(p1[0]) * 60 + Integer.parseInt(p1[1]);
