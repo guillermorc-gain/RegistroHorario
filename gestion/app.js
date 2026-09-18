@@ -2294,7 +2294,6 @@ const app = {
         return h * 60 + m;
     },
 
-    // verde trabajando ahora, rojo ya terminado, gris aún sin empezar
     // Normaliza "Son Rossinyol", "SON ROSSINYOL", "son rossinyol " al mismo valor
     _clavePuesto(puesto) {
         return String(puesto || '').trim().toLowerCase()
@@ -2316,18 +2315,6 @@ const app = {
             if (cur >= a && cur < b) return f.id;
         }
         return '';
-    },
-
-    _estadoTurno(u) {
-        if (u.horarioDe !== 'hoy') return { clase: 'gris', texto: 'sin registro hoy' };
-        const ini = this._minutos(u.horaInicio), fin = this._minutos(u.horaFin);
-        if (ini === null || fin === null) return { clase: 'gris', texto: 'sin horario' };
-        const ahora = new Date().getHours() * 60 + new Date().getMinutes();
-        let finReal = fin; if (finReal <= ini) finReal += 1440;   // turno que cruza medianoche
-        let cur = ahora; if (cur < ini && finReal > 1440) cur += 1440;
-        if (cur < ini) return { clase: 'gris',  texto: 'aún no ha entrado' };
-        if (cur > finReal) return { clase: 'rojo', texto: 'ha terminado' };
-        return { clase: 'verde', texto: 'trabajando' };
     },
 
     // ── Registro diario de todos los trabajadores ────────────────────────────
@@ -2710,45 +2697,152 @@ td{border:1px solid #ccc;}</style></head>
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
+    // Día que muestran los puestos: 0 = hoy, -1 = ayer, +1 = mañana.
+    _puestosOffset: 0,
+
+    _fechaOffset(off) {
+        const d = new Date();
+        d.setHours(12, 0, 0, 0);          // mediodía: los cambios de hora no restan un día
+        d.setDate(d.getDate() + off);
+        return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+    },
+
+    _etiquetaDia(off) {
+        if (off === 0)  return 'Hoy';
+        if (off === -1) return 'Ayer';
+        if (off === 1)  return 'Mañana';
+        const d = new Date();
+        d.setHours(12, 0, 0, 0);
+        d.setDate(d.getDate() + off);
+        return d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+    },
+
+    cambiarDiaPuestos(paso) {
+        this._puestosOffset += paso;
+        this._renderPuestos();
+    },
+
+    // Swipe horizontal dentro de Puestos: cambia de día en vez de pestaña. El
+    // touchstart corta la propagación para que el swipe de pestañas no salte.
+    _initSwipePuestos() {
+        const cont = document.getElementById('puestosBody');
+        if (!cont || cont._swipeDia) return;
+        cont._swipeDia = true;
+        let x0 = 0, y0 = 0, activo = false;
+        cont.addEventListener('touchstart', e => {
+            e.stopPropagation();
+            if (e.touches.length !== 1) { activo = false; return; }
+            x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; activo = true;
+        }, { passive: true });
+        cont.addEventListener('touchend', e => {
+            e.stopPropagation();
+            if (!activo) return;
+            activo = false;
+            const t = e.changedTouches[0];
+            const dx = t.clientX - x0, dy = t.clientY - y0;
+            if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
+            this.cambiarDiaPuestos(dx < 0 ? 1 : -1);   // arrastrar a la izquierda avanza
+        }, { passive: true });
+    },
+
+    // Jornada de un trabajador en una fecha concreta (la última si hay varias)
+    _jornadaDe(u, fecha) {
+        const dia = (u.jornadas || []).filter(j => j && j.f === fecha);
+        return dia.length ? dia[dia.length - 1] : null;
+    },
+
+    _estadoJornada(u, j, esHoy, esFuturo) {
+        if (u.baja) return { clase: 'baja', texto: 'de baja (BE)' };
+        if (!j)      return { clase: 'gris', texto: esFuturo ? 'sin previsión' : 'sin registro' };
+        if (j.v)     return { clase: 'gris', texto: 'vacaciones' };
+        if (j.p)     return { clase: 'gris', texto: 'permiso retribuido' };
+        if (esFuturo) return { clase: 'gris', texto: 'previsto' };
+        if (!esHoy)   return { clase: 'rojo', texto: 'jornada cerrada' };
+        const ini = this._minutos(j.i), fin = this._minutos(j.o);
+        if (ini === null || fin === null) return { clase: 'gris', texto: 'sin horario' };
+        const ahora = new Date().getHours() * 60 + new Date().getMinutes();
+        let finReal = fin; if (finReal <= ini) finReal += 1440;   // turno que cruza medianoche
+        let cur = ahora; if (cur < ini && finReal > 1440) cur += 1440;
+        if (cur < ini)     return { clase: 'gris',  texto: 'aún no ha entrado' };
+        if (cur > finReal) return { clase: 'rojo',  texto: 'ha terminado' };
+        return { clase: 'verde', texto: 'trabajando' };
+    },
+
     _renderPuestos() {
         const cont = document.getElementById('puestosList');
         if (!cont) return;
-        const lista = Object.values(this._conductores || {});
+        this._initSwipePuestos();
+
+        const off     = this._puestosOffset;
+        const fecha   = this._fechaOffset(off);
+        const esHoy   = off === 0;
+        const esFuturo = off > 0;
+        const txt = document.getElementById('pstDiaTxt');
+        if (txt) txt.textContent = this._etiquetaDia(off);
+
+        const lista    = Object.values(this._conductores || {});
         const conPuesto = lista.filter(u => (u.puesto || '').trim());
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+
+        // Contadores de la cabecera: quién ha trabajado ese día y quién está
+        // dentro ahora mismo (esto último solo tiene sentido en el día de hoy).
+        let trabajaron = 0, ahoraMismo = 0;
+        lista.forEach(u => {
+            if (u.baja) return;
+            const j = this._jornadaDe(u, fecha);
+            if (!j || j.v || j.p) return;
+            trabajaron++;
+            if (esHoy && this._estadoJornada(u, j, true, false).clase === 'verde') ahoraMismo++;
+        });
+        const cnt = document.getElementById('puestosCnt');
+        if (cnt) {
+            cnt.textContent = esFuturo
+                ? `${trabajaron} previstos`
+                : esHoy ? `${trabajaron} hoy · ${ahoraMismo} ahora`
+                        : `${trabajaron} ese día`;
+        }
+
         if (!conPuesto.length) {
             cont.innerHTML = '<div class="tab-empty" style="padding:22px 16px;">'
                 + '<span class="tab-empty-s">Asigna un puesto tocando el nombre de un trabajador<br>'
                 + 'y aquí verás si queda cubierto.</span></div>';
             return;
         }
-        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
         const porPuesto = {};
         conPuesto.forEach(u => { (porPuesto[u.puesto] = porPuesto[u.puesto] || []).push(u); });
 
         cont.innerHTML = Object.keys(porPuesto).sort().map(puesto => {
             // Ordenar por hora de entrada: así se ve de un vistazo si el relevo encaja
-            const gente = porPuesto[puesto].sort((a, b) => {
-                const ma = this._minutos(a.horaInicio), mb = this._minutos(b.horaInicio);
-                if (ma === null) return 1;
-                if (mb === null) return -1;
-                return ma - mb;
-            });
-            const activos = gente.filter(u => this._estadoTurno(u).clase === 'verde').length;
-            const filas = gente.map(u => {
-                const e = this._estadoTurno(u);
-                const horario = (u.horaInicio && u.horaFin) ? `${esc(u.horaInicio)}–${esc(u.horaFin)}` : 'sin horario';
-                const t = this._turnoDe(u.puesto, u.horaInicio) || u.turno;
-                return `<div class="pst-fila">
+            const gente = porPuesto[puesto].map(u => ({ u, j: this._jornadaDe(u, fecha) }))
+                .sort((a, b) => {
+                    const ma = this._minutos(a.j?.i), mb = this._minutos(b.j?.i);
+                    if (ma === null) return 1;
+                    if (mb === null) return -1;
+                    return ma - mb;
+                });
+            const dentro = gente.filter(({ u, j }) =>
+                this._estadoJornada(u, j, esHoy, esFuturo).clase === 'verde').length;
+            const delDia = gente.filter(({ u, j }) => !u.baja && j && !j.v && !j.p).length;
+            const filas = gente.map(({ u, j }) => {
+                const e = this._estadoJornada(u, j, esHoy, esFuturo);
+                const horario = (j?.i && j?.o) ? `${esc(j.i)}–${esc(j.o)}` : (u.baja ? 'BE' : '—');
+                const t = this._turnoDe(j?.pu || u.puesto, j?.i) || '';
+                return `<div class="pst-fila${u.baja ? ' baja' : ''}">
                     <span class="pst-dot ${e.clase}" title="${esc(e.texto)}"></span>
                     <span class="pst-quien"><b>${esc(u.conductor) || '—'}</b> ${esc(u.nombre)}</span>
                     ${t ? `<span class="cond-turno ${t}">${t}</span>` : ''}
                     <span class="pst-horario">${horario}</span>
                 </div>`;
             }).join('');
+            // Hoy interesa quién está dentro; en otro día, cuántos lo cubrieron.
+            const cob = esHoy
+                ? (dentro > 0 ? `${dentro} en turno` : 'sin cubrir')
+                : (delDia > 0 ? `${delDia} ${esFuturo ? 'previstos' : 'ese día'}` : 'sin cubrir');
+            const vacio = esHoy ? dentro === 0 : delDia === 0;
             return `<div class="pst-card">
                 <div class="pst-head">
                     <span class="pst-nombre">${esc(puesto)}</span>
-                    <span class="pst-cob${activos > 0 ? '' : ' vacio'}">${activos > 0 ? `${activos} en turno` : 'sin cubrir'}</span>
+                    <span class="pst-cob${vacio ? ' vacio' : ''}">${cob}</span>
                 </div>
                 ${filas}
             </div>`;
@@ -2781,7 +2875,7 @@ td{border:1px solid #ccc;}</style></head>
             const anual = u.horasAnuales || 777;
             const restan = Math.max(0, Math.round((anual - (u.horasTotales || 0)) * 10) / 10);
             const cerrada = this._estaPlegado('t:' + u.email, true);
-            return `<div class="cond-card${cerrada ? ' plegada' : ''}">
+            return `<div class="cond-card${cerrada ? ' plegada' : ''}${u.baja ? ' baja' : ''}">
                 <div class="cond-top" onclick="app._plegarTrabajador('${esc(u.email)}')">
                     ${av}
                     <div class="cond-id">
@@ -2791,6 +2885,8 @@ td{border:1px solid #ccc;}</style></head>
                         <div class="cond-num">${esc(u.conductor) || 'sin nº'}
                             <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app._editarPuesto('${esc(u.email)}')">· ${esc(u.puesto) || 'asignar puesto'} ✎</span></div>
                     </div>
+                    <button class="be-btn${u.baja ? ' on' : ''}" title="${u.baja ? 'Dar de alta' : 'Marcar baja'}"
+                            onclick="event.stopPropagation();app.toggleBaja('${esc(u.email)}')">BE</button>
                     <span class="cond-chev">▾</span>
                 </div>
                 <div class="cond-cuerpo">
@@ -2808,6 +2904,10 @@ td{border:1px solid #ccc;}</style></head>
         }).join('');
         document.getElementById('ordenNombre')?.classList.toggle('activo', orden === 'nombre');
         document.getElementById('ordenNumero')?.classList.toggle('activo', orden === 'numero');
+        const activos = lista.filter(u => !u.baja).length;
+        const bajas   = lista.length - activos;
+        const cnt = document.getElementById('trabajCnt');
+        if (cnt) cnt.textContent = `${activos} activos${bajas ? ` · ${bajas} BE` : ''}`;
         this._renderPuestos();
         this._renderRegistro();
     },
@@ -2840,6 +2940,38 @@ td{border:1px solid #ccc;}</style></head>
         p[clave] = !(clave in p ? p[clave] : true);
         localStorage.setItem('regPlegado', JSON.stringify(p));
         this._renderConductores();
+    },
+
+    // BE = baja del trabajador. Se guarda en el resumen compartido: lo pone el
+    // gestor y la publicación del trabajador no lo pisa.
+    async toggleBaja(email) {
+        const u = (this._conductores || {})[email];
+        if (!u) return;
+        const baja = !u.baja;
+        u.baja = baja;                    // pintar ya: la red puede tardar
+        this._renderConductores();
+        try {
+            const resp = await fetch(this.USUARIOS_URL, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ email, baja })
+            });
+            const data = await resp.json();
+            if (!resp.ok) {
+                u.baja = !baja;
+                this._renderConductores();
+                this._mostrarToast('❌ ' + (data.error || resp.status), 4000);
+                return;
+            }
+            this._conductores = data;
+            this._renderConductores();
+            this._mostrarToast(baja ? `🟡 ${u.nombre || email} de baja` : `✅ ${u.nombre || email} de alta`, 2500);
+        } catch (e) {
+            u.baja = !baja;
+            this._renderConductores();
+            this._mostrarToast('❌ Error: ' + e.message, 4000);
+        }
     },
 
     _editarPuesto(email) {
