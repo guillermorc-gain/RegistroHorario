@@ -958,6 +958,7 @@ const app = {
         const d = String(hoy.getDate()).padStart(2, '0');
         document.getElementById('fechaInput').value = `${y}-${m}-${d}`;
         document.getElementById('fechaInput').max   = `${y}-${m}-${d}`;
+        this.comprobarFestivo();
     },
 
     actualizarFecha() {
@@ -1038,7 +1039,6 @@ const app = {
         const nocheExtra = document.getElementById('nocheExtra');
         const nocheBtn   = document.querySelector('.noche-compact');
         // Auto-activate luna if start hour is in nocturnal range (21–06)
-        const h1 = parseInt(inicio.split(':')[0], 10);
         const autoLuna = h1 >= 21 || h1 < 6;
         if (nocturnas > 0 || autoLuna) {
             document.getElementById('nocheToggle').checked = true;
@@ -1075,6 +1075,66 @@ const app = {
         this.festivoActivo = !this.festivoActivo;
         document.getElementById('festivoCompact').classList.toggle('active', this.festivoActivo);
         document.getElementById('festivoToggle').checked = this.festivoActivo;
+    },
+
+    // Easter Sunday (Meeus/Jones/Butcher algorithm)
+    _domingoPascua(year) {
+        const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+        const d = Math.floor(b / 4), e = b % 4;
+        const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+        const h = (19 * a + b - d - g + 15) % 30;
+        const i = Math.floor(c / 4), k = c % 4;
+        const l = (32 + 2 * e + 2 * i - h - k) % 7;
+        const m = Math.floor((a + 11 * h + 22 * l) / 451);
+        const mes = Math.floor((h + l - 7 * m + 114) / 31);
+        const dia = ((h + l - 7 * m + 114) % 31) + 1;
+        return new Date(year, mes - 1, dia);
+    },
+
+    // Holidays for Palma de Mallorca: national + Balearic + local
+    _festivosPalma(year) {
+        const f = {};
+        const key = d => `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const add = (mmdd, nombre) => { f[mmdd] = nombre; };
+        // Nacionales
+        add('01-01', 'Año Nuevo');
+        add('01-06', 'Reyes');
+        add('05-01', 'Fiesta del Trabajo');
+        add('08-15', 'Asunción');
+        add('10-12', 'Fiesta Nacional');
+        add('11-01', 'Todos los Santos');
+        add('12-06', 'Constitución');
+        add('12-08', 'Inmaculada');
+        add('12-25', 'Navidad');
+        // Baleares
+        add('03-01', 'Dia de les Illes Balears');
+        add('12-26', 'Sant Esteve');
+        // Palma
+        add('01-20', 'Sant Sebastià');
+        // Móviles (Semana Santa)
+        const pascua = this._domingoPascua(year);
+        const vSanto = new Date(pascua); vSanto.setDate(pascua.getDate() - 2);
+        const lPascua = new Date(pascua); lPascua.setDate(pascua.getDate() + 1);
+        add(key(vSanto),  'Viernes Santo');
+        add(key(lPascua), 'Lunes de Pascua');
+        return f;
+    },
+
+    _nombreFestivo(fechaStr) {
+        if (!fechaStr) return null;
+        const [y, m, d] = fechaStr.split('-');
+        return this._festivosPalma(parseInt(y, 10))[`${m}-${d}`] || null;
+    },
+
+    comprobarFestivo() {
+        const fecha = document.getElementById('fechaInput').value;
+        const hint  = document.getElementById('festivoHint');
+        const nombre = this._nombreFestivo(fecha);
+        if (hint) {
+            hint.textContent = nombre ? `· 🎉 ${nombre}` : '';
+            hint.style.display = nombre ? 'inline' : 'none';
+        }
+        if (nombre && !this.festivoActivo) this.clickFestivo();
     },
 
     switchTab(idx) {
@@ -1233,6 +1293,7 @@ const app = {
         document.querySelector('.noche-compact')?.classList.remove('active');
         if (lastInicio && lastFin) this.calcularHorasPorTiempo();
         else document.getElementById('horasInput').value = '';
+        this.comprobarFestivo();
     },
 
     cancelarEdicion() { this.editingId = null; this.limpiarInput(); },
@@ -2179,11 +2240,20 @@ const app = {
             if (latestNum > currentNum) {
                 const asset = release.assets?.find(a => a.name.endsWith('.apk'));
                 this._updateApkUrl = asset?.browser_download_url || release.html_url;
+                const texto  = `${this._buildNumToVersion(latestNum)} disponible (tienes ${this._buildNumToVersion(currentNum)})`;
                 const banner = document.getElementById('updateBanner');
                 const msg    = document.getElementById('updateBannerMsg');
-                if (msg) msg.textContent = `${this._buildNumToVersion(latestNum)} disponible (tienes ${this._buildNumToVersion(currentNum)})`;
+                if (msg) msg.textContent = texto;
                 if (banner) banner.style.display = 'flex';
-                if (showFeedback) this._mostrarToast('🔄 ' + this._buildNumToVersion(latestNum) + ' disponible');
+                // Auto-popup: only once per version, unless manually checked
+                const modal    = document.getElementById('updateModal');
+                const modalMsg = document.getElementById('updateModalMsg');
+                const yaAvisado = localStorage.getItem('updatePromptedFor') === String(latestNum);
+                if (modal && (showFeedback || !yaAvisado)) {
+                    if (modalMsg) modalMsg.textContent = texto;
+                    modal.style.display = 'flex';
+                    localStorage.setItem('updatePromptedFor', String(latestNum));
+                }
             } else if (showFeedback) {
                 if (currentNum > latestNum) {
                     this._mostrarToast('⚙️ Build de desarrollo ' + this._buildNumToVersion(currentNum) + ' (release oficial: ' + this._buildNumToVersion(latestNum) + ')');
@@ -2199,6 +2269,8 @@ const app = {
     _descargarActualizacion() {
         const url = this._updateApkUrl;
         if (!url) return;
+        const modal = document.getElementById('updateModal');
+        if (modal) modal.style.display = 'none';
         const overlay = document.getElementById('updateProgressOverlay');
         if (overlay) overlay.style.display = 'flex';
         const bar = document.getElementById('updateProgressBar');
