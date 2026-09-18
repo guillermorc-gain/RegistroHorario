@@ -283,7 +283,9 @@ jobs:
                                   // El tipo debe seguir a la extensión: un CSV guardado
                                   // como JSON no lo abre la hoja de cálculo
                                   v.put(MediaStore.Downloads.MIME_TYPE,
-                                      fname.endsWith(".csv") ? "text/csv" : "application/json");
+                                      fname.endsWith(".csv") ? "text/csv"
+                                      : fname.endsWith(".xls") ? "application/vnd.ms-excel"
+                                      : "application/json");
                                   Uri uri = ctx.getContentResolver().insert(
                                       MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
                                   if (uri == null) return;

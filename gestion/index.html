@@ -1199,6 +1199,27 @@
     </div>
 </div>
 
+<!-- Elegir formato de exportación -->
+<div class="modal" id="expModal">
+    <div class="modal-card" id="expModalContent">
+        <div class="modal-header">
+            <h3>📊 Exportar registro</h3>
+            <button class="modal-close" onclick="document.getElementById('expModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div class="pm-op" onclick="app.exportarSheets()">
+                <div style="flex:1;">Google Sheets<br><span class="pm-turnos">Crea la hoja en tu Drive y la abre</span></div>
+            </div>
+            <div class="pm-op" onclick="app.exportarXLS()">
+                <div style="flex:1;">Excel (.xls)<br><span class="pm-turnos">Con la cabecera resaltada</span></div>
+            </div>
+            <div class="pm-op" onclick="app.exportarCSV()">
+                <div style="flex:1;">CSV<br><span class="pm-turnos">Lo abre cualquier programa</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Visor del cuadrante -->
 <div class="cuad-visor" id="cuadVisor" onclick="app.cerrarCuadranteGrande()">
     <button class="cuad-visor-x" onclick="event.stopPropagation();app.cerrarCuadranteGrande()">×</button>
