@@ -2501,8 +2501,10 @@ td{border:1px solid #ccc;}</style></head>
         const meses = {};
         filas.forEach(r => { (meses[mesDe(r.f)] = meses[mesDe(r.f)] || []).push(r); });
 
+        // El puesto va en segunda línea: en una sola no cabe con el horario
         const pintaFila = r => `<div class="rg-fila">
-            <span class="rg-quien"><b>${esc(r.num) || '—'}</b> ${esc(r.nombre)}</span>
+            <span class="rg-quien"><b>${esc(r.num) || '—'}</b> ${esc(r.nombre)}
+                ${r.puesto ? `<br><span class="rg-pt">${esc(r.puesto)}</span>` : ''}</span>
             ${r.extra ? '<span class="rg-x">extra</span>' : ''}
             ${r.festivo ? '<span class="festivo-badge">🎉</span>' : ''}
             ${r.vac ? '<span class="vacaciones-badge">🏖️</span>' : ''}
