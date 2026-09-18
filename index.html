@@ -423,8 +423,8 @@
                 <div id="editLabel" class="edit-label" style="display:none;">✏️ Editando en pantalla</div>
                 <div class="input-row" style="margin-bottom:6px;">
                     <div class="input-group" style="flex:1;">
-                        <label>Fecha</label>
-                        <input type="date" id="fechaInput" oninput="app.calcularHorasPorTiempo()" onchange="app.calcularHorasPorTiempo()">
+                        <label>Fecha <span id="festivoHint" style="display:none;color:#e67e22;font-weight:800;"></span></label>
+                        <input type="date" id="fechaInput" oninput="app.calcularHorasPorTiempo();app.comprobarFestivo()" onchange="app.calcularHorasPorTiempo();app.comprobarFestivo()">
                     </div>
                 </div>
                 <div class="input-row">
@@ -705,6 +705,17 @@
         </div>
         <button onclick="app._descargarActualizacion()" style="background:white;color:#e67e22;border:none;border-radius:6px;padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;">Actualizar</button>
         <button onclick="document.getElementById('updateBanner').style.display='none'" style="background:transparent;border:none;color:white;font-size:20px;cursor:pointer;padding:0 6px;line-height:1;">×</button>
+    </div>
+
+    <!-- Update Modal (auto-popup) -->
+    <div id="updateModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99998;align-items:center;justify-content:center;padding:20px;">
+        <div style="background:var(--card,#fff);border-radius:18px;padding:26px 22px;width:100%;max-width:340px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.3);">
+            <div style="font-size:38px;margin-bottom:8px;">🚀</div>
+            <div style="font-size:17px;font-weight:800;margin-bottom:6px;color:#e67e22;">Nueva versión disponible</div>
+            <div id="updateModalMsg" style="font-size:13px;color:var(--text-secondary,#666);margin-bottom:20px;line-height:1.5;"></div>
+            <button onclick="app._descargarActualizacion()" style="width:100%;padding:13px;background:linear-gradient(135deg,#f39c12,#e67e22);color:white;border:none;border-radius:11px;cursor:pointer;font-size:15px;font-weight:700;margin-bottom:8px;">Actualizar ahora</button>
+            <button onclick="document.getElementById('updateModal').style.display='none'" style="width:100%;padding:11px;background:transparent;color:var(--text-secondary,#888);border:none;cursor:pointer;font-size:13px;font-weight:600;">Más tarde</button>
+        </div>
     </div>
 
     <!-- Update Progress Overlay -->
