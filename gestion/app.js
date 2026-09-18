@@ -1406,13 +1406,15 @@ const app = {
     },
 
     mostrarCambiarConductor() {
-        const v = prompt('Número de conductor (4 dígitos, guión y otro número).\n\nEjemplo: 1418-3', this.numConductor || '');
+        const v = prompt('Número de trabajador (5 dígitos).\n\nPuedes escribirlo con o sin guión: 14183 o 1418-3', this.numConductor || '');
         if (v === null) return;
-        const val = v.trim();
-        if (val && !/^\d{4}-\d$/.test(val)) {
-            alert('❌ Formato incorrecto. Debe ser 4 dígitos, un guión y otro número.\nEjemplo: 1418-3');
+        // Accept it typed either way and always store it as 1418-3
+        const digitos = v.replace(/\D/g, '');
+        if (v.trim() && digitos.length !== 5) {
+            alert('❌ Formato incorrecto. Deben ser 5 dígitos.\nEjemplo: 14183 o 1418-3');
             return;
         }
+        const val = digitos ? digitos.slice(0, 4) + '-' + digitos.slice(4) : '';
         this.numConductor = val;
         localStorage.setItem('numConductor', val);
         this._actualizarConductorDisplay();
@@ -1948,6 +1950,23 @@ const app = {
         if (badge) badge.textContent = count > 0 ? `${count} registros` : 'Sin registros';
     },
 
+    // Current month at a glance, for when the section is collapsed
+    _renderResumenMes(meses) {
+        const el = document.getElementById('mensualResumen');
+        if (!el) return;
+        const hoy = new Date();
+        const clave = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+        const m = (meses || {})[clave];
+        if (!m) {
+            el.innerHTML = `<span class="mr-mes">${MESES_ES[hoy.getMonth()]}</span><span class="mr-h">0h</span>`;
+            return;
+        }
+        el.innerHTML = `<span class="mr-mes">${MESES_ES[hoy.getMonth()]}</span>`
+            + `<span class="mr-h">${m.horas}h</span>`
+            + (m.nocturnas > 0 ? `<span class="mr-n">🌙${m.nocturnas}h</span>` : '')
+            + (m.extra > 0 ? `<span class="mr-e">+${m.extra.toFixed(2)}€</span>` : '');
+    },
+
     toggleMensual() {
         const sec = document.getElementById('mensualSection');
         if (!sec) return;
@@ -1964,6 +1983,7 @@ const app = {
         const container = document.getElementById('mensualTable');
         if (!container) return;
         const meses = this._calcTodosMeses(historial);
+        this._renderResumenMes(meses);
         const keys  = Object.keys(meses).sort((a, b) => b.localeCompare(a)).slice(0, 6);
         if (keys.length === 0) { container.innerHTML = '<div style="text-align:center;color:#95a5a6;font-size:12px;padding:8px;">Sin datos</div>'; return; }
         container.innerHTML = keys.map(k => {
