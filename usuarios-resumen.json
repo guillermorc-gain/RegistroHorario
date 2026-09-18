@@ -176,5 +176,31 @@
     "email": "prueba-1789760248885@prueba.local",
     "ficticio": true,
     "actualizado": "2026-09-18T19:37:48.994Z"
+  },
+  "prueba-1789760390735@prueba.local": {
+    "nombre": "Miguel Moyà",
+    "conductor": "6865-6",
+    "puesto": "Son Rossinyol",
+    "avatar": null,
+    "version": "build-36",
+    "horasMes": 7,
+    "horasTotales": 7,
+    "diasMes": 1,
+    "horaInicio": "20:00",
+    "horaFin": "03:00",
+    "horarioDe": "hoy",
+    "turno": "T",
+    "jornadas": [
+      {
+        "f": "20260918",
+        "i": "20:00",
+        "o": "03:00",
+        "h": 7,
+        "n": 7
+      }
+    ],
+    "email": "prueba-1789760390735@prueba.local",
+    "ficticio": true,
+    "actualizado": "2026-09-18T19:40:24.459Z"
   }
 }
