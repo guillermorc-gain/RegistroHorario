@@ -2123,7 +2123,7 @@ const app = {
     },
 
     async borrarCuadrante() {
-        if (!confirm('¿Quitar el cuadrante publicado?\nDejará de verse en la app de conductores.')) return;
+        if (!confirm('¿Quitar el cuadrante publicado?\nDejará de verse en la app de trabajadores.')) return;
         try {
             const resp = await fetch(this.CUADRANTE_URL, {
                 method: 'DELETE',
@@ -2138,7 +2138,7 @@ const app = {
     },
 
 
-    // ── Versión publicada a los conductores ──────────────────────────────────
+    // ── Versión publicada a los trabajadores ──────────────────────────────────
 
     async _cargarVersiones() {
         const cont = document.getElementById('versionesList');
@@ -2152,7 +2152,7 @@ const app = {
             ]);
             const releases = rRel.ok ? await rRel.json() : [];
             this._versionPublicada = rVer.ok ? ((await rVer.json())?.build ?? null) : null;
-            // Solo las de la app de conductores
+            // Solo las de la app de trabajadores
             const re = /^build-(\d+)$/;
             const builds = (Array.isArray(releases) ? releases : [])
                 .map(r => ({ r, m: re.exec(r.tag_name || '') }))
@@ -2180,7 +2180,7 @@ const app = {
     },
 
     async _publicarVersion(build) {
-        if (!confirm(`¿Publicar la ${this._buildNumToVersion(build)} para los conductores?\n\nSolo recibirán esa versión hasta que publiques otra.`)) return;
+        if (!confirm(`¿Publicar la ${this._buildNumToVersion(build)} para los trabajadores?\n\nSolo recibirán esa versión hasta que publiques otra.`)) return;
         try {
             const resp = await fetch(VERSION_URL, {
                 method: 'POST',
@@ -2196,7 +2196,7 @@ const app = {
     },
 
 
-    // ── Conductores (gestión) ────────────────────────────────────────────────
+    // ── Trabajadores (gestión) ────────────────────────────────────────────────
 
     USUARIOS_URL: 'https://registro-horario-emt.vercel.app/api/usuarios',
 
@@ -2223,7 +2223,7 @@ const app = {
             .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
         if (!lista.length) {
             cont.innerHTML = '<div class="tab-empty"><span class="tab-empty-ico">👥</span>'
-                + '<span class="tab-empty-t">Sin conductores</span>'
+                + '<span class="tab-empty-t">Sin trabajadores</span>'
                 + '<span class="tab-empty-s">Aparecerán en cuanto abran su app.</span></div>';
             return;
         }

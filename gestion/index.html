@@ -506,10 +506,10 @@
 
         <div class="app-content" id="appContent">
 
-        <!-- ── TAB: Conductores ── -->
+        <!-- ── TAB: Trabajadores ── -->
         <div class="tab-panel active" id="tabPanel0">
             <div class="cond-head">
-                <span class="cond-title">👥 Conductores</span>
+                <span class="cond-title">👥 Trabajadores</span>
                 <button class="cond-refresh" onclick="app._cargarConductores()" title="Actualizar">⟳</button>
             </div>
             <div id="condList" class="cond-list"></div>
@@ -527,7 +527,7 @@
                 <div class="tab-empty" id="cuadVacio">
                     <span class="tab-empty-ico">🗓️</span>
                     <span class="tab-empty-t">Sin cuadrante</span>
-                    <span class="tab-empty-s">Sube una foto y la verán<br>todos en la app de conductores.</span>
+                    <span class="tab-empty-s">Sube una foto y la verán<br>todos en la app de trabajadores.</span>
                 </div>
                 <img id="cuadImg" class="cuad-img" style="display:none" onclick="app.verCuadranteGrande()">
             </div>
@@ -555,7 +555,7 @@
                     ondragstart="app._tabDragStart(event)" ondragend="app._tabDragEnd(event)"
                     ondragover="app._tabDragOver(event)" ondragleave="app._tabDragLeave(event)"
                     ondrop="app._tabDrop(event)">
-                <span class="tab-ico">👥</span><span class="tab-lbl">Conductores</span>
+                <span class="tab-ico">👥</span><span class="tab-lbl">Trabajadores</span>
             </button>
             <button class="tab-btn" data-tab="1" draggable="true"
                     onclick="app.switchTab(1)"
@@ -653,7 +653,7 @@
                 <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._cargarVersiones()">🚀 Versión para los usuarios <span class="ops-chevron">›</span></button>
                 <div class="ops-body">
                     <div class="ops-field">
-                        <span class="ops-field-sub">Elige qué versión de la app de conductores reciben. Tú siempre ves la más reciente para poder probarla antes de publicarla.</span>
+                        <span class="ops-field-sub">Elige qué versión de la app de trabajadores reciben. Tú siempre ves la más reciente para poder probarla antes de publicarla.</span>
                         <div id="versionActual" class="ver-actual">Comprobando…</div>
                     </div>
                     <div id="versionesList"></div>
