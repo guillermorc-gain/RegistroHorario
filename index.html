@@ -9,7 +9,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Horas EMT">
+    <meta name="apple-mobile-web-app-title" content="EMT - Movilidad">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <style>
         /* ── THEMES ── */
@@ -48,12 +48,13 @@
         .app-screen{display:none;flex-direction:column;flex:1;min-height:0;}
         .app-screen.active{display:flex;}
 
-        .app-header{background:linear-gradient(135deg,var(--g1) 0%,var(--g2) 100%);color:white;padding:10px 15px;flex-shrink:0;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+        .app-header{position:relative;background:linear-gradient(135deg,var(--g1) 0%,var(--g2) 100%);color:white;padding:10px 15px;flex-shrink:0;display:flex;flex-direction:column;gap:5px;}
+        .app-header-top{display:flex;justify-content:space-between;align-items:center;gap:10px;}
         .app-header.dark{background:linear-gradient(135deg,var(--gdark1) 0%,var(--gdark2) 100%);}
         .app-header-left{display:flex;flex-direction:column;}
         .app-header-title{font-size:14px;font-weight:700;letter-spacing:0.2px;}
-        .app-header-user{font-size:11.5px;font-weight:600;opacity:0.95;margin-top:2px;}
-        .app-header-user:empty{display:none;}
+        .app-header-center{text-align:center;font-size:11.5px;font-weight:700;opacity:0.95;line-height:1.25;letter-spacing:0.2px;}
+        .app-header-center:empty{display:none;}
         .app-header-date{font-size:11px;opacity:0.85;margin-top:1px;}
         .profile-btn{width:42px;height:42px;border-radius:50%;border:2px solid rgba(255,255,255,0.4);cursor:pointer;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;flex-shrink:0;color:white;overflow:hidden;padding:0;}
 
@@ -165,6 +166,23 @@
         .extra-compact span{font-size:15px;line-height:1;pointer-events:none;}
         .extra-compact input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#8e44ad;}
         .extra-badge{display:inline-block;background:#8e44ad;color:white;font-size:9px;font-weight:800;padding:2px 6px;border-radius:10px;letter-spacing:0.5px;vertical-align:middle;}
+        /* ── VACACIONES ── */
+        .vacaciones-compact{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 8px;background:#e4f5f1;border-radius:8px;border:1.5px solid #16a085;cursor:pointer;flex-shrink:0;touch-action:manipulation;user-select:none;}
+        .vacaciones-compact.active{background:#16a085;border-color:#0e6655;}
+        .vacaciones-compact.active span{filter:brightness(10);}
+        .app-content.dark .vacaciones-compact{background:#04231e;border-color:#0e6655;}
+        .app-content.dark .vacaciones-compact.active{background:#0e6655;}
+        .vacaciones-compact span{font-size:15px;line-height:1;pointer-events:none;}
+        .vacaciones-compact input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#16a085;}
+        /* ── MODO VACACIONES ── */
+        body.vacaciones .app-header{background:linear-gradient(135deg,#f6b93b 0%,#e58e26 45%,#16a085 100%);}
+        body.vacaciones .splash-title::after{content:' 🏖️';}
+        .vac-banner{display:none;align-items:center;gap:10px;background:linear-gradient(135deg,#f6b93b,#16a085);color:#fff;border-radius:12px;padding:11px 14px;flex-shrink:0;box-shadow:0 2px 8px rgba(22,160,133,0.3);}
+        body.vacaciones .vac-banner{display:flex;}
+        .vac-banner-ico{font-size:26px;line-height:1;animation:vacFloat 2.6s ease-in-out infinite;}
+        @keyframes vacFloat{0%,100%{transform:translateY(0) rotate(-4deg);}50%{transform:translateY(-4px) rotate(4deg);}}
+        .vac-banner-t{font-size:13.5px;font-weight:800;display:block;}
+        .vac-banner-s{font-size:11px;opacity:0.95;}
         .extra-panel{display:none;margin-bottom:7px;padding:9px 10px;background:#f4ecf7;border-radius:8px;border:1px solid #8e44ad;}
         .extra-panel.visible{display:block;}
         .app-content.dark .extra-panel{background:#1a0724;border-color:#6c3483;}
@@ -188,6 +206,10 @@
         .hm-stripe-pr{border-left:4px solid #3498db!important;padding-left:10px!important;}
         .hm-stripe-noche{border-left:4px solid #9b59b6!important;padding-left:10px!important;}
         .hm-stripe-extra{border-left:4px solid #8e44ad!important;padding-left:10px!important;}
+        .hm-stripe-vacaciones{border-left:4px solid #16a085!important;padding-left:10px!important;}
+        .hm-nota-txt{font-size:10.5px;color:#b9770e;font-weight:600;margin-top:2px;word-break:break-word;}
+        .modal-card.dark .hm-nota-txt{color:#f0b429;}
+        .vacaciones-badge{display:inline-block;background:#16a085;color:white;font-size:9px;font-weight:800;padding:2px 6px;border-radius:10px;letter-spacing:0.5px;vertical-align:middle;}
         .noche-extra{display:none;margin-bottom:7px;padding:8px 9px;background:#fff8e1;border-radius:8px;border:1px solid #ffc107;}
         .noche-extra.visible{display:block;}
         .app-content.dark .noche-extra{background:#1a1500;border-color:#665500;}
@@ -205,7 +227,12 @@
         /* ── MONTHLY BREAKDOWN ── */
         .mensual-section{background:white;border-radius:12px;padding:10px 12px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
         .app-content.dark .mensual-section{background:#1e2a3a;}
-        .mensual-title{font-size:10px;font-weight:800;color:var(--g1);text-transform:uppercase;letter-spacing:0.7px;margin-bottom:8px;}
+        .mensual-title{font-size:10px;font-weight:800;color:var(--g1);text-transform:uppercase;letter-spacing:0.7px;}
+        .mensual-head{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;margin-bottom:8px;}
+        .mensual-toggle{width:26px;height:26px;background:linear-gradient(135deg,var(--g1),var(--g2));border:none;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;font-size:13px;flex-shrink:0;transition:transform 0.2s;}
+        .mensual-section.cerrada .mensual-toggle{transform:rotate(-90deg);}
+        .mensual-section.cerrada .mensual-head{margin-bottom:0;}
+        .mensual-section.cerrada #mensualTable{display:none;}
         .mes-row{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #f0f0f0;}
         .app-content.dark .mes-row{border-color:#2d3561;}
         .mes-row:last-child{border-bottom:none;padding-bottom:0;}
@@ -267,6 +294,17 @@
         .freq-opt{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;cursor:pointer;color:#2c3e50;}
         .options-content.dark .freq-opt{color:#e0e0e0;}
         .freq-opt input{width:16px;height:16px;accent-color:var(--g1);cursor:pointer;flex-shrink:0;}
+        .vac-add{display:flex;align-items:center;gap:5px;margin-top:3px;flex-wrap:wrap;}
+        .vac-input{flex:1;min-width:112px;padding:7px;border:1.5px solid #e8eaf0;border-radius:7px;font-size:12px;font-family:inherit;background:white;color:#2c3e50;}
+        .options-content.dark .vac-input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
+        .vac-sep{color:#95a5a6;font-size:12px;}
+        .vac-add-btn{padding:7px 12px;background:#16a085;color:white;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+        .vac-item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:12.5px;color:#2c3e50;}
+        .options-content.dark .vac-item{color:#e0e0e0;border-color:#2d3561;}
+        .vac-item:last-child{border-bottom:none;}
+        .vac-item-txt{flex:1;}
+        .vac-item-n{font-size:10.5px;color:#16a085;font-weight:700;}
+        .vac-del{background:#e74c3c;color:white;border:none;border-radius:6px;width:24px;height:24px;cursor:pointer;font-size:13px;flex-shrink:0;}
         .ops-input{width:100%;padding:9px 11px;border:1.5px solid #e8eaf0;border-radius:8px;font-size:14px;font-family:inherit;background:white;color:#2c3e50;}
         .ops-input:focus{outline:none;border-color:var(--g1);}
         .options-content.dark .ops-input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
@@ -357,7 +395,7 @@
 <!-- Splash Screen -->
 <div id="splashScreen">
     <div class="splash-bus">🚌</div>
-    <div class="splash-title">Horas EMT</div>
+    <div class="splash-title">EMT - Movilidad</div>
     <div class="splash-sub" id="splashMsg">Iniciando...</div>
 </div>
 <script>
@@ -399,18 +437,29 @@
     <!-- ── APP SCREEN ── -->
     <div class="app-screen" id="appScreen">
         <div class="app-header" id="appHeader">
-            <div class="app-header-left">
-                <span class="app-header-title">🕐 Horas EMT</span>
-                <span class="app-header-user" id="cabeceraConductor"></span>
-                <span class="app-header-date" id="fechaHoy"></span>
+            <div class="app-header-top">
+                <div class="app-header-left">
+                    <span class="app-header-title">🚌 EMT - Movilidad</span>
+                    <span class="app-header-date" id="fechaHoy"></span>
+                </div>
+                <button class="profile-btn" id="profileBtn" onclick="app.mostrarOpciones()"></button>
             </div>
-            <button class="profile-btn" id="profileBtn" onclick="app.mostrarOpciones()"></button>
+            <div class="app-header-center" id="cabeceraConductor"></div>
         </div>
 
         <div class="app-content" id="appContent">
 
         <!-- ── TAB: Registro ── -->
         <div class="tab-panel active" id="tabPanel0">
+
+            <!-- Vacaciones -->
+            <div class="vac-banner" id="vacBanner">
+                <span class="vac-banner-ico">🏖️</span>
+                <div style="flex:1;min-width:0;">
+                    <span class="vac-banner-t">¡Estás de vacaciones!</span>
+                    <span class="vac-banner-s" id="vacBannerSub"></span>
+                </div>
+            </div>
 
             <!-- Stats 2x2 -->
             <div class="stats-grid">
@@ -511,6 +560,10 @@
                         <span>⏱️</span>
                         <input type="checkbox" id="extraToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#8e44ad;cursor:pointer;">
                     </div>
+                    <div class="vacaciones-compact" id="vacacionesCompact" ontouchend="event.preventDefault();app.clickVacaciones()" onclick="app.clickVacaciones()" title="Vacaciones (registra 0 horas)">
+                        <span>🏖️</span>
+                        <input type="checkbox" id="vacacionesToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#16a085;cursor:pointer;">
+                    </div>
                 </div>
                 <div class="extra-panel" id="extraPanel">
                     <div class="extra-panel-t">¿Dónde van estas horas?</div>
@@ -543,8 +596,11 @@
             </div>
 
             <!-- Monthly breakdown -->
-            <div class="mensual-section">
-                <div class="mensual-title">📊 Por mes</div>
+            <div class="mensual-section" id="mensualSection">
+                <div class="mensual-head" onclick="app.toggleMensual()">
+                    <span class="mensual-title">📊 Por mes</span>
+                    <button class="mensual-toggle" id="mensualToggle" title="Mostrar/ocultar">▼</button>
+                </div>
                 <div id="mensualTable"><div style="text-align:center;color:#95a5a6;font-size:12px;padding:6px;">Sin datos</div></div>
             </div>
 
@@ -619,6 +675,11 @@
                         <div id="profileAvatarPreview" class="avatar-preview" style="background:var(--g1);color:white;font-size:26px;">?</div>
                         <button onclick="app.mostrarAvatarPicker()" style="padding:8px 14px;background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Cambiar avatar</button>
                     </div>
+                    <button class="ops-btn" onclick="app.mostrarCambiarConductor()">
+                        🚌 Número de conductor
+                        <span id="conductorDisplay" style="margin-left:auto;color:var(--g1);font-weight:700;font-size:13px;"></span>
+                        <span class="ops-arrow">›</span>
+                    </button>
                     <div class="ops-field">
                         <span class="ops-field-label">Cuenta Google</span>
                         <div id="perfilNombre" style="font-size:14px;font-weight:600;color:#2c3e50;padding:2px 0;"></div>
@@ -696,11 +757,16 @@
                         <span id="jornadaHorasDisplay" style="margin-left:auto;color:var(--g1);font-weight:700;font-size:13px;"></span>
                         <span class="ops-arrow">›</span>
                     </button>
-                    <button class="ops-btn" onclick="app.mostrarCambiarConductor()">
-                        🚌 Número de conductor
-                        <span id="conductorDisplay" style="margin-left:auto;color:var(--g1);font-weight:700;font-size:13px;"></span>
-                        <span class="ops-arrow">›</span>
-                    </button>
+                    <div class="ops-field">
+                        <span class="ops-field-label">🏖️ Vacaciones</span>
+                        <div class="vac-add">
+                            <input type="date" id="vacDesde" class="vac-input">
+                            <span class="vac-sep">→</span>
+                            <input type="date" id="vacHasta" class="vac-input">
+                            <button class="vac-add-btn" onclick="app.añadirVacaciones()">Añadir</button>
+                        </div>
+                        <div id="vacList"></div>
+                    </div>
                     <button class="ops-btn" onclick="app.revisarSuma()">🔍 Revisar suma <span class="ops-arrow">›</span></button>
                 </div>
             </div>
@@ -862,7 +928,7 @@
     <!-- Install Banner -->
     <div class="install-banner" id="installBanner">
         <div style="flex:1;">
-            <strong style="display:block;font-size:13px;margin-bottom:2px;">📲 Instalar Horas EMT</strong>
+            <strong style="display:block;font-size:13px;margin-bottom:2px;">📲 Instalar EMT - Movilidad</strong>
             <span id="installBannerMsg" style="font-size:11px;opacity:0.9;">Instala la app para acceso rápido</span>
         </div>
         <button id="installBannerBtn" onclick="app.instalarApp()" style="background:white;color:#0052CC;border:none;border-radius:6px;padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;">Instalar</button>

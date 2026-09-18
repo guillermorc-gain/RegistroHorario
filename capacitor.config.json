@@ -1,6 +1,6 @@
 {
   "appId": "com.guillermorc.horasemt",
-  "appName": "Horas EMT",
+  "appName": "EMT - Movilidad",
   "webDir": "www",
   "server": {
     "androidScheme": "https"
