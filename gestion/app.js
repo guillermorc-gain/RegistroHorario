@@ -2778,25 +2778,32 @@ td{border:1px solid #ccc;}</style></head>
                 ? `<img class="cond-avatar" src="${esc(u.avatar)}">`
                 : `<div class="cond-avatar">${esc(ini)}</div>`;
             const ver = u.version ? this._buildNumToVersion(parseInt(String(u.version).replace('build-',''),10) || 0) : '—';
-            return `<div class="cond-card">
-                <div class="cond-top">
+            const anual = u.horasAnuales || 777;
+            const restan = Math.max(0, Math.round((anual - (u.horasTotales || 0)) * 10) / 10);
+            const cerrada = this._estaPlegado('t:' + u.email, true);
+            return `<div class="cond-card${cerrada ? ' plegada' : ''}">
+                <div class="cond-top" onclick="app._plegarTrabajador('${esc(u.email)}')">
                     ${av}
-                    <div class="cond-id" onclick="app._editarPuesto('${esc(u.email)}')">
+                    <div class="cond-id">
                         <div class="cond-nombre">${esc(u.nombre) || esc(u.email)}
                             ${turno ? `<span class="cond-turno ${turno}">${turno}</span>` : ''}
                             ${u.ficticio ? '<span class="pr-badge2">PRUEBA</span>' : ''}</div>
                         <div class="cond-num">${esc(u.conductor) || 'sin nº'}
-                            ${u.puesto ? `<span class="cond-puesto">· ${esc(u.puesto)}</span>` : ''}</div>
+                            <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app._editarPuesto('${esc(u.email)}')">· ${esc(u.puesto) || 'asignar puesto'} ✎</span></div>
                     </div>
+                    <span class="cond-chev">▾</span>
                 </div>
-                <div class="cond-stats">
-                    <div class="cond-stat"><div class="cond-stat-v">${(u.horasMes ?? 0).toFixed(1)}</div><div class="cond-stat-l">h este mes</div></div>
-                    <div class="cond-stat"><div class="cond-stat-v">${u.diasMes ?? 0}</div><div class="cond-stat-l">días</div></div>
-                    <div class="cond-stat"><div class="cond-stat-v">${(u.horasTotales ?? 0).toFixed(1)}</div><div class="cond-stat-l">h totales</div></div>
+                <div class="cond-cuerpo">
+                    <div class="cond-stats">
+                        <div class="cond-stat"><div class="cond-stat-v">${(u.horasMes ?? 0).toFixed(1)}</div><div class="cond-stat-l">h este mes</div></div>
+                        <div class="cond-stat"><div class="cond-stat-v">${u.diasMes ?? 0}</div><div class="cond-stat-l">días</div></div>
+                        <div class="cond-stat"><div class="cond-stat-v">${(u.horasTotales ?? 0).toFixed(1)}</div><div class="cond-stat-l">h totales</div></div>
+                        <div class="cond-stat"><div class="cond-stat-v">${restan.toFixed(1)}</div><div class="cond-stat-l">restantes</div></div>
+                    </div>
+                    <div class="cond-ver">${ver} · actualizado ${u.actualizado
+                        ? new Date(u.actualizado).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
+                        : 'nunca'}</div>
                 </div>
-                <div class="cond-ver">${ver} · actualizado ${u.actualizado
-                    ? new Date(u.actualizado).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
-                    : 'nunca'}</div>
             </div>`;
         }).join('');
         document.getElementById('ordenNombre')?.classList.toggle('activo', orden === 'nombre');
@@ -2823,6 +2830,15 @@ td{border:1px solid #ccc;}</style></head>
         localStorage.setItem('ordenTrabajadores', modo);
         document.getElementById('ordenNombre')?.classList.toggle('activo', modo === 'nombre');
         document.getElementById('ordenNumero')?.classList.toggle('activo', modo === 'numero');
+        this._renderConductores();
+    },
+
+    _plegarTrabajador(email) {
+        const clave = 't:' + email;
+        const p = JSON.parse(localStorage.getItem('regPlegado') || '{}');
+        // Invertir el estado efectivo, no el guardado: las tarjetas nacen plegadas
+        p[clave] = !(clave in p ? p[clave] : true);
+        localStorage.setItem('regPlegado', JSON.stringify(p));
         this._renderConductores();
     },
 

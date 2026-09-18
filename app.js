@@ -2234,6 +2234,7 @@ const app = {
                 version:      (typeof APP_VERSION !== 'undefined') ? APP_VERSION : '',
                 horasMes:     Math.round(delMes.reduce((s, r) => s + (parseFloat(r.horas) || 0), 0) * 10) / 10,
                 horasTotales: t.anualReal,
+                horasAnuales: this.horasAnualesCustom,
                 diasMes:      delMes.length,
                 turno:        this._turnoHabitual(delMes),
                 horaInicio:   ultimo?.horaInicio || '',
@@ -2245,7 +2246,7 @@ const app = {
             // actualizar la app el nuevo número de versión no llegaba a gestión
             // hasta el día siguiente. Sin cambios no se escribe nada.
             const huella = JSON.stringify([payload.version, payload.horasMes, payload.horasTotales,
-                                           payload.diasMes, payload.turno, payload.conductor,
+                                           payload.diasMes, payload.turno, payload.conductor, payload.horasAnuales,
                                            payload.nombre, payload.horaInicio, payload.horaFin,
                                            payload.horarioDe, jornadas.length,
                                            jornadas.length ? jornadas[jornadas.length - 1].f : '',

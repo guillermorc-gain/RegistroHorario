@@ -84,6 +84,7 @@ export default async function handler(req, res) {
           version:      typeof b.version === 'string' ? b.version.slice(0, 20) : previo.version || '',
           horasMes:     Number(b.horasMes) || 0,
           horasTotales: Number(b.horasTotales) || 0,
+          horasAnuales: Number(b.horasAnuales) || previo.horasAnuales || 777,
           diasMes:      Number(b.diasMes) || 0,
           turno:        ['M','T','N'].includes(b.turno) ? b.turno : (previo.turno || ''),
           horaInicio:   typeof b.horaInicio === 'string' ? b.horaInicio.slice(0, 5) : previo.horaInicio || '',
