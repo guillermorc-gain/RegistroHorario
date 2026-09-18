@@ -2210,9 +2210,10 @@ const app = {
                 : Object.values(hist).sort((a, b) => b.timestamp - a.timestamp)[0];
             // Jornadas del año en curso, compactas: gestión las agrupa por mes.
             // Claves cortas a propósito, son ~220 al año por trabajador.
-            const añoActual = ahora.getFullYear();
+            // Desde el 1 de enero del año en curso
+            const desde = new Date(ahora.getFullYear(), 0, 1).getTime();
             const jornadas = Object.entries(hist)
-                .filter(([, r]) => r.timestamp && new Date(r.timestamp).getFullYear() === añoActual)
+                .filter(([, r]) => r.timestamp && r.timestamp >= desde)
                 .sort((a, b) => a[1].timestamp - b[1].timestamp)
                 .map(([id, r]) => ({
                     f: this._fechaDeId(id),

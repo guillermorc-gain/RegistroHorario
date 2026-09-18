@@ -277,7 +277,10 @@ jobs:
                               if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                                   ContentValues v = new ContentValues();
                                   v.put(MediaStore.Downloads.DISPLAY_NAME, fname);
-                                  v.put(MediaStore.Downloads.MIME_TYPE, "application/json");
+                                  // El tipo debe seguir a la extensión: un CSV guardado
+                                  // como JSON no lo abre la hoja de cálculo
+                                  v.put(MediaStore.Downloads.MIME_TYPE,
+                                      fname.endsWith(".csv") ? "text/csv" : "application/json");
                                   Uri uri = ctx.getContentResolver().insert(
                                       MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
                                   if (uri == null) return;
