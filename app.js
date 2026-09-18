@@ -1235,6 +1235,14 @@ const app = {
         document.getElementById('optionsScreen').classList.remove('active');
     },
 
+    // Gestionar quién entra es cosa del administrador; al resto ni se le
+    // ofrece, aunque el endpoint ya rechace sus cambios con un 403.
+    _aplicarVisibilidadAdmin() {
+        const esAdmin = (this.usuarioActual?.email || '').toLowerCase() === SUPER_USER_EMAIL.toLowerCase();
+        const sec = document.getElementById('sectionAcceso');
+        if (sec) sec.style.display = esAdmin ? '' : 'none';
+    },
+
     mostrarOpciones() {
         document.getElementById('authScreen').classList.add('hidden');
         document.getElementById('appScreen').classList.remove('active');
@@ -1243,6 +1251,7 @@ const app = {
         document.getElementById('horasAnualesDisplay').textContent = this.horasAnualesCustom + 'h';
         this._actualizarJornadaDisplay();
         this._actualizarConductorDisplay();
+        this._aplicarVisibilidadAdmin();
         this._renderVacaciones();
         document.getElementById('perfilEmail').textContent = this.usuarioActual?.email || '';
         document.getElementById('perfilNombre').textContent = this.usuarioActual?.name || '';
