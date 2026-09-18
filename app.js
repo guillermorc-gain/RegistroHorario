@@ -2888,6 +2888,10 @@ const app = {
                 }
                 await this._writeDriveFile(data);
             } catch(e) { console.error('Error guardando preferencias:', e); }
+            // Cambios como el número de trabajador o el avatar pasan por aquí.
+            // _publicarResumen solo escribe si algo del resumen cambió de verdad,
+            // así que engancharlo aquí cubre todos los casos sin duplicar avisos.
+            this._publicarResumen();
         };
         if (inmediato) return guardar();
         this._prefSaveTimer = setTimeout(guardar, 2000);
