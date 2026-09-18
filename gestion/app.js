@@ -7,6 +7,8 @@ const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.goo
 const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file profile email';
 const AUTH_SCOPE       = 'profile email';
 // Turnos de cada puesto. La hora de entrada registrada decide en cuál cae.
+const PUESTOS_DEFINIDOS = ['Son Rossinyol', 'Control', 'Calle', 'Taller'];
+
 const TURNOS_POR_PUESTO = {
     'son rossinyol': [
         { id: 'M', nombre: 'Mañana', desde: '03:45', hasta: '14:00' },
@@ -17,6 +19,11 @@ const TURNOS_POR_PUESTO = {
         { id: 'M', nombre: 'Mañana', desde: '05:00', hasta: '14:00' },
         { id: 'T', nombre: 'Tarde',  desde: '14:00', hasta: '20:00' },
         { id: 'N', nombre: 'Noche',  desde: '20:00', hasta: '24:00' },
+    ],
+    'taller': [
+        { id: 'M', nombre: 'Mañana', desde: '06:00', hasta: '14:00' },
+        { id: 'T', nombre: 'Tarde',  desde: '14:00', hasta: '21:00' },
+        { id: 'N', nombre: 'Noche',  desde: '21:00', hasta: '06:00' },
     ],
     'calle': [
         { id: 'M', nombre: 'Mañana', desde: '07:00', hasta: '14:00' },
@@ -2418,23 +2425,68 @@ const app = {
         this._renderConductores();
     },
 
-    async _editarPuesto(email) {
+    _editarPuesto(email) {
         const u = (this._conductores || {})[email];
         if (!u) return;
-        const v = prompt(`Puesto de trabajo de ${u.nombre || email}:`, u.puesto || '');
+        this._puestoEditando = email;
+        document.getElementById('puestoModalQuien').textContent =
+            `${u.conductor ? u.conductor + ' · ' : ''}${u.nombre || email}`;
+        this._renderPuestoModal();
+        document.getElementById('puestoModal').classList.add('show');
+        if (this.darkMode) document.getElementById('puestoModalContent').classList.add('dark');
+    },
+
+    _renderPuestoModal() {
+        const u = (this._conductores || {})[this._puestoEditando] || {};
+        const actual = this._clavePuesto(u.puesto);
+        // Los definidos más los que ya se usen y no estén en la tabla
+        const usados = [...new Set(Object.values(this._conductores || {})
+            .map(x => (x.puesto || '').trim()).filter(Boolean))];
+        const todos = [...PUESTOS_DEFINIDOS];
+        usados.forEach(p => {
+            if (!todos.some(d => this._clavePuesto(d) === this._clavePuesto(p))) todos.push(p);
+        });
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const cont = document.getElementById('puestoModalLista');
+        cont.innerHTML = todos.map(p => {
+            const fr = TURNOS_POR_PUESTO[this._clavePuesto(p)];
+            const detalle = fr
+                ? fr.map(f => `${f.id} ${f.desde}–${f.hasta}`).join(' · ')
+                : 'sin turnos definidos';
+            const sel = this._clavePuesto(p) === actual;
+            return `<div class="pm-op${sel ? ' sel' : ''}" onclick="app._asignarPuesto('${esc(p).replace(/'/g, "\\'")}')">
+                <div style="flex:1;min-width:0;">${esc(p)}<br><span class="pm-turnos">${esc(detalle)}</span></div>
+                ${sel ? '<span class="pm-check">✓</span>' : ''}
+            </div>`;
+        }).join('')
+        + `<div class="pm-op pm-nuevo" onclick="app._nuevoPuesto()">➕ Crear puesto nuevo…</div>`
+        + (u.puesto ? `<div class="pm-op pm-quitar" onclick="app._asignarPuesto('')">✕ Quitar el puesto</div>` : '');
+    },
+
+    _nuevoPuesto() {
+        const v = prompt('Nombre del puesto nuevo:\n\nSin turnos definidos se usará el criterio general (mañana antes de las 13h).');
         if (v === null) return;
+        const nombre = v.trim();
+        if (!nombre) return;
+        this._asignarPuesto(nombre);
+    },
+
+    async _asignarPuesto(puesto) {
+        const email = this._puestoEditando;
+        if (!email) return;
+        document.getElementById('puestoModal').classList.remove('show');
         try {
             const resp = await fetch(this.USUARIOS_URL, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json',
                            'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ email, puesto: v.trim() })
+                body: JSON.stringify({ email, puesto })
             });
             const data = await resp.json();
             if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
             this._conductores = data;
             this._renderConductores();
-            this._mostrarToast('✅ Puesto actualizado', 2500);
+            this._mostrarToast(puesto ? `✅ Puesto: ${puesto}` : 'Puesto quitado', 2500);
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
