@@ -1387,15 +1387,17 @@ const app = {
         return document.querySelector('input[name="extraDestino"]:checked')?.value || 'anual';
     },
 
-    mostrarCambiarJornada() {
-        const v = prompt('¿Cuántas horas tiene tu jornada?\n\nSe usará para contar los festivos que no trabajas.', this.jornadaHoras);
-        if (v !== null && !isNaN(parseFloat(v)) && parseFloat(v) > 0) {
-            this.jornadaHoras = parseFloat(v);
-            localStorage.setItem('jornadaHoras', String(this.jornadaHoras));
-            this._actualizarJornadaDisplay();
-            this._guardarPreferencias();
-            this.cargarDatos();
-        }
+    async mostrarCambiarJornada() {
+        const v = prompt('¿Cuántas horas tiene tu jornada?\n\nPuedes usar decimales: 3,5 o 3.5\nSe usará para contar los festivos que no trabajas.', this.jornadaHoras);
+        if (v === null) return;
+        const n = this._leerDecimal(v);
+        if (n === null || n <= 0) { alert('❌ Introduce un número de horas válido.\nEjemplo: 3,5 o 7'); return; }
+        this.jornadaHoras = n;
+        localStorage.setItem('jornadaHoras', String(n));
+        this._actualizarJornadaDisplay();
+        await this._guardarPreferencias(true);
+        this.cargarDatos();
+        this._mostrarToast(`✅ Jornada: ${n}h`, 2500);
     },
 
     _actualizarJornadaDisplay() {
@@ -2037,15 +2039,17 @@ const app = {
         this._guardarPreferencias();
     },
 
-    mostrarCambiarHoras() {
+    async mostrarCambiarHoras() {
         const v = prompt('¿Cuántas horas quieres trabajar al año?', this.horasAnualesCustom);
-        if (v !== null && !isNaN(parseFloat(v)) && parseFloat(v) > 0) {
-            this.horasAnualesCustom = parseFloat(v);
-            localStorage.setItem('horasAnuales', this.horasAnualesCustom);
-            document.getElementById('horasAnualesDisplay').textContent = this.horasAnualesCustom + 'h';
-            alert(`✅ Horas anuales cambiadas a ${this.horasAnualesCustom}h`);
-            this.cargarDatos();
-        }
+        if (v === null) return;
+        const n = this._leerDecimal(v);
+        if (n === null || n <= 0) { alert('❌ Introduce un número de horas válido.'); return; }
+        this.horasAnualesCustom = n;
+        localStorage.setItem('horasAnuales', String(n));
+        document.getElementById('horasAnualesDisplay').textContent = n + 'h';
+        await this._guardarPreferencias(true);
+        this.cargarDatos();
+        this._mostrarToast(`✅ Horas anuales: ${n}h`, 2500);
     },
 
     confirmarResetear() {
@@ -2592,9 +2596,12 @@ const app = {
         if (scheduleRow) scheduleRow.style.display = this.gpsMode === 'schedule' ? '' : 'none';
     },
 
-    _guardarPreferencias() {
+    // inmediato=true guarda ya y devuelve la promesa, para poder esperar a que
+    // esté en Drive antes de releer (si no, la recarga trae el valor viejo y
+    // pisa el que se acaba de cambiar).
+    _guardarPreferencias(inmediato = false) {
         clearTimeout(this._prefSaveTimer);
-        this._prefSaveTimer = setTimeout(async () => {
+        const guardar = async () => {
             if (!this.usuarioActual) return;
             try {
                 const data = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
@@ -2607,7 +2614,17 @@ const app = {
                 }
                 await this._writeDriveFile(data);
             } catch(e) { console.error('Error guardando preferencias:', e); }
-        }, 2000);
+        };
+        if (inmediato) return guardar();
+        this._prefSaveTimer = setTimeout(guardar, 2000);
+        return Promise.resolve();
+    },
+
+    // Acepta coma o punto: en el teclado español "3,5" se escribe con coma y
+    // parseFloat('3,5') daría 3.
+    _leerDecimal(v) {
+        const n = parseFloat(String(v).replace(',', '.').trim());
+        return isNaN(n) ? null : n;
     },
 
     async _pedirPermisosIniciales() {
