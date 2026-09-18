@@ -2198,11 +2198,19 @@ const app = {
         if (!cont) return;
         cont.innerHTML = '<div class="ops-field-sub" style="padding:8px 14px;">Cargando…</div>';
         try {
-            const [rRel, rVer] = await Promise.all([
-                fetch('https://api.github.com/repos/guillermorc-gain/RegistroHorario/releases?per_page=30'),
+            const [res, rVer] = await Promise.all([
+                this._releases(true),
                 fetch(VERSION_URL, { cache: 'no-store' })
             ]);
-            const releases = rRel.ok ? await rRel.json() : [];
+            if (!res.ok) {
+                cont.innerHTML = `<div class="ops-field-sub" style="padding:10px 14px;color:#c0392b;">${
+                    res.limite
+                        ? 'GitHub ha limitado las consultas por hora. Prueba dentro de unos minutos.'
+                        : 'No se pudieron cargar las versiones (error ' + res.status + ').'}</div>`;
+                if (act) act.textContent = '';
+                return;
+            }
+            const releases = res.lista;
             this._versionPublicada = rVer.ok ? ((await rVer.json())?.build ?? null) : null;
             // Solo las de la app de trabajadores
             const re = /^build-(\d+)$/;
@@ -2211,6 +2219,12 @@ const app = {
                 .filter(x => x.m)
                 .map(x => ({ n: parseInt(x.m[1], 10), fecha: x.r.published_at }))
                 .sort((a, b) => b.n - a.n);
+            // La publicada puede ser anterior a las descargadas: sin esto no
+            // aparecería marcada y no habría forma de ver cuál está activa.
+            if (this._versionPublicada !== null && !builds.some(b => b.n === this._versionPublicada)) {
+                builds.push({ n: this._versionPublicada, fecha: null });
+                builds.sort((a, b) => b.n - a.n);
+            }
             if (act) {
                 act.textContent = this._versionPublicada === null
                     ? 'Ahora mismo reciben la más reciente'
@@ -2219,7 +2233,9 @@ const app = {
             if (!builds.length) { cont.innerHTML = '<div class="ops-field-sub" style="padding:8px 14px;">Sin versiones</div>'; return; }
             cont.innerHTML = builds.map(b => {
                 const activa = b.n === this._versionPublicada;
-                const f = new Date(b.fecha).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' });
+                const f = b.fecha
+                    ? new Date(b.fecha).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })
+                    : 'versión publicada';
                 return `<div class="ver-item${activa ? ' activa' : ''}">
                     <span class="ver-n">${this._buildNumToVersion(b.n)}<br><span class="ver-fecha">${f}</span></span>
                     ${activa ? '<span class="ver-badge">PUBLICADA</span>'
@@ -3709,6 +3725,31 @@ td{border:1px solid #ccc;}</style></head>
         if (el) el.textContent = 'Versión ' + this._buildNumToVersion(n);
     },
 
+    // GitHub permite 60 peticiones/hora sin autenticar y la app consulta en cada
+    // apertura, así que se comparte una caché corta entre el chequeo de
+    // actualizaciones y la lista de versiones para no agotarlas.
+    async _releases(forzar) {
+        const CACHE = 'releasesCache', EDAD = 'releasesCacheAt';
+        if (!forzar) {
+            const t = parseInt(sessionStorage.getItem(EDAD) || '0', 10);
+            if (Date.now() - t < 5 * 60 * 1000) {
+                try { return { ok: true, lista: JSON.parse(sessionStorage.getItem(CACHE) || '[]') }; }
+                catch (_) {}
+            }
+        }
+        const resp = await fetch('https://api.github.com/repos/guillermorc-gain/RegistroHorario/releases?per_page=100');
+        if (!resp.ok) {
+            // 403 aquí casi siempre es el límite por hora, no un permiso
+            return { ok: false, status: resp.status, limite: resp.status === 403 };
+        }
+        const lista = await resp.json();
+        try {
+            sessionStorage.setItem(CACHE, JSON.stringify(lista));
+            sessionStorage.setItem(EDAD, String(Date.now()));
+        } catch (_) {}
+        return { ok: true, lista };
+    },
+
     async _checkForUpdates(showFeedback = false) {
         if (!window.Capacitor?.isNativePlatform?.()) return;
         if (typeof APP_VERSION === 'undefined' || APP_VERSION === '0') return;
@@ -3716,12 +3757,14 @@ td{border:1px solid #ccc;}</style></head>
         try {
             // Both apps publish releases to the same repo, so pick only the ones
             // tagged for this app instead of whatever release is newest overall.
-            const resp = await fetch('https://api.github.com/repos/guillermorc-gain/RegistroHorario/releases?per_page=30');
-            if (!resp.ok) {
-                if (showFeedback) this._mostrarToast('❌ No se pudo comprobar (error ' + resp.status + ')');
+            const res = await this._releases(showFeedback);
+            if (!res.ok) {
+                if (showFeedback) this._mostrarToast(res.limite
+                    ? '⏳ GitHub ha limitado las consultas. Prueba en unos minutos.'
+                    : '❌ No se pudo comprobar (error ' + res.status + ')', 4500);
                 return;
             }
-            const lista = await resp.json();
+            const lista = res.lista;
             const re = new RegExp('^' + RELEASE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
             // El gestor siempre ve la última, para poder probarla antes de
             // publicarla; el resto solo ven la que él haya publicado.
