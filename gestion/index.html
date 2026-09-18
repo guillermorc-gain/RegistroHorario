@@ -227,21 +227,12 @@
         .app-content.dark .btn-secondary{background:#2d3561;color:#e0e0e0;}
 
         /* ── MONTHLY BREAKDOWN ── */
-        .mensual-section{background:white;border-radius:12px;padding:10px 12px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
+        .mensual-section{background:white;border-radius:12px;padding:10px 14px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
         .app-content.dark .mensual-section{background:#1e2a3a;}
         .mensual-title{font-size:10px;font-weight:800;color:var(--g1);text-transform:uppercase;letter-spacing:0.7px;}
         .mensual-head{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;margin-bottom:8px;}
         .mensual-toggle{width:30px;height:30px;background:linear-gradient(135deg,var(--g1),var(--g2));border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;flex-shrink:0;transition:transform 0.2s;}
         .mensual-section.cerrada .mensual-toggle{transform:rotate(-90deg);}
-        /* Summary of the current month, shown only while collapsed */
-        .mensual-resumen{display:none;flex:1;justify-content:flex-end;align-items:center;gap:6px;margin-right:9px;}
-        .mensual-section.cerrada .mensual-resumen{display:flex;}
-        .mensual-resumen .mr-mes{font-size:10.5px;font-weight:700;color:#7f8c8d;}
-        .app-content.dark .mensual-resumen .mr-mes{color:#a0a0a0;}
-        .mensual-resumen .mr-h{font-size:11px;font-weight:800;color:#2c3e50;}
-        .app-content.dark .mensual-resumen .mr-h{color:#e0e0e0;}
-        .mensual-resumen .mr-n{font-size:10px;font-weight:700;color:#856404;background:#fff3cd;padding:1px 5px;border-radius:8px;}
-        .mensual-resumen .mr-e{font-size:10px;font-weight:700;color:#27ae60;background:#d5f4e6;padding:1px 5px;border-radius:8px;}
         .mensual-section.cerrada .mensual-head{margin-bottom:0;}
         .mensual-section.cerrada #mensualTable{display:none;}
         .mes-row{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #f0f0f0;}
@@ -264,7 +255,7 @@
         .historial-bar-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:#7f8c8d;flex:1;}
         .app-content.dark .historial-bar-title{color:#a0a0a0;}
         .historial-count{font-size:11px;font-weight:700;color:var(--g1);margin-right:10px;}
-        .historial-toggle{width:30px;height:30px;background:linear-gradient(135deg,var(--g1),var(--g2));border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;flex-shrink:0;}
+        .historial-toggle{transform:rotate(-90deg);width:30px;height:30px;background:linear-gradient(135deg,var(--g1),var(--g2));border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;flex-shrink:0;}
 
         /* ── OPTIONS ── */
         .options-screen{display:none;flex-direction:column;flex:1;min-height:0;}
@@ -613,7 +604,6 @@
             <div class="mensual-section" id="mensualSection">
                 <div class="mensual-head" onclick="app.toggleMensual()">
                     <span class="mensual-title">📊 Por mes</span>
-                    <span class="mensual-resumen" id="mensualResumen"></span>
                     <button class="mensual-toggle" id="mensualToggle" title="Mostrar/ocultar">▼</button>
                 </div>
                 <div id="mensualTable"><div style="text-align:center;color:#95a5a6;font-size:12px;padding:6px;">Sin datos</div></div>
