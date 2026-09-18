@@ -274,7 +274,7 @@
         .cond-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:#7f8c8d;}
         .app-content.dark .cond-title{color:#a0a0a0;}
         .cond-refresh{width:30px;height:30px;background:linear-gradient(135deg,var(--g1),var(--g2));border:none;border-radius:8px;color:#fff;font-size:16px;cursor:pointer;}
-        .cond-list{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:8px;}
+        .cond-list{flex:none;display:flex;flex-direction:column;gap:8px;}
         .cond-card{background:white;border-radius:12px;padding:11px 13px;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
         .app-content.dark .cond-card{background:#1e2a3a;}
         .cond-top{display:flex;align-items:center;gap:10px;}
@@ -294,6 +294,24 @@
         .app-content.dark .cond-stat-v{color:#e0e0e0;}
         .cond-stat-l{font-size:9px;color:#95a5a6;text-transform:uppercase;letter-spacing:0.3px;}
         .cond-ver{font-size:9.5px;color:#95a5a6;margin-top:6px;text-align:right;}
+        .pst-card{background:white;border-radius:12px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);margin-bottom:8px;}
+        .app-content.dark .pst-card{background:#1e2a3a;}
+        .pst-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;}
+        .pst-nombre{font-size:12.5px;font-weight:800;color:#2c3e50;}
+        .app-content.dark .pst-nombre{color:#e0e0e0;}
+        .pst-cob{font-size:10px;font-weight:800;color:#27ae60;background:#d5f4e6;padding:2px 8px;border-radius:9px;}
+        .pst-cob.vacio{color:#c0392b;background:#fdecea;}
+        .pst-fila{display:flex;align-items:center;gap:7px;padding:5px 0;border-top:1px solid #f0f0f0;font-size:12px;}
+        .app-content.dark .pst-fila{border-color:#2d3561;}
+        .pst-fila:first-of-type{border-top:none;}
+        .pst-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+        .pst-dot.verde{background:#27ae60;box-shadow:0 0 0 3px rgba(39,174,96,.18);}
+        .pst-dot.rojo{background:#e74c3c;}
+        .pst-dot.gris{background:#bdc3c7;}
+        .pst-quien{flex:1;min-width:0;color:#2c3e50;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .app-content.dark .pst-quien{color:#e0e0e0;}
+        .pst-horario{font-size:11px;font-weight:700;color:#7f8c8d;font-variant-numeric:tabular-nums;}
+        .app-content.dark .pst-horario{color:#a0a0a0;}
         /* ── CUADRANTE ── */
         .cuad-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 2px 0;flex-shrink:0;}
         .cuad-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:#7f8c8d;}
@@ -304,9 +322,11 @@
         .cuad-img{max-width:100%;border-radius:8px;cursor:zoom-in;display:block;}
         .cuad-box #cuadVacio{margin:auto;}
         .cuad-acciones{display:flex;gap:6px;flex-shrink:0;}
-        .cuad-visor{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:99999;align-items:center;justify-content:center;}
+        .cuad-visor{display:none;position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:99999;align-items:center;justify-content:center;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pinch-zoom;}
         .cuad-visor.show{display:flex;}
-        .cuad-visor img{max-width:100%;max-height:100%;object-fit:contain;}
+        .cuad-visor img{max-width:100%;max-height:100%;object-fit:contain;transform-origin:center center;transition:transform .18s ease;}
+        .cuad-visor img.zoom{max-width:none;max-height:none;width:260%;height:auto;object-fit:initial;}
+        .cuad-visor-ayuda{position:absolute;bottom:calc(14px + env(safe-area-inset-bottom,0px));left:0;right:0;text-align:center;color:rgba(255,255,255,.65);font-size:11.5px;pointer-events:none;}
         .cuad-visor-x{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:14px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;border:none;font-size:22px;cursor:pointer;}
 
         /* ── OPTIONS ── */
@@ -514,6 +534,11 @@
             </div>
             <div id="condList" class="cond-list"></div>
 
+            <div class="cond-head" style="margin-top:4px;">
+                <span class="cond-title">🧩 Puestos de trabajo</span>
+            </div>
+            <div id="puestosList"></div>
+
             <!-- Formulario heredado: oculto en gestión, pero presente para que
                  el código compartido siga encontrando sus campos. -->
             <div id="legacyRegistro" hidden>
@@ -608,20 +633,20 @@
                         <span>🌙</span>
                         <input type="checkbox" id="nocheToggle" onclick="event.stopPropagation();app.toggleNoche()">
                     </div>
-                    <div class="pr-compact" id="prCompact" ontouchend="event.preventDefault();app.clickPrCompact()" onclick="app.clickPrCompact()" title="Permiso Retribuido">
+                    <div class="pr-compact" id="prCompact" onclick="app.clickPrCompact()" title="Permiso Retribuido">
                         <span>PR</span>
                         <span class="pr-restantes" id="prRestantes">2</span>
                         <input type="checkbox" id="prToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#3498db;cursor:pointer;">
                     </div>
-                    <div class="festivo-compact" id="festivoCompact" ontouchend="event.preventDefault();app.clickFestivo()" onclick="app.clickFestivo()" title="Festivo">
+                    <div class="festivo-compact" id="festivoCompact" onclick="app.clickFestivo()" title="Festivo">
                         <span>🎉</span>
                         <input type="checkbox" id="festivoToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#e67e22;cursor:pointer;">
                     </div>
-                    <div class="extra-compact" id="extraCompact" ontouchend="event.preventDefault();app.clickExtra()" onclick="app.clickExtra()" title="Horas extras">
+                    <div class="extra-compact" id="extraCompact" onclick="app.clickExtra()" title="Horas extras">
                         <span>⏱️</span>
                         <input type="checkbox" id="extraToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#8e44ad;cursor:pointer;">
                     </div>
-                    <div class="vacaciones-compact" id="vacacionesCompact" ontouchend="event.preventDefault();app.clickVacaciones()" onclick="app.clickVacaciones()" title="Vacaciones (registra 0 horas)">
+                    <div class="vacaciones-compact" id="vacacionesCompact" onclick="app.clickVacaciones()" title="Vacaciones (registra 0 horas)">
                         <span>🏖️</span>
                         <input type="checkbox" id="vacacionesToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#16a085;cursor:pointer;">
                     </div>
@@ -1022,7 +1047,8 @@
 <!-- Visor del cuadrante -->
 <div class="cuad-visor" id="cuadVisor" onclick="app.cerrarCuadranteGrande()">
     <button class="cuad-visor-x" onclick="event.stopPropagation();app.cerrarCuadranteGrande()">×</button>
-    <img id="cuadVisorImg" onclick="event.stopPropagation()">
+    <img id="cuadVisorImg" onclick="event.stopPropagation();app.zoomCuadrante(event)">
+    <div class="cuad-visor-ayuda" id="cuadVisorAyuda">Toca la imagen para ampliar · pellizca para acercar</div>
 </div>
 
 <script src="version.js"></script>

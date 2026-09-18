@@ -2096,8 +2096,28 @@ const app = {
         document.getElementById('cuadVisor').classList.add('show');
     },
 
+
+    zoomCuadrante(ev) {
+        const img = document.getElementById('cuadVisorImg');
+        if (!img) return;
+        const ampliada = img.classList.toggle('zoom');
+        const ayuda = document.getElementById('cuadVisorAyuda');
+        if (ayuda) ayuda.textContent = ampliada
+            ? 'Arrastra para moverte · toca para reducir'
+            : 'Toca la imagen para ampliar · pellizca para acercar';
+        // Al ampliar, centrar en el punto tocado
+        if (ampliada && ev) {
+            const visor = document.getElementById('cuadVisor');
+            requestAnimationFrame(() => {
+                visor.scrollLeft = (img.scrollWidth - visor.clientWidth) / 2;
+                visor.scrollTop  = Math.max(0, ev.offsetY * (img.clientHeight / (img.clientHeight || 1)) - visor.clientHeight / 2);
+            });
+        }
+    },
+
     cerrarCuadranteGrande() {
         document.getElementById('cuadVisor')?.classList.remove('show');
+        document.getElementById('cuadVisorImg')?.classList.remove('zoom');
     },
 
 
@@ -2124,6 +2144,14 @@ const app = {
                 return d.getFullYear() === ahora.getFullYear() && d.getMonth() === ahora.getMonth();
             });
             const t = this._calcTotales(hist);
+            // Horario de hoy si lo hay; si no, el del último día registrado.
+            // Gestión lo usa para ver si el puesto queda cubierto.
+            const hoyId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            const deHoy = Object.entries(hist)
+                .filter(([id]) => this._fechaDeId(id) === hoyId)
+                .map(([, r]) => r);
+            const ultimo = deHoy.length ? deHoy[deHoy.length - 1]
+                : Object.values(hist).sort((a, b) => b.timestamp - a.timestamp)[0];
             const payload = {
                 nombre:       this.usuarioActual.name || '',
                 conductor:    this.numConductor || '',
@@ -2133,13 +2161,17 @@ const app = {
                 horasTotales: t.anualReal,
                 diasMes:      delMes.length,
                 turno:        this._turnoHabitual(delMes),
+                horaInicio:   ultimo?.horaInicio || '',
+                horaFin:      ultimo?.horaFin || '',
+                horarioDe:    deHoy.length ? 'hoy' : 'anterior',
             };
             // Publicar cuando algo cambie de verdad, no una vez al día: si no, al
             // actualizar la app el nuevo número de versión no llegaba a gestión
             // hasta el día siguiente. Sin cambios no se escribe nada.
             const huella = JSON.stringify([payload.version, payload.horasMes, payload.horasTotales,
                                            payload.diasMes, payload.turno, payload.conductor,
-                                           payload.nombre, new Date().toISOString().slice(0, 10)]);
+                                           payload.nombre, payload.horaInicio, payload.horaFin,
+                                           payload.horarioDe, new Date().toISOString().slice(0, 10)]);
             if (localStorage.getItem('resumenHuella') === huella) return;
             const resp = await fetch(this.USUARIOS_URL, {
                 method: 'POST',

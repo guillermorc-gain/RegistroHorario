@@ -2073,8 +2073,28 @@ const app = {
         document.getElementById('cuadVisor').classList.add('show');
     },
 
+
+    zoomCuadrante(ev) {
+        const img = document.getElementById('cuadVisorImg');
+        if (!img) return;
+        const ampliada = img.classList.toggle('zoom');
+        const ayuda = document.getElementById('cuadVisorAyuda');
+        if (ayuda) ayuda.textContent = ampliada
+            ? 'Arrastra para moverte · toca para reducir'
+            : 'Toca la imagen para ampliar · pellizca para acercar';
+        // Al ampliar, centrar en el punto tocado
+        if (ampliada && ev) {
+            const visor = document.getElementById('cuadVisor');
+            requestAnimationFrame(() => {
+                visor.scrollLeft = (img.scrollWidth - visor.clientWidth) / 2;
+                visor.scrollTop  = Math.max(0, ev.offsetY * (img.clientHeight / (img.clientHeight || 1)) - visor.clientHeight / 2);
+            });
+        }
+    },
+
     cerrarCuadranteGrande() {
         document.getElementById('cuadVisor')?.classList.remove('show');
+        document.getElementById('cuadVisorImg')?.classList.remove('zoom');
     },
 
     // Downscale before upload: a phone photo is several MB and the store caps
@@ -2222,6 +2242,72 @@ const app = {
         }
     },
 
+
+    // ── Puestos de trabajo: ¿queda cubierta la jornada? ──────────────────────
+
+    _minutos(hhmm) {
+        if (!hhmm || !/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
+        const [h, m] = hhmm.split(':').map(Number);
+        return h * 60 + m;
+    },
+
+    // verde trabajando ahora, rojo ya terminado, gris aún sin empezar
+    _estadoTurno(u) {
+        if (u.horarioDe !== 'hoy') return { clase: 'gris', texto: 'sin registro hoy' };
+        const ini = this._minutos(u.horaInicio), fin = this._minutos(u.horaFin);
+        if (ini === null || fin === null) return { clase: 'gris', texto: 'sin horario' };
+        const ahora = new Date().getHours() * 60 + new Date().getMinutes();
+        let finReal = fin; if (finReal <= ini) finReal += 1440;   // turno que cruza medianoche
+        let cur = ahora; if (cur < ini && finReal > 1440) cur += 1440;
+        if (cur < ini) return { clase: 'gris',  texto: 'aún no ha entrado' };
+        if (cur > finReal) return { clase: 'rojo', texto: 'ha terminado' };
+        return { clase: 'verde', texto: 'trabajando' };
+    },
+
+    _renderPuestos() {
+        const cont = document.getElementById('puestosList');
+        if (!cont) return;
+        const lista = Object.values(this._conductores || {});
+        const conPuesto = lista.filter(u => (u.puesto || '').trim());
+        if (!conPuesto.length) {
+            cont.innerHTML = '<div class="tab-empty" style="padding:22px 16px;">'
+                + '<span class="tab-empty-s">Asigna un puesto tocando el nombre de un trabajador<br>'
+                + 'y aquí verás si queda cubierto.</span></div>';
+            return;
+        }
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const porPuesto = {};
+        conPuesto.forEach(u => { (porPuesto[u.puesto] = porPuesto[u.puesto] || []).push(u); });
+
+        cont.innerHTML = Object.keys(porPuesto).sort().map(puesto => {
+            // Ordenar por hora de entrada: así se ve de un vistazo si el relevo encaja
+            const gente = porPuesto[puesto].sort((a, b) => {
+                const ma = this._minutos(a.horaInicio), mb = this._minutos(b.horaInicio);
+                if (ma === null) return 1;
+                if (mb === null) return -1;
+                return ma - mb;
+            });
+            const activos = gente.filter(u => this._estadoTurno(u).clase === 'verde').length;
+            const filas = gente.map(u => {
+                const e = this._estadoTurno(u);
+                const horario = (u.horaInicio && u.horaFin) ? `${esc(u.horaInicio)}–${esc(u.horaFin)}` : 'sin horario';
+                return `<div class="pst-fila">
+                    <span class="pst-dot ${e.clase}" title="${esc(e.texto)}"></span>
+                    <span class="pst-quien"><b>${esc(u.conductor) || '—'}</b> ${esc(u.nombre)}</span>
+                    ${u.turno ? `<span class="cond-turno ${u.turno}">${u.turno}</span>` : ''}
+                    <span class="pst-horario">${horario}</span>
+                </div>`;
+            }).join('');
+            return `<div class="pst-card">
+                <div class="pst-head">
+                    <span class="pst-nombre">${esc(puesto)}</span>
+                    <span class="pst-cob${activos > 0 ? '' : ' vacio'}">${activos > 0 ? `${activos} en turno` : 'sin cubrir'}</span>
+                </div>
+                ${filas}
+            </div>`;
+        }).join('');
+    },
+
     _renderConductores() {
         const cont = document.getElementById('condList');
         const lista = Object.values(this._conductores || {})
@@ -2257,6 +2343,7 @@ const app = {
                 <div class="cond-ver">${ver} · ${u.actualizado ? new Date(u.actualizado).toLocaleDateString('es-ES') : ''}</div>
             </div>`;
         }).join('');
+        this._renderPuestos();
     },
 
     async _editarPuesto(email) {
