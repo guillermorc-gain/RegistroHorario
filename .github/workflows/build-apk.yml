@@ -39,6 +39,15 @@ jobs:
           sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 34/' "$VARS"
           sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 34/' "$VARS"
 
+      - name: Patch build.gradle — versionCode/versionName from build number
+        run: |
+          GRADLE="android/app/build.gradle"
+          N=${{ github.run_number }}
+          MAJOR=$((N / 100)); MINOR=$((N % 100))
+          sed -i "s/versionCode [0-9]*/versionCode $N/" "$GRADLE"
+          sed -i "s/versionName \"[^\"]*\"/versionName \"$MAJOR.$(printf '%02d' $MINOR)\"/" "$GRADLE"
+          grep -E "versionCode|versionName" "$GRADLE"
+
       - name: Patch AndroidManifest — permissions + intent filter localhost
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
