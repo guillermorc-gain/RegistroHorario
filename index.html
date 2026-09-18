@@ -305,7 +305,7 @@
         @keyframes splash-pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.1);}}
 
         /* ── INSTALL BANNER ── */
-        .install-banner{display:none;background:#0052CC;color:white;padding:12px 15px;flex-shrink:0;align-items:center;gap:10px;box-shadow:0 -2px 6px rgba(0,0,0,0.25);}
+        .install-banner{display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:500px;z-index:9997;background:#0052CC;color:white;padding:12px 15px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));align-items:center;gap:10px;box-shadow:0 -2px 10px rgba(0,0,0,0.3);}
         .install-banner.show{display:flex;}
         .install-banner-close{background:transparent;color:white;border:none;font-size:22px;cursor:pointer;padding:0 4px;line-height:1;opacity:0.8;}
 
