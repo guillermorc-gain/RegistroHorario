@@ -2321,6 +2321,7 @@ const app = {
         document.querySelectorAll('.reg-barra .orden-btn').forEach(b =>
             b.classList.toggle('activo', b.dataset.ord === modo));
         this._renderRegistro();
+        this._renderPrueba();
     },
 
     // Hay que invertir el estado EFECTIVO, no el guardado: si la clave aún no
@@ -2435,6 +2436,144 @@ const app = {
         }).join('');
     },
 
+    // ── Usuarios de prueba ───────────────────────────────────────────────────
+
+    _renderPrueba() {
+        const cont = document.getElementById('pruebaList');
+        if (!cont) return;
+        const fict = Object.values(this._conductores || {}).filter(u => u.ficticio);
+        if (!fict.length) {
+            cont.innerHTML = '<div class="ops-field-sub" style="padding:8px 14px;">Ninguno todavía</div>';
+            return;
+        }
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        cont.innerHTML = fict.map(u => `<div class="pr-item">
+            <span class="pr-item-t"><b>${esc(u.conductor) || '—'}</b> ${esc(u.nombre)}
+                ${u.puesto ? `<span class="cond-puesto">· ${esc(u.puesto)}</span>` : ''}
+                <br><span class="ops-field-sub">${(u.jornadas || []).length} jornadas · ${u.horasTotales || 0}h</span></span>
+            <button class="pr-ed"  onclick="app._nuevoFicticio('${esc(u.email)}')">✏️</button>
+            <button class="pr-del" onclick="app._borrarFicticio('${esc(u.email)}')">×</button>
+        </div>`).join('');
+    },
+
+    _nuevoFicticio(email) {
+        const u = email ? (this._conductores || {})[email] : null;
+        this._fictEditando = email || `prueba-${Date.now()}@prueba.local`;
+        document.getElementById('fNum').value    = u?.conductor || '';
+        document.getElementById('fNombre').value = u?.nombre || '';
+        const sel = document.getElementById('fPuesto');
+        const usados = [...new Set(Object.values(this._conductores || {}).map(x => (x.puesto || '').trim()).filter(Boolean))];
+        const todos = [...PUESTOS_DEFINIDOS];
+        usados.forEach(p => { if (!todos.some(d => this._clavePuesto(d) === this._clavePuesto(p))) todos.push(p); });
+        sel.innerHTML = '<option value="">Sin puesto</option>' +
+            todos.map(p => `<option${this._clavePuesto(p) === this._clavePuesto(u?.puesto) ? ' selected' : ''}>${p}</option>`).join('');
+        this._fictJornadas = (u?.jornadas || []).map(j => ({ ...j }));
+        if (!this._fictJornadas.length) this._addJornadaFict(true);
+        this._renderJornadasFict();
+        document.getElementById('fictModal').classList.add('show');
+        if (this.darkMode) document.getElementById('fictModalContent').classList.add('dark');
+    },
+
+    _addJornadaFict(silencioso) {
+        const hoy = new Date();
+        const f = `${hoy.getFullYear()}${String(hoy.getMonth()+1).padStart(2,'0')}${String(hoy.getDate()).padStart(2,'0')}`;
+        (this._fictJornadas = this._fictJornadas || []).push({ f, i: '06:00', o: '14:00', h: 8, n: 0 });
+        if (!silencioso) this._renderJornadasFict();
+    },
+
+    _renderJornadasFict() {
+        const cont = document.getElementById('fJornadas');
+        cont.innerHTML = (this._fictJornadas || []).map((j, k) => {
+            const iso = `${j.f.slice(0,4)}-${j.f.slice(4,6)}-${j.f.slice(6,8)}`;
+            return `<div class="fj">
+                <div class="fj-row">
+                    <div style="flex:1;"><label>Fecha</label><input type="date" value="${iso}" onchange="app._setJ(${k},'f',this.value)"></div>
+                    <button class="fj-del" onclick="app._delJ(${k})">×</button>
+                </div>
+                <div class="fj-row" style="margin-top:5px;">
+                    <div style="flex:1;"><label>Inicio</label><input type="time" value="${j.i || ''}" onchange="app._setJ(${k},'i',this.value)"></div>
+                    <div style="flex:1;"><label>Fin</label><input type="time" value="${j.o || ''}" onchange="app._setJ(${k},'o',this.value)"></div>
+                    <div style="flex:.6;"><label>Horas</label><input type="text" inputmode="decimal" value="${j.h ?? ''}" onchange="app._setJ(${k},'h',this.value)"></div>
+                </div>
+                <div class="fj-flags">
+                    <label><input type="checkbox" ${j.x === 1 ? 'checked' : ''} onchange="app._setJ(${k},'x',this.checked)"> Extra</label>
+                    <label><input type="checkbox" ${j.fe ? 'checked' : ''} onchange="app._setJ(${k},'fe',this.checked)"> Festivo</label>
+                    <label><input type="checkbox" ${j.v ? 'checked' : ''} onchange="app._setJ(${k},'v',this.checked)"> Vacaciones</label>
+                    <label><input type="checkbox" ${j.p ? 'checked' : ''} onchange="app._setJ(${k},'p',this.checked)"> PR</label>
+                    <label>Noct. <input type="text" inputmode="decimal" style="width:44px;" value="${j.n || 0}" onchange="app._setJ(${k},'n',this.value)"></label>
+                </div>
+            </div>`;
+        }).join('');
+    },
+
+    _setJ(k, campo, valor) {
+        const j = this._fictJornadas[k];
+        if (!j) return;
+        if (campo === 'f') j.f = String(valor).replace(/-/g, '');
+        else if (campo === 'h' || campo === 'n') j[campo] = this._leerDecimal(valor) || 0;
+        else if (campo === 'x') { if (valor) j.x = 1; else delete j.x; }
+        else if (['fe','v','p'].includes(campo)) { if (valor) j[campo] = 1; else delete j[campo]; }
+        else j[campo] = valor;
+        // Horas automáticas al cambiar el horario, como en la app real
+        if ((campo === 'i' || campo === 'o') && j.i && j.o) j.h = this._horasEntre(j.i, j.o);
+        if (campo === 'i' || campo === 'o') this._renderJornadasFict();
+    },
+
+    _delJ(k) { this._fictJornadas.splice(k, 1); this._renderJornadasFict(); },
+
+    async _guardarFicticio() {
+        const num    = document.getElementById('fNum').value.replace(/\D/g, '');
+        const nombre = document.getElementById('fNombre').value.trim();
+        const puesto = document.getElementById('fPuesto').value;
+        if (!nombre) { this._mostrarToast('❌ Pon un nombre', 3000); return; }
+        if (num && num.length !== 5) { this._mostrarToast('❌ El nº son 5 dígitos', 3000); return; }
+        const jornadas = (this._fictJornadas || []).filter(j => j.f);
+        const ahora = new Date();
+        const delMes = jornadas.filter(j =>
+            j.f.slice(0, 6) === `${ahora.getFullYear()}${String(ahora.getMonth()+1).padStart(2,'0')}`);
+        const suma = a => Math.round(a.reduce((s, j) => s + (parseFloat(j.h) || 0), 0) * 10) / 10;
+        const ultima = jornadas.slice().sort((a, b) => b.f.localeCompare(a.f))[0];
+        const hoyId = `${ahora.getFullYear()}${String(ahora.getMonth()+1).padStart(2,'0')}${String(ahora.getDate()).padStart(2,'0')}`;
+        const ficticio = {
+            nombre, conductor: num ? num.slice(0,4) + '-' + num.slice(4) : '', puesto,
+            avatar: null, version: (typeof APP_VERSION !== 'undefined') ? APP_VERSION : '',
+            horasMes: suma(delMes), horasTotales: suma(jornadas), diasMes: delMes.length,
+            horaInicio: ultima?.i || '', horaFin: ultima?.o || '',
+            horarioDe: ultima?.f === hoyId ? 'hoy' : 'anterior',
+            turno: this._turnoDe(puesto, ultima?.i) || '',
+            jornadas,
+        };
+        try {
+            const resp = await fetch(this.USUARIOS_URL, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ email: this._fictEditando, ficticio })
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._conductores = data;
+            document.getElementById('fictModal').classList.remove('show');
+            this._renderConductores(); this._renderPrueba();
+            this._mostrarToast('✅ Usuario de prueba guardado', 2500);
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
+    },
+
+    async _borrarFicticio(email) {
+        if (!confirm('¿Borrar este usuario de prueba?')) return;
+        try {
+            const resp = await fetch(this.USUARIOS_URL, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json', 'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ email })
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._conductores = data;
+            this._renderConductores(); this._renderPrueba();
+            this._mostrarToast('Usuario de prueba borrado', 2500);
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
+    },
+
     _renderPuestos() {
         const cont = document.getElementById('puestosList');
         if (!cont) return;
@@ -2508,7 +2647,8 @@ const app = {
                     ${av}
                     <div class="cond-id" onclick="app._editarPuesto('${esc(u.email)}')">
                         <div class="cond-nombre">${esc(u.nombre) || esc(u.email)}
-                            ${turno ? `<span class="cond-turno ${turno}">${turno}</span>` : ''}</div>
+                            ${turno ? `<span class="cond-turno ${turno}">${turno}</span>` : ''}
+                            ${u.ficticio ? '<span class="pr-badge2">PRUEBA</span>' : ''}</div>
                         <div class="cond-num">${esc(u.conductor) || 'sin nº'}
                             ${u.puesto ? `<span class="cond-puesto">· ${esc(u.puesto)}</span>` : ''}</div>
                     </div>

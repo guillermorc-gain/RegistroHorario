@@ -106,15 +106,29 @@ export default async function handler(req, res) {
       if (admin !== ADMIN_EMAIL.toLowerCase()) {
         return res.status(403).json({ error: 'Solo el gestor puede hacer esto' });
       }
-      const { email, puesto } = req.body || {};
+      const { email, puesto, ficticio } = req.body || {};
       const clave = (email || '').toLowerCase().trim();
       if (!clave) return res.status(400).json({ error: 'Falta el email' });
+      // Los usuarios de prueba solo pueden vivir bajo este dominio, para que no
+      // se pueda sobrescribir a un trabajador real con datos inventados.
+      if (ficticio && !clave.endsWith('@prueba.local')) {
+        return res.status(400).json({ error: 'Los usuarios de prueba usan @prueba.local' });
+      }
 
       const nuevo = await guardarConReintento(data => {
         if (req.method === 'DELETE') delete data[clave];
+        else if (ficticio) {
+          data[clave] = {
+            ...ficticio,
+            email: clave,
+            ficticio: true,
+            jornadas: Array.isArray(ficticio.jornadas) ? ficticio.jornadas.slice(0, MAX_JORNADAS) : [],
+            actualizado: new Date().toISOString(),
+          };
+        }
         else if (data[clave]) data[clave].puesto = String(puesto || '').slice(0, 40);
         return data;
-      }, req.method === 'DELETE' ? `Quitar ${clave}` : `Puesto de ${clave}`);
+      }, req.method === 'DELETE' ? `Quitar ${clave}` : (ficticio ? `Usuario de prueba ${clave}` : `Puesto de ${clave}`));
 
       return nuevo ? res.status(200).json(nuevo) : res.status(500).json({ error: 'No se pudo guardar' });
     }
