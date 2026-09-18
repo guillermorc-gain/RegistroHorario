@@ -1400,7 +1400,7 @@
     "email": "prueba-1789766752991@prueba.local",
     "ficticio": true,
     "actualizado": "2026-09-18T21:26:55.580Z",
-    "baja": false
+    "baja": true
   },
   "prueba-1789766856622@prueba.local": {
     "nombre": "Juan Valera",
