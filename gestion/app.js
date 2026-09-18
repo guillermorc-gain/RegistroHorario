@@ -2316,6 +2316,52 @@ const app = {
 
     // ── Registro diario de todos los trabajadores ────────────────────────────
 
+    // Exporta el registro a CSV: Excel y Google Sheets lo abren directamente.
+    exportarRegistro() {
+        const filas = [];
+        Object.values(this._conductores || {}).forEach(u => {
+            (u.jornadas || []).forEach(j => filas.push({
+                fecha: `${j.f.slice(6,8)}/${j.f.slice(4,6)}/${j.f.slice(0,4)}`,
+                orden: j.f,
+                num: u.conductor || '', nombre: u.nombre || u.email,
+                puesto: u.puesto || '', turno: this._turnoDe(u.puesto, j.i) || '',
+                ini: j.i || '', fin: j.o || '',
+                horas: j.h || 0, noct: j.n || 0,
+                extra: j.x === 1 ? 'Sí' : '', festivo: j.fe ? 'Sí' : '',
+                vac: j.v ? 'Sí' : '', pr: j.p ? 'Sí' : '',
+                prueba: u.ficticio ? 'Sí' : '',
+            }));
+        });
+        if (!filas.length) { this._mostrarToast('No hay jornadas que exportar', 3000); return; }
+        filas.sort((a, b) => a.orden.localeCompare(b.orden) || a.num.localeCompare(b.num));
+
+        const cab = ['Fecha','Nº trabajador','Nombre','Puesto','Turno','Entrada','Salida',
+                     'Horas','Nocturnas','Extra','Festivo','Vacaciones','PR','De prueba'];
+        // Separador ; y coma decimal: es lo que espera Excel en español
+        const esc = v => {
+            const t = String(v ?? '');
+            return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+        };
+        const num = n => String(n).replace('.', ',');
+        const lineas = [cab.join(';')];
+        filas.forEach(f => lineas.push([f.fecha, f.num, f.nombre, f.puesto, f.turno, f.ini, f.fin,
+            num(f.horas), num(f.noct), f.extra, f.festivo, f.vac, f.pr, f.prueba].map(esc).join(';')));
+
+        // BOM para que Excel reconozca los acentos
+        const csv = '﻿' + lineas.join('\r\n') + '\r\n';
+        const nombre = `registro-emt-${new Date().toISOString().slice(0,10)}.csv`;
+        if (window.AndroidBridge?.saveFile) {
+            window.AndroidBridge.saveFile(csv, nombre);
+            this._mostrarToast(`📊 ${filas.length} jornadas en Descargas`, 4000);
+            return;
+        }
+        const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+        const a = document.createElement('a');
+        a.href = url; a.download = nombre; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        this._mostrarToast(`📊 ${filas.length} jornadas exportadas`, 4000);
+    },
+
     ordenarRegistro(modo) {
         localStorage.setItem('ordenRegistro', modo);
         document.querySelectorAll('.reg-barra .orden-btn').forEach(b =>
