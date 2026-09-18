@@ -1629,6 +1629,7 @@ const app = {
         localStorage.setItem('activeTab', String(idx));
         if (idx === 0) this._cargarConductores();
         if (idx === 1) this._cargarCuadrante();
+        if (idx === 3) this._cargarConductores();
     },
 
     _tabDragStart(e) {
@@ -2313,6 +2314,127 @@ const app = {
         return { clase: 'verde', texto: 'trabajando' };
     },
 
+    // ── Registro diario de todos los trabajadores ────────────────────────────
+
+    ordenarRegistro(modo) {
+        localStorage.setItem('ordenRegistro', modo);
+        document.querySelectorAll('.reg-barra .orden-btn').forEach(b =>
+            b.classList.toggle('activo', b.dataset.ord === modo));
+        this._renderRegistro();
+    },
+
+    // Hay que invertir el estado EFECTIVO, no el guardado: si la clave aún no
+    // existe, !undefined siempre da true y la primera pulsación no hacía nada.
+    _plegar(clave, porDefecto) {
+        const p = JSON.parse(localStorage.getItem('regPlegado') || '{}');
+        const actual = clave in p ? p[clave] : porDefecto;
+        p[clave] = !actual;
+        localStorage.setItem('regPlegado', JSON.stringify(p));
+        this._renderRegistro();
+    },
+
+    _estaPlegado(clave, porDefecto) {
+        const p = JSON.parse(localStorage.getItem('regPlegado') || '{}');
+        return clave in p ? p[clave] : porDefecto;
+    },
+
+    _renderRegistro() {
+        const cont = document.getElementById('regList');
+        if (!cont) return;
+        const modo = localStorage.getItem('ordenRegistro') || 'dia';
+        document.querySelectorAll('.reg-barra .orden-btn').forEach(b =>
+            b.classList.toggle('activo', b.dataset.ord === modo));
+
+        // Aplanar: una entrada por trabajador y día
+        const filas = [];
+        Object.values(this._conductores || {}).forEach(u => {
+            (u.jornadas || []).forEach(j => filas.push({
+                f: j.f, horas: j.h || 0, ini: j.i || '', fin: j.o || '',
+                extra: j.x === 1, festivo: !!j.fe, vac: !!j.v, pr: !!j.p,
+                nombre: u.nombre || u.email, num: u.conductor || '', puesto: u.puesto || 'Sin puesto',
+            }));
+        });
+        if (!filas.length) {
+            cont.innerHTML = '<div class="rg-vacio">Sin jornadas todavía.<br>'
+                + 'Aparecerán cuando los trabajadores actualicen su app y registren.</div>';
+            return;
+        }
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const mesDe = f => `${f.slice(0,4)}-${f.slice(4,6)}`;
+        const nomMes = f => `${MESES_ES[parseInt(f.slice(4,6),10)-1]} ${f.slice(0,4)}`;
+        const diaDe = f => `${f.slice(6,8)}/${f.slice(4,6)}`;
+
+        // Agrupar siempre por mes; dentro, según el orden elegido
+        const meses = {};
+        filas.forEach(r => { (meses[mesDe(r.f)] = meses[mesDe(r.f)] || []).push(r); });
+
+        const pintaFila = r => `<div class="rg-fila">
+            <span class="rg-quien"><b>${esc(r.num) || '—'}</b> ${esc(r.nombre)}</span>
+            ${r.extra ? '<span class="rg-x">extra</span>' : ''}
+            ${r.festivo ? '<span class="festivo-badge">🎉</span>' : ''}
+            ${r.vac ? '<span class="vacaciones-badge">🏖️</span>' : ''}
+            <span class="rg-hor">${esc(r.ini && r.fin ? r.ini + '–' + r.fin : '—')}</span>
+            <span class="rg-h2">${r.horas}h</span>
+        </div>`;
+
+        cont.innerHTML = Object.keys(meses).sort().reverse().map(mes => {
+            const delMes = meses[mes];
+            const totMes = Math.round(delMes.reduce((s, r) => s + r.horas, 0) * 10) / 10;
+            const cerradoMes = this._estaPlegado('m:' + mes, false);
+
+            // Subgrupos según el criterio elegido
+            const subs = {};
+            delMes.forEach(r => {
+                const k = modo === 'puesto' ? r.puesto
+                        : modo === 'numero' ? `${r.num || 'zzz'}|${r.nombre}`
+                        : r.f;
+                (subs[k] = subs[k] || []).push(r);
+            });
+            const clavesSub = Object.keys(subs).sort();
+            if (modo === 'dia') clavesSub.reverse();          // días, del más reciente
+
+            const cuerpo = clavesSub.map(k => {
+                const grupo = subs[k];
+                const tot = Math.round(grupo.reduce((s, r) => s + r.horas, 0) * 10) / 10;
+                const titulo = modo === 'puesto' ? k
+                             : modo === 'numero' ? `${grupo[0].num || '—'} ${grupo[0].nombre}`
+                             : diaDe(k);
+                const cs = this._estaPlegado(`s:${mes}:${k}`, true);
+                const orden = modo === 'dia'
+                    ? grupo.sort((a, b) => (a.ini || '').localeCompare(b.ini || ''))
+                    : grupo.sort((a, b) => b.f.localeCompare(a.f));
+                const filasHtml = orden.map(r => modo === 'dia' ? pintaFila(r)
+                    : `<div class="rg-fila">
+                        <span class="rg-quien">${diaDe(r.f)}${modo === 'puesto' ? ` · <b>${esc(r.num)}</b> ${esc(r.nombre)}` : ''}</span>
+                        ${r.extra ? '<span class="rg-x">extra</span>' : ''}
+                        ${r.festivo ? '<span class="festivo-badge">🎉</span>' : ''}
+                        ${r.vac ? '<span class="vacaciones-badge">🏖️</span>' : ''}
+                        <span class="rg-hor">${esc(r.ini && r.fin ? r.ini + '–' + r.fin : '—')}</span>
+                        <span class="rg-h2">${r.horas}h</span>
+                    </div>`).join('');
+                return `<div class="rg rg-sub2${cs ? ' cerrado' : ''}">
+                    <div class="rg-h" onclick="app._plegar('s:${esc(mes)}:${esc(k).replace(/'/g, "\\'")}', true)">
+                        <span class="rg-chev">${cs ? '▸' : '▾'}</span>
+                        <span class="rg-t">${esc(titulo)}</span>
+                        <span class="rg-sub">${tot}h</span>
+                        <span class="rg-n">${grupo.length}</span>
+                    </div>
+                    <div class="rg-body">${filasHtml}</div>
+                </div>`;
+            }).join('');
+
+            return `<div class="rg${cerradoMes ? ' cerrado' : ''}">
+                <div class="rg-h" onclick="app._plegar('m:${esc(mes)}', false)">
+                    <span class="rg-chev">${cerradoMes ? '▸' : '▾'}</span>
+                    <span class="rg-t">${nomMes(delMes[0].f)}</span>
+                    <span class="rg-sub">${totMes}h</span>
+                    <span class="rg-n">${delMes.length}</span>
+                </div>
+                <div class="rg-body">${cuerpo}</div>
+            </div>`;
+        }).join('');
+    },
+
     _renderPuestos() {
         const cont = document.getElementById('puestosList');
         if (!cont) return;
@@ -2396,12 +2518,15 @@ const app = {
                     <div class="cond-stat"><div class="cond-stat-v">${u.diasMes ?? 0}</div><div class="cond-stat-l">días</div></div>
                     <div class="cond-stat"><div class="cond-stat-v">${(u.horasTotales ?? 0).toFixed(1)}</div><div class="cond-stat-l">h totales</div></div>
                 </div>
-                <div class="cond-ver">${ver} · ${u.actualizado ? new Date(u.actualizado).toLocaleDateString('es-ES') : ''}</div>
+                <div class="cond-ver">${ver} · actualizado ${u.actualizado
+                    ? new Date(u.actualizado).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
+                    : 'nunca'}</div>
             </div>`;
         }).join('');
         document.getElementById('ordenNombre')?.classList.toggle('activo', orden === 'nombre');
         document.getElementById('ordenNumero')?.classList.toggle('activo', orden === 'numero');
         this._renderPuestos();
+        this._renderRegistro();
     },
 
     toggleSeccion(id) {
