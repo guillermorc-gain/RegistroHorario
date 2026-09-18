@@ -176,7 +176,7 @@ const app = {
                 } else if (document.getElementById('editModal')?.classList.contains('show')) {
                     document.getElementById('editModal').classList.remove('show');
                 } else if (document.getElementById('avatarModal')?.classList.contains('show')) {
-                    document.getElementById('avatarModal').classList.remove('show');
+                    document.getElementById('avatarModal')?.classList.remove('show');
                 } else if (document.getElementById('optionsScreen')?.classList.contains('active')) {
                     this.mostrarApp();
                 } else {
@@ -621,7 +621,7 @@ const app = {
         this.establecerFechaHoy();
         this.actualizarFecha();
         if (this.precioNocheDefault > 0) {
-            document.getElementById('precioNocheGlobal').value = this.precioNocheDefault;
+            { const e = document.getElementById('precioNocheGlobal'); if (e) e.value = this.precioNocheDefault; }
         }
         this.actualizarEstadoGPS();
         const lastInicio = localStorage.getItem('lastHoraInicio');
@@ -1207,7 +1207,7 @@ const app = {
         document.getElementById('appScreen').classList.remove('active');
         document.getElementById('optionsScreen').classList.add('active');
         document.getElementById('darkModeToggle').checked = this.darkMode;
-        document.getElementById('horasAnualesDisplay').textContent = this.horasAnualesCustom + 'h';
+        { const e = document.getElementById('horasAnualesDisplay'); if (e) e.textContent = this.horasAnualesCustom + 'h'; }
         this._actualizarJornadaDisplay();
         this._actualizarConductorDisplay();
         this._renderVacaciones();
@@ -1350,16 +1350,16 @@ const app = {
     },
 
     añadirVacaciones() {
-        const desde = document.getElementById('vacDesde').value;
-        const hasta = document.getElementById('vacHasta').value;
+        const desde = document.getElementById('vacDesde')?.value;
+        const hasta = document.getElementById('vacHasta')?.value;
         if (!desde || !hasta) { this._mostrarToast('❌ Indica las dos fechas', 3000); return; }
         if (hasta < desde)    { this._mostrarToast('❌ La fecha final es anterior a la inicial', 3000); return; }
         const v = this._getVacaciones();
         v.push({ desde, hasta });
         v.sort((a, b) => a.desde.localeCompare(b.desde));
         this._saveVacaciones(v);
-        document.getElementById('vacDesde').value = '';
-        document.getElementById('vacHasta').value = '';
+        { const e = document.getElementById('vacDesde'); if (e) e.value = ''; }
+        { const e = document.getElementById('vacHasta'); if (e) e.value = ''; }
         this._renderVacaciones();
         this._aplicarModoVacaciones();
         this._mostrarToast('🏖️ Vacaciones añadidas', 2500);
@@ -1967,6 +1967,11 @@ const app = {
 
     actualizarUI(datos) {
         this._historialFull = datos.historial || {};
+        this.actualizarHistorial(datos.historial || {});
+        // En gestión no existen los cuadros de horas ni el formulario: sin esto
+        // actualizarUI revienta al escribir en elementos que no están, y como el
+        // catch de cargarDatos vuelve a llamarla, el arranque se queda colgado.
+        if (!document.getElementById('horasTrabajadas')) return;
         const t         = this._calcTotales(this._historialFull);
         const horas     = t.anual;
         const restantes = t.restantes;
@@ -2359,7 +2364,7 @@ const app = {
     },
 
     guardarPrecioNoche() {
-        const precio = parseFloat(document.getElementById('precioNocheGlobal').value) || 0;
+        const precio = parseFloat(document.getElementById('precioNocheGlobal')?.value) || 0;
         this.precioNocheDefault = precio;
         localStorage.setItem('precioNoche', precio);
         this._guardarPreferencias();
@@ -2372,7 +2377,7 @@ const app = {
         if (n === null || n <= 0) { alert('❌ Introduce un número de horas válido.'); return; }
         this.horasAnualesCustom = n;
         localStorage.setItem('horasAnuales', String(n));
-        document.getElementById('horasAnualesDisplay').textContent = n + 'h';
+        { const e = document.getElementById('horasAnualesDisplay'); if (e) e.textContent = n + 'h'; }
         await this._guardarPreferencias(true);
         this.cargarDatos();
         this._mostrarToast(`✅ Horas anuales: ${n}h`, 2500);
