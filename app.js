@@ -52,6 +52,9 @@ const app = {
     _updateApkUrl: null,
 
     async init() {
+        // The update check must run even if any earlier step throws, otherwise a
+        // single bug anywhere above strands the user on an old build forever.
+        setTimeout(() => { try { this._checkForUpdates(); } catch(_) {} }, 1500);
         this._migrarUbicacionAntigua();
         this.setupUI();
         if (this.darkMode) this.aplicarDarkMode();
@@ -61,7 +64,6 @@ const app = {
         this._setupAppLifecycleBackup();
         this._setupNotificationActions(); // must register listener before any async
         this._initGoogleAuth();
-        this._checkForUpdates();
         this._actualizarVersionDisplay();
     },
 
