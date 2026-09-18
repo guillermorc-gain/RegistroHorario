@@ -1950,6 +1950,23 @@ const app = {
         if (badge) badge.textContent = count > 0 ? `${count} registros` : 'Sin registros';
     },
 
+    // Current month at a glance, for when the section is collapsed
+    _renderResumenMes(meses) {
+        const el = document.getElementById('mensualResumen');
+        if (!el) return;
+        const hoy = new Date();
+        const clave = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+        const m = (meses || {})[clave];
+        if (!m) {
+            el.innerHTML = `<span class="mr-mes">${MESES_ES[hoy.getMonth()]}</span><span class="mr-h">0h</span>`;
+            return;
+        }
+        el.innerHTML = `<span class="mr-mes">${MESES_ES[hoy.getMonth()]}</span>`
+            + `<span class="mr-h">${m.horas}h</span>`
+            + (m.nocturnas > 0 ? `<span class="mr-n">🌙${m.nocturnas}h</span>` : '')
+            + (m.extra > 0 ? `<span class="mr-e">+${m.extra.toFixed(2)}€</span>` : '');
+    },
+
     toggleMensual() {
         const sec = document.getElementById('mensualSection');
         if (!sec) return;
@@ -1966,6 +1983,7 @@ const app = {
         const container = document.getElementById('mensualTable');
         if (!container) return;
         const meses = this._calcTodosMeses(historial);
+        this._renderResumenMes(meses);
         const keys  = Object.keys(meses).sort((a, b) => b.localeCompare(a)).slice(0, 6);
         if (keys.length === 0) { container.innerHTML = '<div style="text-align:center;color:#95a5a6;font-size:12px;padding:8px;">Sin datos</div>'; return; }
         container.innerHTML = keys.map(k => {
