@@ -241,7 +241,7 @@ jobs:
                           PendingIntent openPI = PendingIntent.getActivity(ctx, 1, oi, flags);
                           nm.notify(1001, new NotificationCompat.Builder(ctx, CHANNEL_ID)
                               .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-                              .setContentTitle("📍 Horas EMT")
+                              .setContentTitle("📍 EMT - Movilidad")
                               .setContentText("Parece que estás en el trabajo. ¿Registras la jornada?")
                               .setPriority(NotificationCompat.PRIORITY_HIGH)
                               .setContentIntent(openPI)
@@ -580,7 +580,7 @@ jobs:
                       PendingIntent openPI = PendingIntent.getActivity(ctx, 1, oi, flags);
                       nm.notify(1001, new NotificationCompat.Builder(ctx, CHANNEL_ID)
                           .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-                          .setContentTitle("📍 Horas EMT")
+                          .setContentTitle("📍 EMT - Movilidad")
                           .setContentText("Parece que estás en el trabajo. ¿Registras la jornada?")
                           .setPriority(NotificationCompat.PRIORITY_HIGH)
                           .setContentIntent(openPI)
@@ -948,7 +948,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: "Horas EMT — Build ${{ github.run_number }}"
+          name: "EMT - Movilidad — Build ${{ github.run_number }}"
           body: "APK generado automáticamente en build #${{ github.run_number }}."
           files: android/app/build/outputs/apk/debug/app-debug.apk
           fail_on_unmatched_files: true

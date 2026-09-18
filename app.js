@@ -31,6 +31,7 @@ const app = {
     prActivo: false,
     festivoActivo: false,
     extraActivo: false,
+    vacacionesActivo: false,
     jornadaHoras: parseFloat(localStorage.getItem('jornadaHoras')) || 7.5,
     numConductor: localStorage.getItem('numConductor') || '',
     backupFreq: localStorage.getItem('backupFreq') || 'cerrar',
@@ -64,6 +65,8 @@ const app = {
         this.setupUI();
         if (this.darkMode) this.aplicarDarkMode();
         this._restaurarTabs();
+        this._restaurarMensual();
+        this._aplicarModoVacaciones();
         this._buildAvatarGrid();
         this._setupDeepLinkListener();
         this._setupAppLifecycleBackup();
@@ -97,7 +100,7 @@ const app = {
             if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
                 // External Chrome on Android — bounce code back to native app via intent
                 const intentUrl = `intent://localhost/?code=${encodeURIComponent(code)}#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
-                document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Volviendo a la app...</p><p style="margin:0;font-size:12px;opacity:0.6;">Puedes cerrar esta pestaña</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir Horas EMT ›</a></div>`;
+                document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Volviendo a la app...</p><p style="margin:0;font-size:12px;opacity:0.6;">Puedes cerrar esta pestaña</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir EMT - Movilidad ›</a></div>`;
                 setTimeout(() => document.getElementById('_oauthReturnBtn')?.click(), 300);
                 setTimeout(() => { try { window.close(); } catch(e) {} }, 1200);
                 return;
@@ -112,7 +115,7 @@ const app = {
                 if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
                     const exp = hashParams?.get('expires_in') || '3600';
                     const intentUrl = `intent://localhost/?access_token=${encodeURIComponent(token)}&expires_in=${exp}#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
-                    document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Volviendo a la app...</p><p style="margin:0;font-size:12px;opacity:0.6;">Puedes cerrar esta pestaña</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir Horas EMT ›</a></div>`;
+                    document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Volviendo a la app...</p><p style="margin:0;font-size:12px;opacity:0.6;">Puedes cerrar esta pestaña</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir EMT - Movilidad ›</a></div>`;
                     setTimeout(() => document.getElementById('_oauthReturnBtn')?.click(), 300);
                     setTimeout(() => { try { window.close(); } catch(e) {} }, 1200);
                     return;
@@ -770,7 +773,7 @@ const app = {
         const fecha = document.getElementById('fechaInput').value;
         const esFestivo      = this.festivoActivo;
         // A holiday may be registered with no hours worked; anything else needs hours
-        if (!fecha || (!esFestivo && (isNaN(parseFloat(horasRaw)) || horas <= 0))) {
+        if (!fecha || (!esFestivo && !esVacaciones && (isNaN(parseFloat(horasRaw)) || horas <= 0))) {
             alert('❌ Introduce fecha y horas válidas'); return;
         }
         if (horas < 0) { alert('❌ Las horas no pueden ser negativas'); return; }
@@ -779,6 +782,7 @@ const app = {
         const esNoche        = document.getElementById('nocheToggle').checked;
         const esPR           = this.prActivo;
         const esExtra        = this.extraActivo;
+        const esVacaciones   = this.vacacionesActivo;
         const extraDestino   = esExtra ? this._extraDestino() : null;
         const horasNocturnas = esNoche ? (parseFloat(document.getElementById('horasNocturnas').value) || 0) : 0;
         const precioNoche    = esNoche ? (parseFloat(document.getElementById('precioNoche').value) || 0) : 0;
@@ -803,7 +807,8 @@ const app = {
                 ...(esNoche && horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
                 ...(esPR ? { pr: true } : {}),
                 ...(esFestivo ? { festivo: true } : {}),
-                ...(esExtra ? { extraManual: true, extraDestino } : {})
+                ...(esExtra ? { extraManual: true, extraDestino } : {}),
+                ...(esVacaciones ? { vacaciones: true } : {})
             };
             if (esPR && this._prUsados(datos.historial) > this.PR_ANUALES) {
                 delete datos.historial[registroId];
@@ -938,11 +943,11 @@ const app = {
             return;
         }
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-            try { await navigator.share({ title: 'Copia Horas EMT', files: [file] }); this._mostrarToast('✅ Copia exportada', 3000); return; }
+            try { await navigator.share({ title: 'Copia EMT - Movilidad', files: [file] }); this._mostrarToast('✅ Copia exportada', 3000); return; }
             catch(e) { if (e.name === 'AbortError') return; }
         }
         if (navigator.share) {
-            try { await navigator.share({ title: 'Copia Horas EMT', text: json }); this._mostrarToast('✅ Copia exportada', 3000); return; }
+            try { await navigator.share({ title: 'Copia EMT - Movilidad', text: json }); this._mostrarToast('✅ Copia exportada', 3000); return; }
             catch(e) { if (e.name === 'AbortError') return; }
         }
         try {
@@ -1172,6 +1177,7 @@ const app = {
         document.getElementById('horasAnualesDisplay').textContent = this.horasAnualesCustom + 'h';
         this._actualizarJornadaDisplay();
         this._actualizarConductorDisplay();
+        this._renderVacaciones();
         document.getElementById('perfilEmail').textContent = this.usuarioActual?.email || '';
         document.getElementById('perfilNombre').textContent = this.usuarioActual?.name || '';
         this.actualizarEstadoGPS();
@@ -1275,6 +1281,90 @@ const app = {
         this.festivoActivo = !this.festivoActivo;
         document.getElementById('festivoCompact').classList.toggle('active', this.festivoActivo);
         document.getElementById('festivoToggle').checked = this.festivoActivo;
+    },
+
+    // ── Vacaciones ───────────────────────────────────────────────────────────
+
+    _getVacaciones() { return JSON.parse(localStorage.getItem('vacaciones') || '[]'); },
+
+    _saveVacaciones(v) {
+        localStorage.setItem('vacaciones', JSON.stringify(v));
+        this._guardarPreferencias();
+    },
+
+    _hoyISO() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    },
+
+    _periodoVacacionesActivo() {
+        const hoy = this._hoyISO();
+        return this._getVacaciones().find(v => hoy >= v.desde && hoy <= v.hasta) || null;
+    },
+
+    _aplicarModoVacaciones() {
+        const per = this._periodoVacacionesActivo();
+        document.body.classList.toggle('vacaciones', !!per);
+        const sub = document.getElementById('vacBannerSub');
+        if (per && sub) {
+            const fin  = new Date(per.hasta + 'T12:00:00');
+            const dias = Math.max(0, Math.ceil((fin - new Date()) / 86400000));
+            sub.textContent = dias === 0 ? 'Último día, a disfrutarlo'
+                            : `Te quedan ${dias} día${dias === 1 ? '' : 's'}`;
+        }
+    },
+
+    añadirVacaciones() {
+        const desde = document.getElementById('vacDesde').value;
+        const hasta = document.getElementById('vacHasta').value;
+        if (!desde || !hasta) { this._mostrarToast('❌ Indica las dos fechas', 3000); return; }
+        if (hasta < desde)    { this._mostrarToast('❌ La fecha final es anterior a la inicial', 3000); return; }
+        const v = this._getVacaciones();
+        v.push({ desde, hasta });
+        v.sort((a, b) => a.desde.localeCompare(b.desde));
+        this._saveVacaciones(v);
+        document.getElementById('vacDesde').value = '';
+        document.getElementById('vacHasta').value = '';
+        this._renderVacaciones();
+        this._aplicarModoVacaciones();
+        this._mostrarToast('🏖️ Vacaciones añadidas', 2500);
+    },
+
+    borrarVacaciones(i) {
+        const v = this._getVacaciones();
+        v.splice(i, 1);
+        this._saveVacaciones(v);
+        this._renderVacaciones();
+        this._aplicarModoVacaciones();
+    },
+
+    _renderVacaciones() {
+        const cont = document.getElementById('vacList');
+        if (!cont) return;
+        const v = this._getVacaciones();
+        if (!v.length) {
+            cont.innerHTML = '<div class="ops-field-sub" style="padding-top:6px;">Sin vacaciones guardadas</div>';
+            return;
+        }
+        const fmt = s => new Date(s + 'T12:00:00').toLocaleDateString('es-ES', { day:'2-digit', month:'short' });
+        const hoy = this._hoyISO();
+        cont.innerHTML = v.map((p, i) => {
+            const dias = Math.round((new Date(p.hasta) - new Date(p.desde)) / 86400000) + 1;
+            const activo = hoy >= p.desde && hoy <= p.hasta;
+            return `<div class="vac-item">
+                <span class="vac-item-txt">${activo ? '🏖️ ' : ''}${fmt(p.desde)} → ${fmt(p.hasta)}
+                    <span class="vac-item-n">(${dias} día${dias===1?'':'s'})</span></span>
+                <button class="vac-del" onclick="app.borrarVacaciones(${i})">×</button>
+            </div>`;
+        }).join('');
+    },
+
+    clickVacaciones() {
+        this.vacacionesActivo = !this.vacacionesActivo;
+        document.getElementById('vacacionesCompact').classList.toggle('active', this.vacacionesActivo);
+        document.getElementById('vacacionesToggle').checked = this.vacacionesActivo;
+        // A vacation day is logged with no hours
+        if (this.vacacionesActivo) document.getElementById('horasInput').value = '0';
     },
 
     clickExtra() {
@@ -1616,6 +1706,9 @@ const app = {
         this.festivoActivo = false;
         document.getElementById('festivoCompact').classList.remove('active');
         document.getElementById('festivoToggle').checked = false;
+        this.vacacionesActivo = false;
+        document.getElementById('vacacionesCompact')?.classList.remove('active');
+        const vt = document.getElementById('vacacionesToggle'); if (vt) vt.checked = false;
         this.extraActivo = false;
         document.getElementById('extraCompact')?.classList.remove('active');
         const et = document.getElementById('extraToggle'); if (et) et.checked = false;
@@ -1676,7 +1769,8 @@ const app = {
             const li = document.createElement('li');
             // Colored left stripe: festivo > extra > nocturno > PR
             let stripeClass = '';
-            if (reg.festivo) stripeClass = 'hm-stripe-festivo';
+            if (reg.vacaciones) stripeClass = 'hm-stripe-vacaciones';
+            else if (reg.festivo) stripeClass = 'hm-stripe-festivo';
             else if (reg.extraManual) stripeClass = 'hm-stripe-extra';
             else if (reg.horasNocturnas) stripeClass = 'hm-stripe-noche';
             else if (reg.pr) stripeClass = 'hm-stripe-pr';
@@ -1688,6 +1782,7 @@ const app = {
                 ? `<span style="color:#95a5a6;font-size:10px;font-style:italic;">${reg.horaInicio}–${reg.horaFin}</span>` : '';
             const prBadge     = reg.pr      ? `<span class="pr-badge">PR</span>` : '';
             const festivoBadge= reg.festivo ? `<span class="festivo-badge">🎉 Festivo</span>` : '';
+            const vacBadge    = reg.vacaciones ? `<span class="vacaciones-badge">🏖️ Vacaciones</span>` : '';
             const extraBadge  = reg.extraManual
                 ? `<span class="extra-badge">⏱️ ${reg.extraDestino === 'extras' ? 'Extra' : 'Anual'}</span>` : '';
             li.innerHTML = `
@@ -1696,14 +1791,17 @@ const app = {
                         <span style="color:#7f8c8d;font-weight:700;font-size:12px;">${reg.fecha}</span>
                         ${horario}
                         <span style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;padding:3px 9px;border-radius:20px;font-weight:700;font-size:10px;">${reg.horas}h</span>
-                        ${prBadge}${festivoBadge}${extraBadge}
+                        ${prBadge}${festivoBadge}${extraBadge}${vacBadge}
                     </div>
                     ${nocheStr}
+                    ${reg.nota ? `<div class="hm-nota-txt">📝 ${reg.nota.replace(/</g,'&lt;')}</div>` : ''}
                 </div>
                 <div style="display:flex;gap:5px;flex-shrink:0;">
-                    <button class="hm-edit" style="background:#3498db;color:white;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;border:none;font-weight:600;">✏️</button>
-                    <button class="hm-del"  style="background:#e74c3c;color:white;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;border:none;font-weight:600;">×</button>
+                    <button class="hm-nota" style="background:${reg.nota ? '#f39c12' : '#95a5a6'};color:white;padding:5px 9px;border-radius:6px;font-size:12px;cursor:pointer;border:none;font-weight:600;">📝</button>
+                    <button class="hm-edit" style="background:#3498db;color:white;padding:5px 9px;border-radius:6px;font-size:12px;cursor:pointer;border:none;font-weight:600;">✏️</button>
+                    <button class="hm-del"  style="background:#e74c3c;color:white;padding:5px 9px;border-radius:6px;font-size:12px;cursor:pointer;border:none;font-weight:600;">×</button>
                 </div>`;
+            li.querySelector('.hm-nota').addEventListener('click', () => this.editarNota(id));
             li.querySelector('.hm-edit').addEventListener('click', () => {
                 document.getElementById('historialModal').classList.remove('show');
                 this.editarRegistro(id);
@@ -1711,6 +1809,26 @@ const app = {
             li.querySelector('.hm-del').addEventListener('click', () => this.borrarRegistro(id));
             list.appendChild(li);
         });
+    },
+
+    async editarNota(id) {
+        const reg = this._historialMap[id];
+        if (!reg) return;
+        const v = prompt(`Nota para la jornada del ${reg.fecha}:\n\n(déjala vacía para borrarla)`, reg.nota || '');
+        if (v === null) return;
+        const nota = v.trim().slice(0, 300);
+        try {
+            const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
+            if (!datos.historial?.[id]) { this._mostrarToast('❌ No se encontró la jornada', 3000); return; }
+            if (nota) datos.historial[id].nota = nota;
+            else delete datos.historial[id].nota;
+            await this._writeDriveFile(datos);
+            this.actualizarUI(datos);
+            this._renderHistorialModal();
+            this._mostrarToast(nota ? '✅ Nota guardada' : 'Nota borrada', 2500);
+        } catch (e) {
+            this._mostrarToast('❌ Error al guardar la nota', 3000);
+        }
     },
 
     editarRegistro(id) {
@@ -1819,6 +1937,18 @@ const app = {
         const count = Object.keys(historial).length;
         const badge = document.getElementById('historialCount');
         if (badge) badge.textContent = count > 0 ? `${count} registros` : 'Sin registros';
+    },
+
+    toggleMensual() {
+        const sec = document.getElementById('mensualSection');
+        if (!sec) return;
+        const cerrada = sec.classList.toggle('cerrada');
+        localStorage.setItem('mensualCerrada', cerrada ? '1' : '0');
+    },
+
+    _restaurarMensual() {
+        if (localStorage.getItem('mensualCerrada') === '1')
+            document.getElementById('mensualSection')?.classList.add('cerrada');
     },
 
     _renderMensual(historial) {
@@ -2059,7 +2189,7 @@ const app = {
             try {
                 const notif = {
                     id: 1001,
-                    title: '📍 Horas EMT',
+                    title: '📍 EMT - Movilidad',
                     body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
                     actionTypeId: 'TRABAJO_CERCANO',
                 };
@@ -2074,14 +2204,14 @@ const app = {
         if (!('Notification' in window) || Notification.permission !== 'granted') return;
         try {
             const reg = await navigator.serviceWorker.ready;
-            reg.showNotification('📍 Horas EMT', {
+            reg.showNotification('📍 EMT - Movilidad', {
                 body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
                 icon: '/icons/icon-192.png', badge: '/icons/badge.svg',
                 tag: 'trabajo-cercano', requireInteraction: true,
                 actions: [{ action: 'abrir', title: 'Abrir app' }]
             });
         } catch(_) {
-            new Notification('📍 Horas EMT', { body: 'Parece que estás en el trabajo.', icon: '/icons/icon-192.png' });
+            new Notification('📍 EMT - Movilidad', { body: 'Parece que estás en el trabajo.', icon: '/icons/icon-192.png' });
         }
     },
 
@@ -2093,7 +2223,7 @@ const app = {
         try {
             this._geoWatcherId = await BGGeo.addWatcher({
                 backgroundMessage: '',
-                backgroundTitle: 'Horas EMT',
+                backgroundTitle: 'EMT - Movilidad',
                 requestPermissions: true,
                 stale: false,
                 distanceFilter: 200
@@ -2145,7 +2275,7 @@ const app = {
         try {
             const notif = {
                 id: 1001,
-                title: '📍 Horas EMT',
+                title: '📍 EMT - Movilidad',
                 body: 'Parece que estás en el trabajo. ¿Registras la jornada de hoy?',
                 actionTypeId: 'TRABAJO_CERCANO',
             };
@@ -2244,7 +2374,7 @@ const app = {
                 await LN.requestPermissions();
                 const notif = {
                     id: 9999,
-                    title: '🔔 Horas EMT — prueba',
+                    title: '🔔 EMT - Movilidad — prueba',
                     body: 'Las notificaciones funcionan correctamente.',
                 };
                 if (this.notifSound && this.notifSound !== 'default') {
@@ -2265,13 +2395,13 @@ const app = {
         if (Notification.permission === 'denied') { alert('❌ Las notificaciones están bloqueadas. Actívalas en los ajustes del navegador.'); return; }
         try {
             const reg = await navigator.serviceWorker.ready;
-            await reg.showNotification('🔔 Horas EMT — prueba', {
+            await reg.showNotification('🔔 EMT - Movilidad — prueba', {
                 body: 'Las notificaciones funcionan correctamente.',
                 icon: '/icons/icon-192.png', badge: '/icons/badge.svg',
                 tag: 'test-notif'
             });
         } catch(_) {
-            new Notification('🔔 Horas EMT — prueba', { body: 'Las notificaciones funcionan correctamente.', icon: '/icons/icon-192.png' });
+            new Notification('🔔 EMT - Movilidad — prueba', { body: 'Las notificaciones funcionan correctamente.', icon: '/icons/icon-192.png' });
         }
     },
 
@@ -2291,6 +2421,7 @@ const app = {
             jornadaHoras: this.jornadaHoras,
             numConductor: this.numConductor,
             backupFreq: this.backupFreq,
+            vacaciones: this._getVacaciones(),
             workLocations: this._getWorkLocations(),
             notifSound: this.notifSound
         };
@@ -2326,6 +2457,10 @@ const app = {
             localStorage.setItem('precioNoche', String(prefs.precioNocheDefault));
             const el = document.getElementById('precioNocheGlobal');
             if (el) el.value = prefs.precioNocheDefault;
+        }
+        if (Array.isArray(prefs.vacaciones)) {
+            localStorage.setItem('vacaciones', JSON.stringify(prefs.vacaciones));
+            this._aplicarModoVacaciones();
         }
         if (prefs.backupFreq) {
             this.backupFreq = prefs.backupFreq;
