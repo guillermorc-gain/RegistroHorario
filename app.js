@@ -29,6 +29,7 @@ const app = {
     darkMode: localStorage.getItem('darkMode') === 'true',
     horasAnualesCustom: parseFloat(localStorage.getItem('horasAnuales')) || HORAS_ANUALES,
     precioNocheDefault: parseFloat(localStorage.getItem('precioNoche')) || 0,
+    precioExtraDefault: parseFloat(localStorage.getItem('precioExtra')) || 0,
     modalCallback: null,
     editingId: null,
     prActivo: false,
@@ -612,6 +613,10 @@ const app = {
     setupUI() {
         this.establecerFechaHoy();
         this.actualizarFecha();
+        if (this.precioExtraDefault > 0) {
+            const pe = document.getElementById('precioExtraGlobal');
+            if (pe) pe.value = this.precioExtraDefault;
+        }
         if (this.precioNocheDefault > 0) {
             document.getElementById('precioNocheGlobal').value = this.precioNocheDefault;
         }
@@ -1931,7 +1936,11 @@ const app = {
         if (elF)  elF.textContent  = t.festivo.toFixed(1);
         if (elFS) elFS.textContent = t.diasFestivos === 1 ? '1 día festivo' : `${t.diasFestivos} días festivos`;
         if (elE)  elE.textContent  = t.extras.toFixed(1);
-        if (elES) elES.textContent = `de ${t.topeExtras.toFixed(1)}h`;
+        if (elES) {
+            const importe = this.precioExtraDefault > 0
+                ? ` · ${(t.extras * this.precioExtraDefault).toFixed(2)}€` : '';
+            elES.textContent = `de ${t.topeExtras.toFixed(1)}h${importe}`;
+        }
         const barExt = document.getElementById('progressFillExtra');
         if (barExt) barExt.style.width = Math.min(pctExt, 100) + '%';
         this._actualizarPrUI();
@@ -2048,8 +2057,16 @@ const app = {
         });
     },
 
+    guardarPrecioExtra() {
+        const precio = this._leerDecimal(document.getElementById('precioExtraGlobal').value) || 0;
+        this.precioExtraDefault = precio;
+        localStorage.setItem('precioExtra', String(precio));
+        this._guardarPreferencias();
+        this.cargarDatos();
+    },
+
     guardarPrecioNoche() {
-        const precio = parseFloat(document.getElementById('precioNocheGlobal').value) || 0;
+        const precio = this._leerDecimal(document.getElementById('precioNocheGlobal').value) || 0;
         this.precioNocheDefault = precio;
         localStorage.setItem('precioNoche', precio);
         this._guardarPreferencias();
@@ -2444,6 +2461,7 @@ const app = {
             gpsScheduleFrom: this.gpsScheduleFrom,
             gpsScheduleTo: this.gpsScheduleTo,
             precioNocheDefault: this.precioNocheDefault,
+            precioExtraDefault: this.precioExtraDefault,
             horasAnualesCustom: this.horasAnualesCustom,
             jornadaHoras: this.jornadaHoras,
             numConductor: this.numConductor,
@@ -2484,6 +2502,12 @@ const app = {
             localStorage.setItem('precioNoche', String(prefs.precioNocheDefault));
             const el = document.getElementById('precioNocheGlobal');
             if (el) el.value = prefs.precioNocheDefault;
+        }
+        if (prefs.precioExtraDefault !== undefined && prefs.precioExtraDefault !== null) {
+            this.precioExtraDefault = prefs.precioExtraDefault;
+            localStorage.setItem('precioExtra', String(prefs.precioExtraDefault));
+            const el = document.getElementById('precioExtraGlobal');
+            if (el) el.value = prefs.precioExtraDefault;
         }
         if (Array.isArray(prefs.vacaciones)) {
             localStorage.setItem('vacaciones', JSON.stringify(prefs.vacaciones));

@@ -749,7 +749,7 @@
                 <div class="ops-body">
                     <div class="ops-field">
                         <span class="ops-field-label">💰 Precio hora nocturna (€)</span>
-                        <input type="number" class="ops-night-input" id="precioNocheGlobal" min="0" step="0.01" placeholder="ej: 2.89" onchange="app.guardarPrecioNoche()">
+                        <input type="text" inputmode="decimal" class="ops-night-input" id="precioNocheGlobal" placeholder="ej: 2,89" onchange="app.guardarPrecioNoche()">
                         <span class="ops-field-sub">Se aplica automáticamente al detectar horario 21h–06h</span>
                     </div>
                     <button class="ops-btn" onclick="app.mostrarCambiarHoras()">
