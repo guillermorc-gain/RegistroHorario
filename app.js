@@ -2,7 +2,9 @@
 'use strict';
 
 const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.googleusercontent.com';
-const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata profile email';
+// drive.file is needed on top of appdata: appdata can only write to a hidden
+// folder, so the monthly export could not create a visible "Movilidad Emt".
+const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file profile email';
 const AUTH_SCOPE       = 'profile email';
 const SUPER_USER_EMAIL = 'guillermo.rc82@gmail.com';
 const DRIVE_FILE_NAME  = 'horas-emt.json';
@@ -31,6 +33,8 @@ const app = {
     extraActivo: false,
     jornadaHoras: parseFloat(localStorage.getItem('jornadaHoras')) || 7.5,
     numConductor: localStorage.getItem('numConductor') || '',
+    backupFreq: localStorage.getItem('backupFreq') || 'cerrar',
+    _backupTimer: null,
     _activeTab: 0,
     _dragSrcTab: null,
     _allowedUsersLocal: null,
@@ -422,6 +426,7 @@ const app = {
 
     _setupAppLifecycleBackup() {
         const onBackground = () => {
+            if (this.backupFreq !== 'cerrar') return;
             if (this.accessToken && Date.now() < this.tokenExpiry) this._autoBackup();
         };
         const onForeground = () => {
@@ -445,6 +450,137 @@ const app = {
             } catch (_) {}
         }
         document.addEventListener('visibilitychange', () => { if (document.hidden) onBackground(); });
+        this._iniciarTimerCopia();
+    },
+
+    _iniciarTimerCopia() {
+        clearInterval(this._backupTimer);
+        const periodos = { hora: 60 * 60 * 1000, dia: 24 * 60 * 60 * 1000 };
+        const ms = periodos[this.backupFreq];
+        if (!ms) return;   // 'cerrar' is handled by the lifecycle listener
+        const tick = () => {
+            const ultima = parseInt(localStorage.getItem('lastBackupTime') || '0', 10);
+            if (Date.now() - ultima < ms) return;
+            if (this.accessToken && Date.now() < this.tokenExpiry) this._autoBackup();
+        };
+        tick();
+        this._backupTimer = setInterval(tick, 5 * 60 * 1000);
+    },
+
+    guardarFrecuenciaCopia(freq) {
+        this.backupFreq = freq;
+        localStorage.setItem('backupFreq', freq);
+        this._iniciarTimerCopia();
+        this._guardarPreferencias();
+        const txt = { hora: 'cada hora', dia: 'cada día', cerrar: 'al cerrar la app' }[freq] || freq;
+        this._mostrarToast('✅ Copia automática ' + txt, 2500);
+    },
+
+    // ── Monthly export to Drive: "Movilidad Emt / <nº> <nombre>" ──────────────
+
+    async _carpetaDrive(nombre, parentId) {
+        const q = `name='${nombre.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder'`
+                + ` and trashed=false and '${parentId || 'root'}' in parents`;
+        const resp = await this._driveGet(
+            `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`);
+        if (resp.ok) {
+            const d = await resp.json();
+            if (d.files?.length) return d.files[0].id;
+        }
+        const crear = await fetch('https://www.googleapis.com/drive/v3/files', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: nombre,
+                mimeType: 'application/vnd.google-apps.folder',
+                ...(parentId ? { parents: [parentId] } : {})
+            })
+        });
+        if (!crear.ok) throw new Error('No se pudo crear la carpeta ' + nombre);
+        return (await crear.json()).id;
+    },
+
+    async _subirJsonADrive(nombreArchivo, contenido, carpetaId) {
+        const boundary = '-------horasemt' + Date.now();
+        const meta = JSON.stringify({ name: nombreArchivo, parents: [carpetaId] });
+        const body = `\r\n--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}`
+                   + `\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${contenido}\r\n--${boundary}--`;
+        const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${this.accessToken}`,
+                       'Content-Type': `multipart/related; boundary=${boundary}` },
+            body
+        });
+        if (!resp.ok) throw new Error('Subida fallida: ' + resp.status);
+        return resp.json();
+    },
+
+    _mesesPendientesExport(historial) {
+        const hechos = new Set(JSON.parse(localStorage.getItem('mesesExportados') || '[]'));
+        const hoy = new Date();
+        const claveMesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+        const ultimoDia = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate();
+        const esUltimoDia = hoy.getDate() === ultimoDia;
+        const meses = new Set();
+        Object.values(historial || {}).forEach(r => {
+            if (!r.timestamp) return;
+            const d = new Date(r.timestamp);
+            meses.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+        });
+        // A month is exportable once it is over — or today if it is its last day
+        return [...meses].filter(m =>
+            !hechos.has(m) && (m < claveMesActual || (m === claveMesActual && esUltimoDia))
+        ).sort();
+    },
+
+    async _exportarMesesPendientes() {
+        if (!this.usuarioActual || !this.accessToken) return;
+        const historial = this._historialFull || {};
+        const pendientes = this._mesesPendientesExport(historial);
+        if (!pendientes.length) return;
+        try {
+            const raiz = await this._carpetaDrive('Movilidad Emt', null);
+            const sub  = [this.numConductor, this.usuarioActual.name].filter(Boolean).join(' ')
+                       || this.usuarioActual.email;
+            const carpeta = await this._carpetaDrive(sub, raiz);
+            const hechos = new Set(JSON.parse(localStorage.getItem('mesesExportados') || '[]'));
+            for (const mes of pendientes) {
+                const delMes = Object.entries(historial)
+                    .filter(([, r]) => {
+                        const d = new Date(r.timestamp);
+                        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === mes;
+                    })
+                    .sort((a, b) => a[1].timestamp - b[1].timestamp)
+                    .map(([id, r]) => ({ id, ...r }));
+                const tot = this._calcTotales(historial);
+                const mesJson = JSON.stringify({
+                    mes, generado: new Date().toISOString(),
+                    conductor: this.numConductor || null,
+                    nombre: this.usuarioActual.name || null,
+                    email: this.usuarioActual.email,
+                    totalHoras: Math.round(delMes.reduce((s, r) => s + (parseFloat(r.horas) || 0), 0) * 10) / 10,
+                    horasNocturnas: Math.round(delMes.reduce((s, r) => s + (r.horasNocturnas || 0), 0) * 10) / 10,
+                    diasFestivos: delMes.filter(r => r.festivo).length,
+                    permisosRetribuidos: delMes.filter(r => r.pr).length,
+                    jornadas: delMes
+                }, null, 2);
+                const completoJson = JSON.stringify({
+                    generado: new Date().toISOString(),
+                    conductor: this.numConductor || null,
+                    nombre: this.usuarioActual.name || null,
+                    email: this.usuarioActual.email,
+                    horasAnuales: this.horasAnualesCustom,
+                    totales: tot,
+                    historial: Object.entries(historial)
+                        .sort((a, b) => a[1].timestamp - b[1].timestamp)
+                        .map(([id, r]) => ({ id, ...r }))
+                }, null, 2);
+                await this._subirJsonADrive(`horas-emt-${mes}.json`, mesJson, carpeta);
+                await this._subirJsonADrive(`horas-emt-completo-${mes}.json`, completoJson, carpeta);
+                hechos.add(mes);
+                localStorage.setItem('mesesExportados', JSON.stringify([...hechos]));
+            }
+        } catch (_) { /* silent: it retries next time the app opens */ }
     },
 
     _autoRellenarFormulario() {
@@ -588,6 +724,14 @@ const app = {
     },
 
     _actualizarInfoCopia() {
+        const radio = document.querySelector(`input[name="backupFreq"][value="${this.backupFreq}"]`);
+        if (radio) radio.checked = true;
+        const info = document.getElementById('mesesExportadosInfo');
+        if (info) {
+            const hechos = JSON.parse(localStorage.getItem('mesesExportados') || '[]');
+            info.textContent = hechos.length
+                ? `Último mes guardado: ${hechos.sort().slice(-1)[0]}` : '';
+        }
         const el = document.getElementById('lastBackupInfo');
         if (!el) return;
         const t = parseInt(localStorage.getItem('lastBackupTime') || '0');
@@ -607,6 +751,7 @@ const app = {
             this._startScheduleTimer();
             this.verificarUbicacion();
             this._updateGpsState();
+            this._exportarMesesPendientes();
             this._pedirPermisosIniciales();
             if (this._pendingNotifAction === 'registro-rapido') {
                 this._pendingNotifAction = null;
@@ -2145,6 +2290,7 @@ const app = {
             horasAnualesCustom: this.horasAnualesCustom,
             jornadaHoras: this.jornadaHoras,
             numConductor: this.numConductor,
+            backupFreq: this.backupFreq,
             workLocations: this._getWorkLocations(),
             notifSound: this.notifSound
         };
@@ -2180,6 +2326,10 @@ const app = {
             localStorage.setItem('precioNoche', String(prefs.precioNocheDefault));
             const el = document.getElementById('precioNocheGlobal');
             if (el) el.value = prefs.precioNocheDefault;
+        }
+        if (prefs.backupFreq) {
+            this.backupFreq = prefs.backupFreq;
+            localStorage.setItem('backupFreq', prefs.backupFreq);
         }
         if (typeof prefs.numConductor === 'string') {
             this.numConductor = prefs.numConductor;
