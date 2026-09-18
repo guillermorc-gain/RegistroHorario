@@ -27,6 +27,10 @@ const app = {
     modalCallback: null,
     editingId: null,
     prActivo: false,
+    festivoActivo: false,
+    _activeTab: 0,
+    _tabOrder: [0, 1],
+    _dragSrcTab: null,
     _allowedUsersLocal: null,
     tema: localStorage.getItem('tema') || 'azul',
     _historialMap: {},
@@ -614,6 +618,7 @@ const app = {
         const horaFin        = document.getElementById('horaFin').value;
         const esNoche        = document.getElementById('nocheToggle').checked;
         const esPR           = this.prActivo;
+        const esFestivo      = this.festivoActivo;
         const horasNocturnas = esNoche ? (parseFloat(document.getElementById('horasNocturnas').value) || 0) : 0;
         const precioNoche    = esNoche ? (parseFloat(document.getElementById('precioNoche').value) || 0) : 0;
         const extraNoche     = Math.round(horasNocturnas * precioNoche * 100) / 100;
@@ -639,7 +644,8 @@ const app = {
                 timestamp: new Date(fecha + 'T12:00:00').getTime(),
                 ...(horaInicio && horaFin ? { horaInicio, horaFin } : {}),
                 ...(esNoche && horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
-                ...(esPR ? { pr: true } : {})
+                ...(esPR ? { pr: true } : {}),
+                ...(esFestivo ? { festivo: true } : {})
             };
 
             if (horaInicio && horaFin) {
@@ -671,6 +677,7 @@ const app = {
         const horasN    = parseFloat(document.getElementById('editModalNocturnas').value) || 0;
         const precioN   = parseFloat(document.getElementById('editModalPrecioN').value) || 0;
         const esPR      = document.getElementById('editModalPR').checked;
+        const esFestivo = document.getElementById('editModalFestivo').checked;
         if (!fecha || isNaN(horas) || horas <= 0) { alert('❌ Introduce fecha y horas válidas'); return; }
 
         const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
@@ -689,7 +696,8 @@ const app = {
             timestamp: new Date(fecha + 'T12:00:00').getTime(),
             ...(horaInicio && horaFin ? { horaInicio, horaFin } : {}),
             ...(horasN > 0 ? { horasNocturnas: horasN, precioNoche: precioN, extraNoche: Math.round(horasN * precioN * 100) / 100 } : {}),
-            ...(esPR ? { pr: true } : {})
+            ...(esPR ? { pr: true } : {}),
+            ...(esFestivo ? { festivo: true } : {})
         };
 
         await this._writeDriveFile(datos);
@@ -1028,14 +1036,22 @@ const app = {
         if (horas > 0) document.getElementById('horasInput').value = horas;
         const nocturnas = this._calcHorasNocturnas(inicio, fin);
         const nocheExtra = document.getElementById('nocheExtra');
-        if (nocturnas > 0) {
+        const nocheBtn   = document.querySelector('.noche-compact');
+        // Auto-activate luna if start hour is in nocturnal range (21–06)
+        const h1 = parseInt(inicio.split(':')[0], 10);
+        const autoLuna = h1 >= 21 || h1 < 6;
+        if (nocturnas > 0 || autoLuna) {
             document.getElementById('nocheToggle').checked = true;
+            if (nocheBtn) nocheBtn.classList.add('active');
             nocheExtra.classList.add('visible');
-            document.getElementById('horasNocturnas').value = nocturnas;
-            if (this.precioNocheDefault > 0) document.getElementById('precioNoche').value = this.precioNocheDefault;
-            this.calcularExtra();
+            if (nocturnas > 0) {
+                document.getElementById('horasNocturnas').value = nocturnas;
+                if (this.precioNocheDefault > 0) document.getElementById('precioNoche').value = this.precioNocheDefault;
+                this.calcularExtra();
+            }
         } else {
             document.getElementById('nocheToggle').checked = false;
+            if (nocheBtn) nocheBtn.classList.remove('active');
             nocheExtra.classList.remove('visible');
             document.getElementById('horasNocturnas').value = '';
             document.getElementById('nocheResumen').textContent = '';
@@ -1045,6 +1061,7 @@ const app = {
     clickNocheCompact() {
         const cb = document.getElementById('nocheToggle');
         cb.checked = !cb.checked;
+        document.querySelector('.noche-compact')?.classList.toggle('active', cb.checked);
         this.toggleNoche();
     },
 
@@ -1052,6 +1069,52 @@ const app = {
         this.prActivo = !this.prActivo;
         document.getElementById('prCompact').classList.toggle('active', this.prActivo);
         document.getElementById('prToggle').checked = this.prActivo;
+    },
+
+    clickFestivo() {
+        this.festivoActivo = !this.festivoActivo;
+        document.getElementById('festivoCompact').classList.toggle('active', this.festivoActivo);
+        document.getElementById('festivoToggle').checked = this.festivoActivo;
+    },
+
+    switchTab(idx) {
+        this._activeTab = idx;
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.toggle('active', parseInt(btn.dataset.tab) === idx);
+        });
+        document.querySelectorAll('.tab-panel').forEach((panel, i) => {
+            panel.classList.toggle('active', i === idx);
+        });
+    },
+
+    _tabDragStart(e) {
+        this._dragSrcTab = e.currentTarget;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', e.currentTarget.dataset.tab);
+    },
+
+    _tabDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        e.currentTarget.classList.add('drag-over');
+    },
+
+    _tabDragLeave(e) {
+        e.currentTarget.classList.remove('drag-over');
+    },
+
+    _tabDrop(e) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-over');
+        const src = this._dragSrcTab;
+        const dst = e.currentTarget;
+        if (!src || src === dst) return;
+        const bar = document.getElementById('tabBar');
+        const tabs = [...bar.children];
+        const si = tabs.indexOf(src);
+        const di = tabs.indexOf(dst);
+        if (si < di) bar.insertBefore(src, dst.nextSibling);
+        else bar.insertBefore(src, dst);
     },
 
     toggleNoche() {
@@ -1164,6 +1227,10 @@ const app = {
         this.prActivo = false;
         document.getElementById('prCompact').classList.remove('active');
         document.getElementById('prToggle').checked = false;
+        this.festivoActivo = false;
+        document.getElementById('festivoCompact').classList.remove('active');
+        document.getElementById('festivoToggle').checked = false;
+        document.querySelector('.noche-compact')?.classList.remove('active');
         if (lastInicio && lastFin) this.calcularHorasPorTiempo();
         else document.getElementById('horasInput').value = '';
     },
@@ -1186,19 +1253,26 @@ const app = {
         }
         registros.forEach(([id, reg]) => {
             const li = document.createElement('li');
+            // Colored left stripe: festivo > nocturno > PR
+            let stripeClass = '';
+            if (reg.festivo) stripeClass = 'hm-stripe-festivo';
+            else if (reg.horasNocturnas) stripeClass = 'hm-stripe-noche';
+            else if (reg.pr) stripeClass = 'hm-stripe-pr';
+            li.className = stripeClass;
             li.style.cssText = 'padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #efefef;gap:8px;';
             const nocheStr = reg.horasNocturnas
                 ? `<div style="font-size:10px;color:#856404;font-weight:600;">🌙 ${reg.horasNocturnas}h noct. · +${(reg.extraNoche||0).toFixed(2)}€</div>` : '';
             const horario = (reg.horaInicio && reg.horaFin)
                 ? `<span style="color:#95a5a6;font-size:10px;font-style:italic;">${reg.horaInicio}–${reg.horaFin}</span>` : '';
-            const prBadge = reg.pr ? `<span class="pr-badge">PR</span>` : '';
+            const prBadge     = reg.pr      ? `<span class="pr-badge">PR</span>` : '';
+            const festivoBadge= reg.festivo ? `<span class="festivo-badge">🎉 Festivo</span>` : '';
             li.innerHTML = `
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                         <span style="color:#7f8c8d;font-weight:700;font-size:12px;">${reg.fecha}</span>
                         ${horario}
                         <span style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;padding:3px 9px;border-radius:20px;font-weight:700;font-size:10px;">${reg.horas}h</span>
-                        ${prBadge}
+                        ${prBadge}${festivoBadge}
                     </div>
                     ${nocheStr}
                 </div>
@@ -1229,6 +1303,7 @@ const app = {
         document.getElementById('editModalExtraLabel').textContent =
             reg.horasNocturnas ? `+${(reg.extraNoche || 0).toFixed(2)}€ extra nocturno` : '';
         document.getElementById('editModalPR').checked = !!reg.pr;
+        document.getElementById('editModalFestivo').checked = !!reg.festivo;
         document.getElementById('editModal').classList.add('show');
         if (this.darkMode) document.getElementById('editModalContent').classList.add('dark');
     },
