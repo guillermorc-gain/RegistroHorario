@@ -71,9 +71,9 @@
     "puesto": "Son Rossinyol",
     "avatar": null,
     "version": "build-33",
-    "horasMes": 7,
-    "horasTotales": 7,
-    "diasMes": 1,
+    "horasMes": 14,
+    "horasTotales": 14,
+    "diasMes": 2,
     "horaInicio": "12:00",
     "horaFin": "19:00",
     "horarioDe": "hoy",
@@ -85,10 +85,17 @@
         "o": "19:00",
         "h": 7,
         "n": 0
+      },
+      {
+        "f": "20260917",
+        "i": "12:00",
+        "o": "19:00",
+        "h": 7,
+        "n": 0
       }
     ],
     "email": "prueba-1789759132382@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-18T19:19:23.105Z"
+    "actualizado": "2026-09-18T19:19:44.899Z"
   }
 }
