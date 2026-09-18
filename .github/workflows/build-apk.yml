@@ -3,6 +3,15 @@ name: Build APK
 on:
   push:
     branches: [main, claude/pwa-install-support-dXc0v]
+    # Estos ficheros los escriben las propias apps al guardar datos. Sin esto
+    # cada resumen o cuadrante lanzaba un build, publicaba una release y las
+    # apps anunciaban "versión nueva" en bucle.
+    paths-ignore:
+      - 'usuarios-resumen.json'
+      - 'cuadrante.json'
+      - 'allowed-users.json'
+      - 'allowed-users-gestion.json'
+      - 'version-publicada.json'
   workflow_dispatch:
 
 jobs:
