@@ -97,5 +97,31 @@
     "email": "prueba-1789759132382@prueba.local",
     "ficticio": true,
     "actualizado": "2026-09-18T19:19:44.899Z"
+  },
+  "prueba-1789759514777@prueba.local": {
+    "nombre": "Xisca",
+    "conductor": "8955-6",
+    "puesto": "Control",
+    "avatar": null,
+    "version": "build-34",
+    "horasMes": 7,
+    "horasTotales": 7,
+    "diasMes": 1,
+    "horaInicio": "07:00",
+    "horaFin": "14:00",
+    "horarioDe": "hoy",
+    "turno": "M",
+    "jornadas": [
+      {
+        "f": "20260918",
+        "i": "07:00",
+        "o": "14:00",
+        "h": 7,
+        "n": 0
+      }
+    ],
+    "email": "prueba-1789759514777@prueba.local",
+    "ficticio": true,
+    "actualizado": "2026-09-18T19:25:36.867Z"
   }
 }
