@@ -150,5 +150,31 @@
     "email": "prueba-1789759539366@prueba.local",
     "ficticio": true,
     "actualizado": "2026-09-18T19:26:14.412Z"
+  },
+  "prueba-1789760248885@prueba.local": {
+    "nombre": "Timi",
+    "conductor": "8959-9",
+    "puesto": "Calle",
+    "avatar": null,
+    "version": "build-36",
+    "horasMes": 7,
+    "horasTotales": 7,
+    "diasMes": 1,
+    "horaInicio": "06:00",
+    "horaFin": "13:00",
+    "horarioDe": "hoy",
+    "turno": "",
+    "jornadas": [
+      {
+        "f": "20260918",
+        "i": "06:00",
+        "o": "13:00",
+        "h": 7,
+        "n": 0
+      }
+    ],
+    "email": "prueba-1789760248885@prueba.local",
+    "ficticio": true,
+    "actualizado": "2026-09-18T19:37:48.994Z"
   }
 }
