@@ -1259,5 +1259,32 @@
     "email": "prueba-1789760390735@prueba.local",
     "ficticio": true,
     "actualizado": "2026-09-18T19:40:24.459Z"
+  },
+  "prueba-1789763845092@prueba.local": {
+    "nombre": "Toni Sánchez",
+    "conductor": "1086-5",
+    "puesto": "Control",
+    "avatar": null,
+    "version": "build-40",
+    "horasMes": 8,
+    "horasTotales": 8,
+    "diasMes": 1,
+    "horaInicio": "06:00",
+    "horaFin": "14:00",
+    "horarioDe": "hoy",
+    "turno": "M",
+    "jornadas": [
+      {
+        "f": "20260918",
+        "i": "06:00",
+        "o": "14:00",
+        "h": 8,
+        "n": 0,
+        "v": 1
+      }
+    ],
+    "email": "prueba-1789763845092@prueba.local",
+    "ficticio": true,
+    "actualizado": "2026-09-18T20:37:49.574Z"
   }
 }
