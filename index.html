@@ -350,6 +350,16 @@
         .modal.show{display:flex;}
         .modal-card{background:white;border-radius:16px;width:100%;max-width:440px;overflow:hidden;max-height:90vh;display:flex;flex-direction:column;}
         .modal-card.dark{background:#1e2a3a;color:#e0e0e0;}
+        .jm-op{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #f2f2f2;cursor:pointer;font-size:14.5px;font-weight:700;color:#2c3e50;}
+        .modal-card.dark .jm-op{color:#e0e0e0;border-color:#2d3561;}
+        .jm-op:active{background:#f4f6f9;}
+        .modal-card.dark .jm-op:active{background:#16202e;}
+        .jm-op.sel{background:#eaf2fd;}
+        .modal-card.dark .jm-op.sel{background:#14283f;}
+        .jm-sub{font-size:11.5px;font-weight:400;color:#95a5a6;}
+        .jm-check{color:var(--g1);font-weight:800;visibility:hidden;}
+        .jm-op.sel .jm-check{visibility:visible;}
+        .jm-otra{color:var(--g1);border-bottom:none;justify-content:center;font-size:13.5px;}
         .modal-header{padding:16px 18px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f0f0f0;flex-shrink:0;}
         .modal-card.dark .modal-header{border-color:#2d3561;}
         .modal-header h3{font-size:15px;font-weight:700;color:#2c3e50;}
@@ -1075,6 +1085,29 @@
     </div>
 </div>
 
+
+<!-- Tipo de jornada: lo que de verdad importa es si es de 3,5h o de 7h -->
+<div class="modal" id="jornadaModal">
+    <div class="modal-card" id="jornadaModalContent">
+        <div class="modal-header">
+            <h3>🕐 Horas de tu jornada</h3>
+            <button class="modal-close" onclick="document.getElementById('jornadaModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div class="jm-op" onclick="app.elegirJornada(3.5)">
+                <div style="flex:1;">3,5 h · media jornada
+                    <br><span class="jm-sub">De lunes a viernes · no trabaja festivos · 777h al año</span></div>
+                <span class="jm-check" data-jor="3.5">✓</span>
+            </div>
+            <div class="jm-op" onclick="app.elegirJornada(7)">
+                <div style="flex:1;">7 h · jornada completa
+                    <br><span class="jm-sub">Seis días seguidos · cobra festivos y libres · 1700h al año</span></div>
+                <span class="jm-check" data-jor="7">✓</span>
+            </div>
+            <div class="jm-op jm-otra" onclick="app.elegirJornadaOtra()">Otra cantidad…</div>
+        </div>
+    </div>
+</div>
 
 <!-- Visor del cuadrante -->
 <div class="cuad-visor" id="cuadVisor" onclick="app.cerrarCuadranteGrande()">

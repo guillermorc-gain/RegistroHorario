@@ -1457,12 +1457,29 @@ const app = {
         return document.querySelector('input[name="extraDestino"]:checked')?.value || 'anual';
     },
 
-    async mostrarCambiarJornada() {
+    mostrarCambiarJornada() {
+        // Lo que cambia las reglas es si es media jornada o completa, así que se
+        // elige entre las dos en vez de escribir un número a ojo.
+        document.querySelectorAll('#jornadaModal .jm-op').forEach(op => {
+            const c = op.querySelector('.jm-check');
+            op.classList.toggle('sel', !!c && parseFloat(c.dataset.jor) === this.jornadaHoras);
+        });
+        document.getElementById('jornadaModal').classList.add('show');
+        if (this.darkMode) document.getElementById('jornadaModalContent').classList.add('dark');
+    },
+
+    elegirJornadaOtra() {
         const v = prompt('¿Cuántas horas tiene tu jornada?\n\nPuedes usar decimales: 3,5 o 3.5\n'
-            + 'Con 7h o más se ajustan las horas anuales a 1700 y aparece el precio del día extra.', this.jornadaHoras);
+            + 'Con 7h o más se aplican las reglas de jornada completa.', this.jornadaHoras);
         if (v === null) return;
         const n = this._leerDecimal(v);
         if (n === null || n <= 0) { alert('❌ Introduce un número de horas válido.\nEjemplo: 3,5 o 7'); return; }
+        this.elegirJornada(n);
+    },
+
+    async elegirJornada(n) {
+        document.getElementById('jornadaModal').classList.remove('show');
+        if (n === this.jornadaHoras) return;
         this.jornadaHoras = n;
         localStorage.setItem('jornadaHoras', String(n));
 
