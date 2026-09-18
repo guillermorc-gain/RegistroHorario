@@ -5,6 +5,28 @@ const FILE_PATH    = 'usuarios-resumen.json';
 const ADMIN_EMAIL  = 'g.rioscorrea@gmail.com';
 const MAX_AVATAR   = 40 * 1024;   // el avatar va reescalado a 80px, no debe pasar de aquí
 const MAX_JORNADAS = 500;         // un año da ~220; el tope evita cargas absurdas
+const MAX_LUGARES  = 500;         // un lugar por día: más de un año de excepciones
+
+// 'YYYYMMDD' -> lista de días del tramo, ambos incluidos. Se acota a 400 para
+// que una petición mal formada no genere un fichero enorme.
+function diasEntre(desde, hasta) {
+  const ok = f => /^\d{8}$/.test(String(f || ''));
+  if (!ok(desde) || !ok(hasta) || hasta < desde) return [];
+  const aFecha = f => new Date(+f.slice(0, 4), +f.slice(4, 6) - 1, +f.slice(6, 8), 12);
+  const out = [];
+  for (let d = aFecha(desde), fin = aFecha(hasta); d <= fin && out.length < 400; d.setDate(d.getDate() + 1)) {
+    out.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`);
+  }
+  return out;
+}
+
+function recortarLugares(lugares) {
+  const claves = Object.keys(lugares).sort();
+  if (claves.length <= MAX_LUGARES) return lugares;
+  const recorte = {};
+  claves.slice(-MAX_LUGARES).forEach(k => { recorte[k] = lugares[k]; });
+  return recorte;
+}
 
 const ghHeaders = () => ({
   'User-Agent': 'horasemt-app',
@@ -107,7 +129,7 @@ export default async function handler(req, res) {
       if (admin !== ADMIN_EMAIL.toLowerCase()) {
         return res.status(403).json({ error: 'Solo el gestor puede hacer esto' });
       }
-      const { email, puesto, ficticio, baja } = req.body || {};
+      const { email, puesto, ficticio, baja, desde, hasta } = req.body || {};
       const clave = (email || '').toLowerCase().trim();
       if (!clave) return res.status(400).json({ error: 'Falta el email' });
       // Los usuarios de prueba solo pueden vivir bajo este dominio, para que no
@@ -127,15 +149,31 @@ export default async function handler(req, res) {
             actualizado: new Date().toISOString(),
           };
         }
-        // La baja (BE) y el puesto son campos del gestor; una publicación del
-        // trabajador los conserva porque no los sobrescribe.
+        // La baja (BE) y el lugar de trabajo son campos del gestor; una
+        // publicación del trabajador los conserva porque no los sobrescribe.
         else if (data[clave] && baja !== undefined) data[clave].baja = !!baja;
-        else if (data[clave]) data[clave].puesto = String(puesto || '').slice(0, 40);
+        // Lugar solo para unas fechas: va aparte de `puesto` porque la app del
+        // trabajador reescribe sus jornadas enteras cada vez que publica y se
+        // llevaría por delante el cambio.
+        else if (data[clave] && desde && hasta) {
+          const lugares = { ...(data[clave].lugares || {}) };
+          for (const f of diasEntre(desde, hasta)) {
+            if (puesto) lugares[f] = String(puesto).slice(0, 40);
+            else delete lugares[f];
+          }
+          data[clave].lugares = recortarLugares(lugares);
+        }
+        // Sin fechas es el lugar habitual: manda sobre cualquier excepción
+        else if (data[clave]) {
+          data[clave].puesto  = String(puesto || '').slice(0, 40);
+          data[clave].lugares = {};
+        }
         return data;
       }, req.method === 'DELETE' ? `Quitar ${clave}`
          : ficticio ? `Usuario de prueba ${clave}`
          : baja !== undefined ? `${baja ? 'Baja' : 'Alta'} de ${clave}`
-         : `Puesto de ${clave}`);
+         : desde && hasta ? `Lugar de ${clave} del ${desde} al ${hasta}`
+         : `Lugar de ${clave}`);
 
       return nuevo ? res.status(200).json(nuevo) : res.status(500).json({ error: 'No se pudo guardar' });
     }
