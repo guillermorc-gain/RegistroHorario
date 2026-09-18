@@ -798,7 +798,7 @@
                         <input type="text" inputmode="decimal" class="ops-night-input" id="precioExtraGlobal" placeholder="ej: 14,50" onchange="app.guardarPrecioExtra()">
                         <span class="ops-field-sub" id="precioExtraSub">Se usa para calcular lo que suman tus horas extras</span>
                     </div>
-                    <button class="ops-btn" onclick="app.mostrarCambiarHoras()">
+                    <button class="ops-btn" onclick="app.mostrarCambiarAnuales()">
                         ⚙️ Horas anuales
                         <span id="horasAnualesDisplay" style="margin-left:auto;color:var(--g1);font-weight:700;font-size:13px;"></span>
                         <span class="ops-arrow">›</span>
@@ -1086,7 +1086,7 @@
 </div>
 
 
-<!-- Tipo de jornada: lo que de verdad importa es si es de 3,5h o de 7h -->
+<!-- Horas de la jornada diaria -->
 <div class="modal" id="jornadaModal">
     <div class="modal-card" id="jornadaModalContent">
         <div class="modal-header">
@@ -1095,16 +1095,31 @@
         </div>
         <div class="modal-body" style="padding:0;">
             <div class="jm-op" onclick="app.elegirJornada(3.5)">
-                <div style="flex:1;">3,5 h · media jornada
-                    <br><span class="jm-sub">De lunes a viernes · no trabaja festivos · 777h al año</span></div>
-                <span class="jm-check" data-jor="3.5">✓</span>
+                <div style="flex:1;">3,5 h</div><span class="jm-check" data-jor="3.5">✓</span>
             </div>
             <div class="jm-op" onclick="app.elegirJornada(7)">
-                <div style="flex:1;">7 h · jornada completa
-                    <br><span class="jm-sub">Seis días seguidos · cobra festivos y libres · 1700h al año</span></div>
-                <span class="jm-check" data-jor="7">✓</span>
+                <div style="flex:1;">7 h</div><span class="jm-check" data-jor="7">✓</span>
             </div>
             <div class="jm-op jm-otra" onclick="app.elegirJornadaOtra()">Otra cantidad…</div>
+        </div>
+    </div>
+</div>
+
+<!-- Horas que hay que hacer al año -->
+<div class="modal" id="anualesModal">
+    <div class="modal-card" id="anualesModalContent">
+        <div class="modal-header">
+            <h3>⚙️ Horas anuales</h3>
+            <button class="modal-close" onclick="document.getElementById('anualesModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div class="jm-op" onclick="app.elegirAnuales(777)">
+                <div style="flex:1;">777 h</div><span class="jm-check" data-an="777">✓</span>
+            </div>
+            <div class="jm-op" onclick="app.elegirAnuales(1700)">
+                <div style="flex:1;">1700 h</div><span class="jm-check" data-an="1700">✓</span>
+            </div>
+            <div class="jm-op jm-otra" onclick="app.elegirAnualesOtra()">Otra cantidad…</div>
         </div>
     </div>
 </div>

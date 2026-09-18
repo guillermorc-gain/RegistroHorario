@@ -1469,8 +1469,7 @@ const app = {
     },
 
     elegirJornadaOtra() {
-        const v = prompt('¿Cuántas horas tiene tu jornada?\n\nPuedes usar decimales: 3,5 o 3.5\n'
-            + 'Con 7h o más se aplican las reglas de jornada completa.', this.jornadaHoras);
+        const v = prompt('¿Cuántas horas tiene tu jornada?\n\nPuedes usar decimales: 3,5 o 3.5', this.jornadaHoras);
         if (v === null) return;
         const n = this._leerDecimal(v);
         if (n === null || n <= 0) { alert('❌ Introduce un número de horas válido.\nEjemplo: 3,5 o 7'); return; }
@@ -1482,25 +1481,10 @@ const app = {
         if (n === this.jornadaHoras) return;
         this.jornadaHoras = n;
         localStorage.setItem('jornadaHoras', String(n));
-
-        // Cambiar de jornada arrastra las horas anuales que le corresponden,
-        // pero solo si estaban en uno de los valores por defecto: si alguien se
-        // ha puesto un objetivo propio, no se le pisa.
-        let aviso = '';
-        const anuales = this._anualesDeJornada(n);
-        const porDefecto = Object.values(this.ANUALES_POR_JORNADA);
-        if (this.horasAnualesCustom !== anuales && porDefecto.includes(this.horasAnualesCustom)) {
-            this.horasAnualesCustom = anuales;
-            localStorage.setItem('horasAnuales', String(anuales));
-            const el = document.getElementById('horasAnualesDisplay');
-            if (el) el.textContent = anuales + 'h';
-            aviso = ` · anuales: ${anuales}h`;
-        }
-
         this._actualizarJornadaDisplay();
         await this._guardarPreferencias(true);
         this.cargarDatos();
-        this._mostrarToast(`✅ Jornada: ${n}h${aviso}`, 3000);
+        this._mostrarToast(`✅ Jornada: ${n}h`, 2500);
     },
 
     _actualizarJornadaDisplay() {
@@ -2488,21 +2472,18 @@ const app = {
         this.cargarDatos();
     },
 
-    // La media jornada no trabaja festivos, así que no tiene precio que poner
-    JORNADA_COMPLETA: 7,
+    // Quién trabaja festivos y libres no se puede deducir de las horas de la
+    // jornada: hay un grupo que hace 7h tres días a la semana y va por las
+    // mismas reglas que la media jornada. Lo que los separa son las anuales.
+    ANUALES_COMPLETA: 1700,
 
-    // Horas anuales que le tocan a cada tipo de jornada. La completa trabaja
-    // seis días seguidos y pasa de las 1700h; la media se queda en 777h.
-    ANUALES_POR_JORNADA: { completa: 1700, media: 777 },
-
-    _anualesDeJornada(jornada) {
-        return jornada >= this.JORNADA_COMPLETA
-            ? this.ANUALES_POR_JORNADA.completa : this.ANUALES_POR_JORNADA.media;
+    _esJornadaCompleta() {
+        return this.horasAnualesCustom >= this.ANUALES_COMPLETA;
     },
 
     _actualizarCampoFestivo() {
         const campo = document.getElementById('campoPrecioFestivo');
-        if (campo) campo.hidden = this.jornadaHoras < this.JORNADA_COMPLETA;
+        if (campo) campo.hidden = !this._esJornadaCompleta();
         const inp = document.getElementById('precioFestivoGlobal');
         if (inp && this.precioFestivoDefault > 0) inp.value = this.precioFestivoDefault;
     },
@@ -2514,15 +2495,31 @@ const app = {
         this._guardarPreferencias();
     },
 
-    async mostrarCambiarHoras() {
-        const v = prompt(`¿Cuántas horas quieres trabajar al año?\n\nCon jornada de ${this.jornadaHoras}h lo normal son `
-            + `${this._anualesDeJornada(this.jornadaHoras)}h.`, this.horasAnualesCustom);
+    mostrarCambiarAnuales() {
+        document.querySelectorAll('#anualesModal .jm-op').forEach(op => {
+            const c = op.querySelector('.jm-check');
+            op.classList.toggle('sel', !!c && parseFloat(c.dataset.an) === this.horasAnualesCustom);
+        });
+        document.getElementById('anualesModal').classList.add('show');
+        if (this.darkMode) document.getElementById('anualesModalContent').classList.add('dark');
+    },
+
+    elegirAnualesOtra() {
+        const v = prompt('¿Cuántas horas quieres trabajar al año?', this.horasAnualesCustom);
         if (v === null) return;
         const n = this._leerDecimal(v);
         if (n === null || n <= 0) { alert('❌ Introduce un número de horas válido.'); return; }
+        this.elegirAnuales(n);
+    },
+
+    async elegirAnuales(n) {
+        document.getElementById('anualesModal').classList.remove('show');
+        if (n === this.horasAnualesCustom) return;
         this.horasAnualesCustom = n;
         localStorage.setItem('horasAnuales', String(n));
-        document.getElementById('horasAnualesDisplay').textContent = n + 'h';
+        const el = document.getElementById('horasAnualesDisplay');
+        if (el) el.textContent = n + 'h';
+        this._actualizarCampoFestivo();      // el precio del día extra depende de esto
         await this._guardarPreferencias(true);
         this.cargarDatos();
         this._mostrarToast(`✅ Horas anuales: ${n}h`, 2500);
