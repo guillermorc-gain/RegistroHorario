@@ -1052,17 +1052,42 @@
     "nombre": "Guillermo Ríos Correa",
     "conductor": "1234-5",
     "avatar": null,
-    "version": "build-188",
+    "version": "build-201",
     "horasMes": 14,
     "horasTotales": 14,
     "diasMes": 3,
     "turno": "T",
     "puesto": "Son Rossinyol",
-    "actualizado": "2026-09-18T19:46:42.680Z",
+    "actualizado": "2026-09-18T19:53:22.329Z",
     "horaInicio": "18:00",
     "horaFin": "22:00",
     "horarioDe": "hoy",
-    "jornadas": [],
+    "jornadas": [
+      {
+        "f": "20260915",
+        "h": 5,
+        "i": "17:00",
+        "o": "22:00",
+        "n": 1,
+        "pu": "Son Rossinyol"
+      },
+      {
+        "f": "20260917",
+        "h": 5,
+        "i": "17:00",
+        "o": "22:00",
+        "n": 1,
+        "pu": "Son Rossinyol"
+      },
+      {
+        "f": "20260918",
+        "h": 4,
+        "i": "18:00",
+        "o": "22:00",
+        "n": 1,
+        "pu": "Son Rossinyol"
+      }
+    ],
     "horasAnuales": 777
   },
   "prueba-1789758756867@prueba.local": {
