@@ -1,0 +1,957 @@
+name: Build APK Gestión
+
+on:
+  push:
+    branches: [main, claude/pwa-install-support-dXc0v]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inject build version
+        run: echo "const APP_VERSION = 'build-${{ github.run_number }}';" > gestion/version.js
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build www/
+        run: npm run build:www:gestion
+
+      - name: Use gestion Capacitor config
+        run: cp capacitor.gestion.config.json capacitor.config.json
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Patch variables.gradle — targetSdkVersion 34
+        run: |
+          VARS="android/variables.gradle"
+          sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 34/' "$VARS"
+          sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 34/' "$VARS"
+
+      - name: Patch build.gradle — versionCode/versionName from build number
+        run: |
+          GRADLE="android/app/build.gradle"
+          N=${{ github.run_number }}
+          MAJOR=$((N / 100)); MINOR=$((N % 100))
+          sed -i "s/versionCode [0-9]*/versionCode $N/" "$GRADLE"
+          sed -i "s/versionName \"[^\"]*\"/versionName \"$MAJOR.$(printf '%02d' $MINOR)\"/" "$GRADLE"
+          grep -E "versionCode|versionName" "$GRADLE"
+
+      - name: Patch AndroidManifest — permissions + intent filter localhost
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>|' "$MANIFEST"
+          sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
+          sed -i 's|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />|' "$MANIFEST"
+          sed -i 's|</application>|    <receiver android:name=".MainActivity$GeofenceReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$BootReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/></intent-filter></receiver>\n    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.gestionemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
+
+      - name: Create FileProvider paths config
+        run: |
+          mkdir -p android/app/src/main/res/xml
+          cat > android/app/src/main/res/xml/file_paths.xml << 'XMLEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths>
+              <cache-path name="apk_downloads" path="." />
+          </paths>
+          XMLEOF
+
+      - name: Patch MainActivity — OAuth + file downloads + BroadcastReceiver
+        run: |
+          cat > android/app/src/main/java/com/guillermorc/gestionemt/MainActivity.java << 'JAVAEOF'
+          package com.guillermorc.gestionemt;
+
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.content.BroadcastReceiver;
+          import android.content.ContentValues;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.Environment;
+          import android.os.Handler;
+          import android.os.Looper;
+          import android.provider.MediaStore;
+          import android.webkit.JavascriptInterface;
+          import android.widget.Toast;
+          import androidx.core.app.ActivityCompat;
+          import androidx.core.app.NotificationCompat;
+          import androidx.core.content.FileProvider;
+          import com.getcapacitor.BridgeActivity;
+          import com.google.android.gms.location.Geofence;
+          import com.google.android.gms.location.GeofencingClient;
+          import com.google.android.gms.location.GeofencingEvent;
+          import com.google.android.gms.location.GeofencingRequest;
+          import com.google.android.gms.location.LocationServices;
+          import java.io.OutputStream;
+          import java.util.ArrayList;
+          import java.util.List;
+
+          public class MainActivity extends BridgeActivity {
+
+              public static final String PREFS      = "HorasEMT";
+              public static final String CHANNEL_ID = "trabajo_cercano";
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  createNotificationChannel();
+                  requestNotificationPermission();
+                  requestLocationPermissions();
+                  handleOAuthIntent(getIntent());
+                  setupJavascriptInterface();
+              }
+
+              private void requestNotificationPermission() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
+                              != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                          ActivityCompat.requestPermissions(this,
+                              new String[]{ android.Manifest.permission.POST_NOTIFICATIONS }, 1);
+                      }
+                  }
+              }
+
+              private void requestLocationPermissions() {
+                  List<String> perms = new ArrayList<>();
+                  if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
+                          != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                      perms.add(android.Manifest.permission.ACCESS_FINE_LOCATION);
+                      perms.add(android.Manifest.permission.ACCESS_COARSE_LOCATION);
+                  }
+                  if (!perms.isEmpty()) {
+                      ActivityCompat.requestPermissions(this, perms.toArray(new String[0]), 2);
+                  } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                      if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                              != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                          ActivityCompat.requestPermissions(this,
+                              new String[]{ android.Manifest.permission.ACCESS_BACKGROUND_LOCATION }, 3);
+                      }
+                  }
+              }
+
+              @Override
+              public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+                  super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                  if (requestCode == 2 && grantResults.length > 0
+                          && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                          if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                                  != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                              new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                  ActivityCompat.requestPermissions(this,
+                                      new String[]{ android.Manifest.permission.ACCESS_BACKGROUND_LOCATION }, 3);
+                              }, 500);
+                          }
+                      }
+                  }
+              }
+
+              @Override
+              protected void onNewIntent(Intent intent) {
+                  super.onNewIntent(intent);
+                  setIntent(intent);
+                  handleOAuthIntent(intent);
+              }
+
+              private void createNotificationChannel() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      NotificationChannel ch = new NotificationChannel(
+                          CHANNEL_ID, "Trabajo cercano", NotificationManager.IMPORTANCE_HIGH);
+                      ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE))
+                          .createNotificationChannel(ch);
+                  }
+              }
+
+              private void handleOAuthIntent(Intent intent) {
+                  if (intent == null || getBridge() == null) return;
+                  Uri data = intent.getData();
+                  if (data == null) return;
+                  String code = data.getQueryParameter("code");
+                  if (code != null && !code.isEmpty()) {
+                      String url = "https://localhost/?code=" + Uri.encode(code);
+                      getBridge().getWebView().post(() -> getBridge().getWebView().loadUrl(url));
+                      return;
+                  }
+                  String token = data.getQueryParameter("access_token");
+                  if (token == null || token.isEmpty()) return;
+                  String exp = data.getQueryParameter("expires_in");
+                  String url = "https://localhost/?access_token=" + Uri.encode(token)
+                      + (exp != null ? "&expires_in=" + exp : "");
+                  getBridge().getWebView().post(() -> getBridge().getWebView().loadUrl(url));
+              }
+
+              private void setupJavascriptInterface() {
+                  if (getBridge() == null || getBridge().getWebView() == null) return;
+                  final Context ctx = this;
+                  getBridge().getWebView().addJavascriptInterface(new Object() {
+
+                      @JavascriptInterface
+                      public boolean hasBackgroundLocationPermission() {
+                          if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true;
+                          return ActivityCompat.checkSelfPermission(ctx, android.Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                              == android.content.pm.PackageManager.PERMISSION_GRANTED;
+                      }
+
+                      @JavascriptInterface
+                      public void requestLocationPermissions() {
+                          ((MainActivity) ctx).requestLocationPermissions();
+                      }
+
+                      @JavascriptInterface
+                      public void saveToPrefs(String key, String value) {
+                          ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                              .edit().putString(key, value).apply();
+                      }
+
+                      @JavascriptInterface
+                      public void scheduleWorkNotification(String horaInicio, String horaFin) {
+                          SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                          String today = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(new java.util.Date());
+                          if (today.equals(prefs.getString("lastRegisteredDate", ""))) return;
+                          prefs.edit()
+                              .putString("lastHoraInicio", horaInicio)
+                              .putString("lastHoraFin", horaFin).apply();
+                          NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                              nm.createNotificationChannel(new NotificationChannel(
+                                  CHANNEL_ID, "Trabajo cercano", NotificationManager.IMPORTANCE_HIGH));
+                          }
+                          int flags = PendingIntent.FLAG_UPDATE_CURRENT
+                              | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
+                          Intent bi = new Intent("com.guillermorc.gestionemt.REGISTRAR");
+                          bi.setPackage("com.guillermorc.gestionemt");
+                          PendingIntent broadcastPI = PendingIntent.getBroadcast(ctx, 0, bi, flags);
+                          Intent oi = new Intent(ctx, MainActivity.class);
+                          oi.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                          PendingIntent openPI = PendingIntent.getActivity(ctx, 1, oi, flags);
+                          nm.notify(1001, new NotificationCompat.Builder(ctx, CHANNEL_ID)
+                              .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+                              .setContentTitle("📍 Gestión EMT Movilidad")
+                              .setContentText("Parece que estás en el trabajo. ¿Registras la jornada?")
+                              .setPriority(NotificationCompat.PRIORITY_HIGH)
+                              .setContentIntent(openPI)
+                              .setAutoCancel(false)
+                              .addAction(0, "✅ Registrar jornada", broadcastPI)
+                              .addAction(0, "🕐 Otro horario", openPI)
+                              .build());
+                      }
+
+                      @JavascriptInterface
+                      public void cancelWorkNotification() {
+                          ((NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE)).cancel(1001);
+                      }
+
+                      @JavascriptInterface
+                      public void saveFile(String content, String filename) {
+                          final String fname = (filename != null && !filename.isEmpty())
+                              ? filename : "horas-emt.json";
+                          byte[] bytes;
+                          try { bytes = content.getBytes("UTF-8"); }
+                          catch (Exception e) { bytes = content.getBytes(); }
+                          final byte[] data = bytes;
+                          try {
+                              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                  ContentValues v = new ContentValues();
+                                  v.put(MediaStore.Downloads.DISPLAY_NAME, fname);
+                                  v.put(MediaStore.Downloads.MIME_TYPE, "application/json");
+                                  Uri uri = ctx.getContentResolver().insert(
+                                      MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                                  if (uri == null) return;
+                                  try (OutputStream os = ctx.getContentResolver().openOutputStream(uri)) {
+                                      if (os != null) os.write(data);
+                                  }
+                              } else {
+                                  java.io.File f = new java.io.File(
+                                      Environment.getExternalStoragePublicDirectory(
+                                          Environment.DIRECTORY_DOWNLOADS), fname);
+                                  try (java.io.FileOutputStream fos = new java.io.FileOutputStream(f)) {
+                                      fos.write(data);
+                                  }
+                                  android.media.MediaScannerConnection.scanFile(
+                                      ctx, new String[]{f.getAbsolutePath()}, null, null);
+                              }
+                              new Handler(Looper.getMainLooper()).post(() ->
+                                  Toast.makeText(ctx, "Guardado en Descargas: " + fname, Toast.LENGTH_LONG).show());
+                          } catch (Exception e) {
+                              new Handler(Looper.getMainLooper()).post(() ->
+                                  Toast.makeText(ctx, "Error al guardar", Toast.LENGTH_SHORT).show());
+                          }
+                      }
+                      @JavascriptInterface
+                      public String getPref(String key) {
+                          return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                              .getString(key, null);
+                      }
+
+                      @JavascriptInterface
+                      public void removePref(String key) {
+                          ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                              .edit().remove(key).apply();
+                      }
+
+                      @JavascriptInterface
+                      public void openExternalUrl(String url) {
+                          try {
+                              Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                              intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                              ctx.startActivity(intent);
+                          } catch (Exception e) {}
+                      }
+
+                      @JavascriptInterface
+                      public void downloadAndInstallApk(String url) {
+                          new Thread(() -> {
+                              try {
+                                  java.net.URL apkUrl = new java.net.URL(url);
+                                  java.net.HttpURLConnection conn = (java.net.HttpURLConnection) apkUrl.openConnection();
+                                  conn.setRequestProperty("User-Agent", "HorasEMT/1.0");
+                                  conn.setInstanceFollowRedirects(true);
+                                  conn.connect();
+                                  int totalSize = conn.getContentLength();
+                                  java.io.File apkFile = new java.io.File(ctx.getCacheDir(), "update.apk");
+                                  try (java.io.InputStream in = conn.getInputStream();
+                                       java.io.FileOutputStream out = new java.io.FileOutputStream(apkFile)) {
+                                      byte[] buf = new byte[8192];
+                                      int read; long downloaded = 0;
+                                      while ((read = in.read(buf)) != -1) {
+                                          out.write(buf, 0, read);
+                                          downloaded += read;
+                                          if (totalSize > 0) {
+                                              final int pct = (int)(downloaded * 100L / totalSize);
+                                              ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                                  try {
+                                                      ((BridgeActivity) ctx).getBridge().getWebView()
+                                                          .evaluateJavascript("app._onUpdateProgress(" + pct + ")", null);
+                                                  } catch (Exception ignored) {}
+                                              });
+                                          }
+                                      }
+                                  }
+                                  conn.disconnect();
+                                  Uri apkUri = FileProvider.getUriForFile(ctx,
+                                      ctx.getPackageName() + ".fileprovider", apkFile);
+                                  Intent install = new Intent(Intent.ACTION_VIEW);
+                                  install.setDataAndType(apkUri, "application/vnd.android.package-archive");
+                                  install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                                  install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                  ctx.startActivity(install);
+                              } catch (Exception e) {
+                                  ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                      Toast.makeText(ctx, "Error al descargar: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                                      try {
+                                          ((BridgeActivity) ctx).getBridge().getWebView()
+                                              .evaluateJavascript("app._onUpdateError()", null);
+                                      } catch (Exception ignored) {}
+                                  });
+                              }
+                          }).start();
+                      }
+
+                      @JavascriptInterface
+                      public void fetchImageBase64(final String imgUrl, final String callbackFn) {
+                          new Thread(() -> {
+                              String result = null;
+                              try {
+                                  java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(imgUrl).openConnection();
+                                  conn.setConnectTimeout(10000); conn.setReadTimeout(10000);
+                                  conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+                                  conn.connect();
+                                  java.io.InputStream is = conn.getInputStream();
+                                  java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+                                  byte[] tmp = new byte[4096]; int n;
+                                  while ((n = is.read(tmp)) != -1) buf.write(tmp, 0, n);
+                                  String mime = conn.getContentType() != null ? conn.getContentType().split(";")[0] : "image/jpeg";
+                                  result = "data:" + mime + ";base64," + android.util.Base64.encodeToString(buf.toByteArray(), android.util.Base64.NO_WRAP);
+                              } catch (Exception e) {}
+                              final String r = result;
+                              new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                                  if (getBridge() != null)
+                                      getBridge().getWebView().evaluateJavascript(callbackFn + "(" + (r != null ? "'" + r + "'" : "null") + ")", null);
+                              });
+                          }).start();
+                      }
+
+                      @JavascriptInterface
+                      public void performOAuthInWebView(final String authUrl, final boolean isSilent) {
+                          ((android.app.Activity) ctx).runOnUiThread(new Runnable() {
+                              @Override public void run() {
+                                  final android.webkit.WebView wv = new android.webkit.WebView(ctx);
+                                  wv.getSettings().setJavaScriptEnabled(true);
+                                  wv.getSettings().setDomStorageEnabled(true);
+                                  wv.getSettings().setUserAgentString("Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
+                                  final android.app.Dialog[] dlgRef = {null};
+                                  final boolean[] handled = {false};
+                                  if (!isSilent) {
+                                      android.app.Dialog dlg = new android.app.Dialog(ctx, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+                                      android.widget.FrameLayout fl = new android.widget.FrameLayout(ctx);
+                                      fl.addView(wv, new android.widget.FrameLayout.LayoutParams(-1, -1));
+                                      dlg.setContentView(fl);
+                                      if (dlg.getWindow() != null) dlg.getWindow().setLayout(-1, -1);
+                                      dlgRef[0] = dlg;
+                                  }
+                                  wv.setWebViewClient(new android.webkit.WebViewClient() {
+                                      private void reportResult(final String queryOrFragment) {
+                                          if (handled[0]) return;
+                                          handled[0] = true;
+                                          if (dlgRef[0] != null) try { dlgRef[0].dismiss(); } catch (Exception e) {}
+                                          ((android.app.Activity) ctx).runOnUiThread(new Runnable() {
+                                              @Override public void run() {
+                                                  try {
+                                                      String code = null;
+                                                      if (queryOrFragment != null) {
+                                                          for (String p : queryOrFragment.split("&")) {
+                                                              String[] kv = p.split("=", 2);
+                                                              if (kv.length < 2) continue;
+                                                              if ("code".equals(kv[0])) { try { code = java.net.URLDecoder.decode(kv[1], "UTF-8"); } catch (Exception e) { code = kv[1]; } }
+                                                          }
+                                                      }
+                                                      final String js = code != null
+                                                          ? "app._onOAuthCode('" + code.replace("'", "\\'") + "'," + isSilent + ")"
+                                                          : "app._onOAuthCode(null," + isSilent + ")";
+                                                      ((BridgeActivity) ctx).getBridge().getWebView().evaluateJavascript(js, null);
+                                                  } catch (Exception e) {}
+                                              }
+                                          });
+                                      }
+                                      @Override
+                                      public boolean shouldOverrideUrlLoading(android.webkit.WebView view, android.webkit.WebResourceRequest req) {
+                                          if (handled[0]) return true;
+                                          String u = req.getUrl().toString();
+                                          if (u.contains("registro-horario-emt.vercel.app")) {
+                                              String qry = req.getUrl().getQuery();
+                                              reportResult(qry != null ? qry : "");
+                                              return true;
+                                          }
+                                          if (u.contains("silent_failed=1") || u.contains("error=access_denied") || u.contains("error=interaction_required")) {
+                                              reportResult(null); return true;
+                                          }
+                                          return false;
+                                      }
+                                      @Override
+                                      public void onPageFinished(android.webkit.WebView view, String pageUrl) {
+                                          if (handled[0] || pageUrl == null || !pageUrl.contains("registro-horario-emt.vercel.app")) return;
+                                          view.evaluateJavascript(
+                                              "(function(){var q=(window.location.search||'').replace(/^\\?/,'');return q.indexOf('code=')>=0?q:'';})();",
+                                              new android.webkit.ValueCallback<String>() {
+                                                  @Override public void onReceiveValue(String val) {
+                                                      if (val != null && !val.equals("null") && !val.equals("\"\"") && val.length() > 4) {
+                                                          String clean = val.startsWith("\"") ? val.substring(1, val.length()-1) : val;
+                                                          reportResult(clean);
+                                                      } else { reportResult(null); }
+                                                  }
+                                              }
+                                          );
+                                      }
+                                  });
+                                  wv.loadUrl(authUrl);
+                                  if (dlgRef[0] != null) dlgRef[0].show();
+                              }
+                          });
+                      }
+                      @JavascriptInterface
+                      public void registerGeofences(String locationsJson) {
+                          try {
+                              org.json.JSONArray arr = new org.json.JSONArray(locationsJson);
+                              GeofencingClient client = LocationServices.getGeofencingClient(ctx);
+                              Intent gi = new Intent(ctx, GeofenceReceiver.class);
+                              int piFlags = PendingIntent.FLAG_UPDATE_CURRENT
+                                  | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_MUTABLE : 0);
+                              PendingIntent gpi = PendingIntent.getBroadcast(ctx, 9999, gi, piFlags);
+                              client.removeGeofences(gpi);
+                              if (arr.length() == 0) return;
+                              List<Geofence> fences = new ArrayList<>();
+                              for (int i = 0; i < arr.length(); i++) {
+                                  org.json.JSONObject loc = arr.getJSONObject(i);
+                                  fences.add(new Geofence.Builder()
+                                      .setRequestId("work_" + i)
+                                      .setCircularRegion(loc.getDouble("lat"), loc.getDouble("lng"), 300)
+                                      .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                                      .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_DWELL)
+                                      .setLoiteringDelay(60000)
+                                      .build());
+                              }
+                              GeofencingRequest request = new GeofencingRequest.Builder()
+                                  .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER | GeofencingRequest.INITIAL_TRIGGER_DWELL)
+                                  .addGeofences(fences)
+                                  .build();
+                              if (ActivityCompat.checkSelfPermission(ctx, android.Manifest.permission.ACCESS_FINE_LOCATION)
+                                      == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                  client.addGeofences(request, gpi);
+                              }
+                              ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                                  .edit().putString("geofenceLocations", locationsJson).apply();
+                          } catch (Exception e) {}
+                      }
+
+                      @JavascriptInterface
+                      public void removeGeofences() {
+                          try {
+                              GeofencingClient client = LocationServices.getGeofencingClient(ctx);
+                              Intent gi = new Intent(ctx, GeofenceReceiver.class);
+                              int piFlags = PendingIntent.FLAG_UPDATE_CURRENT
+                                  | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_MUTABLE : 0);
+                              client.removeGeofences(PendingIntent.getBroadcast(ctx, 9999, gi, piFlags));
+                              ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                                  .edit().remove("geofenceLocations").apply();
+                          } catch (Exception e) {}
+                      }
+                  }, "AndroidBridge");
+              }
+
+              @Override
+              public void onBackPressed() {
+                  android.webkit.WebView wv = (getBridge() != null) ? getBridge().getWebView() : null;
+                  if (wv == null) { moveTaskToBack(true); return; }
+                  wv.evaluateJavascript(
+                      "(function(){" +
+                      "try{" +
+                      "var h=document.getElementById('historialModal');" +
+                      "if(h&&h.classList.contains('show')){h.classList.remove('show');return 'modal';}" +
+                      "var e=document.getElementById('editModal');" +
+                      "if(e&&e.classList.contains('show')){e.classList.remove('show');return 'modal';}" +
+                      "var a=document.getElementById('avatarModal');" +
+                      "if(a&&a.classList.contains('show')){a.classList.remove('show');return 'modal';}" +
+                      "var o=document.getElementById('optionsScreen');" +
+                      "if(o&&o.classList.contains('active')){app.mostrarApp();return 'main';}" +
+                      "}catch(ex){}" +
+                      "return 'exit';" +
+                      "})()",
+                      result -> {
+                          if (result == null || result.contains("exit")) {
+                              moveTaskToBack(true);
+                          }
+                      }
+                  );
+              }
+
+              // Native geofencing — fires when user enters a work location, even with app killed
+              public static class GeofenceReceiver extends BroadcastReceiver {
+                  @Override
+                  public void onReceive(Context ctx, Intent intent) {
+                      GeofencingEvent event = GeofencingEvent.fromIntent(intent);
+                      if (event == null || event.hasError()) return;
+                      int transition = event.getGeofenceTransition();
+                      if (transition != Geofence.GEOFENCE_TRANSITION_ENTER && transition != Geofence.GEOFENCE_TRANSITION_DWELL) return;
+                      SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                      String gpsMode = prefs.getString("gpsMode", "always");
+                      if ("off".equals(gpsMode)) return;
+                      if ("schedule".equals(gpsMode)) {
+                          String from = prefs.getString("gpsScheduleFrom", "07:00");
+                          String to   = prefs.getString("gpsScheduleTo",   "09:00");
+                          java.util.Calendar cal = java.util.Calendar.getInstance();
+                          int cur = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE);
+                          String[] fp = from.split(":"); String[] tp = to.split(":");
+                          int f = Integer.parseInt(fp[0]) * 60 + Integer.parseInt(fp[1]);
+                          int t = Integer.parseInt(tp[0]) * 60 + Integer.parseInt(tp[1]);
+                          boolean ok = f <= t ? (cur >= f && cur <= t) : (cur >= f || cur <= t);
+                          if (!ok) return;
+                      }
+                      String today = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(new java.util.Date());
+                      if (today.equals(prefs.getString("lastRegisteredDate", ""))) return;
+                      String inicio = prefs.getString("lastHoraInicio", "");
+                      String fin    = prefs.getString("lastHoraFin", "");
+                      NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          nm.createNotificationChannel(new NotificationChannel(
+                              CHANNEL_ID, "Trabajo cercano", NotificationManager.IMPORTANCE_HIGH));
+                      }
+                      int flags = PendingIntent.FLAG_UPDATE_CURRENT
+                          | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
+                      Intent bi = new Intent("com.guillermorc.gestionemt.REGISTRAR");
+                      bi.setPackage("com.guillermorc.gestionemt");
+                      PendingIntent broadcastPI = PendingIntent.getBroadcast(ctx, 0, bi, flags);
+                      Intent oi = new Intent(ctx, MainActivity.class);
+                      oi.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                      PendingIntent openPI = PendingIntent.getActivity(ctx, 1, oi, flags);
+                      nm.notify(1001, new NotificationCompat.Builder(ctx, CHANNEL_ID)
+                          .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+                          .setContentTitle("📍 Gestión EMT Movilidad")
+                          .setContentText("Parece que estás en el trabajo. ¿Registras la jornada?")
+                          .setPriority(NotificationCompat.PRIORITY_HIGH)
+                          .setContentIntent(openPI)
+                          .setAutoCancel(false)
+                          .addAction(0, "✅ Registrar jornada", broadcastPI)
+                          .addAction(0, "🕐 Otro horario", openPI)
+                          .build());
+                  }
+              }
+
+              // Returns a usable access token, renewing it through the refresh
+              // token when the stored one has expired. Runs off the main thread.
+              static String obtenerTokenValido(Context ctx) {
+                  SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                  String token   = prefs.getString("accessToken", null);
+                  String refresh = prefs.getString("refreshToken", null);
+                  long   expiry  = 0L;
+                  try { expiry = Long.parseLong(prefs.getString("tokenExpiry", "0")); } catch (Exception ignored) {}
+                  // A minute of margin so it does not expire mid-request
+                  if (token != null && expiry > System.currentTimeMillis() + 60000L) return token;
+                  if (refresh == null) return token;
+                  try {
+                      java.net.URL u = new java.net.URL("https://registro-horario-emt.vercel.app/api/auth/refresh");
+                      java.net.HttpURLConnection c = (java.net.HttpURLConnection) u.openConnection();
+                      c.setRequestMethod("POST");
+                      c.setRequestProperty("Content-Type", "application/json");
+                      c.setConnectTimeout(15000); c.setReadTimeout(15000);
+                      c.setDoOutput(true);
+                      org.json.JSONObject body = new org.json.JSONObject();
+                      body.put("refresh_token", refresh);
+                      c.getOutputStream().write(body.toString().getBytes("UTF-8"));
+                      if (c.getResponseCode() != 200) { c.disconnect(); return null; }
+                      java.io.BufferedReader br = new java.io.BufferedReader(
+                          new java.io.InputStreamReader(c.getInputStream(), "UTF-8"));
+                      StringBuilder sb = new StringBuilder(); String l;
+                      while ((l = br.readLine()) != null) sb.append(l);
+                      c.disconnect();
+                      org.json.JSONObject r = new org.json.JSONObject(sb.toString());
+                      String nuevo = r.optString("access_token", null);
+                      if (nuevo == null || nuevo.isEmpty()) return null;
+                      long nuevaExp = System.currentTimeMillis() + (r.optLong("expires_in", 3600) - 60) * 1000L;
+                      prefs.edit().putString("accessToken", nuevo)
+                                  .putString("tokenExpiry", String.valueOf(nuevaExp)).apply();
+                      return nuevo;
+                  } catch (Exception e) { return null; }
+              }
+
+              // Re-register geofences after phone reboot
+              public static class BootReceiver extends BroadcastReceiver {
+                  @Override
+                  public void onReceive(Context ctx, Intent intent) {
+                      if (intent == null || !Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) return;
+                      SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                      String locJson = prefs.getString("geofenceLocations", null);
+                      String gpsMode = prefs.getString("gpsMode", "always");
+                      if (locJson == null || "off".equals(gpsMode)) return;
+                      try {
+                          org.json.JSONArray arr = new org.json.JSONArray(locJson);
+                          if (arr.length() == 0) return;
+                          GeofencingClient client = LocationServices.getGeofencingClient(ctx);
+                          Intent gi = new Intent(ctx, GeofenceReceiver.class);
+                          int piFlags = PendingIntent.FLAG_UPDATE_CURRENT
+                              | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_MUTABLE : 0);
+                          PendingIntent gpi = PendingIntent.getBroadcast(ctx, 9999, gi, piFlags);
+                          List<Geofence> fences = new ArrayList<>();
+                          for (int i = 0; i < arr.length(); i++) {
+                              org.json.JSONObject loc = arr.getJSONObject(i);
+                              fences.add(new Geofence.Builder()
+                                  .setRequestId("work_" + i)
+                                  .setCircularRegion(loc.getDouble("lat"), loc.getDouble("lng"), 300)
+                                  .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                                  .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_DWELL)
+                                  .setLoiteringDelay(60000)
+                                  .build());
+                          }
+                          GeofencingRequest request = new GeofencingRequest.Builder()
+                              .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER | GeofencingRequest.INITIAL_TRIGGER_DWELL)
+                              .addGeofences(fences)
+                              .build();
+                          if (ActivityCompat.checkSelfPermission(ctx, android.Manifest.permission.ACCESS_FINE_LOCATION)
+                                  == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                              client.addGeofences(request, gpi);
+                          }
+                      } catch (Exception e) {}
+                  }
+              }
+
+              // Registers hours directly from notification without opening the app
+              public static class RegistrarReceiver extends BroadcastReceiver {
+                  @Override
+                  public void onReceive(Context ctx, Intent intent) {
+                      final PendingResult pr = goAsync();
+                      SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                      final String fileId = prefs.getString("driveFileId", null);
+                      final String inicio = prefs.getString("lastHoraInicio", null);
+                      final String fin    = prefs.getString("lastHoraFin", null);
+                      final Context app   = ctx.getApplicationContext();
+                      if (inicio == null || fin == null || fileId == null || fileId.isEmpty()) {
+                          new Handler(Looper.getMainLooper()).post(() ->
+                              Toast.makeText(app, "⚠️ Abre la app para registrar", Toast.LENGTH_LONG).show());
+                          pr.finish(); return;
+                      }
+                      new Thread(() -> {
+                          try {
+                              // The stored access token lasts an hour, so by the time the
+                              // geofence fires it is usually dead — renew it first.
+                              final String token = obtenerTokenValido(app);
+                              if (token == null) {
+                                  new Handler(Looper.getMainLooper()).post(() ->
+                                      Toast.makeText(app, "⚠️ Abre la app para renovar la sesión", Toast.LENGTH_LONG).show());
+                                  pr.finish(); return;
+                              }
+                              String[] p1 = inicio.split(":"), p2 = fin.split(":");
+                              int min = (Integer.parseInt(p2[0])*60 + Integer.parseInt(p2[1]))
+                                      - (Integer.parseInt(p1[0])*60 + Integer.parseInt(p1[1]));
+                              if (min <= 0) min += 1440;
+                              final double horas = Math.round(min / 6.0) / 10.0;
+                              String fecha   = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date());
+                              String regId   = fecha.replace("-", "");
+                              String fechaES = new java.text.SimpleDateFormat("dd/MM/yyyy",  java.util.Locale.US).format(new java.util.Date());
+                              // GET existing Drive file
+                              java.net.URL getUrl = new java.net.URL("https://www.googleapis.com/drive/v3/files/" + fileId + "?alt=media");
+                              java.net.HttpURLConnection gc = (java.net.HttpURLConnection) getUrl.openConnection();
+                              gc.setRequestProperty("Authorization", "Bearer " + token);
+                              final int getCode = gc.getResponseCode();
+                              // Never fall through to the PATCH on a failed read: doing so
+                              // would upload an empty object and wipe the whole history.
+                              if (getCode != 200) {
+                                  gc.disconnect();
+                                  new Handler(Looper.getMainLooper()).post(() ->
+                                      Toast.makeText(app, "❌ No se pudo leer los datos (" + getCode + ")", Toast.LENGTH_LONG).show());
+                                  pr.finish(); return;
+                              }
+                              java.io.BufferedReader br = new java.io.BufferedReader(
+                                  new java.io.InputStreamReader(gc.getInputStream(), "UTF-8"));
+                              StringBuilder sb = new StringBuilder(); String line;
+                              while ((line = br.readLine()) != null) sb.append(line);
+                              org.json.JSONObject data = new org.json.JSONObject(sb.toString());
+                              gc.disconnect();
+                              if (!data.has("historial")) data.put("historial", new org.json.JSONObject());
+                              if (!data.has("horasTrabajadas")) data.put("horasTrabajadas", 0.0);
+                              org.json.JSONObject hist = data.getJSONObject("historial");
+                              // Several shifts a day are allowed: ids are YYYYMMDD, -2, -3…
+                              if (hist.has(regId)) {
+                                  int n = 2;
+                                  while (hist.has(regId + "-" + n)) n++;
+                                  regId = regId + "-" + n;
+                              }
+                              // Calculate nocturnal hours (22:00–06:00 range)
+                              int startMin = Integer.parseInt(p1[0]) * 60 + Integer.parseInt(p1[1]);
+                              int endMin   = Integer.parseInt(p2[0]) * 60 + Integer.parseInt(p2[1]);
+                              if (endMin <= startMin) endMin += 1440;
+                              int noctStart = 22 * 60, noctEnd = 6 * 60 + 1440;
+                              int overlapStart = Math.max(startMin, noctStart);
+                              int overlapEnd   = Math.min(endMin, noctEnd);
+                              double horasNoct = (overlapEnd > overlapStart)
+                                  ? Math.round((overlapEnd - overlapStart) / 6.0) / 10.0 : 0.0;
+                              boolean esNoche  = horasNoct > 0;
+                              double total = Math.round((data.getDouble("horasTrabajadas") + horas) * 10) / 10.0;
+                              data.put("horasTrabajadas", total);
+                              org.json.JSONObject reg = new org.json.JSONObject();
+                              reg.put("fecha", fechaES); reg.put("horas", horas);
+                              reg.put("timestamp", System.currentTimeMillis());
+                              reg.put("horaInicio", inicio); reg.put("horaFin", fin);
+                              if (esNoche) { reg.put("esNoche", true); reg.put("horasNocturnas", horasNoct); }
+                              hist.put(regId, reg);
+                              // PATCH Drive file
+                              byte[] body = data.toString().getBytes("UTF-8");
+                              java.net.URL pUrl = new java.net.URL(
+                                  "https://www.googleapis.com/upload/drive/v3/files/" + fileId + "?uploadType=media");
+                              java.net.HttpURLConnection pc = (java.net.HttpURLConnection) pUrl.openConnection();
+                              pc.setRequestMethod("PATCH");
+                              pc.setRequestProperty("Authorization", "Bearer " + token);
+                              pc.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                              pc.setDoOutput(true);
+                              pc.getOutputStream().write(body);
+                              final int code = pc.getResponseCode();
+                              pc.disconnect();
+                              ((NotificationManager) app.getSystemService(Context.NOTIFICATION_SERVICE)).cancel(1001);
+                              if (code == 200 || code == 201) {
+                                  app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                                      .putString("lastRegisteredDate", regId)
+                                      .putString("pendingRefresh", "1")
+                                      .apply();
+                              }
+                              new Handler(Looper.getMainLooper()).post(() ->
+                                  Toast.makeText(app,
+                                      (code == 200 || code == 201)
+                                          ? "✅ " + horas + "h registradas (" + inicio + "–" + fin + ")"
+                                          : "❌ Error al registrar (" + code + ")",
+                                      Toast.LENGTH_LONG).show());
+                          } catch (Exception e) {
+                              new Handler(Looper.getMainLooper()).post(() ->
+                                  Toast.makeText(app, "❌ " + e.getMessage(), Toast.LENGTH_LONG).show());
+                          } finally { pr.finish(); }
+                      }).start();
+                  }
+              }
+          }
+          JAVAEOF
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Add play-services-location for native geofencing
+        run: |
+          GRADLE="android/app/build.gradle"
+          sed -i "/dependencies {/a\\    implementation 'com.google.android.gms:play-services-location:21.0.1'" "$GRADLE"
+
+      - name: Set native splash background color
+        run: |
+          COLORS="android/app/src/main/res/values/colors.xml"
+          STYLES="android/app/src/main/res/values/styles.xml"
+          # Add colorPrimary to colors.xml
+          if [ -f "$COLORS" ]; then
+            grep -q 'colorPrimary' "$COLORS" || \
+              sed -i 's|</resources>|    <color name="colorPrimary">#1565C0</color>\n</resources>|' "$COLORS"
+          else
+            mkdir -p "$(dirname "$COLORS")"
+            printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="colorPrimary">#1565C0</color>\n</resources>\n' > "$COLORS"
+          fi
+          # Add windowBackground to the NoActionBar theme so launch shows blue instead of white/black
+          if [ -f "$STYLES" ]; then
+            grep -q 'windowBackground' "$STYLES" || \
+              sed -i 's|<style name="AppTheme.NoActionBar">|<style name="AppTheme.NoActionBar">\n        <item name="android:windowBackground">@color/colorPrimary</item>|' "$STYLES"
+          fi
+
+      - name: Restore signing keystore
+        run: |
+          mkdir -p ~/.android
+          base64 -d .github/debug.keystore.b64 > ~/.android/debug.keystore
+
+      - name: Generate notification sound files
+        run: |
+          python3 << 'PYEOF'
+          import wave, struct, math, os
+          def gen_wav(path, segments, sr=44100):
+              frames = []
+              for seg in segments:
+                  freq = seg[0]; dur = seg[1]
+                  mode = seg[2] if len(seg) > 2 else 'tone'
+                  freq_end = seg[3] if len(seg) > 3 else freq
+                  n = int(sr * dur); phase = 0.0
+                  for i in range(n):
+                      t = i / sr
+                      if freq == 0:
+                          frames.append(struct.pack('<h', 0)); continue
+                      att = min(1.0, t / 0.012)
+                      if mode == 'bell':
+                          env = att * math.exp(-t * 4.0 / dur)
+                          f = freq
+                      elif mode == 'sweep':
+                          env = att * min(1.0, (dur - t) / 0.10)
+                          f = freq + (freq_end - freq) * t / dur
+                      else:
+                          env = att * min(1.0, (dur - t) / max(dur * 0.15, 0.05))
+                          f = freq
+                      phase += 2 * math.pi * f / sr
+                      frames.append(struct.pack('<h', int(32767 * 0.65 * env * math.sin(phase))))
+              with wave.open(path, 'w') as f:
+                  f.setnchannels(1); f.setsampwidth(2); f.setframerate(sr)
+                  f.writeframes(b''.join(frames))
+          os.makedirs('android/app/src/main/res/raw', exist_ok=True)
+          R = 'android/app/src/main/res/raw/'
+          gen_wav(R+'notif_ding.wav',    [(880, 1.0, 'bell')])
+          gen_wav(R+'notif_campana.wav', [(660, 0.5, 'bell'), (880, 0.75, 'bell')])
+          gen_wav(R+'notif_alerta.wav',  [(440, 0.20), (0, 0.05), (660, 0.20), (0, 0.05), (880, 0.30)])
+          gen_wav(R+'notif_silbido.wav', [(800, 0.42, 'sweep', 1400), (1400, 0.38, 'sweep', 800)])
+          gen_wav(R+'notif_doble.wav',   [(880, 0.30), (0, 0.12), (880, 0.30)])
+          gen_wav(R+'notif_fanfare.wav', [(440, 0.20), (550, 0.20), (660, 0.20), (880, 0.60, 'bell')])
+          gen_wav(R+'notif_suave.wav',   [(330, 1.2, 'bell')])
+          print("Sound files OK")
+          PYEOF
+
+      - name: Set Android launcher icon
+        run: |
+          pip install Pillow -q
+          python3 << 'PYEOF'
+          from PIL import Image
+          import os
+
+          src_path = 'www/icons/icon-512.png'
+          res_base = 'android/app/src/main/res'
+          BG = (21, 101, 192)  # #1565C0
+
+          # (legacy_size, adaptive_canvas_size)
+          sizes = {
+              'mipmap-mdpi':    (48,  108),
+              'mipmap-hdpi':    (72,  162),
+              'mipmap-xhdpi':   (96,  216),
+              'mipmap-xxhdpi':  (144, 324),
+              'mipmap-xxxhdpi': (192, 432),
+          }
+
+          from PIL import ImageDraw
+
+          src_full = Image.open(src_path).convert('RGBA')
+          sw, sh = src_full.size
+
+          # The source icon has grey checkerboard pixels embedded at the corners.
+          # Apply a circular mask so corners become the blue background color.
+          circ_mask = Image.new('L', (sw, sh), 0)
+          ImageDraw.Draw(circ_mask).ellipse([2, 2, sw-3, sh-3], fill=255)
+          src_full.putalpha(circ_mask)
+
+          for dir_name, (size, asize) in sizes.items():
+              path = f'{res_base}/{dir_name}'
+              os.makedirs(path, exist_ok=True)
+
+              # Legacy icon: circular clock on solid blue, fills full square
+              bg = Image.new('RGBA', (size, size), (*BG, 255))
+              fg = src_full.resize((size, size), Image.LANCZOS)
+              result = Image.alpha_composite(bg, fg).convert('RGB')
+              result.save(f'{path}/ic_launcher.png')
+              result.save(f'{path}/ic_launcher_round.png')
+
+              # Adaptive foreground: icon at 66% of canvas, centered
+              fg_sz = asize * 2 // 3
+              adapt = Image.new('RGBA', (asize, asize), (*BG, 255))
+              icon_fg = src_full.resize((fg_sz, fg_sz), Image.LANCZOS)
+              off = (asize - fg_sz) // 2
+              adapt.paste(icon_fg, (off, off), icon_fg.split()[3])
+              adapt.convert('RGB').save(f'{path}/ic_launcher_foreground.png')
+
+              Image.new('RGB', (asize, asize), BG).save(f'{path}/ic_launcher_background.png')
+
+          print("Icons generated OK")
+          PYEOF
+
+          RES="android/app/src/main/res"
+          mkdir -p "$RES/mipmap-anydpi-v26"
+          cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" << 'ICONEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@mipmap/ic_launcher_background"/>
+              <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+          </adaptive-icon>
+          ICONEOF
+          cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: horas-emt-${{ github.run_number }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: gestion-build-${{ github.run_number }}
+          name: "Gestión EMT Movilidad — Build ${{ github.run_number }}"
+          body: "APK de Gestión generado automáticamente en build #${{ github.run_number }}."
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true

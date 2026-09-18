@@ -1,0 +1,13 @@
+{
+  "appId": "com.guillermorc.gestionemt",
+  "appName": "Gestión EMT Movilidad",
+  "webDir": "www-gestion",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "iconColor": "#6C3483"
+    }
+  }
+}

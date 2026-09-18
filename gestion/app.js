@@ -7,8 +7,8 @@ const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.goo
 const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file profile email';
 const AUTH_SCOPE       = 'profile email';
 const SUPER_USER_EMAIL = 'guillermo.rc82@gmail.com';
-const RELEASE_PREFIX   = 'build-';
-const DRIVE_FILE_NAME  = 'horas-emt.json';
+const RELEASE_PREFIX   = 'gestion-build-';
+const DRIVE_FILE_NAME  = 'gestion-emt-movilidad.json';
 const HORAS_ANUALES    = 777;
 
 const NOCHE_INICIO_MIN = 21 * 60;
@@ -101,7 +101,7 @@ const app = {
             if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
                 // External Chrome on Android — bounce code back to native app via intent
                 const intentUrl = `intent://localhost/?code=${encodeURIComponent(code)}#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
-                document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Volviendo a la app...</p><p style="margin:0;font-size:12px;opacity:0.6;">Puedes cerrar esta pestaña</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir EMT - Movilidad ›</a></div>`;
+                document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Volviendo a la app...</p><p style="margin:0;font-size:12px;opacity:0.6;">Puedes cerrar esta pestaña</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir Gestión EMT Movilidad ›</a></div>`;
                 setTimeout(() => document.getElementById('_oauthReturnBtn')?.click(), 300);
                 setTimeout(() => { try { window.close(); } catch(e) {} }, 1200);
                 return;
@@ -116,7 +116,7 @@ const app = {
                 if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
                     const exp = hashParams?.get('expires_in') || '3600';
                     const intentUrl = `intent://localhost/?access_token=${encodeURIComponent(token)}&expires_in=${exp}#Intent;scheme=https;package=com.guillermorc.horasemt;end`;
-                    document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Volviendo a la app...</p><p style="margin:0;font-size:12px;opacity:0.6;">Puedes cerrar esta pestaña</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir EMT - Movilidad ›</a></div>`;
+                    document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1565C0;color:#fff;font-family:sans-serif;gap:20px;padding:32px;text-align:center;box-sizing:border-box;"><div style="font-size:56px;">✅</div><h2 style="margin:0;font-size:20px;font-weight:700;">¡Sesión iniciada!</h2><p style="margin:0;opacity:0.85;font-size:15px;">Volviendo a la app...</p><p style="margin:0;font-size:12px;opacity:0.6;">Puedes cerrar esta pestaña</p><a href="${intentUrl}" id="_oauthReturnBtn" style="background:#fff;color:#1565C0;padding:14px 28px;border-radius:12px;font-size:17px;font-weight:700;text-decoration:none;margin-top:8px;display:inline-block;">Abrir Gestión EMT Movilidad ›</a></div>`;
                     setTimeout(() => document.getElementById('_oauthReturnBtn')?.click(), 300);
                     setTimeout(() => { try { window.close(); } catch(e) {} }, 1200);
                     return;
@@ -950,11 +950,11 @@ const app = {
             return;
         }
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-            try { await navigator.share({ title: 'Copia EMT - Movilidad', files: [file] }); this._mostrarToast('✅ Copia exportada', 3000); return; }
+            try { await navigator.share({ title: 'Copia Gestión EMT Movilidad', files: [file] }); this._mostrarToast('✅ Copia exportada', 3000); return; }
             catch(e) { if (e.name === 'AbortError') return; }
         }
         if (navigator.share) {
-            try { await navigator.share({ title: 'Copia EMT - Movilidad', text: json }); this._mostrarToast('✅ Copia exportada', 3000); return; }
+            try { await navigator.share({ title: 'Copia Gestión EMT Movilidad', text: json }); this._mostrarToast('✅ Copia exportada', 3000); return; }
             catch(e) { if (e.name === 'AbortError') return; }
         }
         try {
@@ -2196,7 +2196,7 @@ const app = {
             try {
                 const notif = {
                     id: 1001,
-                    title: '📍 EMT - Movilidad',
+                    title: '📍 Gestión EMT Movilidad',
                     body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
                     actionTypeId: 'TRABAJO_CERCANO',
                 };
@@ -2211,14 +2211,14 @@ const app = {
         if (!('Notification' in window) || Notification.permission !== 'granted') return;
         try {
             const reg = await navigator.serviceWorker.ready;
-            reg.showNotification('📍 EMT - Movilidad', {
+            reg.showNotification('📍 Gestión EMT Movilidad', {
                 body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
                 icon: '/icons/icon-192.png', badge: '/icons/badge.svg',
                 tag: 'trabajo-cercano', requireInteraction: true,
                 actions: [{ action: 'abrir', title: 'Abrir app' }]
             });
         } catch(_) {
-            new Notification('📍 EMT - Movilidad', { body: 'Parece que estás en el trabajo.', icon: '/icons/icon-192.png' });
+            new Notification('📍 Gestión EMT Movilidad', { body: 'Parece que estás en el trabajo.', icon: '/icons/icon-192.png' });
         }
     },
 
@@ -2230,7 +2230,7 @@ const app = {
         try {
             this._geoWatcherId = await BGGeo.addWatcher({
                 backgroundMessage: '',
-                backgroundTitle: 'EMT - Movilidad',
+                backgroundTitle: 'Gestión EMT Movilidad',
                 requestPermissions: true,
                 stale: false,
                 distanceFilter: 200
@@ -2282,7 +2282,7 @@ const app = {
         try {
             const notif = {
                 id: 1001,
-                title: '📍 EMT - Movilidad',
+                title: '📍 Gestión EMT Movilidad',
                 body: 'Parece que estás en el trabajo. ¿Registras la jornada de hoy?',
                 actionTypeId: 'TRABAJO_CERCANO',
             };
@@ -2381,7 +2381,7 @@ const app = {
                 await LN.requestPermissions();
                 const notif = {
                     id: 9999,
-                    title: '🔔 EMT - Movilidad — prueba',
+                    title: '🔔 Gestión EMT Movilidad — prueba',
                     body: 'Las notificaciones funcionan correctamente.',
                 };
                 if (this.notifSound && this.notifSound !== 'default') {
@@ -2402,13 +2402,13 @@ const app = {
         if (Notification.permission === 'denied') { alert('❌ Las notificaciones están bloqueadas. Actívalas en los ajustes del navegador.'); return; }
         try {
             const reg = await navigator.serviceWorker.ready;
-            await reg.showNotification('🔔 EMT - Movilidad — prueba', {
+            await reg.showNotification('🔔 Gestión EMT Movilidad — prueba', {
                 body: 'Las notificaciones funcionan correctamente.',
                 icon: '/icons/icon-192.png', badge: '/icons/badge.svg',
                 tag: 'test-notif'
             });
         } catch(_) {
-            new Notification('🔔 EMT - Movilidad — prueba', { body: 'Las notificaciones funcionan correctamente.', icon: '/icons/icon-192.png' });
+            new Notification('🔔 Gestión EMT Movilidad — prueba', { body: 'Las notificaciones funcionan correctamente.', icon: '/icons/icon-192.png' });
         }
     },
 
