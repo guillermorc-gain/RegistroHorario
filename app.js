@@ -56,6 +56,7 @@ const app = {
     horasAnualesCustom: parseFloat(localStorage.getItem('horasAnuales')) || HORAS_ANUALES,
     precioNocheDefault: parseFloat(localStorage.getItem('precioNoche')) || 0,
     precioExtraDefault: parseFloat(localStorage.getItem('precioExtra')) || 0,
+    precioFestivoDefault: parseFloat(localStorage.getItem('precioFestivo')) || 0,
     modalCallback: null,
     editingId: null,
     prActivo: false,
@@ -1472,6 +1473,7 @@ const app = {
     _actualizarJornadaDisplay() {
         const el = document.getElementById('jornadaHorasDisplay');
         if (el) el.textContent = this.jornadaHoras + 'h';
+        this._actualizarCampoFestivo();
     },
 
     // El último dígito es el de control y va tras el guión. El cuerpo puede ser
@@ -1528,13 +1530,15 @@ const app = {
 
     // Single source of truth for all hour totals, derived from the history
     _calcTotales(historial) {
-        let anual = 0, extrasManual = 0, festivo = 0, diasFestivos = 0;
+        let anual = 0, extrasManual = 0, festivo = 0, diasFestivos = 0, festivosTrabajados = 0;
         Object.values(historial || {}).forEach(r => {
             const h = parseFloat(r.horas) || 0;
             if (r.extraDestino === 'extras') { extrasManual += h; return; }
-            // A holiday you did not work still counts as a full standard shift
+            // Un festivo que no se trabaja cuenta como jornada entera: así se
+            // descuenta de las horas que hay que hacer al año. Trabajarlo, en
+            // cambio, se paga como día extra.
             const efectivas = (r.festivo && h === 0) ? this.jornadaHoras : h;
-            if (r.festivo) { festivo += efectivas; diasFestivos++; }
+            if (r.festivo) { festivo += efectivas; diasFestivos++; if (h > 0) festivosTrabajados++; }
             anual += efectivas;
         });
         const tope    = this.horasAnualesCustom;
@@ -1548,6 +1552,8 @@ const app = {
             topeExtras: topeExt,
             festivo:   r1(festivo),
             diasFestivos,
+            festivosTrabajados,
+            importeFestivos: r1(festivosTrabajados * this.precioFestivoDefault),
             restantes: r1(Math.max(0, tope - anual))
         };
     },
@@ -2060,7 +2066,12 @@ const app = {
         const elE = document.getElementById('statExtras');
         const elES= document.getElementById('statExtrasSub');
         if (elF)  elF.textContent  = t.festivo.toFixed(1);
-        if (elFS) elFS.textContent = t.diasFestivos === 1 ? '1 día festivo' : `${t.diasFestivos} días festivos`;
+        if (elFS) {
+            const dias = t.diasFestivos === 1 ? '1 día festivo' : `${t.diasFestivos} días festivos`;
+            elFS.textContent = t.importeFestivos > 0
+                ? `${dias} · ${t.festivosTrabajados} trabajado${t.festivosTrabajados === 1 ? '' : 's'}: ${t.importeFestivos.toFixed(2)}€`
+                : dias;
+        }
         if (elE)  elE.textContent  = t.extras.toFixed(1);
         if (elES) {
             const importe = this.precioExtraDefault > 0
@@ -2421,6 +2432,24 @@ const app = {
         localStorage.setItem('precioExtra', String(precio));
         this._guardarPreferencias();
         this.cargarDatos();
+    },
+
+    guardarPrecioFestivo() {
+        const precio = this._leerDecimal(document.getElementById('precioFestivoGlobal').value) || 0;
+        this.precioFestivoDefault = precio;
+        localStorage.setItem('precioFestivo', String(precio));
+        this._guardarPreferencias();
+        this.cargarDatos();
+    },
+
+    // La media jornada no trabaja festivos, así que no tiene precio que poner
+    JORNADA_COMPLETA: 7,
+
+    _actualizarCampoFestivo() {
+        const campo = document.getElementById('campoPrecioFestivo');
+        if (campo) campo.hidden = this.jornadaHoras < this.JORNADA_COMPLETA;
+        const inp = document.getElementById('precioFestivoGlobal');
+        if (inp && this.precioFestivoDefault > 0) inp.value = this.precioFestivoDefault;
     },
 
     guardarPrecioNoche() {
@@ -2821,6 +2850,7 @@ const app = {
             gpsScheduleTo: this.gpsScheduleTo,
             precioNocheDefault: this.precioNocheDefault,
             precioExtraDefault: this.precioExtraDefault,
+            precioFestivoDefault: this.precioFestivoDefault,
             horasAnualesCustom: this.horasAnualesCustom,
             jornadaHoras: this.jornadaHoras,
             numConductor: this.numConductor,
@@ -2861,6 +2891,10 @@ const app = {
             localStorage.setItem('precioNoche', String(prefs.precioNocheDefault));
             const el = document.getElementById('precioNocheGlobal');
             if (el) el.value = prefs.precioNocheDefault;
+        }
+        if (prefs.precioFestivoDefault !== undefined && prefs.precioFestivoDefault !== null) {
+            this.precioFestivoDefault = prefs.precioFestivoDefault;
+            localStorage.setItem('precioFestivo', String(prefs.precioFestivoDefault));
         }
         if (prefs.precioExtraDefault !== undefined && prefs.precioExtraDefault !== null) {
             this.precioExtraDefault = prefs.precioExtraDefault;

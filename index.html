@@ -798,6 +798,13 @@
                         <span id="jornadaHorasDisplay" style="margin-left:auto;color:var(--g1);font-weight:700;font-size:13px;"></span>
                         <span class="ops-arrow">›</span>
                     </button>
+                    <!-- Solo para jornada completa: los de media jornada no
+                         trabajan los festivos, se les descuentan de las horas. -->
+                    <div class="ops-field" id="campoPrecioFestivo" hidden>
+                        <span class="ops-field-label">🎉 Precio del festivo trabajado (€)</span>
+                        <input type="text" inputmode="decimal" class="ops-night-input" id="precioFestivoGlobal" placeholder="ej: 85,00" onchange="app.guardarPrecioFestivo()">
+                        <span class="ops-field-sub">Se paga como día extra por cada festivo que trabajes</span>
+                    </div>
                     <div class="ops-field">
                         <span class="ops-field-label">🏖️ Vacaciones</span>
                         <div class="vac-add">
