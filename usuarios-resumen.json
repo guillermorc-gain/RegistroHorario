@@ -123,5 +123,31 @@
     "email": "prueba-1789759514777@prueba.local",
     "ficticio": true,
     "actualizado": "2026-09-18T19:25:36.867Z"
+  },
+  "prueba-1789759539366@prueba.local": {
+    "nombre": "Juan",
+    "conductor": "9785-6",
+    "puesto": "Taller",
+    "avatar": null,
+    "version": "build-34",
+    "horasMes": 7,
+    "horasTotales": 7,
+    "diasMes": 1,
+    "horaInicio": "20:00",
+    "horaFin": "03:00",
+    "horarioDe": "hoy",
+    "turno": "T",
+    "jornadas": [
+      {
+        "f": "20260918",
+        "i": "20:00",
+        "o": "03:00",
+        "h": 7,
+        "n": 7
+      }
+    ],
+    "email": "prueba-1789759539366@prueba.local",
+    "ficticio": true,
+    "actualizado": "2026-09-18T19:26:14.412Z"
   }
 }
