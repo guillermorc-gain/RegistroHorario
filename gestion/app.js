@@ -609,6 +609,7 @@ const app = {
     },
 
     _autoRellenarFormulario() {
+        if (!document.getElementById('horaInicio')) return;
         const inicio = localStorage.getItem('lastHoraInicio');
         const fin    = localStorage.getItem('lastHoraFin');
         if (inicio) document.getElementById('horaInicio').value = inicio;
@@ -782,7 +783,7 @@ const app = {
             this._startScheduleTimer();
             this.verificarUbicacion();
             this._updateGpsState();
-            this._exportarMesesPendientes();
+            this._cargarConductores();
             this._pedirPermisosIniciales();
             if (this._pendingNotifAction === 'registro-rapido') {
                 this._pendingNotifAction = null;
@@ -1159,6 +1160,7 @@ const app = {
     },
 
     establecerFechaHoy() {
+        if (!document.getElementById('fechaInput')) return;
         const hoy = new Date();
         const y = hoy.getFullYear();
         const m = String(hoy.getMonth() + 1).padStart(2, '0');
@@ -1236,6 +1238,7 @@ const app = {
     },
 
     calcularHorasPorTiempo() {
+        if (!document.getElementById('horaInicio')) return;
         const inicio = document.getElementById('horaInicio').value;
         const fin    = document.getElementById('horaFin').value;
         if (!inicio || !fin) return;
@@ -1289,6 +1292,7 @@ const app = {
     },
 
     _actualizarPrUI() {
+        if (!document.getElementById('prCompact')) return;
         const restantes = this._prRestantes();
         const el = document.getElementById('prRestantes');
         if (el) el.textContent = restantes;
@@ -1548,6 +1552,7 @@ const app = {
     },
 
     comprobarFestivo() {
+        if (!document.getElementById('fechaInput')) return;
         const fecha = document.getElementById('fechaInput').value;
         const hint  = document.getElementById('festivoHint');
         const nombre = this._nombreFestivo(fecha);
@@ -1596,6 +1601,7 @@ const app = {
             panel.classList.toggle('active', panel.id === 'tabPanel' + idx);
         });
         localStorage.setItem('activeTab', String(idx));
+        if (idx === 0) this._cargarConductores();
         if (idx === 1) this._cargarCuadrante();
     },
 
@@ -1755,6 +1761,7 @@ const app = {
     },
 
     limpiarInput() {
+        if (!document.getElementById('fechaInput')) return;
         // Limpiar desmarca todo menos el festivo, y recupera el horario del día
         // anterior. No debe reabrir el cajón nocturno aunque ese horario lo sea.
         const manteniaFestivo = this.festivoActivo;
@@ -2188,6 +2195,85 @@ const app = {
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
+
+    // ── Conductores (gestión) ────────────────────────────────────────────────
+
+    USUARIOS_URL: 'https://registro-horario-emt.vercel.app/api/usuarios',
+
+    async _cargarConductores() {
+        const cont = document.getElementById('condList');
+        if (!cont) return;
+        cont.innerHTML = '<div class="tab-empty"><span class="tab-empty-s">Cargando…</span></div>';
+        try {
+            const resp = await fetch(this.USUARIOS_URL, { cache: 'no-store' });
+            if (!resp.ok) throw new Error(resp.status);
+            const data = await resp.json();
+            this._conductores = data || {};
+            this._renderConductores();
+        } catch (e) {
+            cont.innerHTML = '<div class="tab-empty"><span class="tab-empty-ico">⚠️</span>'
+                + '<span class="tab-empty-t">No se pudo cargar</span>'
+                + '<span class="tab-empty-s">Revisa la conexión e inténtalo otra vez.</span></div>';
+        }
+    },
+
+    _renderConductores() {
+        const cont = document.getElementById('condList');
+        const lista = Object.values(this._conductores || {})
+            .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+        if (!lista.length) {
+            cont.innerHTML = '<div class="tab-empty"><span class="tab-empty-ico">👥</span>'
+                + '<span class="tab-empty-t">Sin conductores</span>'
+                + '<span class="tab-empty-s">Aparecerán en cuanto abran su app.</span></div>';
+            return;
+        }
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        cont.innerHTML = lista.map(u => {
+            const ini = (u.nombre || u.email || '?').trim()[0]?.toUpperCase() || '?';
+            const av = u.avatar
+                ? `<img class="cond-avatar" src="${esc(u.avatar)}">`
+                : `<div class="cond-avatar">${esc(ini)}</div>`;
+            const ver = u.version ? this._buildNumToVersion(parseInt(String(u.version).replace('build-',''),10) || 0) : '—';
+            return `<div class="cond-card">
+                <div class="cond-top">
+                    ${av}
+                    <div class="cond-id" onclick="app._editarPuesto('${esc(u.email)}')">
+                        <div class="cond-nombre">${esc(u.nombre) || esc(u.email)}
+                            ${u.turno ? `<span class="cond-turno ${u.turno}">${u.turno}</span>` : ''}</div>
+                        <div class="cond-num">${esc(u.conductor) || 'sin nº'}
+                            ${u.puesto ? `<span class="cond-puesto">· ${esc(u.puesto)}</span>` : ''}</div>
+                    </div>
+                </div>
+                <div class="cond-stats">
+                    <div class="cond-stat"><div class="cond-stat-v">${(u.horasMes ?? 0).toFixed(1)}</div><div class="cond-stat-l">h este mes</div></div>
+                    <div class="cond-stat"><div class="cond-stat-v">${u.diasMes ?? 0}</div><div class="cond-stat-l">días</div></div>
+                    <div class="cond-stat"><div class="cond-stat-v">${(u.horasTotales ?? 0).toFixed(1)}</div><div class="cond-stat-l">h totales</div></div>
+                </div>
+                <div class="cond-ver">${ver} · ${u.actualizado ? new Date(u.actualizado).toLocaleDateString('es-ES') : ''}</div>
+            </div>`;
+        }).join('');
+    },
+
+    async _editarPuesto(email) {
+        const u = (this._conductores || {})[email];
+        if (!u) return;
+        const v = prompt(`Puesto de trabajo de ${u.nombre || email}:`, u.puesto || '');
+        if (v === null) return;
+        try {
+            const resp = await fetch(this.USUARIOS_URL, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ email, puesto: v.trim() })
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._conductores = data;
+            this._renderConductores();
+            this._mostrarToast('✅ Puesto actualizado', 2500);
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
+    },
+
     toggleMensual() {
         const sec = document.getElementById('mensualSection');
         if (!sec) return;
@@ -2411,6 +2497,7 @@ const app = {
     },
 
     verificarUbicacion() {
+        if (!document.getElementById('workBanner')) return;
         const locs = this._getWorkLocations();
         if (locs.length === 0 || !navigator.geolocation) return;
         if (this.gpsMode === 'off') return;
@@ -2820,6 +2907,7 @@ const app = {
     },
 
     _renderGpsSettings() {
+        if (!document.getElementById('gpsIntervalSelect')) return;
         const radio = document.querySelector(`input[name="gpsMode"][value="${this.gpsMode}"]`);
         if (radio) radio.checked = true;
         const sel = document.getElementById('gpsIntervalSelect');
@@ -2958,12 +3046,17 @@ const app = {
             el.innerHTML = '<div style="color:#888;font-size:12px;padding:4px 0;">Lista vacía — cualquier cuenta puede entrar</div>';
             return;
         }
-        el.innerHTML = emails.map(email =>
-            `<div class="access-user-item">
-                <span class="access-user-email">${email}</span>
+        const porEmail = this._conductores || {};
+        el.innerHTML = emails.map(email => {
+            const u = porEmail[String(email).toLowerCase()];
+            const ver = u?.version
+                ? this._buildNumToVersion(parseInt(String(u.version).replace('build-',''),10) || 0)
+                : 'sin datos';
+            return `<div class="access-user-item">
+                <span class="access-user-email">${email}<br><span class="access-user-ver">${ver}</span></span>
                 <button class="access-user-remove" onclick="app._removeUserAcceso('${email.replace(/'/g,"\\'")}\')" title="Eliminar">✕</button>
-            </div>`
-        ).join('');
+            </div>`;
+        }).join('');
     },
 
     async _addUserAcceso() {

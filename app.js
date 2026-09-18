@@ -39,6 +39,7 @@ const app = {
     vacacionesActivo: false,
     jornadaHoras: parseFloat(localStorage.getItem('jornadaHoras')) || 7.5,
     numConductor: localStorage.getItem('numConductor') || '',
+    puestoTrabajo: localStorage.getItem('puestoTrabajo') || '',
     backupFreq: localStorage.getItem('backupFreq') || 'cerrar',
     _backupTimer: null,
     _activeTab: 0,
@@ -788,6 +789,7 @@ const app = {
             this.verificarUbicacion();
             this._updateGpsState();
             this._exportarMesesPendientes();
+            this._publicarResumen();
             this._pedirPermisosIniciales();
             if (this._pendingNotifAction === 'registro-rapido') {
                 this._pendingNotifAction = null;
@@ -1453,14 +1455,14 @@ const app = {
 
     _actualizarConductorDisplay() {
         const el = document.getElementById('conductorDisplay');
-        if (el) el.textContent = this.numConductor || 'Sin asignar';
+        if (el) el.textContent = [this.numConductor || 'Sin asignar', this.puestoTrabajo].filter(Boolean).join(' · ');
     },
 
     _actualizarCabeceraUsuario() {
         const nom = document.getElementById('cabeceraNombre');
         const num = document.getElementById('cabeceraNum');
         if (nom) nom.textContent = this.usuarioActual?.name || '';
-        if (num) num.textContent = this.numConductor || '';
+        if (num) num.textContent = [this.puestoTrabajo, this.numConductor].filter(Boolean).join(' · ');
     },
 
     // Record ids are YYYYMMDD for the first entry of a day, then YYYYMMDD-2, -3…
@@ -2096,6 +2098,61 @@ const app = {
 
     cerrarCuadranteGrande() {
         document.getElementById('cuadVisor')?.classList.remove('show');
+    },
+
+
+    // ── Resumen para la app de gestión ───────────────────────────────────────
+
+    USUARIOS_URL: 'https://registro-horario-emt.vercel.app/api/usuarios',
+
+    // Turno según la hora de entrada habitual: mañana 6–13, tarde 13–20
+    _turnoHabitual(delMes) {
+        const horas = delMes.map(r => r.horaInicio).filter(Boolean)
+            .map(h => parseInt(h.split(':')[0], 10));
+        if (!horas.length) return '';
+        const media = horas.reduce((a, b) => a + b, 0) / horas.length;
+        return media < 13 ? 'M' : 'T';
+    },
+
+    async _publicarResumen() {
+        if (!this.usuarioActual?.email) return;
+        // Una vez al día basta: es lo que necesita gestión y evita escrituras
+        const hoy = new Date().toISOString().slice(0, 10);
+        if (localStorage.getItem('resumenPublicado') === hoy) return;
+        try {
+            const hist = this._historialFull || {};
+            const ahora = new Date();
+            const delMes = Object.values(hist).filter(r => {
+                const d = new Date(r.timestamp);
+                return d.getFullYear() === ahora.getFullYear() && d.getMonth() === ahora.getMonth();
+            });
+            const t = this._calcTotales(hist);
+            const resp = await fetch(this.USUARIOS_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json',
+                           'X-User-Email': this.usuarioActual.email },
+                body: JSON.stringify({
+                    nombre:       this.usuarioActual.name || '',
+                    conductor:    this.numConductor || '',
+                    avatar:       localStorage.getItem('avatarPhoto') || null,
+                    version:      (typeof APP_VERSION !== 'undefined') ? APP_VERSION : '',
+                    horasMes:     Math.round(delMes.reduce((s, r) => s + (parseFloat(r.horas) || 0), 0) * 10) / 10,
+                    horasTotales: t.anualReal,
+                    diasMes:      delMes.length,
+                    turno:        this._turnoHabitual(delMes),
+                })
+            });
+            if (resp.ok) {
+                localStorage.setItem('resumenPublicado', hoy);
+                const mio = await resp.json();
+                if (mio?.puesto !== undefined) {
+                    this.puestoTrabajo = mio.puesto || '';
+                    localStorage.setItem('puestoTrabajo', this.puestoTrabajo);
+                    this._actualizarCabeceraUsuario();
+                    this._actualizarConductorDisplay();
+                }
+            }
+        } catch (_) { /* silencioso: se reintenta al día siguiente */ }
     },
 
     toggleMensual() {
