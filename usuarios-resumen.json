@@ -1399,5 +1399,45 @@
     "email": "prueba-1789766752991@prueba.local",
     "ficticio": true,
     "actualizado": "2026-09-18T21:26:55.580Z"
+  },
+  "prueba-1789766856622@prueba.local": {
+    "nombre": "Juan Valera",
+    "conductor": "7858-5",
+    "puesto": "Calle",
+    "avatar": null,
+    "version": "build-40",
+    "horasMes": 22,
+    "horasTotales": 22,
+    "diasMes": 3,
+    "horaInicio": "08:00",
+    "horaFin": "15:00",
+    "horarioDe": "hoy",
+    "turno": "M",
+    "jornadas": [
+      {
+        "f": "20260918",
+        "i": "08:00",
+        "o": "15:00",
+        "h": 7,
+        "n": 0
+      },
+      {
+        "f": "20260918",
+        "i": "06:00",
+        "o": "14:00",
+        "h": 8,
+        "n": 0
+      },
+      {
+        "f": "20260916",
+        "i": "08:00",
+        "o": "15:00",
+        "h": 7,
+        "n": 0
+      }
+    ],
+    "email": "prueba-1789766856622@prueba.local",
+    "ficticio": true,
+    "actualizado": "2026-09-18T21:28:36.257Z"
   }
 }
