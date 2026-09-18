@@ -455,9 +455,11 @@ const app = {
                 window.AndroidBridge?.removePref?.('pendingRefresh');
                 this.cargarDatos();
             }
-            // Also re-run update check (at most once every 30 min)
+            // Check for updates every time the app is opened, even if it was
+            // only in the background. The short guard is just so flipping in and
+            // out fast does not burn the GitHub API's 60 requests/hour limit.
             const lastCheck = parseInt(sessionStorage.getItem('lastUpdateCheck') || '0');
-            if (Date.now() - lastCheck > 30 * 60 * 1000) {
+            if (Date.now() - lastCheck > 90 * 1000) {
                 this._checkForUpdates();
             }
         };
@@ -468,7 +470,9 @@ const app = {
                 });
             } catch (_) {}
         }
-        document.addEventListener('visibilitychange', () => { if (document.hidden) onBackground(); });
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) onBackground(); else onForeground();
+        });
         this._iniciarTimerCopia();
     },
 
