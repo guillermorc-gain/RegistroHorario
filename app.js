@@ -7,6 +7,8 @@ const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.goo
 const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file profile email';
 const AUTH_SCOPE       = 'profile email';
 // Turnos de cada puesto. La hora de entrada registrada decide en cuál cae.
+const PUESTOS_DEFINIDOS = ['Son Rossinyol', 'Control', 'Calle', 'Taller'];
+
 const TURNOS_POR_PUESTO = {
     'son rossinyol': [
         { id: 'M', nombre: 'Mañana', desde: '03:45', hasta: '14:00' },
@@ -17,6 +19,11 @@ const TURNOS_POR_PUESTO = {
         { id: 'M', nombre: 'Mañana', desde: '05:00', hasta: '14:00' },
         { id: 'T', nombre: 'Tarde',  desde: '14:00', hasta: '20:00' },
         { id: 'N', nombre: 'Noche',  desde: '20:00', hasta: '24:00' },
+    ],
+    'taller': [
+        { id: 'M', nombre: 'Mañana', desde: '06:00', hasta: '14:00' },
+        { id: 'T', nombre: 'Tarde',  desde: '14:00', hasta: '21:00' },
+        { id: 'N', nombre: 'Noche',  desde: '21:00', hasta: '06:00' },
     ],
     'calle': [
         { id: 'M', nombre: 'Mañana', desde: '07:00', hasta: '14:00' },
