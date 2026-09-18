@@ -29,7 +29,6 @@ const app = {
     prActivo: false,
     festivoActivo: false,
     _activeTab: 0,
-    _tabOrder: [0, 1],
     _dragSrcTab: null,
     _allowedUsersLocal: null,
     tema: localStorage.getItem('tema') || 'azul',
@@ -54,6 +53,7 @@ const app = {
         this._migrarUbicacionAntigua();
         this.setupUI();
         if (this.darkMode) this.aplicarDarkMode();
+        this._restaurarTabs();
         this._buildAvatarGrid();
         this._setupDeepLinkListener();
         this._setupAppLifecycleBackup();
@@ -1140,17 +1140,46 @@ const app = {
     switchTab(idx) {
         this._activeTab = idx;
         document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.classList.toggle('active', parseInt(btn.dataset.tab) === idx);
+            btn.classList.toggle('active', parseInt(btn.dataset.tab, 10) === idx);
         });
-        document.querySelectorAll('.tab-panel').forEach((panel, i) => {
-            panel.classList.toggle('active', i === idx);
+        document.querySelectorAll('.tab-panel').forEach(panel => {
+            panel.classList.toggle('active', panel.id === 'tabPanel' + idx);
         });
+        localStorage.setItem('activeTab', String(idx));
     },
 
     _tabDragStart(e) {
         this._dragSrcTab = e.currentTarget;
+        e.currentTarget.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', e.currentTarget.dataset.tab);
+    },
+
+    _tabDragEnd(e) {
+        e.currentTarget.classList.remove('dragging');
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('drag-over'));
+        this._guardarOrdenTabs();
+    },
+
+    _guardarOrdenTabs() {
+        const orden = [...document.querySelectorAll('#tabBar .tab-btn')].map(b => b.dataset.tab);
+        localStorage.setItem('tabOrder', JSON.stringify(orden));
+    },
+
+    _restaurarTabs() {
+        const bar = document.getElementById('tabBar');
+        if (!bar) return;
+        try {
+            const orden = JSON.parse(localStorage.getItem('tabOrder') || 'null');
+            if (Array.isArray(orden)) {
+                orden.forEach(t => {
+                    const btn = bar.querySelector(`.tab-btn[data-tab="${t}"]`);
+                    if (btn) bar.appendChild(btn);
+                });
+            }
+        } catch(_) {}
+        const activa = parseInt(localStorage.getItem('activeTab') || '0', 10);
+        this.switchTab(Number.isInteger(activa) ? activa : 0);
     },
 
     _tabDragOver(e) {
@@ -1175,6 +1204,7 @@ const app = {
         const di = tabs.indexOf(dst);
         if (si < di) bar.insertBefore(src, dst.nextSibling);
         else bar.insertBefore(src, dst);
+        this._guardarOrdenTabs();
     },
 
     toggleNoche() {
@@ -1479,7 +1509,7 @@ const app = {
 
     aplicarDarkMode() {
         document.body.classList.add('dark');
-        ['#appHeader','#appContent','#optionsHeader','#optionsContent','#modalContent',
+        ['#appHeader','#appContent','#tabBar','#optionsHeader','#optionsContent','#modalContent',
          '#editModalContent','#historialModalContent','#avatarModalContent']
             .forEach(s => { const e = document.querySelector(s); if(e) e.classList.add('dark'); });
         document.querySelector('.container')?.classList.add('dark');
@@ -1487,7 +1517,7 @@ const app = {
 
     removerDarkMode() {
         document.body.classList.remove('dark');
-        ['#appHeader','#appContent','#optionsHeader','#optionsContent','#modalContent',
+        ['#appHeader','#appContent','#tabBar','#optionsHeader','#optionsContent','#modalContent',
          '#editModalContent','#historialModalContent','#avatarModalContent']
             .forEach(s => { const e = document.querySelector(s); if(e) e.classList.remove('dark'); });
         document.querySelector('.container')?.classList.remove('dark');
