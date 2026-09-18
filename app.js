@@ -1524,6 +1524,23 @@ const app = {
 
     _fechaDeId(id) { return String(id).slice(0, 8); },
 
+    _esFinDeSemana(fecha) {
+        const d = new Date(+fecha.slice(0, 4), +fecha.slice(4, 6) - 1, +fecha.slice(6, 8), 12).getDay();
+        return d === 0 || d === 6;
+    },
+
+    // Horas que cuentan para las anuales. Un festivo trabajado cuenta sus horas
+    // como cualquier otro día. Uno sin trabajar cuenta como jornada entera, y
+    // así se descuenta de las horas que hay que hacer al año — pero solo si era
+    // día de trabajo: quien hace media jornada no trabaja festivos, y únicamente
+    // le descuenta el que cae en fin de semana.
+    _horasEfectivas(fecha, reg) {
+        const h = parseFloat(reg.horas) || 0;
+        if (!reg.festivo || h > 0) return h;
+        if (this.jornadaHoras >= this.JORNADA_COMPLETA) return this.jornadaHoras;
+        return (fecha && this._esFinDeSemana(fecha)) ? this.jornadaHoras : 0;
+    },
+
     _hayRegistroEnFecha(fechaKey) {
         return Object.keys(this._historialFull || {}).some(id => this._fechaDeId(id) === fechaKey);
     },
@@ -1531,13 +1548,10 @@ const app = {
     // Single source of truth for all hour totals, derived from the history
     _calcTotales(historial) {
         let anual = 0, extrasManual = 0, festivo = 0, diasFestivos = 0, festivosTrabajados = 0;
-        Object.values(historial || {}).forEach(r => {
+        Object.entries(historial || {}).forEach(([id, r]) => {
             const h = parseFloat(r.horas) || 0;
             if (r.extraDestino === 'extras') { extrasManual += h; return; }
-            // Un festivo que no se trabaja cuenta como jornada entera: así se
-            // descuenta de las horas que hay que hacer al año. Trabajarlo, en
-            // cambio, se paga como día extra.
-            const efectivas = (r.festivo && h === 0) ? this.jornadaHoras : h;
+            const efectivas = this._horasEfectivas(this._fechaDeId(id), r);
             if (r.festivo) { festivo += efectivas; diasFestivos++; if (h > 0) festivosTrabajados++; }
             anual += efectivas;
         });
@@ -2013,9 +2027,10 @@ const app = {
         const meses = {};
         // Chronological pass: hours past the annual cap are overtime, and this is
         // the only way to attribute them to the month they actually happened in.
-        const orden = Object.values(historial || {})
-            .filter(r => r.timestamp)
-            .sort((a, b) => a.timestamp - b.timestamp);
+        const orden = Object.entries(historial || {})
+            .filter(([, r]) => r.timestamp)
+            .sort((a, b) => a[1].timestamp - b[1].timestamp)
+            .map(([id, r]) => ({ ...r, _fecha: this._fechaDeId(id) }));
         const tope = this.horasAnualesCustom;
         let acumulado = 0;
         orden.forEach(reg => {
@@ -2027,7 +2042,7 @@ const app = {
             if (reg.extraDestino === 'extras') {
                 extrasReg = h;                       // marked as overtime by hand
             } else {
-                const efectivas = (reg.festivo && h === 0) ? this.jornadaHoras : h;
+                const efectivas = this._horasEfectivas(reg._fecha, reg);
                 const cabe = Math.max(0, tope - acumulado);
                 extrasReg = Math.max(0, efectivas - cabe);
                 acumulado += efectivas;
