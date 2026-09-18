@@ -107,6 +107,7 @@ export default async function handler(req, res) {
           horasMes:     Number(b.horasMes) || 0,
           horasTotales: Number(b.horasTotales) || 0,
           horasAnuales: Number(b.horasAnuales) || previo.horasAnuales || 777,
+          jornadaHoras: Number(b.jornadaHoras) || previo.jornadaHoras || 7,
           diasMes:      Number(b.diasMes) || 0,
           turno:        ['M','T','N'].includes(b.turno) ? b.turno : (previo.turno || ''),
           horaInicio:   typeof b.horaInicio === 'string' ? b.horaInicio.slice(0, 5) : previo.horaInicio || '',

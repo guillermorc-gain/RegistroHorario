@@ -622,6 +622,7 @@ const app = {
                     nombre: this.usuarioActual.name || null,
                     email: this.usuarioActual.email,
                     horasAnuales: this.horasAnualesCustom,
+                jornadaHoras: this.jornadaHoras,
                     totales: tot,
                     historial: Object.entries(historial)
                         .sort((a, b) => a[1].timestamp - b[1].timestamp)
@@ -2294,6 +2295,7 @@ const app = {
             // hasta el día siguiente. Sin cambios no se escribe nada.
             const huella = JSON.stringify([payload.version, payload.horasMes, payload.horasTotales,
                                            payload.diasMes, payload.turno, payload.conductor, payload.horasAnuales,
+                                           payload.jornadaHoras,
                                            payload.nombre, payload.horaInicio, payload.horaFin,
                                            payload.horarioDe, jornadas.length,
                                            jornadas.length ? jornadas[jornadas.length - 1].f : '',

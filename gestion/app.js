@@ -3117,13 +3117,14 @@ const app = {
 
     cambiarDiaPuestos(paso) {
         this._puestosOffset += paso;
-        this._renderPuestos();
+        this._renderConductores();      // el día manda sobre las dos secciones
     },
 
-    // Swipe horizontal dentro de Puestos: cambia de día en vez de pestaña. El
-    // touchstart corta la propagación para que el swipe de pestañas no salte.
+    // Swipe horizontal en toda la pestaña: cambia de día, no de pestaña. El
+    // touchstart corta la propagación para que el swipe de pestañas no salte;
+    // para cambiar de pestaña está la barra de abajo.
     _initSwipePuestos() {
-        const cont = document.getElementById('puestosBody');
+        const cont = document.getElementById('tabPanel0');
         if (!cont || cont._swipeDia) return;
         cont._swipeDia = true;
         let x0 = 0, y0 = 0, activo = false;
@@ -3143,10 +3144,37 @@ const app = {
         }, { passive: true });
     },
 
+    irAHoy() {
+        if (this._puestosOffset === 0) return;
+        this._puestosOffset = 0;
+        this._renderConductores();
+    },
+
     // El lugar de un día puede no ser el habitual: manda la excepción que haya
     // puesto el gestor, luego lo que publicó la app y por último el habitual.
     _lugarDe(u, fecha, j) {
         return (u.lugares && u.lugares[fecha]) || j?.pu || u.puesto || '';
+    },
+
+    // Totales tal y como estaban al acabar ese día. Se replican las reglas de
+    // la app del trabajador: las jornadas marcadas como extra no suman al
+    // cómputo anual, y un festivo sin horas cuenta como una jornada entera.
+    _totalesDe(u, hasta) {
+        const tope = u.horasAnuales || 777;
+        const jor  = u.jornadaHoras || 7;
+        const mes  = hasta.slice(0, 6);
+        let anual = 0, extras = 0, delMes = 0, dias = 0;
+        (u.jornadas || []).forEach(j => {
+            if (!j || j.f > hasta) return;
+            const h = j.h || 0;
+            if (j.f.slice(0, 6) === mes) { delMes += h; dias++; }
+            if (j.x === 1) { extras += h; return; }
+            anual += (j.fe && h === 0) ? jor : h;
+        });
+        const exceso = Math.max(0, anual - tope);
+        const r1 = n => Math.round(n * 10) / 10;
+        return { mes: r1(delMes), dias, extras: r1(extras + exceso),
+                 realizadas: r1(anual), restantes: r1(Math.max(0, tope - anual)) };
     },
 
     // Jornada de un trabajador en una fecha concreta (la última si hay varias)
@@ -3218,6 +3246,7 @@ const app = {
         const esFuturo = off > 0;
         const txt = document.getElementById('pstDiaTxt');
         if (txt) txt.textContent = this._etiquetaDia(off);
+        document.getElementById('pstHoy')?.classList.toggle('oculto', off === 0);
 
         const lista    = Object.values(this._conductores || {});
         const conPuesto = lista
@@ -3296,35 +3325,71 @@ const app = {
         }).join('');
     },
 
+    // Estado de un trabajador ese día, para el filtro de la lista
+    _estadoTrabajador(u, fecha) {
+        if (u.baja) return 'be';
+        const { j } = this._jornadaVisible(u, fecha);
+        if (j?.v) return 'vacaciones';
+        return 'activo';
+    },
+
+    _renderFiltrosCond(lista, fecha) {
+        const cont = document.getElementById('condFiltros');
+        if (!cont) return;
+        const sel = localStorage.getItem('filtroTrabajadores') || 'todos';
+        const n = { todos: lista.length, activo: 0, be: 0, vacaciones: 0 };
+        lista.forEach(u => { n[this._estadoTrabajador(u, fecha)]++; });
+        cont.innerHTML = [['todos','Todos'],['activo','Activos'],['be','BE'],['vacaciones','Vacaciones']]
+            .map(([id, txt]) => `<button class="${sel === id ? 'activo' : ''}"
+                onclick="app.filtrarTrabajadores('${id}')">${txt} ${n[id]}</button>`).join('');
+    },
+
+    filtrarTrabajadores(modo) {
+        localStorage.setItem('filtroTrabajadores', modo);
+        this._renderConductores();
+    },
+
     _renderConductores() {
         const cont = document.getElementById('condList');
+        const fecha = this._fechaOffset(this._puestosOffset);
+        const esHoy = this._puestosOffset === 0;
         const orden = localStorage.getItem('ordenTrabajadores') || 'nombre';
-        const lista = Object.values(this._conductores || {}).sort((a, b) =>
+        const todos = Object.values(this._conductores || {});
+        const filtro = localStorage.getItem('filtroTrabajadores') || 'todos';
+        this._renderFiltrosCond(todos, fecha);
+        const lista = todos
+            .filter(u => filtro === 'todos' || this._estadoTrabajador(u, fecha) === filtro)
+            .sort((a, b) =>
             orden === 'numero'
                 // Sin número al final, y comparación numérica para que 209 no
                 // quede antes que 1418
                 ? ((a.conductor || '\uffff').localeCompare(b.conductor || '\uffff', 'es', { numeric: true }))
                 : (a.nombre || '').localeCompare(b.nombre || '', 'es'));
         if (!lista.length) {
-            cont.innerHTML = '<div class="tab-empty"><span class="tab-empty-ico">👥</span>'
-                + '<span class="tab-empty-t">Sin trabajadores</span>'
-                + '<span class="tab-empty-s">Aparecerán en cuanto abran su app.</span></div>';
+            cont.innerHTML = todos.length
+                ? '<div class="tab-empty"><span class="tab-empty-ico">🔍</span>'
+                  + '<span class="tab-empty-t">Ninguno en este grupo</span>'
+                  + '<span class="tab-empty-s">Prueba con otro filtro o con otro día.</span></div>'
+                : '<div class="tab-empty"><span class="tab-empty-ico">👥</span>'
+                  + '<span class="tab-empty-t">Sin trabajadores</span>'
+                  + '<span class="tab-empty-s">Aparecerán en cuanto abran su app.</span></div>';
+            this._renderPuestos();
+            this._renderRegistro();
             return;
         }
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
         cont.innerHTML = lista.map(u => {
             const ini = (u.nombre || u.email || '?').trim()[0]?.toUpperCase() || '?';
-            // La tarjeta muestra dónde está hoy, que puede no ser su sitio habitual
-            const hoy       = this._fechaOffset(0);
-            const lugarHoy  = this._lugarDe(u, hoy, this._jornadaDe(u, hoy));
-            const excepcion = !!(u.lugares && u.lugares[hoy]) && this._clavePuesto(lugarHoy) !== this._clavePuesto(u.puesto);
-            const turno = this._turnoDe(lugarHoy, u.horaInicio) || u.turno;
+            // La tarjeta muestra los datos del día elegido, no siempre los de hoy
+            const { j, deAyer } = this._jornadaVisible(u, fecha);
+            const lugarHoy  = this._lugarDe(u, fecha, j);
+            const excepcion = !!(u.lugares && u.lugares[fecha]) && this._clavePuesto(lugarHoy) !== this._clavePuesto(u.puesto);
+            const turno = this._turnoDe(lugarHoy, j?.i) || (esHoy ? u.turno : '');
+            const t = this._totalesDe(u, fecha);
             const av = u.avatar
                 ? `<img class="cond-avatar" src="${esc(u.avatar)}">`
                 : `<div class="cond-avatar">${esc(ini)}</div>`;
             const ver = u.version ? this._buildNumToVersion(parseInt(String(u.version).replace('build-',''),10) || 0) : '—';
-            const anual = u.horasAnuales || 777;
-            const restan = Math.max(0, Math.round((anual - (u.horasTotales || 0)) * 10) / 10);
             const cerrada = this._estaPlegado('t:' + u.email, true);
             return `<div class="cond-card${cerrada ? ' plegada' : ''}${u.baja ? ' baja' : ''}">
                 <div class="cond-top" onclick="app._plegarTrabajador('${esc(u.email)}')">
@@ -3334,7 +3399,7 @@ const app = {
                             ${turno ? `<span class="cond-turno ${turno}">${turno}</span>` : ''}
                             ${u.ficticio ? '<span class="pr-badge2">PRUEBA</span>' : ''}</div>
                         <div class="cond-num">${esc(u.conductor) || 'sin nº'}
-                            <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app._editarPuesto('${esc(u.email)}')">· ${esc(lugarHoy) || 'asignar lugar'}${excepcion ? ' (hoy)' : ''} ✎</span></div>
+                            <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app._editarPuesto('${esc(u.email)}','${esc(fecha)}')">· ${esc(lugarHoy) || 'asignar lugar'}${excepcion ? ' ·' : ''} ✎</span></div>
                     </div>
                     <button class="be-btn${u.baja ? ' on' : ''}" title="${u.baja ? 'Dar de alta' : 'Marcar baja'}"
                             onclick="event.stopPropagation();app.toggleBaja('${esc(u.email)}')">BE</button>
@@ -3342,10 +3407,10 @@ const app = {
                 </div>
                 <div class="cond-cuerpo">
                     <div class="cond-stats">
-                        <div class="cond-stat"><div class="cond-stat-v">${(u.horasMes ?? 0).toFixed(1)}</div><div class="cond-stat-l">h este mes</div></div>
-                        <div class="cond-stat"><div class="cond-stat-v">${u.diasMes ?? 0}</div><div class="cond-stat-l">días</div></div>
-                        <div class="cond-stat"><div class="cond-stat-v">${(u.horasTotales ?? 0).toFixed(1)}</div><div class="cond-stat-l">h totales</div></div>
-                        <div class="cond-stat"><div class="cond-stat-v">${restan.toFixed(1)}</div><div class="cond-stat-l">restantes</div></div>
+                        <div class="cond-stat"><div class="cond-stat-v">${t.mes.toFixed(1)}</div><div class="cond-stat-l">este mes</div></div>
+                        <div class="cond-stat"><div class="cond-stat-v">${t.extras.toFixed(1)}</div><div class="cond-stat-l">horas extras</div></div>
+                        <div class="cond-stat"><div class="cond-stat-v">${t.realizadas.toFixed(1)}</div><div class="cond-stat-l">realizadas</div></div>
+                        <div class="cond-stat"><div class="cond-stat-v">${t.restantes.toFixed(1)}</div><div class="cond-stat-l">restantes</div></div>
                     </div>
                     <div class="cond-ver">${ver} · actualizado ${u.actualizado
                         ? new Date(u.actualizado).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
@@ -3355,8 +3420,8 @@ const app = {
         }).join('');
         document.getElementById('ordenNombre')?.classList.toggle('activo', orden === 'nombre');
         document.getElementById('ordenNumero')?.classList.toggle('activo', orden === 'numero');
-        const activos = lista.filter(u => !u.baja).length;
-        const bajas   = lista.length - activos;
+        const activos = todos.filter(u => !u.baja).length;
+        const bajas   = todos.length - activos;
         const cnt = document.getElementById('trabajCnt');
         if (cnt) cnt.textContent = `${activos} activos${bajas ? ` · ${bajas} BE` : ''}`;
         this._renderPuestos();

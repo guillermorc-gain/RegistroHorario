@@ -288,6 +288,11 @@
         .orden-btn.activo{background:white;color:var(--g1);box-shadow:0 1px 2px rgba(0,0,0,.08);}
         .app-content.dark .orden-btn.activo{background:#1e2a3a;}
         .cond-refresh{flex-shrink:0;width:30px;height:30px;background:linear-gradient(135deg,var(--g1),var(--g2));border:none;border-radius:8px;color:#fff;font-size:16px;cursor:pointer;}
+        .cond-filtros{display:flex;gap:6px;overflow-x:auto;padding:2px 0 9px;}
+        .cond-filtros button{flex-shrink:0;border:none;border-radius:9px;padding:6px 12px;font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer;background:#eef1f6;color:#7f8c8d;}
+        .app-content.dark .cond-filtros button{background:#16202e;color:#a0a0a0;}
+        .cond-filtros button.activo{background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;}
+        .sec.cerrada .solo-abierta{display:none;}
         .cond-list{flex:none;display:flex;flex-direction:column;gap:8px;}
         .cond-card{background:white;border-radius:12px;padding:11px 13px;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
         .app-content.dark .cond-card{background:#1e2a3a;}
@@ -295,7 +300,8 @@
         .cond-avatar{width:42px;height:42px;border-radius:50%;flex-shrink:0;background:var(--g1);color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;object-fit:cover;}
         .cond-id{flex:1;min-width:0;}
         .cond-top{cursor:pointer;-webkit-tap-highlight-color:transparent;}
-        .cond-chev{color:#95a5a6;font-size:13px;flex-shrink:0;transition:transform .2s;}
+        .cond-chev{color:#7f8c8d;font-size:15px;flex-shrink:0;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:9px;background:#f1f4f8;transition:transform .2s;}
+        .app-content.dark .cond-chev{background:#16202e;color:#a0a0a0;}
         .cond-card.plegada .cond-chev{transform:rotate(-90deg);}
         .cond-card.plegada .cond-cuerpo{display:none;}
         .puesto-click{text-decoration:underline;text-decoration-style:dotted;cursor:pointer;}
@@ -365,7 +371,7 @@
         .rg-h{display:flex;align-items:center;gap:7px;padding:9px 12px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
         .rg-h:active{background:#f4f6f9;}
         .app-content.dark .rg-h:active{background:#16202e;}
-        .rg-chev{font-size:10px;width:10px;color:#95a5a6;flex-shrink:0;}
+        .rg-chev{font-size:13px;width:28px;height:28px;margin-left:-4px;color:#7f8c8d;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
         .rg-t{flex:1;font-size:12.5px;font-weight:800;color:#2c3e50;text-transform:capitalize;}
         .app-content.dark .rg-t{color:#e0e0e0;}
         .rg-sub{font-size:10.5px;font-weight:700;color:var(--g1);}
@@ -408,7 +414,9 @@
         .pr-ed{background:#3498db;color:#fff;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;}
         .pr-del{background:#e74c3c;color:#fff;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;}
         /* Barra de día: el bloque entero acepta swipe horizontal */
-        .pst-dia{display:flex;align-items:center;gap:6px;margin-bottom:8px;}
+        .pst-dia{display:flex;align-items:center;gap:6px;margin-bottom:10px;}
+        .pst-hoy{flex-shrink:0;border:none;border-radius:8px;padding:6px 12px;font-family:inherit;font-size:11.5px;font-weight:800;cursor:pointer;background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;}
+        .pst-hoy.oculto{visibility:hidden;}
         .pst-dia-txt{flex:1;text-align:center;font-size:11.5px;font-weight:800;color:#2c3e50;text-transform:capitalize;}
         .app-content.dark .pst-dia-txt{color:#e0e0e0;}
         .pst-nav{width:28px;height:28px;flex-shrink:0;border:none;border-radius:8px;background:#e8eaf0;color:#2c3e50;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit;line-height:1;}
@@ -659,34 +667,39 @@
         <!-- ── TAB: Trabajadores ── -->
         <div class="tab-panel active" id="tabPanel0">
             <!-- Lugares primero: es lo que se mira de un vistazo -->
+            <!-- El día manda sobre las dos secciones: se cambia con las flechas
+                 o arrastrando en horizontal por cualquier punto de la pestaña. -->
+            <div class="pst-dia">
+                <button class="pst-nav" onclick="app.cambiarDiaPuestos(-1)">‹</button>
+                <span class="pst-dia-txt" id="pstDiaTxt">Hoy</span>
+                <button class="pst-hoy" id="pstHoy" onclick="app.irAHoy()">Hoy</button>
+                <button class="pst-nav" onclick="app.cambiarDiaPuestos(1)">›</button>
+            </div>
+
             <div class="sec" id="secPuestos">
                 <div class="sec-head" onclick="app.toggleSeccion('secPuestos')">
                     <span class="cond-title">🧩 Lugares de trabajo</span>
                     <span class="sec-cnt" id="puestosCnt"></span>
                     <button class="mensual-toggle sec-chev">▼</button>
                 </div>
-                <div class="sec-body" id="puestosBody">
-                    <div class="pst-dia">
-                        <button class="pst-nav" onclick="app.cambiarDiaPuestos(-1)">‹</button>
-                        <span class="pst-dia-txt" id="pstDiaTxt">Hoy</span>
-                        <button class="pst-nav" id="pstNavNext" onclick="app.cambiarDiaPuestos(1)">›</button>
-                    </div>
-                    <div id="puestosList"></div>
-                </div>
+                <div class="sec-body" id="puestosBody"><div id="puestosList"></div></div>
             </div>
 
             <div class="sec" id="secTrabajadores">
                 <div class="sec-head" onclick="app.toggleSeccion('secTrabajadores')">
                     <span class="cond-title">👥 Trabajadores</span>
                     <span class="sec-cnt" id="trabajCnt"></span>
-                    <div class="cond-orden" onclick="event.stopPropagation()">
+                    <div class="cond-orden solo-abierta" onclick="event.stopPropagation()">
                         <button id="ordenNombre" class="orden-btn activo" onclick="app.ordenarTrabajadores('nombre')">Nombre</button>
                         <button id="ordenNumero" class="orden-btn" onclick="app.ordenarTrabajadores('numero')">Nº</button>
                     </div>
-                    <button class="cond-refresh" onclick="event.stopPropagation();app._cargarConductores()" title="Actualizar">⟳</button>
+                    <button class="cond-refresh solo-abierta" onclick="event.stopPropagation();app._cargarConductores()" title="Actualizar">⟳</button>
                     <button class="mensual-toggle sec-chev">▼</button>
                 </div>
-                <div class="sec-body"><div id="condList" class="cond-list"></div></div>
+                <div class="sec-body">
+                    <div class="cond-filtros" id="condFiltros"></div>
+                    <div id="condList" class="cond-list"></div>
+                </div>
             </div>
 
             <!-- Formulario heredado: oculto en gestión, pero presente para que
