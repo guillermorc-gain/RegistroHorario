@@ -12,9 +12,11 @@ const ghHeaders = () => ({
 });
 
 async function getFile() {
+  // GitHub responde con ETag y puede servir una copia cacheada; el parámetro
+  // suelto y el no-cache fuerzan a que la lectura sea siempre la última.
   const r = await fetch(
-    `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}?ref=${BRANCH}`,
-    { headers: ghHeaders() }
+    `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}?ref=${BRANCH}&t=${Date.now()}`,
+    { headers: { ...ghHeaders(), 'Cache-Control': 'no-cache' }, cache: 'no-store' }
   );
   if (!r.ok) return { data: {}, sha: null };
   const meta = await r.json();

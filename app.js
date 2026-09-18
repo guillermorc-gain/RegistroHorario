@@ -874,6 +874,7 @@ const app = {
             this._cancelarNotificacionTrabajo();
             this.actualizarUI(datos);
             this.cancelarEdicion();
+            this._publicarResumen();
         } catch(e) {
             alert('❌ Error al guardar: ' + e.message);
         }
@@ -916,6 +917,7 @@ const app = {
         this.editingId = null;
         document.getElementById('editModal').classList.remove('show');
         this.actualizarUI(datos);
+        this._publicarResumen();
         // Volver al listado, no a la pantalla principal
         this.mostrarHistorialModal();
     },
@@ -929,6 +931,7 @@ const app = {
             datos.horasTrabajadas = this._calcTotales(datos.historial).anualReal;
             await this._writeDriveFile(datos);
             this.actualizarUI(datos);
+            this._publicarResumen();
             if (this.editingId === id) this.editingId = null;
             if (document.getElementById('historialModal').classList.contains('show')) this._renderHistorialModal();
         }
@@ -2636,6 +2639,7 @@ const app = {
             this._cancelarNotificacionTrabajo();
             this.actualizarUI(datos);
             this._mostrarToast(`✅ ${horas}h registradas (${horaInicio}–${horaFin})`, 4000);
+            this._publicarResumen();
         } catch(e) {
             this._mostrarToast('❌ Error al registrar: ' + e.message, 4000);
         }
