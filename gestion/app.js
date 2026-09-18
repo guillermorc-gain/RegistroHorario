@@ -1895,14 +1895,31 @@ const app = {
 
     _calcTodosMeses(historial) {
         const meses = {};
-        Object.values(historial).forEach(reg => {
-            if (!reg.timestamp) return;
+        // Chronological pass: hours past the annual cap are overtime, and this is
+        // the only way to attribute them to the month they actually happened in.
+        const orden = Object.values(historial || {})
+            .filter(r => r.timestamp)
+            .sort((a, b) => a.timestamp - b.timestamp);
+        const tope = this.horasAnualesCustom;
+        let acumulado = 0;
+        orden.forEach(reg => {
             const d   = new Date(reg.timestamp);
             const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-            if (!meses[key]) meses[key] = { horas:0, nocturnas:0, extra:0, dias:0, label:'', año:d.getFullYear(), mes:d.getMonth()+1 };
-            meses[key].horas     = Math.round((meses[key].horas     + reg.horas) * 10) / 10;
-            meses[key].nocturnas = Math.round((meses[key].nocturnas + (reg.horasNocturnas||0)) * 10) / 10;
-            meses[key].extra     = Math.round((meses[key].extra     + (reg.extraNoche||0)) * 100) / 100;
+            if (!meses[key]) meses[key] = { horas:0, nocturnas:0, extra:0, horasExtras:0, dias:0, label:'', año:d.getFullYear(), mes:d.getMonth()+1 };
+            const h = parseFloat(reg.horas) || 0;
+            let extrasReg;
+            if (reg.extraDestino === 'extras') {
+                extrasReg = h;                       // marked as overtime by hand
+            } else {
+                const efectivas = (reg.festivo && h === 0) ? this.jornadaHoras : h;
+                const cabe = Math.max(0, tope - acumulado);
+                extrasReg = Math.max(0, efectivas - cabe);
+                acumulado += efectivas;
+            }
+            meses[key].horas       = Math.round((meses[key].horas     + h) * 10) / 10;
+            meses[key].nocturnas   = Math.round((meses[key].nocturnas + (reg.horasNocturnas||0)) * 10) / 10;
+            meses[key].extra       = Math.round((meses[key].extra     + (reg.extraNoche||0)) * 100) / 100;
+            meses[key].horasExtras = Math.round((meses[key].horasExtras + extrasReg) * 10) / 10;
             meses[key].dias++;
             meses[key].label = `${MESES_ES[d.getMonth()]} ${d.getFullYear()}`;
         });
@@ -1988,12 +2005,22 @@ const app = {
         if (keys.length === 0) { container.innerHTML = '<div style="text-align:center;color:#95a5a6;font-size:12px;padding:8px;">Sin datos</div>'; return; }
         container.innerHTML = keys.map(k => {
             const m = meses[k];
-            const barPct = Math.min((m.horas / (this.horasAnualesCustom / 12)) * 100, 100);
-            return `<div class="mes-row">
+            const objetivo = this.horasAnualesCustom / 12;
+            const barPct   = Math.min((m.horas / objetivo) * 100, 100);
+            // Split the bar proportionally, so the orange slice reflects how much
+            // of that month's hours were overtime even when the bar is saturated
+            const ratioExt = m.horas > 0 ? Math.min(m.horasExtras / m.horas, 1) : 0;
+            const extPct   = barPct * ratioExt;
+            const normPct  = barPct - extPct;
+            return `<div class="mes-row${m.horasExtras > 0 ? ' con-extras' : ''}">
                 <div class="mes-label">${m.label}</div>
-                <div class="mes-bar-wrap"><div class="mes-bar" style="width:${barPct}%"></div></div>
+                <div class="mes-bar-wrap">
+                    <div class="mes-bar" style="width:${normPct}%"></div>
+                    <div class="mes-bar-extra" style="width:${extPct}%"></div>
+                </div>
                 <div class="mes-vals">
                     <span>${m.horas}h</span>
+                    ${m.horasExtras > 0 ? `<span class="mes-extras-h">⏱️${m.horasExtras}h</span>` : ''}
                     ${m.nocturnas > 0 ? `<span class="mes-noche">🌙${m.nocturnas}h</span>` : ''}
                     ${m.extra > 0    ? `<span class="mes-extra">+${m.extra.toFixed(2)}€</span>` : ''}
                 </div>
