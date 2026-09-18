@@ -1473,16 +1473,25 @@ const app = {
         if (el) el.textContent = this.jornadaHoras + 'h';
     },
 
+    // El último dígito es el de control y va tras el guión. El cuerpo puede ser
+    // de 3 o de 4 dígitos: 209-1 y 1418-3 son los dos válidos. Devuelve null si
+    // no encaja, '' si se ha dejado en blanco.
+    _normalizarConductor(v) {
+        const digitos = String(v ?? '').replace(/\D/g, '');
+        if (!String(v ?? '').trim()) return '';
+        if (digitos.length !== 4 && digitos.length !== 5) return null;
+        return digitos.slice(0, -1) + '-' + digitos.slice(-1);
+    },
+
     mostrarCambiarConductor() {
-        const v = prompt('Número de trabajador (5 dígitos).\n\nPuedes escribirlo con o sin guión: 14183 o 1418-3', this.numConductor || '');
+        const v = prompt('Número de trabajador.\n\nPuedes escribirlo con o sin guión: 14183 o 1418-3, 2091 o 209-1',
+            this.numConductor || '');
         if (v === null) return;
-        // Accept it typed either way and always store it as 1418-3
-        const digitos = v.replace(/\D/g, '');
-        if (v.trim() && digitos.length !== 5) {
-            alert('❌ Formato incorrecto. Deben ser 5 dígitos.\nEjemplo: 14183 o 1418-3');
+        const val = this._normalizarConductor(v);
+        if (val === null) {
+            alert('❌ Formato incorrecto. Deben ser 4 o 5 dígitos.\nEjemplo: 209-1 o 1418-3');
             return;
         }
-        const val = digitos ? digitos.slice(0, 4) + '-' + digitos.slice(4) : '';
         this.numConductor = val;
         localStorage.setItem('numConductor', val);
         this._actualizarConductorDisplay();
@@ -2177,19 +2186,48 @@ const app = {
 
     // Turno según el puesto y la hora de entrada registrada. Si el puesto no
     // está en la tabla, se cae al criterio antiguo (mañana antes de las 13h).
+    // La noche es 21:00–06:00 en cualquier lugar. Mañana y tarde admiten una
+    // hora de margen: entrar una hora antes sigue siendo mañana y salir una
+    // hora más tarde sigue siendo tarde. En los lugares que entran de
+    // madrugada (Son Rossinyol a las 3:45) la noche termina donde empieza su
+    // mañana con el margen, o de lo contrario se las tragaría enteras.
+    NOCHE_DESDE: 21 * 60,
+    NOCHE_HASTA: 6 * 60,
+    MARGEN_TURNO: 60,
+
+    _franjasDe(puesto) {
+        return (TURNOS_POR_PUESTO[this._clavePuesto(puesto)] || []).filter(f => f.id !== 'N');
+    },
+
+    // Hora a la que deja de ser de noche en este lugar: nunca más tarde de las 6
+    _amanecerDe(puesto) {
+        const m = this._franjasDe(puesto).find(f => f.id === 'M');
+        const ini = m ? this._minutos(m.desde) : null;
+        if (ini === null) return this.NOCHE_HASTA;
+        return Math.min(this.NOCHE_HASTA, Math.max(0, ini - this.MARGEN_TURNO));
+    },
+
+    _esNoche(min, puesto) {
+        return min >= this.NOCHE_DESDE || min < this._amanecerDe(puesto);
+    },
+
     _turnoDe(puesto, horaInicio) {
         const ini = this._minutos(horaInicio);
         if (ini === null) return '';
-        const franjas = TURNOS_POR_PUESTO[this._clavePuesto(puesto)];
-        if (!franjas) return ini < 13 * 60 ? 'M' : 'T';
-        for (const f of franjas) {
-            let a = this._minutos(f.desde), b = this._minutos(f.hasta);
-            if (b <= a) b += 1440;                   // franja que cruza medianoche
-            let cur = ini;
+        if (this._esNoche(ini, puesto)) return 'N';
+        const franjas = this._franjasDe(puesto);
+        if (!franjas.length) return ini < 13 * 60 ? 'M' : 'T';
+
+        const dentro = (min, f, margen) => {
+            let a = this._minutos(f.desde) - margen, b = this._minutos(f.hasta) + margen;
+            if (b <= a) b += 1440;
+            let cur = min;
             if (cur < a && b > 1440) cur += 1440;
-            if (cur >= a && cur < b) return f.id;
-        }
-        return '';
+            return cur >= a && cur < b;
+        };
+        for (const f of franjas) if (dentro(ini, f, 0)) return f.id;
+        for (const f of franjas) if (dentro(ini, f, this.MARGEN_TURNO)) return f.id;
+        return ini < 13 * 60 ? 'M' : 'T';
     },
 
     _turnoHabitual(delMes) {

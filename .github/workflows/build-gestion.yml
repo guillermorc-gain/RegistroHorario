@@ -271,12 +271,29 @@ jobs:
 
                       @JavascriptInterface
                       public void saveFile(String content, String filename) {
-                          final String fname = (filename != null && !filename.isEmpty())
-                              ? filename : "horas-emt.json";
                           byte[] bytes;
                           try { bytes = content.getBytes("UTF-8"); }
                           catch (Exception e) { bytes = content.getBytes(); }
-                          final byte[] data = bytes;
+                          guardarEnDescargas(bytes, filename);
+                      }
+
+                      // Un .xlsx es binario y no sobrevive a un String, así que
+                      // viaja en base64 y se decodifica aquí.
+                      @JavascriptInterface
+                      public void saveFileBase64(String base64, String filename) {
+                          try {
+                              guardarEnDescargas(
+                                  android.util.Base64.decode(base64, android.util.Base64.DEFAULT),
+                                  filename);
+                          } catch (Exception e) {
+                              new Handler(Looper.getMainLooper()).post(() ->
+                                  Toast.makeText(ctx, "Error al guardar", Toast.LENGTH_SHORT).show());
+                          }
+                      }
+
+                      private void guardarEnDescargas(byte[] data, String filename) {
+                          final String fname = (filename != null && !filename.isEmpty())
+                              ? filename : "horas-emt.json";
                           try {
                               if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                                   ContentValues v = new ContentValues();
@@ -285,6 +302,8 @@ jobs:
                                   // como JSON no lo abre la hoja de cálculo
                                   v.put(MediaStore.Downloads.MIME_TYPE,
                                       fname.endsWith(".csv") ? "text/csv"
+                                      : fname.endsWith(".xlsx")
+                                        ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                       : fname.endsWith(".xls") ? "application/vnd.ms-excel"
                                       : "application/json");
                                   Uri uri = ctx.getContentResolver().insert(
