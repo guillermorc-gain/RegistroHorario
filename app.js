@@ -3127,6 +3127,31 @@ const app = {
         if (el) el.textContent = 'Versión ' + this._buildNumToVersion(n);
     },
 
+    // GitHub permite 60 peticiones/hora sin autenticar y la app consulta en cada
+    // apertura, así que se comparte una caché corta entre el chequeo de
+    // actualizaciones y la lista de versiones para no agotarlas.
+    async _releases(forzar) {
+        const CACHE = 'releasesCache', EDAD = 'releasesCacheAt';
+        if (!forzar) {
+            const t = parseInt(sessionStorage.getItem(EDAD) || '0', 10);
+            if (Date.now() - t < 5 * 60 * 1000) {
+                try { return { ok: true, lista: JSON.parse(sessionStorage.getItem(CACHE) || '[]') }; }
+                catch (_) {}
+            }
+        }
+        const resp = await fetch('https://api.github.com/repos/guillermorc-gain/RegistroHorario/releases?per_page=100');
+        if (!resp.ok) {
+            // 403 aquí casi siempre es el límite por hora, no un permiso
+            return { ok: false, status: resp.status, limite: resp.status === 403 };
+        }
+        const lista = await resp.json();
+        try {
+            sessionStorage.setItem(CACHE, JSON.stringify(lista));
+            sessionStorage.setItem(EDAD, String(Date.now()));
+        } catch (_) {}
+        return { ok: true, lista };
+    },
+
     async _checkForUpdates(showFeedback = false) {
         if (!window.Capacitor?.isNativePlatform?.()) return;
         if (typeof APP_VERSION === 'undefined' || APP_VERSION === '0') return;
@@ -3134,12 +3159,14 @@ const app = {
         try {
             // Both apps publish releases to the same repo, so pick only the ones
             // tagged for this app instead of whatever release is newest overall.
-            const resp = await fetch('https://api.github.com/repos/guillermorc-gain/RegistroHorario/releases?per_page=30');
-            if (!resp.ok) {
-                if (showFeedback) this._mostrarToast('❌ No se pudo comprobar (error ' + resp.status + ')');
+            const res = await this._releases(showFeedback);
+            if (!res.ok) {
+                if (showFeedback) this._mostrarToast(res.limite
+                    ? '⏳ GitHub ha limitado las consultas. Prueba en unos minutos.'
+                    : '❌ No se pudo comprobar (error ' + res.status + ')', 4500);
                 return;
             }
-            const lista = await resp.json();
+            const lista = res.lista;
             const re = new RegExp('^' + RELEASE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
             // El gestor siempre ve la última, para poder probarla antes de
             // publicarla; el resto solo ven la que él haya publicado.
