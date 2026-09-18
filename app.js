@@ -69,6 +69,7 @@ const app = {
         this.setupUI();
         if (this.darkMode) this.aplicarDarkMode();
         this._restaurarTabs();
+        this._initSwipeTabs();
         this._restaurarMensual();
         this._cargarCuadrante();
         this._aplicarModoVacaciones();
@@ -803,7 +804,9 @@ const app = {
         const horas = parseFloat(horasRaw) || 0;
         const fecha = document.getElementById('fechaInput').value;
         const esFestivo      = this.festivoActivo;
-        // A holiday may be registered with no hours worked; anything else needs hours
+        const esVacaciones   = this.vacacionesActivo;
+        // A holiday or a vacation day may be registered with no hours worked;
+        // anything else needs hours.
         if (!fecha || (!esFestivo && !esVacaciones && (isNaN(parseFloat(horasRaw)) || horas <= 0))) {
             alert('❌ Introduce fecha y horas válidas'); return;
         }
@@ -813,7 +816,6 @@ const app = {
         const esNoche        = document.getElementById('nocheToggle').checked;
         const esPR           = this.prActivo;
         const esExtra        = this.extraActivo;
-        const esVacaciones   = this.vacacionesActivo;
         const extraDestino   = esExtra ? this._extraDestino() : null;
         const horasNocturnas = esNoche ? (parseFloat(document.getElementById('horasNocturnas').value) || 0) : 0;
         const precioNoche    = esNoche ? (parseFloat(document.getElementById('precioNoche').value) || 0) : 0;
@@ -911,6 +913,8 @@ const app = {
         this.editingId = null;
         document.getElementById('editModal').classList.remove('show');
         this.actualizarUI(datos);
+        // Volver al listado, no a la pantalla principal
+        this.mostrarHistorialModal();
     },
 
     async borrarRegistro(id) {
@@ -1558,6 +1562,35 @@ const app = {
         if (nombre && !this.festivoActivo) this.clickFestivo();
     },
 
+
+    // Swipe horizontal para cambiar de pestaña. Se ignora si el gesto empieza
+    // sobre algo desplazable en horizontal (p. ej. el cuadrante ampliado).
+    _initSwipeTabs() {
+        const cont = document.getElementById('appContent');
+        if (!cont) return;
+        let x0 = 0, y0 = 0, activo = false;
+        cont.addEventListener('touchstart', e => {
+            if (e.touches.length !== 1) { activo = false; return; }
+            const t = e.touches[0];
+            x0 = t.clientX; y0 = t.clientY; activo = true;
+        }, { passive: true });
+        cont.addEventListener('touchend', e => {
+            if (!activo) return;
+            activo = false;
+            const t = e.changedTouches[0];
+            const dx = t.clientX - x0, dy = t.clientY - y0;
+            // Debe ser claramente horizontal y suficientemente largo
+            if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
+            const orden = [...document.querySelectorAll('#tabBar .tab-btn')]
+                .map(b => parseInt(b.dataset.tab, 10));
+            const pos = orden.indexOf(this._activeTab);
+            if (pos === -1) return;
+            const destino = dx < 0 ? pos + 1 : pos - 1;
+            if (destino < 0 || destino >= orden.length) return;
+            this.switchTab(orden[destino]);
+        }, { passive: true });
+    },
+
     switchTab(idx) {
         this._activeTab = idx;
         document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -1726,6 +1759,9 @@ const app = {
     },
 
     limpiarInput() {
+        // Limpiar desmarca todo menos el festivo, y recupera el horario del día
+        // anterior. No debe reabrir el cajón nocturno aunque ese horario lo sea.
+        const manteniaFestivo = this.festivoActivo;
         this.establecerFechaHoy();
         const lastInicio = localStorage.getItem('lastHoraInicio') || '';
         const lastFin    = localStorage.getItem('lastHoraFin') || '';
@@ -1736,12 +1772,10 @@ const app = {
         document.getElementById('precioNoche').value    = '';
         document.getElementById('nocheResumen').textContent = '';
         document.getElementById('nocheToggle').checked = false;
+        document.querySelector('.noche-compact')?.classList.remove('active');
         this.prActivo = false;
         document.getElementById('prCompact').classList.remove('active');
         document.getElementById('prToggle').checked = false;
-        this.festivoActivo = false;
-        document.getElementById('festivoCompact').classList.remove('active');
-        document.getElementById('festivoToggle').checked = false;
         this.vacacionesActivo = false;
         document.getElementById('vacacionesCompact')?.classList.remove('active');
         const vt = document.getElementById('vacacionesToggle'); if (vt) vt.checked = false;
@@ -1749,10 +1783,22 @@ const app = {
         document.getElementById('extraCompact')?.classList.remove('active');
         const et = document.getElementById('extraToggle'); if (et) et.checked = false;
         document.getElementById('extraPanel')?.classList.remove('visible');
-        document.querySelector('.noche-compact')?.classList.remove('active');
-        if (lastInicio && lastFin) this.calcularHorasPorTiempo();
-        else document.getElementById('horasInput').value = '';
-        this.comprobarFestivo();
+        // Horas del horario recuperado, sin activar nada nocturno
+        document.getElementById('horasInput').value = (lastInicio && lastFin)
+            ? this._horasEntre(lastInicio, lastFin) : '';
+        this.festivoActivo = false;
+        document.getElementById('festivoCompact').classList.remove('active');
+        document.getElementById('festivoToggle').checked = false;
+        this.comprobarFestivo();                 // vuelve a marcarlo si la fecha es festiva
+        if (manteniaFestivo && !this.festivoActivo) this.clickFestivo();
+    },
+
+    _horasEntre(inicio, fin) {
+        const [h1, m1] = inicio.split(':').map(Number);
+        const [h2, m2] = fin.split(':').map(Number);
+        let mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+        if (mins < 0) mins += 1440;
+        return Math.round(mins / 60 * 2) / 2;
     },
 
     cancelarEdicion() { this.editingId = null; this.limpiarInput(); },
@@ -1790,13 +1836,20 @@ const app = {
                 const delMes = registros
                     .filter(([, r]) => { const x = new Date(r.timestamp); return `${x.getFullYear()}-${x.getMonth()}` === mesKey; });
                 const totMes = delMes.reduce((s, [, r]) => s + (parseFloat(r.horas) || 0), 0);
+                const nocMes = delMes.reduce((s, [, r]) => s + (parseFloat(r.horasNocturnas) || 0), 0);
+                const mesesCalc = this._calcTodosMeses(this._historialMap);
+                const extMes = mesesCalc[`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`]?.horasExtras || 0;
                 const cab = document.createElement('li');
                 cab.className = 'hm-mes';
                 cab.dataset.mes = mesKey;
                 const colapsado = this._mesesColapsados.has(mesKey);
+                const r1 = n => (Math.round(n * 10) / 10).toFixed(1);
                 cab.innerHTML = `<span class="hm-mes-chev">${colapsado ? '▸' : '▾'}</span>`
                     + `<span class="hm-mes-n">${MESES_ES[d.getMonth()]} ${d.getFullYear()}</span>`
-                    + `<span class="hm-mes-tot">${(Math.round(totMes * 10) / 10).toFixed(1)}h`
+                    + `<span class="hm-mes-tot">`
+                    + (extMes > 0 ? `<span class="hm-mes-ext">⏱️${r1(extMes)}h</span>` : '')
+                    + (nocMes > 0 ? `<span class="hm-mes-noc">🌙${r1(nocMes)}h</span>` : '')
+                    + `${r1(totMes)}h`
                     + `<span class="hm-mes-c">${delMes.length}</span></span>`;
                 cab.addEventListener('click', () => this._toggleMes(mesKey));
                 list.appendChild(cab);
@@ -2071,7 +2124,7 @@ const app = {
             const ratioExt = m.horas > 0 ? Math.min(m.horasExtras / m.horas, 1) : 0;
             const extPct   = barPct * ratioExt;
             const normPct  = barPct - extPct;
-            return `<div class="mes-row${m.horasExtras > 0 ? ' con-extras' : ''}">
+            return `<div class="mes-row">
                 <div class="mes-label">${m.label}</div>
                 <div class="mes-bar-wrap">
                     <div class="mes-bar" style="width:${normPct}%"></div>
@@ -2080,6 +2133,7 @@ const app = {
                 <div class="mes-vals">
                     <span>${m.horas}h</span>
                     ${m.horasExtras > 0 ? `<span class="mes-extras-h">⏱️${m.horasExtras}h</span>` : ''}
+                    ${m.horasExtras > 0 && this.precioExtraDefault > 0 ? `<span class="mes-extras-e">+${(m.horasExtras * this.precioExtraDefault).toFixed(2)}€</span>` : ''}
                     ${m.nocturnas > 0 ? `<span class="mes-noche">🌙${m.nocturnas}h</span>` : ''}
                     ${m.extra > 0    ? `<span class="mes-extra">+${m.extra.toFixed(2)}€</span>` : ''}
                 </div>

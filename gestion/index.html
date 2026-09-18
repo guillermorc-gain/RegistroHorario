@@ -706,11 +706,6 @@
                         <div id="profileAvatarPreview" class="avatar-preview" style="background:var(--g1);color:white;font-size:26px;">?</div>
                         <button onclick="app.mostrarAvatarPicker()" style="padding:8px 14px;background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Cambiar avatar</button>
                     </div>
-                    <button class="ops-btn" onclick="app.mostrarCambiarConductor()">
-                        🚌 Número de conductor
-                        <span id="conductorDisplay" style="margin-left:auto;color:var(--g1);font-weight:700;font-size:13px;"></span>
-                        <span class="ops-arrow">›</span>
-                    </button>
                     <div class="ops-field">
                         <span class="ops-field-label">Cuenta Google</span>
                         <div id="perfilNombre" style="font-size:14px;font-weight:600;color:#2c3e50;padding:2px 0;"></div>
@@ -769,95 +764,7 @@
                 </div>
             </div>
 
-            <!-- Trabajo -->
-            <div class="ops-section">
-                <button class="ops-title" onclick="app.toggleSection(this)">💼 Trabajo <span class="ops-chevron">›</span></button>
-                <div class="ops-body">
-                    <div class="ops-field">
-                        <span class="ops-field-label">💰 Precio hora nocturna (€)</span>
-                        <input type="text" inputmode="decimal" class="ops-night-input" id="precioNocheGlobal" placeholder="ej: 2,89" onchange="app.guardarPrecioNoche()">
-                        <span class="ops-field-sub">Se aplica automáticamente al detectar horario 21h–06h</span>
-                    </div>
-                    <button class="ops-btn" onclick="app.mostrarCambiarHoras()">
-                        ⚙️ Horas anuales
-                        <span id="horasAnualesDisplay" style="margin-left:auto;color:var(--g1);font-weight:700;font-size:13px;"></span>
-                        <span class="ops-arrow">›</span>
-                    </button>
-                    <button class="ops-btn" onclick="app.mostrarCambiarJornada()">
-                        🕐 Horas de tu jornada
-                        <span id="jornadaHorasDisplay" style="margin-left:auto;color:var(--g1);font-weight:700;font-size:13px;"></span>
-                        <span class="ops-arrow">›</span>
-                    </button>
-                    <div class="ops-field">
-                        <span class="ops-field-label">🏖️ Vacaciones</span>
-                        <div class="vac-add">
-                            <input type="date" id="vacDesde" class="vac-input">
-                            <span class="vac-sep">→</span>
-                            <input type="date" id="vacHasta" class="vac-input">
-                            <button class="vac-add-btn" onclick="app.añadirVacaciones()">Añadir</button>
-                        </div>
-                        <div id="vacList"></div>
-                    </div>
-                    <button class="ops-btn" onclick="app.revisarSuma()">🔍 Revisar suma <span class="ops-arrow">›</span></button>
-                </div>
-            </div>
-
-            <!-- GPS -->
-            <div class="ops-section">
-                <button class="ops-title" onclick="app.toggleSection(this)">📍 Detección de trabajo <span class="ops-chevron">›</span></button>
-                <div class="ops-body">
-                    <!-- Ubicaciones -->
-                    <div class="ops-row" style="flex-direction:column;align-items:flex-start;gap:10px;">
-                        <div>
-                            <div class="ops-row-label">Ubicaciones guardadas</div>
-                            <span class="ops-row-sub">La app detecta si estás cerca y envía una notificación</span>
-                        </div>
-                        <div id="gpsStatus" class="gps-badge none">Sin ubicaciones</div>
-                        <div id="workLocationsList" style="width:100%;"></div>
-                        <button onclick="app.guardarUbicacionTrabajo()" style="padding:9px 14px;background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;font-weight:600;font-size:12px;cursor:pointer;font-family:inherit;">📍 Añadir ubicación actual</button>
-                    </div>
-                    <!-- Modo GPS -->
-                    <div class="ops-field" style="gap:10px;padding-top:4px;">
-                        <span class="ops-field-label">Modo GPS</span>
-                        <div style="display:flex;flex-direction:column;gap:8px;">
-                            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
-                                <input type="radio" name="gpsMode" value="off" onchange="app.guardarGpsConfig()" style="accent-color:var(--primary);">
-                                <span><strong>Desactivado</strong> — sin seguimiento</span>
-                            </label>
-                            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
-                                <input type="radio" name="gpsMode" value="always" onchange="app.guardarGpsConfig()" style="accent-color:var(--primary);">
-                                <span><strong>Siempre activo</strong> — comprueba periódicamente</span>
-                            </label>
-                            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
-                                <input type="radio" name="gpsMode" value="schedule" onchange="app.guardarGpsConfig()" style="accent-color:var(--primary);">
-                                <span><strong>Por horario</strong> — solo en tu franja de trabajo</span>
-                            </label>
-                        </div>
-                    </div>
-                    <!-- Intervalo -->
-                    <div id="gpsIntervalRow" class="ops-field">
-                        <span class="ops-field-label">Intervalo de búsqueda</span>
-                        <select id="gpsIntervalSelect" onchange="app.guardarGpsConfig()" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;width:100%;">
-                            <option value="30">Cada 30 minutos</option>
-                            <option value="60">Cada 1 hora</option>
-                            <option value="120">Cada 2 horas</option>
-                            <option value="180">Cada 3 horas</option>
-                        </select>
-                    </div>
-                    <!-- Horario -->
-                    <div id="gpsScheduleRow" class="ops-field" style="display:none;">
-                        <span class="ops-field-label">Activar GPS entre</span>
-                        <div style="display:flex;align-items:center;gap:10px;">
-                            <input type="time" id="gpsFrom" onchange="app.guardarGpsConfig()" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;">
-                            <span style="color:var(--text-secondary);font-size:13px;">y</span>
-                            <input type="time" id="gpsTo" onchange="app.guardarGpsConfig()" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;">
-                        </div>
-                        <span class="ops-row-sub">El GPS solo estará activo en esa franja horaria — ahorra batería y no muestra notificación permanente fuera de ella</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Copia de Seguridad -->
+                                    <!-- Copia de Seguridad -->
             <div class="ops-section" id="sectionBackup">
                 <button class="ops-title" onclick="app.toggleSection(this)">☁️ Copia de Seguridad <span class="ops-chevron">›</span></button>
                 <div class="ops-body">
