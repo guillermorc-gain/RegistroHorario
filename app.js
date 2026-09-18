@@ -30,6 +30,7 @@ const app = {
     festivoActivo: false,
     extraActivo: false,
     jornadaHoras: parseFloat(localStorage.getItem('jornadaHoras')) || 7.5,
+    numConductor: localStorage.getItem('numConductor') || '',
     _activeTab: 0,
     _dragSrcTab: null,
     _allowedUsersLocal: null,
@@ -211,6 +212,9 @@ const app = {
             localStorage.setItem('gRefreshToken', this.refreshToken);
         }
         window.AndroidBridge?.saveToPrefs('accessToken', this.accessToken);
+        // The notification receiver needs these to renew an expired token on its own
+        window.AndroidBridge?.saveToPrefs('tokenExpiry', String(this.tokenExpiry));
+        if (this.refreshToken) window.AndroidBridge?.saveToPrefs('refreshToken', this.refreshToken);
         this._scheduleTokenRefresh();
     },
 
@@ -245,6 +249,7 @@ const app = {
             }
             this.mostrarApp();
             this.actualizarBotonesPerfil();
+            this._actualizarCabeceraUsuario();
             setTimeout(() => this._autoRellenarFormulario(), 50);
             this._scheduleTokenRefresh();
             this.cargarDatos();
@@ -655,6 +660,11 @@ const app = {
                 ...(esFestivo ? { festivo: true } : {}),
                 ...(esExtra ? { extraManual: true, extraDestino } : {})
             };
+            if (esPR && this._prUsados(datos.historial) > this.PR_ANUALES) {
+                delete datos.historial[registroId];
+                alert(`❌ Ya has usado los ${this.PR_ANUALES} permisos retribuidos de este año`);
+                return;
+            }
             const tot = this._calcTotales(datos.historial);
             if (tot.anualReal > this.horasAnualesCustom + tot.topeExtras) {
                 delete datos.historial[registroId];
@@ -1016,6 +1026,7 @@ const app = {
         document.getElementById('darkModeToggle').checked = this.darkMode;
         document.getElementById('horasAnualesDisplay').textContent = this.horasAnualesCustom + 'h';
         this._actualizarJornadaDisplay();
+        this._actualizarConductorDisplay();
         document.getElementById('perfilEmail').textContent = this.usuarioActual?.email || '';
         document.getElementById('perfilNombre').textContent = this.usuarioActual?.name || '';
         this.actualizarEstadoGPS();
@@ -1082,10 +1093,37 @@ const app = {
         this.toggleNoche();
     },
 
+    // PR = Permiso Retribuido. Two per calendar year, counted down as they are used.
+    PR_ANUALES: 2,
+
+    _prUsados(historial) {
+        const año = new Date().getFullYear();
+        return Object.values(historial || this._historialFull || {})
+            .filter(r => r.pr && new Date(r.timestamp).getFullYear() === año).length;
+    },
+
+    _prRestantes(historial) {
+        return Math.max(0, this.PR_ANUALES - this._prUsados(historial));
+    },
+
+    _actualizarPrUI() {
+        const restantes = this._prRestantes();
+        const el = document.getElementById('prRestantes');
+        if (el) el.textContent = restantes;
+        const btn = document.getElementById('prCompact');
+        // Still tappable when exhausted (an old one may have been deleted), just dimmed
+        if (btn) btn.classList.toggle('agotado', restantes === 0 && !this.prActivo);
+    },
+
     clickPrCompact() {
+        if (!this.prActivo && this._prRestantes() === 0) {
+            alert(`❌ Ya has usado los ${this.PR_ANUALES} permisos retribuidos de este año`);
+            return;
+        }
         this.prActivo = !this.prActivo;
         document.getElementById('prCompact').classList.toggle('active', this.prActivo);
         document.getElementById('prToggle').checked = this.prActivo;
+        this._actualizarPrUI();
     },
 
     clickFestivo() {
@@ -1121,6 +1159,33 @@ const app = {
     _actualizarJornadaDisplay() {
         const el = document.getElementById('jornadaHorasDisplay');
         if (el) el.textContent = this.jornadaHoras + 'h';
+    },
+
+    mostrarCambiarConductor() {
+        const v = prompt('Número de conductor (4 dígitos, guión y otro número).\n\nEjemplo: 1418-3', this.numConductor || '');
+        if (v === null) return;
+        const val = v.trim();
+        if (val && !/^\d{4}-\d$/.test(val)) {
+            alert('❌ Formato incorrecto. Debe ser 4 dígitos, un guión y otro número.\nEjemplo: 1418-3');
+            return;
+        }
+        this.numConductor = val;
+        localStorage.setItem('numConductor', val);
+        this._actualizarConductorDisplay();
+        this._actualizarCabeceraUsuario();
+        this._guardarPreferencias();
+    },
+
+    _actualizarConductorDisplay() {
+        const el = document.getElementById('conductorDisplay');
+        if (el) el.textContent = this.numConductor || 'Sin asignar';
+    },
+
+    _actualizarCabeceraUsuario() {
+        const el = document.getElementById('cabeceraConductor');
+        if (!el) return;
+        const nombre = this.usuarioActual?.name || '';
+        el.textContent = [this.numConductor, nombre].filter(Boolean).join(' ');
     },
 
     // Record ids are YYYYMMDD for the first entry of a day, then YYYYMMDD-2, -3…
@@ -1424,6 +1489,15 @@ const app = {
         this._renderHistorialModal();
     },
 
+    _mesesColapsados: new Set(JSON.parse(localStorage.getItem('mesesColapsados') || '[]')),
+
+    _toggleMes(mesKey) {
+        if (this._mesesColapsados.has(mesKey)) this._mesesColapsados.delete(mesKey);
+        else this._mesesColapsados.add(mesKey);
+        localStorage.setItem('mesesColapsados', JSON.stringify([...this._mesesColapsados]));
+        this._renderHistorialModal();
+    },
+
     _renderHistorialModal() {
         const list = document.getElementById('historialModalList');
         list.innerHTML = '';
@@ -1439,15 +1513,21 @@ const app = {
             const mesKey = `${d.getFullYear()}-${d.getMonth()}`;
             if (mesKey !== mesActual) {
                 mesActual = mesKey;
-                const totMes = registros
-                    .filter(([, r]) => { const x = new Date(r.timestamp); return `${x.getFullYear()}-${x.getMonth()}` === mesKey; })
-                    .reduce((s, [, r]) => s + (parseFloat(r.horas) || 0), 0);
+                const delMes = registros
+                    .filter(([, r]) => { const x = new Date(r.timestamp); return `${x.getFullYear()}-${x.getMonth()}` === mesKey; });
+                const totMes = delMes.reduce((s, [, r]) => s + (parseFloat(r.horas) || 0), 0);
                 const cab = document.createElement('li');
                 cab.className = 'hm-mes';
-                cab.innerHTML = `<span>${MESES_ES[d.getMonth()]} ${d.getFullYear()}</span>`
-                    + `<span class="hm-mes-tot">${(Math.round(totMes * 10) / 10).toFixed(1)}h</span>`;
+                cab.dataset.mes = mesKey;
+                const colapsado = this._mesesColapsados.has(mesKey);
+                cab.innerHTML = `<span class="hm-mes-chev">${colapsado ? '▸' : '▾'}</span>`
+                    + `<span class="hm-mes-n">${MESES_ES[d.getMonth()]} ${d.getFullYear()}</span>`
+                    + `<span class="hm-mes-tot">${(Math.round(totMes * 10) / 10).toFixed(1)}h`
+                    + `<span class="hm-mes-c">${delMes.length}</span></span>`;
+                cab.addEventListener('click', () => this._toggleMes(mesKey));
                 list.appendChild(cab);
             }
+            if (this._mesesColapsados.has(mesKey)) return;
             const li = document.createElement('li');
             // Colored left stripe: festivo > extra > nocturno > PR
             let stripeClass = '';
@@ -1566,6 +1646,7 @@ const app = {
         if (elES) elES.textContent = `de ${t.topeExtras.toFixed(1)}h`;
         const barExt = document.getElementById('progressFillExtra');
         if (barExt) barExt.style.width = Math.min(pctExt, 100) + '%';
+        this._actualizarPrUI();
         const pctExtEl = document.getElementById('porcentajeExtra');
         if (pctExtEl) pctExtEl.textContent = Math.min(Math.round(pctExt), 100);
         const ahora = new Date();
@@ -2063,6 +2144,7 @@ const app = {
             precioNocheDefault: this.precioNocheDefault,
             horasAnualesCustom: this.horasAnualesCustom,
             jornadaHoras: this.jornadaHoras,
+            numConductor: this.numConductor,
             workLocations: this._getWorkLocations(),
             notifSound: this.notifSound
         };
@@ -2098,6 +2180,11 @@ const app = {
             localStorage.setItem('precioNoche', String(prefs.precioNocheDefault));
             const el = document.getElementById('precioNocheGlobal');
             if (el) el.value = prefs.precioNocheDefault;
+        }
+        if (typeof prefs.numConductor === 'string') {
+            this.numConductor = prefs.numConductor;
+            localStorage.setItem('numConductor', prefs.numConductor);
+            this._actualizarCabeceraUsuario();
         }
         if (prefs.jornadaHoras) {
             this.jornadaHoras = prefs.jornadaHoras;
