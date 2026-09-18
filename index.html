@@ -240,9 +240,14 @@
         .mes-row:last-child{border-bottom:none;padding-bottom:0;}
         .mes-label{font-size:10px;font-weight:600;color:#7f8c8d;width:75px;flex-shrink:0;}
         .app-content.dark .mes-label{color:#a0a0a0;}
-        .mes-bar-wrap{flex:1;height:5px;background:#ecf0f1;border-radius:3px;overflow:hidden;}
+        .mes-bar-wrap{flex:1;height:5px;background:#ecf0f1;border-radius:3px;overflow:hidden;display:flex;}
         .app-content.dark .mes-bar-wrap{background:#2d3561;}
-        .mes-bar{height:100%;background:linear-gradient(90deg,var(--g1),var(--g2));border-radius:3px;min-width:2px;}
+        .mes-bar{height:100%;background:linear-gradient(90deg,var(--g1),var(--g2));border-radius:3px 0 0 3px;min-width:2px;}
+        .mes-bar-extra{height:100%;background:linear-gradient(90deg,#f39c12,#e67e22);border-radius:0 3px 3px 0;}
+        .mes-extras-h{color:#d35400!important;background:#fdebd0;padding:1px 5px;border-radius:8px;}
+        .app-content.dark .mes-extras-h{background:#3a1f00;color:#f5b041!important;}
+        .mes-row.con-extras .mes-label{color:#d35400;font-weight:700;}
+        .app-content.dark .mes-row.con-extras .mes-label{color:#f5b041;}
         .mes-vals{display:flex;gap:5px;align-items:center;flex-shrink:0;}
         .mes-vals span{font-size:10px;font-weight:700;color:#2c3e50;}
         .app-content.dark .mes-vals span{color:#e0e0e0;}
