@@ -2324,32 +2324,105 @@ const app = {
     _filasExport() {
         const filas = [];
         Object.values(this._conductores || {}).forEach(u => {
-            (u.jornadas || []).forEach(j => filas.push({
-                fecha: `${j.f.slice(6,8)}/${j.f.slice(4,6)}/${j.f.slice(0,4)}`,
-                orden: j.f,
-                num: u.conductor || '', nombre: u.nombre || u.email,
-                puesto: j.pu || u.puesto || '', turno: this._turnoDe(j.pu || u.puesto, j.i) || '',
-                ini: j.i || '', fin: j.o || '',
-                horas: j.h || 0, noct: j.n || 0,
-                extra: j.x === 1 ? 'Sí' : '', festivo: j.fe ? 'Sí' : '',
-                vac: j.v ? 'Sí' : '', pr: j.p ? 'Sí' : '',
-                prueba: u.ficticio ? 'Sí' : '',
-            }));
+            (u.jornadas || []).forEach(j => {
+                const lugar = this._lugarDe(u, j.f, j);
+                const t = this._turnoDe(lugar, j.i) || '';
+                filas.push({
+                    fecha: `${j.f.slice(6,8)}/${j.f.slice(4,6)}/${j.f.slice(0,4)}`,
+                    orden: j.f,
+                    dia: j.f.slice(6,8), mes: MESES_ES[parseInt(j.f.slice(4,6),10) - 1] || '',
+                    anio: j.f.slice(0,4),
+                    num: u.conductor || '', nombre: u.nombre || u.email,
+                    puesto: lugar, turno: { M:'Mañana', T:'Tarde', N:'Noche' }[t] || '',
+                    ini: j.i || '', fin: j.o || '',
+                    horas: j.h || 0, noct: j.n || 0,
+                    extra: j.x === 1 ? 'Sí' : '', festivo: j.fe ? 'Sí' : '',
+                    vac: j.v ? 'Sí' : '', pr: j.p ? 'Sí' : '',
+                    be: u.baja ? 'Sí' : '',
+                    prueba: u.ficticio ? 'Sí' : '',
+                });
+            });
         });
         filas.sort((a, b) => a.orden.localeCompare(b.orden) || a.num.localeCompare(b.num));
         return filas;
     },
 
-    CABECERAS_EXPORT: ['Fecha','Nº trabajador','Nombre','Puesto','Turno','Entrada','Salida',
-                       'Horas','Nocturnas','Extra','Festivo','Vacaciones','PR','De prueba'],
+    // Cada opción del selector es una o varias columnas de la hoja
+    COLUMNAS_EXPORT: [
+        { id:'fecha',      etiqueta:'Fecha completa',        cabeceras:['Fecha'],                  valores:f => [f.fecha] },
+        { id:'dia',        etiqueta:'Día',                   cabeceras:['Día'],                    valores:f => [f.dia] },
+        { id:'mes',        etiqueta:'Mes',                   cabeceras:['Mes'],                    valores:f => [f.mes] },
+        { id:'anio',       etiqueta:'Año',                   cabeceras:['Año'],                    valores:f => [f.anio] },
+        { id:'trabajador', etiqueta:'Trabajador',            cabeceras:['Nº trabajador','Nombre'], valores:f => [f.num, f.nombre] },
+        { id:'lugar',      etiqueta:'Lugar de trabajo',      cabeceras:['Lugar de trabajo'],       valores:f => [f.puesto] },
+        { id:'turno',      etiqueta:'Mañana, tarde o noche', cabeceras:['Turno'],                  valores:f => [f.turno] },
+        { id:'horarios',   etiqueta:'Horarios',              cabeceras:['Entrada','Salida'],       valores:f => [f.ini, f.fin] },
+        { id:'horas',      etiqueta:'Horas',                 cabeceras:['Horas'],                  valores:f => [f.horas] },
+        { id:'nocturnas',  etiqueta:'Horas nocturnas',       cabeceras:['Nocturnas'],              valores:f => [f.noct] },
+        { id:'extras',     etiqueta:'Horas extras',          cabeceras:['Extra'],                  valores:f => [f.extra] },
+        { id:'festivos',   etiqueta:'Festivos',              cabeceras:['Festivo'],                valores:f => [f.festivo] },
+        { id:'vacaciones', etiqueta:'Vacaciones',            cabeceras:['Vacaciones'],             valores:f => [f.vac] },
+        { id:'pr',         etiqueta:'PR',                    cabeceras:['PR'],                     valores:f => [f.pr] },
+        { id:'be',         etiqueta:'BE',                    cabeceras:['BE'],                     valores:f => [f.be] },
+        { id:'prueba',     etiqueta:'De prueba',             cabeceras:['De prueba'],              valores:f => [f.prueba] },
+    ],
 
-    _valoresFila(f) {
-        return [f.fecha, f.num, f.nombre, f.puesto, f.turno, f.ini, f.fin,
-                f.horas, f.noct, f.extra, f.festivo, f.vac, f.pr, f.prueba];
+    _colsElegidas() {
+        let guardadas = null;
+        try { guardadas = JSON.parse(localStorage.getItem('colsExport') || 'null'); } catch (_) {}
+        const ids = this.COLUMNAS_EXPORT.map(c => c.id);
+        // Sin elección previa se exporta todo, como antes. Una lista vacía sí es
+        // una elección: desmarcar "Todo" tiene que dejar las casillas vacías.
+        if (!Array.isArray(guardadas)) return ids;
+        return guardadas.filter(id => ids.includes(id));
+    },
+
+    _colsActivas() {
+        const elegidas = this._colsElegidas();
+        return this.COLUMNAS_EXPORT.filter(c => elegidas.includes(c.id));
+    },
+
+    get CABECERAS_EXPORT() { return this._colsActivas().flatMap(c => c.cabeceras); },
+
+    _valoresFila(f) { return this._colsActivas().flatMap(c => c.valores(f)); },
+
+    _renderColsExport() {
+        const cont = document.getElementById('expCols');
+        if (!cont) return;
+        const elegidas = this._colsElegidas();
+        const todo = elegidas.length === this.COLUMNAS_EXPORT.length;
+        cont.innerHTML = `<label class="exp-col exp-todo">
+                <input type="checkbox" ${todo ? 'checked' : ''} onchange="app._marcarTodoExport(this.checked)">
+                <span>Todo</span></label>`
+            + this.COLUMNAS_EXPORT.map(c => `<label class="exp-col">
+                <input type="checkbox" value="${c.id}" ${elegidas.includes(c.id) ? 'checked' : ''}
+                       onchange="app._guardarColsExport()">
+                <span>${c.etiqueta}</span></label>`).join('');
+    },
+
+    _guardarColsExport() {
+        const ids = [...document.querySelectorAll('#expCols input[value]')]
+            .filter(i => i.checked).map(i => i.value);
+        localStorage.setItem('colsExport', JSON.stringify(ids));
+        this._renderColsExport();
+    },
+
+    _marcarTodoExport(marcar) {
+        localStorage.setItem('colsExport', JSON.stringify(
+            marcar ? this.COLUMNAS_EXPORT.map(c => c.id) : []));
+        this._renderColsExport();
+    },
+
+    // Una hoja sin columnas no sirve de nada: mejor avisar que generarla vacía
+    _hayColumnas() {
+        if (this._colsElegidas().length) return true;
+        this._mostrarToast('Elige al menos un dato que exportar', 3000);
+        return false;
     },
 
     exportarRegistro() {
         if (!this._filasExport().length) { this._mostrarToast('No hay jornadas que exportar', 3000); return; }
+        this._renderColsExport();
         document.getElementById('expModal').classList.add('show');
         if (this.darkMode) document.getElementById('expModalContent').classList.add('dark');
     },
@@ -2378,6 +2451,7 @@ const app = {
     },
 
     exportarCSV() {
+        if (!this._hayColumnas()) return;
         document.getElementById('expModal').classList.remove('show');
         const filas = this._filasExport();
         this._descargar(this._csvRegistro(), this._nombreExport('csv'), 'text/csv;charset=utf-8;');
@@ -2386,6 +2460,7 @@ const app = {
 
     // Excel abre una tabla HTML guardada como .xls, y así van con formato
     exportarXLS() {
+        if (!this._hayColumnas()) return;
         document.getElementById('expModal').classList.remove('show');
         const filas = this._filasExport();
         const esc = t => String(t ?? '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
@@ -2403,6 +2478,7 @@ td{border:1px solid #ccc;}</style></head>
 
     // Drive convierte un CSV en hoja de cálculo si se le pide ese mimeType
     async exportarSheets() {
+        if (!this._hayColumnas()) return;
         document.getElementById('expModal').classList.remove('show');
         const filas = this._filasExport();
         this._mostrarToast('☁️ Creando hoja en Drive...', 3000);
@@ -2471,7 +2547,8 @@ td{border:1px solid #ccc;}</style></head>
                 f: j.f, horas: j.h || 0, ini: j.i || '', fin: j.o || '',
                 extra: j.x === 1, festivo: !!j.fe, vac: !!j.v, pr: !!j.p,
                 nombre: u.nombre || u.email, num: u.conductor || '',
-                puesto: j.pu || u.puesto || 'Sin puesto',
+                email: u.email,
+                puesto: this._lugarDe(u, j.f, j) || 'Sin lugar',
             }));
         });
         if (!filas.length) {
@@ -2489,6 +2566,8 @@ td{border:1px solid #ccc;}</style></head>
         filas.forEach(r => { (meses[mesDe(r.f)] = meses[mesDe(r.f)] || []).push(r); });
 
         // El puesto va en segunda línea: en una sola no cabe con el horario
+        const lapiz = r => `<button class="rg-ed" title="Cambiar el lugar de trabajo"
+            onclick="event.stopPropagation();app._editarPuesto('${esc(r.email)}','${esc(r.f)}')">✎</button>`;
         const pintaFila = r => `<div class="rg-fila">
             <span class="rg-quien"><b>${esc(r.num) || '—'}</b> ${esc(r.nombre)}
                 ${r.puesto ? `<br><span class="rg-pt">${esc(r.puesto)}</span>` : ''}</span>
@@ -2497,6 +2576,7 @@ td{border:1px solid #ccc;}</style></head>
             ${r.vac ? '<span class="vacaciones-badge">🏖️</span>' : ''}
             <span class="rg-hor">${esc(r.ini && r.fin ? r.ini + '–' + r.fin : '—')}</span>
             <span class="rg-h2">${r.horas}h</span>
+            ${lapiz(r)}
         </div>`;
 
         cont.innerHTML = Object.keys(meses).sort().reverse().map(mes => {
@@ -2535,6 +2615,7 @@ td{border:1px solid #ccc;}</style></head>
                         ${r.vac ? '<span class="vacaciones-badge">🏖️</span>' : ''}
                         <span class="rg-hor">${esc(r.ini && r.fin ? r.ini + '–' + r.fin : '—')}</span>
                         <span class="rg-h2">${r.horas}h</span>
+                        ${lapiz(r)}
                     </div>`).join('');
                 return `<div class="rg rg-sub2${cs ? ' cerrado' : ''}">
                     <div class="rg-h" onclick="app._plegar('s:${esc(mes)}:${esc(k).replace(/'/g, "\\'")}', true)">
@@ -2588,7 +2669,7 @@ td{border:1px solid #ccc;}</style></head>
         const usados = [...new Set(Object.values(this._conductores || {}).map(x => (x.puesto || '').trim()).filter(Boolean))];
         const todos = [...PUESTOS_DEFINIDOS];
         usados.forEach(p => { if (!todos.some(d => this._clavePuesto(d) === this._clavePuesto(p))) todos.push(p); });
-        sel.innerHTML = '<option value="">Sin puesto</option>' +
+        sel.innerHTML = '<option value="">Sin lugar</option>' +
             todos.map(p => `<option${this._clavePuesto(p) === this._clavePuesto(u?.puesto) ? ' selected' : ''}>${p}</option>`).join('');
         this._fictJornadas = (u?.jornadas || []).map(j => ({ ...j }));
         if (!this._fictJornadas.length) this._addJornadaFict(true);
@@ -2745,6 +2826,12 @@ td{border:1px solid #ccc;}</style></head>
         }, { passive: true });
     },
 
+    // El lugar de un día puede no ser el habitual: manda la excepción que haya
+    // puesto el gestor, luego lo que publicó la app y por último el habitual.
+    _lugarDe(u, fecha, j) {
+        return (u.lugares && u.lugares[fecha]) || j?.pu || u.puesto || '';
+    },
+
     // Jornada de un trabajador en una fecha concreta (la última si hay varias)
     _jornadaDe(u, fecha) {
         const dia = (u.jornadas || []).filter(j => j && j.f === fecha);
@@ -2781,7 +2868,9 @@ td{border:1px solid #ccc;}</style></head>
         if (txt) txt.textContent = this._etiquetaDia(off);
 
         const lista    = Object.values(this._conductores || {});
-        const conPuesto = lista.filter(u => (u.puesto || '').trim());
+        const conPuesto = lista
+            .map(u => ({ u, lugar: this._lugarDe(u, fecha, this._jornadaDe(u, fecha)) }))
+            .filter(x => x.lugar.trim());
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
 
         // Contadores de la cabecera: quién ha trabajado ese día y quién está
@@ -2804,12 +2893,12 @@ td{border:1px solid #ccc;}</style></head>
 
         if (!conPuesto.length) {
             cont.innerHTML = '<div class="tab-empty" style="padding:22px 16px;">'
-                + '<span class="tab-empty-s">Asigna un puesto tocando el nombre de un trabajador<br>'
+                + '<span class="tab-empty-s">Asigna un lugar tocando el nombre de un trabajador<br>'
                 + 'y aquí verás si queda cubierto.</span></div>';
             return;
         }
         const porPuesto = {};
-        conPuesto.forEach(u => { (porPuesto[u.puesto] = porPuesto[u.puesto] || []).push(u); });
+        conPuesto.forEach(({ u, lugar }) => { (porPuesto[lugar] = porPuesto[lugar] || []).push(u); });
 
         cont.innerHTML = Object.keys(porPuesto).sort().map(puesto => {
             // Ordenar por hora de entrada: así se ve de un vistazo si el relevo encaja
@@ -2826,7 +2915,7 @@ td{border:1px solid #ccc;}</style></head>
             const filas = gente.map(({ u, j }) => {
                 const e = this._estadoJornada(u, j, esHoy, esFuturo);
                 const horario = (j?.i && j?.o) ? `${esc(j.i)}–${esc(j.o)}` : (u.baja ? 'BE' : '—');
-                const t = this._turnoDe(j?.pu || u.puesto, j?.i) || '';
+                const t = this._turnoDe(puesto, j?.i) || '';
                 return `<div class="pst-fila${u.baja ? ' baja' : ''}">
                     <span class="pst-dot ${e.clase}" title="${esc(e.texto)}"></span>
                     <span class="pst-quien"><b>${esc(u.conductor) || '—'}</b> ${esc(u.nombre)}</span>
@@ -2867,7 +2956,11 @@ td{border:1px solid #ccc;}</style></head>
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
         cont.innerHTML = lista.map(u => {
             const ini = (u.nombre || u.email || '?').trim()[0]?.toUpperCase() || '?';
-            const turno = this._turnoDe(u.puesto, u.horaInicio) || u.turno;
+            // La tarjeta muestra dónde está hoy, que puede no ser su sitio habitual
+            const hoy       = this._fechaOffset(0);
+            const lugarHoy  = this._lugarDe(u, hoy, this._jornadaDe(u, hoy));
+            const excepcion = !!(u.lugares && u.lugares[hoy]) && this._clavePuesto(lugarHoy) !== this._clavePuesto(u.puesto);
+            const turno = this._turnoDe(lugarHoy, u.horaInicio) || u.turno;
             const av = u.avatar
                 ? `<img class="cond-avatar" src="${esc(u.avatar)}">`
                 : `<div class="cond-avatar">${esc(ini)}</div>`;
@@ -2883,7 +2976,7 @@ td{border:1px solid #ccc;}</style></head>
                             ${turno ? `<span class="cond-turno ${turno}">${turno}</span>` : ''}
                             ${u.ficticio ? '<span class="pr-badge2">PRUEBA</span>' : ''}</div>
                         <div class="cond-num">${esc(u.conductor) || 'sin nº'}
-                            <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app._editarPuesto('${esc(u.email)}')">· ${esc(u.puesto) || 'asignar puesto'} ✎</span></div>
+                            <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app._editarPuesto('${esc(u.email)}')">· ${esc(lugarHoy) || 'asignar lugar'}${excepcion ? ' (hoy)' : ''} ✎</span></div>
                     </div>
                     <button class="be-btn${u.baja ? ' on' : ''}" title="${u.baja ? 'Dar de alta' : 'Marcar baja'}"
                             onclick="event.stopPropagation();app.toggleBaja('${esc(u.email)}')">BE</button>
@@ -2974,12 +3067,18 @@ td{border:1px solid #ccc;}</style></head>
         }
     },
 
-    _editarPuesto(email) {
+    // Abre el selector de lugar. `fecha` (YYYYMMDD) es el día de referencia
+    // para los alcances; sin ella se usa hoy.
+    _editarPuesto(email, fecha) {
         const u = (this._conductores || {})[email];
         if (!u) return;
         this._puestoEditando = email;
+        this._fechaEditando  = /^\d{8}$/.test(String(fecha || '')) ? fecha : this._fechaOffset(0);
+        this._lugarElegido   = null;
+        const hoy = this._fechaEditando === this._fechaOffset(0);
         document.getElementById('puestoModalQuien').textContent =
-            `${u.conductor ? u.conductor + ' · ' : ''}${u.nombre || email}`;
+            `${u.conductor ? u.conductor + ' · ' : ''}${u.nombre || email}`
+            + (hoy ? '' : ` · ${this._fechaEditando.slice(6,8)}/${this._fechaEditando.slice(4,6)}/${this._fechaEditando.slice(0,4)}`);
         this._renderPuestoModal();
         document.getElementById('puestoModal').classList.add('show');
         if (this.darkMode) document.getElementById('puestoModalContent').classList.add('dark');
@@ -2987,10 +3086,12 @@ td{border:1px solid #ccc;}</style></head>
 
     _renderPuestoModal() {
         const u = (this._conductores || {})[this._puestoEditando] || {};
-        const actual = this._clavePuesto(u.puesto);
+        const fecha = this._fechaEditando;
+        const actual = this._clavePuesto(this._lugarDe(u, fecha, this._jornadaDe(u, fecha)));
         // Los definidos más los que ya se usen y no estén en la tabla
         const usados = [...new Set(Object.values(this._conductores || {})
-            .map(x => (x.puesto || '').trim()).filter(Boolean))];
+            .flatMap(x => [x.puesto || '', ...Object.values(x.lugares || {})])
+            .map(v => v.trim()).filter(Boolean))];
         const todos = [...PUESTOS_DEFINIDOS];
         usados.forEach(p => {
             if (!todos.some(d => this._clavePuesto(d) === this._clavePuesto(p))) todos.push(p);
@@ -3003,39 +3104,81 @@ td{border:1px solid #ccc;}</style></head>
                 ? fr.map(f => `${f.id} ${f.desde}–${f.hasta}`).join(' · ')
                 : 'sin turnos definidos';
             const sel = this._clavePuesto(p) === actual;
-            return `<div class="pm-op${sel ? ' sel' : ''}" onclick="app._asignarPuesto('${esc(p).replace(/'/g, "\\'")}')">
+            return `<div class="pm-op${sel ? ' sel' : ''}" onclick="app._elegirAlcance('${esc(p).replace(/'/g, "\\'")}')">
                 <div style="flex:1;min-width:0;">${esc(p)}<br><span class="pm-turnos">${esc(detalle)}</span></div>
                 ${sel ? '<span class="pm-check">✓</span>' : ''}
             </div>`;
         }).join('')
-        + `<div class="pm-op pm-nuevo" onclick="app._nuevoPuesto()">➕ Crear puesto nuevo…</div>`
-        + (u.puesto ? `<div class="pm-op pm-quitar" onclick="app._asignarPuesto('')">✕ Quitar el puesto</div>` : '');
+        + `<div class="pm-op pm-nuevo" onclick="app._nuevoPuesto()">➕ Crear lugar nuevo…</div>`
+        + (actual ? `<div class="pm-op pm-quitar" onclick="app._elegirAlcance('')">✕ Quitar el lugar</div>` : '');
+    },
+
+    // Tramos posibles a partir del día de referencia. La semana empieza en lunes.
+    _tramos() {
+        const f = this._fechaEditando;
+        const d = new Date(+f.slice(0,4), +f.slice(4,6) - 1, +f.slice(6,8), 12);
+        const clave = x => `${x.getFullYear()}${String(x.getMonth()+1).padStart(2,'0')}${String(x.getDate()).padStart(2,'0')}`;
+        const lunes = new Date(d); lunes.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+        const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6);
+        const primero = new Date(d.getFullYear(), d.getMonth(), 1, 12);
+        const ultimo  = new Date(d.getFullYear(), d.getMonth() + 1, 0, 12);
+        const hoy = f === this._fechaOffset(0);
+        return [
+            { id:'dia',    titulo: hoy ? 'Solo hoy' : 'Solo ese día',
+              detalle: `${f.slice(6,8)}/${f.slice(4,6)}`, desde: f, hasta: f },
+            { id:'semana', titulo: hoy ? 'Esta semana' : 'Esa semana',
+              detalle: `${clave(lunes).slice(6,8)}/${clave(lunes).slice(4,6)} – ${clave(domingo).slice(6,8)}/${clave(domingo).slice(4,6)}`,
+              desde: clave(lunes), hasta: clave(domingo) },
+            { id:'mes',    titulo: hoy ? 'Este mes' : 'Ese mes',
+              detalle: `${MESES_ES[d.getMonth()]} ${d.getFullYear()}`,
+              desde: clave(primero), hasta: clave(ultimo) },
+            { id:'siempre', titulo: 'Siempre',
+              detalle: 'Pasa a ser su lugar habitual y borra las excepciones' },
+        ];
+    },
+
+    _elegirAlcance(lugar) {
+        this._lugarElegido = lugar;
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        document.getElementById('puestoModalLista').innerHTML =
+            `<div class="pm-paso">${lugar ? `Poner <b>${esc(lugar)}</b>` : 'Quitar el lugar'} · ¿para cuándo?</div>`
+            + this._tramos().map(t => `<div class="pm-op" onclick="app._aplicarLugar('${t.id}')">
+                    <div style="flex:1;min-width:0;">${esc(t.titulo)}<br><span class="pm-turnos">${esc(t.detalle)}</span></div>
+                </div>`).join('')
+            + `<div class="pm-op pm-volver" onclick="app._renderPuestoModal()">‹ Elegir otro lugar</div>`;
     },
 
     _nuevoPuesto() {
-        const v = prompt('Nombre del puesto nuevo:\n\nSin turnos definidos se usará el criterio general (mañana antes de las 13h).');
+        const v = prompt('Nombre del lugar de trabajo nuevo:\n\nSin turnos definidos se usará el criterio general (mañana antes de las 13h).');
         if (v === null) return;
         const nombre = v.trim();
         if (!nombre) return;
-        this._asignarPuesto(nombre);
+        this._elegirAlcance(nombre);
     },
 
-    async _asignarPuesto(puesto) {
+    async _aplicarLugar(alcance) {
         const email = this._puestoEditando;
+        const lugar = this._lugarElegido ?? '';
         if (!email) return;
+        const tramo = this._tramos().find(t => t.id === alcance);
+        if (!tramo) return;
         document.getElementById('puestoModal').classList.remove('show');
+        const cuerpo = { email, puesto: lugar };
+        if (tramo.desde) { cuerpo.desde = tramo.desde; cuerpo.hasta = tramo.hasta; }
         try {
             const resp = await fetch(this.USUARIOS_URL, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json',
                            'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ email, puesto })
+                body: JSON.stringify(cuerpo)
             });
             const data = await resp.json();
             if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
             this._conductores = data;
             this._renderConductores();
-            this._mostrarToast(puesto ? `✅ Puesto: ${puesto}` : 'Puesto quitado', 2500);
+            this._mostrarToast(lugar
+                ? `✅ ${lugar} · ${tramo.titulo.toLowerCase()}`
+                : `Lugar quitado · ${tramo.titulo.toLowerCase()}`, 3000);
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
