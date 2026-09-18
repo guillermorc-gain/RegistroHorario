@@ -7,6 +7,7 @@ const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.goo
 const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file profile email';
 const AUTH_SCOPE       = 'profile email';
 const SUPER_USER_EMAIL = 'guillermo.rc82@gmail.com';
+const ALLOWLIST_APP    = 'movilidad';
 const ANDROID_PACKAGE  = 'com.guillermorc.horasemt';
 const RELEASE_PREFIX   = 'build-';
 const DRIVE_FILE_NAME  = 'horas-emt.json';
@@ -2700,7 +2701,7 @@ const app = {
     async _checkUserAuthorized(email) {
         if (email.toLowerCase() === SUPER_USER_EMAIL.toLowerCase()) return true;
         try {
-            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist', { cache: 'no-store' });
+            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, { cache: 'no-store' });
             if (!resp.ok) return true;
             const allowed = await resp.json();
             if (!Array.isArray(allowed) || allowed.length === 0) return true;
@@ -2713,7 +2714,7 @@ const app = {
         if (!el) return;
         el.innerHTML = '<div style="color:#888;font-size:12px;padding:4px 0;">Cargando...</div>';
         try {
-            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist', { cache: 'no-store' });
+            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, { cache: 'no-store' });
             if (!resp.ok) throw new Error(resp.status);
             this._allowedUsersLocal = await resp.json();
             this._renderAllowedUsers();
@@ -2745,10 +2746,10 @@ const app = {
         const btn = document.querySelector('#sectionAcceso .ops-body button[onclick*="_addUserAcceso"]');
         if (btn) btn.disabled = true;
         try {
-            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist', {
+            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ email })
+                body: JSON.stringify({ email, app: ALLOWLIST_APP })
             });
             const data = await resp.json();
             if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status)); return; }
@@ -2762,10 +2763,10 @@ const app = {
 
     async _removeUserAcceso(email) {
         try {
-            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist', {
+            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json', 'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ email })
+                body: JSON.stringify({ email, app: ALLOWLIST_APP })
             });
             const data = await resp.json();
             if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status)); return; }

@@ -1,8 +1,14 @@
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-const ADMIN_EMAIL  = 'guillermo.rc82@gmail.com';
 const REPO         = 'guillermorc-gain/RegistroHorario';
-const FILE_PATH    = 'allowed-users.json';
 const BRANCH       = 'main';
+
+// Each app keeps its own list and its own administrator: granting access to one
+// must not grant access to the other.
+const APPS = {
+  movilidad: { file: 'allowed-users.json',         admin: 'guillermo.rc82@gmail.com' },
+  gestion:   { file: 'allowed-users-gestion.json', admin: 'g.rioscorrea@gmail.com'   },
+};
+const appCfg = req => APPS[String((req.query?.app) || (req.body?.app) || '').toLowerCase()] || APPS.movilidad;
 
 const ghHeaders = () => ({
   'User-Agent': 'horasemt-app',
@@ -10,7 +16,7 @@ const ghHeaders = () => ({
   ...(GITHUB_TOKEN ? { Authorization: `Bearer ${GITHUB_TOKEN}` } : {}),
 });
 
-async function getFile() {
+async function getFile(FILE_PATH) {
   const r = await fetch(
     `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}?ref=${BRANCH}`,
     { headers: ghHeaders() }
@@ -21,9 +27,9 @@ async function getFile() {
   return { emails: Array.isArray(emails) ? emails : [], sha: data.sha };
 }
 
-async function setFile(emails, sha) {
+async function setFile(FILE_PATH, emails, sha) {
   const content = Buffer.from(JSON.stringify(emails, null, 2) + '\n').toString('base64');
-  const body = { message: 'Actualizar usuarios con acceso', content, branch: BRANCH };
+  const body = { message: `Actualizar acceso (${FILE_PATH})`, content, branch: BRANCH };
   if (sha) body.sha = sha;
   const r = await fetch(
     `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}`,
@@ -40,15 +46,16 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      const { emails } = await getFile();
+      const { emails } = await getFile(appCfg(req).file);
       return res.status(200).json(emails);
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
   }
 
+  const cfg = appCfg(req);
   const adminEmail = (req.headers['x-admin-email'] || '').toLowerCase();
-  if (adminEmail !== ADMIN_EMAIL.toLowerCase()) {
+  if (adminEmail !== cfg.admin.toLowerCase()) {
     return res.status(403).json({ error: 'Solo el administrador puede modificar la lista' });
   }
 
@@ -57,17 +64,17 @@ export default async function handler(req, res) {
   const norm = email.toLowerCase().trim();
 
   try {
-    const { emails, sha } = await getFile();
+    const { emails, sha } = await getFile(cfg.file);
 
     if (req.method === 'POST') {
       if (!emails.map(e => e.toLowerCase()).includes(norm)) emails.push(norm);
-      const ok = await setFile(emails, sha);
+      const ok = await setFile(cfg.file, emails, sha);
       return res.status(ok ? 200 : 500).json(ok ? { emails } : { error: 'No se pudo guardar' });
     }
 
     if (req.method === 'DELETE') {
       const filtered = emails.filter(e => e.toLowerCase() !== norm);
-      const ok = await setFile(filtered, sha);
+      const ok = await setFile(cfg.file, filtered, sha);
       return res.status(ok ? 200 : 500).json(ok ? { emails: filtered } : { error: 'No se pudo guardar' });
     }
   } catch (e) {
