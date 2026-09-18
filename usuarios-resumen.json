@@ -11,5 +11,18 @@
     "turno": "M",
     "puesto": "Control",
     "actualizado": "2026-09-18T18:18:19.443Z"
+  },
+  "guillermo.rcxx@gmail.com": {
+    "email": "guillermo.rcxx@gmail.com",
+    "nombre": "Guillermo Ríos Correa",
+    "conductor": "",
+    "avatar": null,
+    "version": "build-186",
+    "horasMes": 0,
+    "horasTotales": 0,
+    "diasMes": 0,
+    "turno": "",
+    "puesto": "",
+    "actualizado": "2026-09-18T18:21:01.290Z"
   }
 }
