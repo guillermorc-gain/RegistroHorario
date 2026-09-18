@@ -3,17 +3,25 @@ name: Build APK
 on:
   push:
     branches: [main, claude/pwa-install-support-dXc0v]
-    # Estos ficheros los escriben las propias apps al guardar datos. Sin esto
-    # cada resumen o cuadrante lanzaba un build, publicaba una release y las
-    # apps anunciaban "versión nueva" en bucle.
-    paths-ignore:
-      - 'usuarios-resumen.json'
-      - 'cuadrante.json'
-      - 'allowed-users.json'
-      - 'allowed-users-gestion.json'
-      - 'version-publicada.json'
+    # Solo lo que acaba dentro de ESTE APK. Antes se usaba paths-ignore y un
+    # cambio en gestión compilaba también esta app: salía una versión nueva sin
+    # que la app hubiera cambiado en nada y pedía actualizar a todo el mundo.
+    # Los ficheros de datos (resúmenes, cuadrante, listas) no están aquí a
+    # propósito: los escriben las propias apps y lanzaban builds en bucle.
+    paths:
+      - 'index.html'
+      - 'app.js'
+      - 'service-worker.js'
+      - 'manifest.json'
+      - 'icons/**'
+      - 'scripts/build-www.js'
+      - 'capacitor.config.json'
+      - '.github/workflows/build-apk.yml'
+      # Comunes a las dos apps
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/debug.keystore.b64'
   workflow_dispatch:
-
 jobs:
   build-apk:
     runs-on: ubuntu-latest

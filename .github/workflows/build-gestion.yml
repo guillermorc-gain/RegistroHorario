@@ -3,17 +3,18 @@ name: Build APK Gestión
 on:
   push:
     branches: [main, claude/pwa-install-support-dXc0v]
-    # Estos ficheros los escriben las propias apps al guardar datos. Sin esto
-    # cada resumen o cuadrante lanzaba un build, publicaba una release y las
-    # apps anunciaban "versión nueva" en bucle.
-    paths-ignore:
-      - 'usuarios-resumen.json'
-      - 'cuadrante.json'
-      - 'allowed-users.json'
-      - 'allowed-users-gestion.json'
-      - 'version-publicada.json'
+    # Solo lo que acaba dentro del APK de gestión: cambiar la app de los
+    # trabajadores no tiene por qué publicar una versión nueva de esta.
+    paths:
+      - 'gestion/**'
+      - 'scripts/build-www-gestion.js'
+      - 'capacitor.gestion.config.json'
+      - '.github/workflows/build-gestion.yml'
+      # Comunes a las dos apps
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/debug.keystore.b64'
   workflow_dispatch:
-
 jobs:
   build-apk:
     runs-on: ubuntu-latest
