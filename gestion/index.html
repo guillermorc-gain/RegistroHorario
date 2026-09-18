@@ -240,14 +240,9 @@
         .mes-row:last-child{border-bottom:none;padding-bottom:0;}
         .mes-label{font-size:10px;font-weight:600;color:#7f8c8d;width:75px;flex-shrink:0;}
         .app-content.dark .mes-label{color:#a0a0a0;}
-        .mes-bar-wrap{flex:1;height:5px;background:#ecf0f1;border-radius:3px;overflow:hidden;display:flex;}
+        .mes-bar-wrap{flex:1;height:5px;background:#ecf0f1;border-radius:3px;overflow:hidden;}
         .app-content.dark .mes-bar-wrap{background:#2d3561;}
-        .mes-bar{height:100%;background:linear-gradient(90deg,var(--g1),var(--g2));border-radius:3px 0 0 3px;min-width:2px;}
-        .mes-bar-extra{height:100%;background:linear-gradient(90deg,#f39c12,#e67e22);border-radius:0 3px 3px 0;}
-        .mes-extras-h{color:#d35400!important;background:#fdebd0;padding:1px 5px;border-radius:8px;}
-        .app-content.dark .mes-extras-h{background:#3a1f00;color:#f5b041!important;}
-        .mes-row.con-extras .mes-label{color:#d35400;font-weight:700;}
-        .app-content.dark .mes-row.con-extras .mes-label{color:#f5b041;}
+        .mes-bar{height:100%;background:linear-gradient(90deg,var(--g1),var(--g2));border-radius:3px;min-width:2px;}
         .mes-vals{display:flex;gap:5px;align-items:center;flex-shrink:0;}
         .mes-vals span{font-size:10px;font-weight:700;color:#2c3e50;}
         .app-content.dark .mes-vals span{color:#e0e0e0;}
@@ -261,6 +256,21 @@
         .app-content.dark .historial-bar-title{color:#a0a0a0;}
         .historial-count{font-size:11px;font-weight:700;color:var(--g1);margin-right:10px;}
         .historial-toggle{transform:rotate(-90deg);width:30px;height:30px;background:linear-gradient(135deg,var(--g1),var(--g2));border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;font-size:16px;flex-shrink:0;}
+
+        /* ── CUADRANTE ── */
+        .cuad-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 2px 0;flex-shrink:0;}
+        .cuad-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:#7f8c8d;}
+        .app-content.dark .cuad-title{color:#a0a0a0;}
+        .cuad-fecha{font-size:10.5px;font-weight:700;color:var(--g1);}
+        .cuad-box{flex:1;min-height:0;display:flex;align-items:flex-start;justify-content:center;background:white;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);overflow:auto;padding:6px;}
+        .app-content.dark .cuad-box{background:#1e2a3a;}
+        .cuad-img{max-width:100%;border-radius:8px;cursor:zoom-in;display:block;}
+        .cuad-box #cuadVacio{margin:auto;}
+        .cuad-acciones{display:flex;gap:6px;flex-shrink:0;}
+        .cuad-visor{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:99999;align-items:center;justify-content:center;}
+        .cuad-visor.show{display:flex;}
+        .cuad-visor img{max-width:100%;max-height:100%;object-fit:contain;}
+        .cuad-visor-x{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:14px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;border:none;font-size:22px;cursor:pointer;}
 
         /* ── OPTIONS ── */
         .options-screen{display:none;flex-direction:column;flex:1;min-height:0;}
@@ -625,10 +635,21 @@
 
         <!-- ── TAB: Cuadrante ── -->
         <div class="tab-panel" id="tabPanel1">
-            <div class="tab-empty">
-                <span class="tab-empty-ico">🗓️</span>
-                <span class="tab-empty-t">Cuadrante</span>
-                <span class="tab-empty-s">Aquí verás tu cuadrante de turnos.<br>Sección en desarrollo.</span>
+            <div class="cuad-head">
+                <span class="cuad-title">🗓️ Cuadrante publicado</span>
+                <span class="cuad-fecha" id="cuadFecha"></span>
+            </div>
+            <div class="cuad-box" id="cuadBox">
+                <div class="tab-empty" id="cuadVacio">
+                    <span class="tab-empty-ico">🗓️</span>
+                    <span class="tab-empty-t">Sin cuadrante</span>
+                    <span class="tab-empty-s">Sube una foto y la verán<br>todos en la app de conductores.</span>
+                </div>
+                <img id="cuadImg" class="cuad-img" style="display:none" onclick="app.verCuadranteGrande()">
+            </div>
+            <div class="cuad-acciones">
+                <button class="btn-main" onclick="app.subirCuadrante()">📤 Subir foto del cuadrante</button>
+                <button class="btn-secondary" id="cuadBorrar" style="display:none" onclick="app.borrarCuadrante()">Quitar</button>
             </div>
         </div>
 
@@ -1035,6 +1056,13 @@
         <button class="avatar-photo-btn" onclick="app.subirFotoPerfil()">📷 Subir foto</button>
         <button class="avatar-cancel-btn" onclick="document.getElementById('avatarPickerModal').classList.remove('show')">Cancelar</button>
     </div>
+</div>
+
+
+<!-- Visor del cuadrante -->
+<div class="cuad-visor" id="cuadVisor" onclick="app.cerrarCuadranteGrande()">
+    <button class="cuad-visor-x" onclick="event.stopPropagation();app.cerrarCuadranteGrande()">×</button>
+    <img id="cuadVisorImg" onclick="event.stopPropagation()">
 </div>
 
 <script src="version.js"></script>

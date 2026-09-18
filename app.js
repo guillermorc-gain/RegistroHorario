@@ -70,6 +70,7 @@ const app = {
         if (this.darkMode) this.aplicarDarkMode();
         this._restaurarTabs();
         this._restaurarMensual();
+        this._cargarCuadrante();
         this._aplicarModoVacaciones();
         this._buildAvatarGrid();
         this._setupDeepLinkListener();
@@ -1566,6 +1567,7 @@ const app = {
             panel.classList.toggle('active', panel.id === 'tabPanel' + idx);
         });
         localStorage.setItem('activeTab', String(idx));
+        if (idx === 1) this._cargarCuadrante();
     },
 
     _tabDragStart(e) {
@@ -1992,6 +1994,54 @@ const app = {
         const count = Object.keys(historial).length;
         const badge = document.getElementById('historialCount');
         if (badge) badge.textContent = count > 0 ? `${count} registros` : 'Sin registros';
+    },
+
+
+    // ── Cuadrante ────────────────────────────────────────────────────────────
+
+    CUADRANTE_URL: 'https://registro-horario-emt.vercel.app/api/cuadrante',
+
+    async _cargarCuadrante() {
+        try {
+            const resp = await fetch(this.CUADRANTE_URL, { cache: 'no-store' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            this._pintarCuadrante(data);
+            if (data?.imagen) localStorage.setItem('cuadranteCache', JSON.stringify(data));
+        } catch (_) {
+            // Offline: fall back to the last one we saw
+            try {
+                const cache = JSON.parse(localStorage.getItem('cuadranteCache') || 'null');
+                if (cache) this._pintarCuadrante(cache);
+            } catch (__) {}
+        }
+    },
+
+    _pintarCuadrante(data) {
+        const img   = document.getElementById('cuadImg');
+        const vacio = document.getElementById('cuadVacio');
+        const fecha = document.getElementById('cuadFecha');
+        const borrar= document.getElementById('cuadBorrar');
+        const hay = !!(data && data.imagen);
+        if (img)   { img.style.display = hay ? 'block' : 'none'; if (hay) img.src = data.imagen; }
+        if (vacio) vacio.style.display = hay ? 'none' : 'flex';
+        if (borrar) borrar.style.display = hay ? 'inline-block' : 'none';
+        if (fecha) {
+            fecha.textContent = hay && data.actualizado
+                ? new Date(data.actualizado).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })
+                : '';
+        }
+    },
+
+    verCuadranteGrande() {
+        const img = document.getElementById('cuadImg');
+        if (!img?.src) return;
+        document.getElementById('cuadVisorImg').src = img.src;
+        document.getElementById('cuadVisor').classList.add('show');
+    },
+
+    cerrarCuadranteGrande() {
+        document.getElementById('cuadVisor')?.classList.remove('show');
     },
 
     toggleMensual() {

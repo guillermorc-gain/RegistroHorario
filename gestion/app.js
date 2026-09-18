@@ -69,6 +69,7 @@ const app = {
         if (this.darkMode) this.aplicarDarkMode();
         this._restaurarTabs();
         this._restaurarMensual();
+        this._cargarCuadrante();
         this._aplicarModoVacaciones();
         this._buildAvatarGrid();
         this._setupDeepLinkListener();
@@ -1561,6 +1562,7 @@ const app = {
             panel.classList.toggle('active', panel.id === 'tabPanel' + idx);
         });
         localStorage.setItem('activeTab', String(idx));
+        if (idx === 1) this._cargarCuadrante();
     },
 
     _tabDragStart(e) {
@@ -1895,31 +1897,14 @@ const app = {
 
     _calcTodosMeses(historial) {
         const meses = {};
-        // Chronological pass: hours past the annual cap are overtime, and this is
-        // the only way to attribute them to the month they actually happened in.
-        const orden = Object.values(historial || {})
-            .filter(r => r.timestamp)
-            .sort((a, b) => a.timestamp - b.timestamp);
-        const tope = this.horasAnualesCustom;
-        let acumulado = 0;
-        orden.forEach(reg => {
+        Object.values(historial).forEach(reg => {
+            if (!reg.timestamp) return;
             const d   = new Date(reg.timestamp);
             const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-            if (!meses[key]) meses[key] = { horas:0, nocturnas:0, extra:0, horasExtras:0, dias:0, label:'', año:d.getFullYear(), mes:d.getMonth()+1 };
-            const h = parseFloat(reg.horas) || 0;
-            let extrasReg;
-            if (reg.extraDestino === 'extras') {
-                extrasReg = h;                       // marked as overtime by hand
-            } else {
-                const efectivas = (reg.festivo && h === 0) ? this.jornadaHoras : h;
-                const cabe = Math.max(0, tope - acumulado);
-                extrasReg = Math.max(0, efectivas - cabe);
-                acumulado += efectivas;
-            }
-            meses[key].horas       = Math.round((meses[key].horas     + h) * 10) / 10;
-            meses[key].nocturnas   = Math.round((meses[key].nocturnas + (reg.horasNocturnas||0)) * 10) / 10;
-            meses[key].extra       = Math.round((meses[key].extra     + (reg.extraNoche||0)) * 100) / 100;
-            meses[key].horasExtras = Math.round((meses[key].horasExtras + extrasReg) * 10) / 10;
+            if (!meses[key]) meses[key] = { horas:0, nocturnas:0, extra:0, dias:0, label:'', año:d.getFullYear(), mes:d.getMonth()+1 };
+            meses[key].horas     = Math.round((meses[key].horas     + reg.horas) * 10) / 10;
+            meses[key].nocturnas = Math.round((meses[key].nocturnas + (reg.horasNocturnas||0)) * 10) / 10;
+            meses[key].extra     = Math.round((meses[key].extra     + (reg.extraNoche||0)) * 100) / 100;
             meses[key].dias++;
             meses[key].label = `${MESES_ES[d.getMonth()]} ${d.getFullYear()}`;
         });
@@ -1985,6 +1970,119 @@ const app = {
         if (badge) badge.textContent = count > 0 ? `${count} registros` : 'Sin registros';
     },
 
+
+    // ── Cuadrante ────────────────────────────────────────────────────────────
+
+    CUADRANTE_URL: 'https://registro-horario-emt.vercel.app/api/cuadrante',
+
+    async _cargarCuadrante() {
+        try {
+            const resp = await fetch(this.CUADRANTE_URL, { cache: 'no-store' });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            this._pintarCuadrante(data);
+            if (data?.imagen) localStorage.setItem('cuadranteCache', JSON.stringify(data));
+        } catch (_) {
+            // Offline: fall back to the last one we saw
+            try {
+                const cache = JSON.parse(localStorage.getItem('cuadranteCache') || 'null');
+                if (cache) this._pintarCuadrante(cache);
+            } catch (__) {}
+        }
+    },
+
+    _pintarCuadrante(data) {
+        const img   = document.getElementById('cuadImg');
+        const vacio = document.getElementById('cuadVacio');
+        const fecha = document.getElementById('cuadFecha');
+        const borrar= document.getElementById('cuadBorrar');
+        const hay = !!(data && data.imagen);
+        if (img)   { img.style.display = hay ? 'block' : 'none'; if (hay) img.src = data.imagen; }
+        if (vacio) vacio.style.display = hay ? 'none' : 'flex';
+        if (borrar) borrar.style.display = hay ? 'inline-block' : 'none';
+        if (fecha) {
+            fecha.textContent = hay && data.actualizado
+                ? new Date(data.actualizado).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })
+                : '';
+        }
+    },
+
+    verCuadranteGrande() {
+        const img = document.getElementById('cuadImg');
+        if (!img?.src) return;
+        document.getElementById('cuadVisorImg').src = img.src;
+        document.getElementById('cuadVisor').classList.add('show');
+    },
+
+    cerrarCuadranteGrande() {
+        document.getElementById('cuadVisor')?.classList.remove('show');
+    },
+
+    // Downscale before upload: a phone photo is several MB and the store caps
+    // the payload, so send something the drivers can still read but that fits.
+    subirCuadrante() {
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = 'image/*';
+        input.onchange = (e) => {
+            const file = e.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = async () => {
+                    const MAX = 1400;
+                    const escala = Math.min(1, MAX / Math.max(img.width, img.height));
+                    const w = Math.round(img.width * escala), h = Math.round(img.height * escala);
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    let calidad = 0.82, dataUrl = canvas.toDataURL('image/jpeg', calidad);
+                    while (dataUrl.length > 680 * 1024 && calidad > 0.35) {
+                        calidad -= 0.12;
+                        dataUrl = canvas.toDataURL('image/jpeg', calidad);
+                    }
+                    if (dataUrl.length > 680 * 1024) {
+                        this._mostrarToast('❌ La imagen sigue siendo muy grande', 4000);
+                        return;
+                    }
+                    this._mostrarToast('📤 Subiendo cuadrante...', 2500);
+                    try {
+                        const resp = await fetch(this.CUADRANTE_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json',
+                                       'X-Admin-Email': this.usuarioActual?.email || '' },
+                            body: JSON.stringify({ imagen: dataUrl, nombre: file.name })
+                        });
+                        const data = await resp.json();
+                        if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+                        this._pintarCuadrante(data);
+                        localStorage.setItem('cuadranteCache', JSON.stringify(data));
+                        this._mostrarToast('✅ Cuadrante publicado', 3000);
+                    } catch (err) {
+                        this._mostrarToast('❌ Error al subir: ' + err.message, 4000);
+                    }
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+        input.click();
+    },
+
+    async borrarCuadrante() {
+        if (!confirm('¿Quitar el cuadrante publicado?\nDejará de verse en la app de conductores.')) return;
+        try {
+            const resp = await fetch(this.CUADRANTE_URL, {
+                method: 'DELETE',
+                headers: { 'X-Admin-Email': this.usuarioActual?.email || '' }
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._pintarCuadrante(data);
+            localStorage.removeItem('cuadranteCache');
+            this._mostrarToast('Cuadrante retirado', 2500);
+        } catch (err) { this._mostrarToast('❌ Error: ' + err.message, 4000); }
+    },
+
     toggleMensual() {
         const sec = document.getElementById('mensualSection');
         if (!sec) return;
@@ -2005,22 +2103,12 @@ const app = {
         if (keys.length === 0) { container.innerHTML = '<div style="text-align:center;color:#95a5a6;font-size:12px;padding:8px;">Sin datos</div>'; return; }
         container.innerHTML = keys.map(k => {
             const m = meses[k];
-            const objetivo = this.horasAnualesCustom / 12;
-            const barPct   = Math.min((m.horas / objetivo) * 100, 100);
-            // Split the bar proportionally, so the orange slice reflects how much
-            // of that month's hours were overtime even when the bar is saturated
-            const ratioExt = m.horas > 0 ? Math.min(m.horasExtras / m.horas, 1) : 0;
-            const extPct   = barPct * ratioExt;
-            const normPct  = barPct - extPct;
-            return `<div class="mes-row${m.horasExtras > 0 ? ' con-extras' : ''}">
+            const barPct = Math.min((m.horas / (this.horasAnualesCustom / 12)) * 100, 100);
+            return `<div class="mes-row">
                 <div class="mes-label">${m.label}</div>
-                <div class="mes-bar-wrap">
-                    <div class="mes-bar" style="width:${normPct}%"></div>
-                    <div class="mes-bar-extra" style="width:${extPct}%"></div>
-                </div>
+                <div class="mes-bar-wrap"><div class="mes-bar" style="width:${barPct}%"></div></div>
                 <div class="mes-vals">
                     <span>${m.horas}h</span>
-                    ${m.horasExtras > 0 ? `<span class="mes-extras-h">⏱️${m.horasExtras}h</span>` : ''}
                     ${m.nocturnas > 0 ? `<span class="mes-noche">🌙${m.nocturnas}h</span>` : ''}
                     ${m.extra > 0    ? `<span class="mes-extra">+${m.extra.toFixed(2)}€</span>` : ''}
                 </div>
