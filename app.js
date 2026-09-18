@@ -8,6 +8,7 @@ const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://
 const AUTH_SCOPE       = 'profile email';
 const SUPER_USER_EMAIL = 'guillermo.rc82@gmail.com';
 const ALLOWLIST_APP    = 'movilidad';
+const VERSION_URL      = 'https://registro-horario-emt.vercel.app/api/version';
 const ANDROID_PACKAGE  = 'com.guillermorc.horasemt';
 const RELEASE_PREFIX   = 'build-';
 const DRIVE_FILE_NAME  = 'horas-emt.json';
@@ -2963,12 +2964,24 @@ const app = {
             }
             const lista = await resp.json();
             const re = new RegExp('^' + RELEASE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
+            // El gestor siempre ve la última, para poder probarla antes de
+            // publicarla; el resto solo ven la que él haya publicado.
+            const soyGestor = (this.usuarioActual?.email || '').toLowerCase() === SUPER_USER_EMAIL.toLowerCase();
+            let publicada = null;
+            if (!soyGestor) {
+                try {
+                    const rv = await fetch(VERSION_URL, { cache: 'no-store' });
+                    if (rv.ok) publicada = (await rv.json())?.build ?? null;
+                } catch (_) {}
+            }
             let release = null, latestNum = 0, latestTag = '';
             (Array.isArray(lista) ? lista : []).forEach(r => {
                 const m = re.exec(r.tag_name || '');
-                if (m && parseInt(m[1], 10) > latestNum) {
-                    latestNum = parseInt(m[1], 10); release = r; latestTag = r.tag_name;
-                }
+                if (!m) return;
+                const n = parseInt(m[1], 10);
+                // Sin versión publicada se comporta como antes: la más reciente
+                if (publicada !== null && n > publicada) return;
+                if (n > latestNum) { latestNum = n; release = r; latestTag = r.tag_name; }
             });
             const currentNum = parseInt(String(APP_VERSION).replace('build-', '')) || 0;
             if (latestNum === 0) {

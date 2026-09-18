@@ -8,6 +8,7 @@ const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://
 const AUTH_SCOPE       = 'profile email';
 const SUPER_USER_EMAIL = 'g.rioscorrea@gmail.com';
 const ALLOWLIST_APP    = 'gestion';
+const VERSION_URL      = 'https://registro-horario-emt.vercel.app/api/version';
 const ANDROID_PACKAGE  = 'com.guillermorc.gestionemt';
 const RELEASE_PREFIX   = 'gestion-build-';
 const DRIVE_FILE_NAME  = 'gestion-emt-movilidad.json';
@@ -2129,6 +2130,64 @@ const app = {
         } catch (err) { this._mostrarToast('❌ Error: ' + err.message, 4000); }
     },
 
+
+    // ── Versión publicada a los conductores ──────────────────────────────────
+
+    async _cargarVersiones() {
+        const cont = document.getElementById('versionesList');
+        const act  = document.getElementById('versionActual');
+        if (!cont) return;
+        cont.innerHTML = '<div class="ops-field-sub" style="padding:8px 14px;">Cargando…</div>';
+        try {
+            const [rRel, rVer] = await Promise.all([
+                fetch('https://api.github.com/repos/guillermorc-gain/RegistroHorario/releases?per_page=30'),
+                fetch(VERSION_URL, { cache: 'no-store' })
+            ]);
+            const releases = rRel.ok ? await rRel.json() : [];
+            this._versionPublicada = rVer.ok ? ((await rVer.json())?.build ?? null) : null;
+            // Solo las de la app de conductores
+            const re = /^build-(\d+)$/;
+            const builds = (Array.isArray(releases) ? releases : [])
+                .map(r => ({ r, m: re.exec(r.tag_name || '') }))
+                .filter(x => x.m)
+                .map(x => ({ n: parseInt(x.m[1], 10), fecha: x.r.published_at }))
+                .sort((a, b) => b.n - a.n);
+            if (act) {
+                act.textContent = this._versionPublicada === null
+                    ? 'Ahora mismo reciben la más reciente'
+                    : `Publicada: ${this._buildNumToVersion(this._versionPublicada)}`;
+            }
+            if (!builds.length) { cont.innerHTML = '<div class="ops-field-sub" style="padding:8px 14px;">Sin versiones</div>'; return; }
+            cont.innerHTML = builds.map(b => {
+                const activa = b.n === this._versionPublicada;
+                const f = new Date(b.fecha).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' });
+                return `<div class="ver-item${activa ? ' activa' : ''}">
+                    <span class="ver-n">${this._buildNumToVersion(b.n)}<br><span class="ver-fecha">${f}</span></span>
+                    ${activa ? '<span class="ver-badge">PUBLICADA</span>'
+                             : `<button class="ver-btn" onclick="app._publicarVersion(${b.n})">Publicar</button>`}
+                </div>`;
+            }).join('');
+        } catch (e) {
+            cont.innerHTML = '<div style="color:#e74c3c;font-size:12px;padding:8px 14px;">Error al cargar versiones</div>';
+        }
+    },
+
+    async _publicarVersion(build) {
+        if (!confirm(`¿Publicar la ${this._buildNumToVersion(build)} para los conductores?\n\nSolo recibirán esa versión hasta que publiques otra.`)) return;
+        try {
+            const resp = await fetch(VERSION_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ build })
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._mostrarToast('🚀 Publicada ' + this._buildNumToVersion(build), 3000);
+            this._cargarVersiones();
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
+    },
+
     toggleMensual() {
         const sec = document.getElementById('mensualSection');
         if (!sec) return;
@@ -2972,12 +3031,24 @@ const app = {
             }
             const lista = await resp.json();
             const re = new RegExp('^' + RELEASE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
+            // El gestor siempre ve la última, para poder probarla antes de
+            // publicarla; el resto solo ven la que él haya publicado.
+            const soyGestor = (this.usuarioActual?.email || '').toLowerCase() === SUPER_USER_EMAIL.toLowerCase();
+            let publicada = null;
+            if (!soyGestor) {
+                try {
+                    const rv = await fetch(VERSION_URL, { cache: 'no-store' });
+                    if (rv.ok) publicada = (await rv.json())?.build ?? null;
+                } catch (_) {}
+            }
             let release = null, latestNum = 0, latestTag = '';
             (Array.isArray(lista) ? lista : []).forEach(r => {
                 const m = re.exec(r.tag_name || '');
-                if (m && parseInt(m[1], 10) > latestNum) {
-                    latestNum = parseInt(m[1], 10); release = r; latestTag = r.tag_name;
-                }
+                if (!m) return;
+                const n = parseInt(m[1], 10);
+                // Sin versión publicada se comporta como antes: la más reciente
+                if (publicada !== null && n > publicada) return;
+                if (n > latestNum) { latestNum = n; release = r; latestTag = r.tag_name; }
             });
             const currentNum = parseInt(String(APP_VERSION).replace('build-', '')) || 0;
             if (latestNum === 0) {
