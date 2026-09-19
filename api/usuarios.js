@@ -2,7 +2,9 @@ import { emailDelToken, tokenDe, exigirAdmin } from './_auth.js';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO         = 'guillermorc-gain/RegistroHorario';
-const BRANCH       = 'main';
+// Los datos viven fuera de main: cada escritura de las apps era un commit
+// que cancelaba el despliegue del código que fuera por medio.
+const BRANCH       = 'datos';
 const FILE_PATH    = 'usuarios-resumen.json';
 const ADMIN_EMAIL  = 'g.rioscorrea@gmail.com';
 const MAX_AVATAR   = 40 * 1024;   // el avatar va reescalado a 80px, no debe pasar de aquí
@@ -233,8 +235,10 @@ export default async function handler(req, res) {
           }
           data[clave].lugares = recortarLugares(lugares);
         }
-        // Sin fechas es el lugar habitual: manda sobre cualquier excepción
-        else if (data[clave]) {
+        // Sin fechas es el lugar habitual: manda sobre cualquier excepción.
+        // Se exige que venga `puesto`: si no, una petición con un campo que
+        // esta versión todavía no conozca acabaría aquí y le borraría el lugar.
+        else if (data[clave] && puesto !== undefined) {
           data[clave].puesto  = String(puesto || '').slice(0, 40);
           data[clave].lugares = {};
         }
