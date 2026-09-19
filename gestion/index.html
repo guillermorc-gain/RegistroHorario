@@ -346,6 +346,13 @@
         .pm-volver{color:#7f8c8d;font-weight:700;justify-content:center;}
         .pm-paso{padding:11px 16px;font-size:12.5px;color:#2c3e50;background:#f4f6f9;border-bottom:1px solid #efefef;}
         .modal-card.dark .pm-paso{color:#e0e0e0;background:#16202e;border-color:#2d3561;}
+        .lg-dias{display:flex;gap:5px;margin-bottom:6px;}
+        .lg-dias button{flex:1;min-width:0;border:1.5px solid #dfe4ea;background:transparent;color:#95a5a6;font-family:inherit;font-size:12px;font-weight:800;padding:8px 0;border-radius:8px;cursor:pointer;}
+        .modal-card.dark .lg-dias button{border-color:#2d3561;}
+        .lg-dias button.on{background:var(--g1);border-color:var(--g1);color:#fff;}
+        .pst-nota{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:9px;background:#eef1f6;color:#7f8c8d;font-size:10.5px;font-weight:700;}
+        .app-content.dark .pst-nota{background:#16202e;color:#a0a0a0;}
+        .pst-quien{cursor:pointer;-webkit-tap-highlight-color:transparent;}
         .lg-mapa{height:230px;border-radius:10px;overflow:hidden;margin-bottom:10px;border:1.5px solid #dfe4ea;background:#eef1f6;}
         .modal-card.dark .lg-mapa{border-color:#2d3561;background:#16202e;}
         .lg-sinmapa{padding:10px 12px;margin-bottom:10px;border-radius:10px;background:#fdecea;color:#c0392b;font-size:12px;}
@@ -1309,6 +1316,8 @@
         </div>
         <div class="modal-body">
             <div class="edit-field"><label>Nombre</label><input type="text" id="lgNombre" placeholder="Son Rossinyol"></div>
+            <div class="f-sep">Días que se trabaja</div>
+            <div class="lg-dias" id="lgDias"></div>
             <div class="f-sep">Turnos</div>
             <div id="lgTurnos"></div>
             <div class="f-sep">Ubicación</div>

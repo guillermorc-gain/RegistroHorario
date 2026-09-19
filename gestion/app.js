@@ -55,10 +55,13 @@ const TURNOS_POR_PUESTO = {
 // El catálogo que mantiene el gestor manda sobre la tabla de aquí abajo: así
 // se pueden cambiar turnos y añadir lugares sin publicar una versión nueva.
 let LUGARES_CATALOGO = {};
+let DIAS_POR_LUGAR = {};
 function aplicarCatalogoLugares(cat) {
     LUGARES_CATALOGO = cat || {};
     Object.entries(LUGARES_CATALOGO).forEach(([k, l]) => {
         if (Array.isArray(l?.turnos) && l.turnos.length) TURNOS_POR_PUESTO[k] = l.turnos;
+        if (Array.isArray(l?.dias) && l.dias.length) DIAS_POR_LUGAR[k] = l.dias;
+        else delete DIAS_POR_LUGAR[k];
         const nombre = l?.nombre;
         if (nombre && !PUESTOS_DEFINIDOS.some(p => p.toLowerCase().normalize('NFD')
                 .replace(/[\u0300-\u036f]/g, '') === k)) {
@@ -3294,6 +3297,37 @@ const app = {
         return (j.fe && h === 0) ? jornada : h;
     },
 
+    // Nota junto al nombre en el cuadro de lugares: para los de calle, en qué
+    // andan ese día. Va por fecha, como el lugar, porque cambia a diario.
+    _notaDe(u, fecha) { return (u?.notas && u.notas[fecha]) || ''; },
+
+    _ultimaNota(u) {
+        const f = Object.keys(u?.notas || {}).sort();
+        return f.length ? u.notas[f[f.length - 1]] : '';
+    },
+
+    async editarNota(email, fecha) {
+        const u = (this._conductores || {})[email];
+        if (!u) return;
+        const actual = this._notaDe(u, fecha) || this._ultimaNota(u);
+        const v = prompt(`Descripción para ${u.nombre || email}\n${fecha.slice(6,8)}/${fecha.slice(4,6)}`, actual);
+        if (v === null) return;
+        const nota = v.trim().slice(0, 40);
+        try {
+            const resp = await fetch(this.USUARIOS_URL, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ email, nota, fecha })
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._conductores = data;
+            this._renderConductores();
+            this._mostrarToast(nota ? `✅ ${nota}` : 'Descripción quitada', 2500);
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
+    },
+
     // Jornada de un trabajador en una fecha concreta (la última si hay varias)
     _jornadaDe(u, fecha) {
         const dia = (u.jornadas || []).filter(j => j && j.f === fecha);
@@ -3382,7 +3416,7 @@ const app = {
                      enBaja: this._enBaja(u, fecha) || (!this._bajasDe(u).length && !!u.baja),
                      enVac:  this._enVacaciones(u, fecha),
                      lugar: this._lugarDe(u, fecha, v.j).trim() || SIN };
-        });
+        }).filter(x => !(x.lugar === SIN && x.enVac));   // de vacaciones no hay lugar que asignar
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
 
         // Contadores de la cabecera: quién ha trabajado ese día y quién está
@@ -3413,8 +3447,14 @@ const app = {
 
         const filtro = localStorage.getItem('filtroLugares') || 'todos';
         const tarjetas = [];
+        const diaSemana = new Date(+fecha.slice(0,4), +fecha.slice(4,6) - 1, +fecha.slice(6,8), 12).getDay();
         Object.keys(porPuesto).sort((a, b) =>
             a === SIN ? 1 : b === SIN ? -1 : a.localeCompare(b, 'es')).forEach(puesto => {
+            // Los días que ese lugar no abre no se enseña, salvo que alguien
+            // haya registrado jornada: un dato real no debe desaparecer.
+            const dias = DIAS_POR_LUGAR[this._clavePuesto(puesto)];
+            if (dias && !dias.includes(diaSemana)
+                && !porPuesto[puesto].some(x => x.j && !x.j.v && !x.j.p)) return;
             // Ordenar por hora de entrada: así se ve de un vistazo si el relevo encaja
             const gente = porPuesto[puesto].slice().sort((a, b) => {
                 // El que viene de la víspera va primero: lleva dentro desde ayer
@@ -3447,7 +3487,8 @@ const app = {
                 const t = this._turnoDe(puesto, j?.i) || '';
                 return `<div class="pst-fila${enBaja ? ' baja' : ''}${enVac ? ' vac' : ''}">
                     <span class="pst-dot ${e.clase}" title="${esc(e.texto)}"></span>
-                    <span class="pst-quien"><b>${esc(u.conductor) || '—'}</b> ${esc(u.nombre)}</span>
+                    <span class="pst-quien" onclick="app.editarNota('${esc(u.email)}','${esc(fecha)}')"><b>${esc(u.conductor) || '—'}</b> ${esc(u.nombre)}${
+                        this._notaDe(u, fecha) ? `<span class="pst-nota">${esc(this._notaDe(u, fecha))}</span>` : ''}</span>
                     ${t ? `<span class="cond-turno ${t}">${t}</span>` : ''}
                     <span class="pst-horario">${horario}</span>
                 </div>`;
@@ -3656,8 +3697,11 @@ const app = {
             const franjas = (TURNOS_POR_PUESTO[k] || []).map(f => `${f.id} ${f.desde}–${f.hasta}`).join(' · ')
                 || 'sin turnos definidos';
             const ubi = l?.ubicacion ? `📍 ${l.ubicacion.radio}m` : '';
+            const nd = ['D','L','M','X','J','V','S'];
+            const dias = Array.isArray(l?.dias) && l.dias.length
+                ? ' · ' + [1,2,3,4,5,6,0].filter(d => l.dias.includes(d)).map(d => nd[d]).join('') : '';
             return `<div class="ver-item" onclick="app._editarLugar('${esc(k)}')" style="cursor:pointer;">
-                <div class="ver-n">${esc(nombre)}<br><span class="pm-turnos">${esc(franjas)}</span></div>
+                <div class="ver-n">${esc(nombre)}<br><span class="pm-turnos">${esc(franjas)}${esc(dias)}</span></div>
                 <span class="ver-fecha">${ubi}</span><span class="ops-arrow">›</span>
             </div>`;
         }).join('');
@@ -3671,6 +3715,8 @@ const app = {
         const nombre = l.nombre || (k ? PUESTOS_DEFINIDOS.find(p => this._clavePuesto(p) === k) || k : '');
         document.getElementById('lgNombre').value = nombre;
         this._turnosTmp = (TURNOS_POR_PUESTO[k] || []).map(f => ({ ...f }));
+        this._diasTmp = (k && DIAS_POR_LUGAR[k]) ? [...DIAS_POR_LUGAR[k]] : [0,1,2,3,4,5,6];
+        this._renderDiasLugar();
         this._renderTurnosLugar();
         const u = l.ubicacion || {};
         document.getElementById('lgLat').value   = u.lat ?? '';
@@ -3791,6 +3837,19 @@ const app = {
         }
     },
 
+    _renderDiasLugar() {
+        const nombres = ['D','L','M','X','J','V','S'];   // 0 es domingo
+        document.getElementById('lgDias').innerHTML = [1,2,3,4,5,6,0]
+            .map(d => `<button class="${this._diasTmp.includes(d) ? 'on' : ''}"
+                onclick="app._toggleDiaLugar(${d})">${nombres[d]}</button>`).join('');
+    },
+
+    _toggleDiaLugar(d) {
+        const i = this._diasTmp.indexOf(d);
+        if (i === -1) this._diasTmp.push(d); else this._diasTmp.splice(i, 1);
+        this._renderDiasLugar();
+    },
+
     _renderTurnosLugar() {
         const nombres = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
         document.getElementById('lgTurnos').innerHTML = ['M', 'T', 'N'].map(id => {
@@ -3855,6 +3914,7 @@ const app = {
         const cuerpo = {
             nombre,
             turnos: this._turnosTmp.filter(f => f.desde && f.hasta),
+            dias: this._diasTmp.slice().sort(),
             ubicacion: (lat !== null && lng !== null)
                 ? { lat, lng, radio: this._leerDecimal(document.getElementById('lgRadio').value) || 150 }
                 : null,
