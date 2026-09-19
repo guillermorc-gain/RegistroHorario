@@ -1957,7 +1957,8 @@
     ],
     "email": "prueba-1789760390735@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T10:41:18.940Z"
+    "actualizado": "2026-09-19T10:41:18.940Z",
+    "horario": ""
   },
   "prueba-1789763845092@prueba.local": {
     "nombre": "Toni Sánchez",
