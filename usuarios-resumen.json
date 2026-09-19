@@ -1241,7 +1241,12 @@
     "diasAt": 1789847119245,
     "horario": "",
     "grupo": null,
-    "horarios": {},
+    "horarios": {
+      "202609": {
+        "i": "09:00",
+        "f": "12:30"
+      }
+    },
     "revisiones": {}
   },
   "guillermo.rcxx@gmail.com": {
