@@ -1542,14 +1542,24 @@
     "conductor": "1086-5",
     "puesto": "",
     "avatar": null,
-    "version": "build-40",
+    "version": "build-67",
     "horasMes": 14,
     "horasTotales": 14,
     "diasMes": 2,
     "horaInicio": "12:00",
     "horaFin": "19:00",
-    "horarioDe": "hoy",
+    "horarioDe": "anterior",
     "turno": "M",
+    "jornadaHoras": 3.5,
+    "horasAnuales": 777,
+    "ritmo": "lv",
+    "dias": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
     "jornadas": [
       {
         "f": "20260918",
@@ -1569,15 +1579,7 @@
     ],
     "email": "prueba-1789763845092@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-18T21:43:58.499Z",
-    "lugares": {},
-    "vacaciones": [
-      {
-        "desde": "2026-09-17",
-        "hasta": "2026-09-30"
-      }
-    ],
-    "vacacionesAt": 1789806810695
+    "actualizado": "2026-09-19T09:33:47.282Z"
   },
   "prueba-1789764004986@prueba.local": {
     "nombre": "Pepe",
