@@ -68,32 +68,18 @@
           }
         ],
         "en": "2026-09-19T18:02:38.345Z"
+      },
+      {
+        "de": "guillermo.rc82@gmail.com",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Ok",
+        "adjuntos": [],
+        "en": "2026-09-19T18:12:13.766Z"
       }
     ],
     "archivada": false,
     "de": "trabajador",
     "tipo": "gestion",
-    "estado": "pendiente"
-  },
-  "20260919181139350-re5fc": {
-    "id": "20260919181139350-re5fc",
-    "email": "guillermo.rcxx@gmail.com",
-    "creado": "2026-09-19T18:11:39.350Z",
-    "nombre": "Guillermo Ríos Correa",
-    "conductor": "1234-5",
-    "mensajes": [
-      {
-        "de": "gestor",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Uuuu",
-        "adjuntos": [],
-        "en": "2026-09-19T18:11:39.350Z"
-      }
-    ],
-    "archivada": false,
-    "de": "gestor",
-    "tipo": "gestion",
-    "gestor": "Guillermo Ríos Correa",
     "estado": "pendiente"
   }
 }
