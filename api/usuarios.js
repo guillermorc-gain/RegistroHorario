@@ -65,6 +65,14 @@ function diasMasNuevos(previo, b) {
   return { dias: limpiarDiasSemana(b.dias), diasAt: suyos };
 }
 
+// Horario asignado desde el cuadrante: entrada y salida en HH:MM. Vacío = sin
+// horario fijo, y entonces se deduce de la hora a la que ficha.
+function limpiarHorario(h) {
+  const ok = v => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(v || ''));
+  if (!h || !ok(h.i) || !ok(h.f)) return '';
+  return { i: h.i, f: h.f };
+}
+
 // Grupo de descanso (1–10) de los de jornada completa. 0 / vacío = sin grupo.
 function limpiarGrupo(g) {
   const n = parseInt(g, 10);
@@ -263,7 +271,7 @@ export default async function handler(req, res) {
         }
         else if (data[clave] && grupo !== undefined) data[clave].grupo = limpiarGrupo(grupo);
         else if (data[clave] && horario !== undefined) {
-          data[clave].horario = ['M','T','N'].includes(horario) ? horario : '';
+          data[clave].horario = limpiarHorario(horario);
         }
         // Lugar solo para unas fechas: va aparte de `puesto` porque la app del
         // trabajador reescribe sus jornadas enteras cada vez que publica y se
