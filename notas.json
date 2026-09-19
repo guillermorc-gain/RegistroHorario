@@ -131,5 +131,28 @@
     "deNombre": "Guillermo Ríos Correa",
     "deConductor": "1418-3",
     "estado": "pendiente"
+  },
+  "20260919183849831-mq9f3": {
+    "id": "20260919183849831-mq9f3",
+    "email": "guillermo.rcxx@gmail.com",
+    "creado": "2026-09-19T18:38:49.831Z",
+    "nombre": "Guillermo Ríos Correa",
+    "conductor": "1234-5",
+    "mensajes": [
+      {
+        "de": "guillermo.rc82@gmail.com",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Jj",
+        "adjuntos": [],
+        "en": "2026-09-19T18:38:49.831Z"
+      }
+    ],
+    "archivada": false,
+    "de": "trabajador",
+    "tipo": "companero",
+    "deEmail": "guillermo.rc82@gmail.com",
+    "deNombre": "Guillermo Ríos Correa",
+    "deConductor": "1418-3",
+    "estado": "pendiente"
   }
 }
