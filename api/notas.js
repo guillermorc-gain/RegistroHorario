@@ -1,4 +1,5 @@
 import { emailDelToken, tokenDe, exigirAdmin } from './_auth.js';
+import { hayBaseDeDatos, leerNotas, leerNota, guardarNota, borrarNota } from './_almacen.js';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO         = 'guillermorc-gain/RegistroHorario';
@@ -128,6 +129,23 @@ function recortar(data) {
   return out;
 }
 
+// Dar el visto, denegar o contestar. Está aquí fuera para que valga igual
+// guardando en la base de datos o en el fichero: una sola verdad.
+function tocarNota(nota, { estado, respuesta, gestor, adjuntos }) {
+  const n = { ...nota };
+  if (['pendiente', 'ok', 'no'].includes(estado)) n.estado = estado;
+  if (respuesta !== undefined) {
+    const cuerpo = texto(respuesta);
+    const adj = limpiarAdjuntos(adjuntos);
+    // El trabajador tiene que ver quién le contesta
+    n.respuesta = (cuerpo || adj.length)
+      ? { texto: cuerpo, adjuntos: adj,
+          gestor: String(gestor || '').slice(0, 80), en: new Date().toISOString() }
+      : null;
+  }
+  return n;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
@@ -137,9 +155,12 @@ export default async function handler(req, res) {
   try {
     // Con ?email= se devuelven solo las suyas, que es lo que pide su app.
     if (req.method === 'GET') {
-      const { data } = await getFile();
       res.setHeader('Cache-Control', 'no-store');
       const quien = String(req.query?.email || '').toLowerCase().trim();
+      // Con base de datos el filtro y el orden los hace Postgres, que para eso
+      // tiene los índices; si no, se filtra aquí como siempre.
+      if (hayBaseDeDatos()) return res.status(200).json(await leerNotas(quien));
+      const { data } = await getFile();
       // Las mías son las que me llegan y las que he mandado a un compañero
       const notas = Object.values(data)
         .filter(n => !quien || (n.email || '').toLowerCase() === quien
@@ -192,6 +213,11 @@ export default async function handler(req, res) {
         estado: 'pendiente',
         respuesta: null,
       };
+      if (hayBaseDeDatos()) {
+        // Una fila por nota: no hay que recortar nada para que quepa
+        await guardarNota(nueva);
+        return res.status(200).json(nueva);
+      }
       const nuevo = await guardarConReintento(data => acotarAdjuntos(recortar({ ...data, [id]: nueva })),
         entreCompaneros ? `Mensaje de ${quien} para ${para}`
         : delGestor ? `Nota del gestor para ${para}` : `Nota de ${quien}`);
@@ -203,20 +229,20 @@ export default async function handler(req, res) {
       if (!await exigirAdmin(req, res, ADMIN_EMAIL)) return;
       const { id, estado, respuesta, gestor } = req.body || {};
       if (!id) return res.status(400).json({ error: 'Falta la nota' });
+      if (hayBaseDeDatos()) {
+        const n = await leerNota(id);
+        if (!n) return res.status(404).json({ error: 'No se pudo actualizar la nota' });
+        if (req.method === 'DELETE') {
+          await borrarNota(id);
+          return res.status(200).json({ id, borrada: true });
+        }
+        await guardarNota(tocarNota(n, { estado, respuesta, gestor, adjuntos: req.body?.adjuntos }));
+        return res.status(200).json(await leerNota(id));
+      }
       const nuevo = await guardarConReintento(data => {
         if (!data[id]) return null;
         if (req.method === 'DELETE') { const out = { ...data }; delete out[id]; return out; }
-        const n = { ...data[id] };
-        if (['pendiente', 'ok', 'no'].includes(estado)) n.estado = estado;
-        if (respuesta !== undefined) {
-          const cuerpo = texto(respuesta);
-          const adj = limpiarAdjuntos(req.body?.adjuntos);
-          // El trabajador tiene que ver quién le contesta
-          n.respuesta = (cuerpo || adj.length)
-            ? { texto: cuerpo, adjuntos: adj,
-                gestor: String(gestor || '').slice(0, 80), en: new Date().toISOString() }
-            : null;
-        }
+        const n = tocarNota(data[id], { estado, respuesta, gestor, adjuntos: req.body?.adjuntos });
         return acotarAdjuntos({ ...data, [id]: n });
       }, req.method === 'DELETE' ? `Quitar nota ${id}` : `Respuesta a ${id}`);
       if (!nuevo) return res.status(404).json({ error: 'No se pudo actualizar la nota' });
