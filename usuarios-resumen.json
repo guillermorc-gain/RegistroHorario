@@ -1394,7 +1394,14 @@
     "email": "prueba-1789763845092@prueba.local",
     "ficticio": true,
     "actualizado": "2026-09-18T21:43:58.499Z",
-    "lugares": {}
+    "lugares": {},
+    "vacaciones": [
+      {
+        "desde": "2026-09-17",
+        "hasta": "2026-09-19"
+      }
+    ],
+    "vacacionesAt": 1789806802781
   },
   "prueba-1789764004986@prueba.local": {
     "nombre": "Pepe",
