@@ -3356,10 +3356,20 @@ const app = {
                 if (mb === null) return -1;
                 return ma - mb;
             });
-            const dentro = gente.filter(({ u, j, deAyer, enBaja }) =>
-                this._estadoJornada(u, j, esHoy, esFuturo, deAyer, enBaja).clase === 'verde').length;
+            const trabajando = x =>
+                this._estadoJornada(x.u, x.j, esHoy, esFuturo, x.deAyer, x.enBaja).clase === 'verde';
+            const dentro = gente.filter(trabajando).length;
             const delDia = gente.filter(({ j, deAyer, enBaja }) => !enBaja && j && !j.v && !j.p && !deAyer).length;
-            const filas = gente.map(({ u, j, deAyer, enBaja }) => {
+
+            // El filtro escoge qué trabajadores se ven, salvo "sin cubrir", que
+            // es una propiedad del lugar: los que ahora no tienen a nadie dentro.
+            if (filtro === 'sincubrir' && dentro > 0) return;
+            const visibles = filtro === 'trabajando'  ? gente.filter(trabajando)
+                           : filtro === 'sinservicio' ? gente.filter(x => !trabajando(x))
+                           : gente;
+            if (!visibles.length) return;
+
+            const filas = visibles.map(({ u, j, deAyer, enBaja }) => {
                 const e = this._estadoJornada(u, j, esHoy, esFuturo, deAyer, enBaja);
                 const horario = (j?.i && j?.o)
                     ? (deAyer ? `→${esc(j.o)}` : `${esc(j.i)}–${esc(j.o)}`)
@@ -3377,10 +3387,6 @@ const app = {
                 ? (dentro > 0 ? `${dentro} en turno` : 'sin cubrir')
                 : (delDia > 0 ? `${delDia} ${esFuturo ? 'previstos' : 'ese día'}` : 'sin cubrir');
             const vacio = esHoy ? dentro === 0 : delDia === 0;
-            // "sin servicio" es que ese día no fue de nadie; "sin cubrir",
-            // que hay gente asignada pero ninguna dentro ahora mismo.
-            const estado = delDia === 0 ? 'sinservicio' : dentro > 0 ? 'trabajando' : 'sincubrir';
-            if (filtro !== 'todos' && filtro !== estado) return;
             tarjetas.push(`<div class="pst-card">
                 <div class="pst-head">
                     <span class="pst-nombre">${esc(puesto)}</span>
