@@ -3080,6 +3080,7 @@ const app = {
         document.getElementById('fHasta').value = hoy.toISOString().slice(0, 10);
         if (!this._fictJornadas.length) this._addJornadaFict(true);
         this._renderJornadasFict();
+        this._aplicarPlegadoFict();
         document.getElementById('fictModal').classList.add('show');
         if (this.darkMode) document.getElementById('fictModalContent').classList.add('dark');
     },
@@ -3146,7 +3147,25 @@ const app = {
         if (!silencioso) this._renderJornadasFict();
     },
 
+    _plegarJornadasFict() {
+        const cab = document.querySelector('#fictModal .f-sep-pleg');
+        const cont = document.getElementById('fPlegable');
+        if (!cab || !cont) return;
+        const cerrado = cab.classList.toggle('cerrado');
+        cont.hidden = cerrado;
+        localStorage.setItem('fictPlegado', cerrado ? '1' : '0');
+    },
+
+    _aplicarPlegadoFict() {
+        const cerrado = localStorage.getItem('fictPlegado') === '1';
+        document.querySelector('#fictModal .f-sep-pleg')?.classList.toggle('cerrado', cerrado);
+        const cont = document.getElementById('fPlegable');
+        if (cont) cont.hidden = cerrado;
+    },
+
     _renderJornadasFict() {
+        const cuenta = document.getElementById('fCuenta');
+        if (cuenta) cuenta.textContent = (this._fictJornadas || []).length;
         const cont = document.getElementById('fJornadas');
         cont.innerHTML = (this._fictJornadas || []).map((j, k) => {
             const iso = `${j.f.slice(0,4)}-${j.f.slice(4,6)}-${j.f.slice(6,8)}`;
