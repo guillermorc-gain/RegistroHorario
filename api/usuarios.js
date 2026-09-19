@@ -10,6 +10,7 @@ const ADMIN_EMAIL  = 'g.rioscorrea@gmail.com';
 const MAX_AVATAR   = 40 * 1024;   // el avatar va reescalado a 80px, no debe pasar de aquí
 const MAX_JORNADAS = 500;         // un año da ~220; el tope evita cargas absurdas
 const MAX_LUGARES  = 500;         // un lugar por día: más de un año de excepciones
+const GRUPOS_DESCANSO = 10;       // grupos de descanso de la jornada completa
 
 // 'YYYYMMDD' -> lista de días del tramo, ambos incluidos. Se acota a 400 para
 // que una petición mal formada no genere un fichero enorme.
@@ -51,6 +52,23 @@ function limpiarVacaciones(v) {
     .slice(0, 60)
     .map(x => ({ desde: x.desde, hasta: x.hasta }))
     .sort((a, b) => a.desde.localeCompare(b.desde));
+}
+
+// Los días de la semana los tocan los dos lados (el trabajador en su app y el
+// gestor desde el cuadrante), así que gana el que los haya cambiado después.
+function diasMasNuevos(previo, b) {
+  const suyos = Number(b.diasAt) || 0;
+  const guardados = Number(previo.diasAt) || 0;
+  if (b.dias === undefined || suyos <= guardados) {
+    return { dias: previo.dias ?? null, diasAt: guardados };
+  }
+  return { dias: limpiarDiasSemana(b.dias), diasAt: suyos };
+}
+
+// Grupo de descanso (1–10) de los de jornada completa. 0 / vacío = sin grupo.
+function limpiarGrupo(g) {
+  const n = parseInt(g, 10);
+  return Number.isInteger(n) && n >= 1 && n <= GRUPOS_DESCANSO ? n : null;
 }
 
 function vacacionesMasNuevas(previo, b) {
@@ -170,7 +188,7 @@ export default async function handler(req, res) {
           horasAnuales: Number(b.horasAnuales) || previo.horasAnuales || 777,
           jornadaHoras: Number(b.jornadaHoras) || previo.jornadaHoras || 7,
           // Días de la semana que trabaja; null si no los ha fijado
-          dias:         b.dias !== undefined ? limpiarDiasSemana(b.dias) : (previo.dias ?? null),
+          ...diasMasNuevos(previo, b),
           diasMes:      Number(b.diasMes) || 0,
           turno:        ['M','T','N'].includes(b.turno) ? b.turno : (previo.turno || ''),
           horaInicio:   typeof b.horaInicio === 'string' ? b.horaInicio.slice(0, 5) : previo.horaInicio || '',
@@ -182,6 +200,10 @@ export default async function handler(req, res) {
           ...vacacionesMasNuevas(previo, b),
           // el puesto lo pone el gestor: una publicación del conductor no lo pisa
           puesto:       previo.puesto || '',
+          // Lo mismo con el horario asignado y el grupo de descanso, que se
+          // eligen desde el cuadrante y el trabajador no envía.
+          horario:      previo.horario || '',
+          grupo:        previo.grupo ?? null,
           actualizado:  new Date().toISOString(),
         };
         return data;
@@ -193,7 +215,8 @@ export default async function handler(req, res) {
     // Solo el gestor asigna el puesto de trabajo
     if (req.method === 'PATCH' || req.method === 'DELETE') {
       if (!await exigirAdmin(req, res, ADMIN_EMAIL)) return;
-      const { email, puesto, ficticio, baja, bajas, vacaciones, nota, fecha, desde, hasta } = req.body || {};
+      const { email, puesto, ficticio, baja, bajas, vacaciones, nota, fecha,
+              desde, hasta, dias, grupo, horario } = req.body || {};
       const clave = (email || '').toLowerCase().trim();
       if (!clave) return res.status(400).json({ error: 'Falta el email' });
       // Los usuarios de prueba solo pueden vivir bajo este dominio, para que no
@@ -232,6 +255,16 @@ export default async function handler(req, res) {
           data[clave].baja  = enBajaHoy(data[clave].bajas);
         }
         else if (data[clave] && baja !== undefined) data[clave].baja = !!baja;
+        // Días de la semana: se sella la hora para que gane el último que los
+        // toque, venga del cuadrante o de la app del trabajador.
+        else if (data[clave] && dias !== undefined) {
+          data[clave].dias   = limpiarDiasSemana(dias);
+          data[clave].diasAt = Date.now();
+        }
+        else if (data[clave] && grupo !== undefined) data[clave].grupo = limpiarGrupo(grupo);
+        else if (data[clave] && horario !== undefined) {
+          data[clave].horario = ['M','T','N'].includes(horario) ? horario : '';
+        }
         // Lugar solo para unas fechas: va aparte de `puesto` porque la app del
         // trabajador reescribe sus jornadas enteras cada vez que publica y se
         // llevaría por delante el cambio.
@@ -257,6 +290,9 @@ export default async function handler(req, res) {
          : nota !== undefined ? `Descripción de ${clave}`
          : vacaciones !== undefined ? `Vacaciones de ${clave}`
          : bajas !== undefined ? `Bajas de ${clave}`
+         : dias !== undefined ? `Días de ${clave}`
+         : grupo !== undefined ? `Grupo de descanso de ${clave}`
+         : horario !== undefined ? `Horario de ${clave}`
          : desde && hasta ? `Lugar de ${clave} del ${desde} al ${hasta}`
          : `Lugar de ${clave}`);
 

@@ -347,6 +347,8 @@
         .pm-quitar{color:#c0392b;}
         .pm-volver{color:#7f8c8d;font-weight:700;justify-content:center;}
         .pm-paso{padding:11px 16px;font-size:12.5px;color:#2c3e50;background:#f4f6f9;border-bottom:1px solid #efefef;}
+        .pm-nota{border-top:1px solid #efefef;color:#7f8c8d;font-size:11.5px;}
+        .modal-card.dark .pm-nota{border-color:#2d3561;color:#a0a0a0;}
         .modal-card.dark .pm-paso{color:#e0e0e0;background:#16202e;border-color:#2d3561;}
         .f-sep-pleg{display:flex;align-items:center;gap:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
         .f-cnt{font-size:10px;font-weight:800;color:var(--g1);background:#eaf2fd;padding:2px 8px;border-radius:9px;}
@@ -510,11 +512,38 @@
         .pst-horario{font-size:11px;font-weight:700;color:#7f8c8d;font-variant-numeric:tabular-nums;}
         .app-content.dark .pst-horario{color:#a0a0a0;}
         /* ── CUADRANTE ── */
+        /* ── Trabajadores dentro del cuadrante ── */
+        .ct-list{display:flex;flex-direction:column;gap:6px;padding-bottom:6px;}
+        .ct-row{background:white;border-radius:11px;padding:8px 10px;box-shadow:0 1px 3px rgba(0,0,0,0.07);border-left:4px solid transparent;}
+        .app-content.dark .ct-row{background:#1e2a3a;}
+        .ct-row.activo{background:#e8f8ee;border-left-color:#27ae60;}
+        .app-content.dark .ct-row.activo{background:#17332a;border-left-color:#2ecc71;}
+        .ct-row.vacaciones{background:#fdf6e0;border-left-color:#f0b429;}
+        .app-content.dark .ct-row.vacaciones{background:#3a3117;border-left-color:#f1c40f;}
+        .ct-row.baja{background:#e9edf2;border-left-color:#95a5a6;}
+        .app-content.dark .ct-row.baja{background:#151d29;border-left-color:#7f8c8d;}
+        .ct-row.baja .ct-top,.ct-row.baja .ct-chips{filter:grayscale(1);opacity:.5;}
+        .ct-top{display:flex;align-items:center;gap:7px;}
+        .ct-nom{flex:1;min-width:0;font-size:13px;font-weight:700;color:#2c3e50;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .app-content.dark .ct-nom{color:#e0e0e0;}
+        .ct-num{font-size:10.5px;font-weight:800;color:#7f8c8d;background:#eef1f6;border-radius:7px;padding:2px 6px;flex-shrink:0;}
+        .app-content.dark .ct-num{background:#16202e;color:#a0a0a0;}
+        .ct-jor{font-size:9px;font-weight:800;letter-spacing:.4px;border-radius:9px;padding:2px 7px;color:#fff;flex-shrink:0;}
+        .ct-jor.completa{background:#2980b9;} .ct-jor.media{background:#16a085;}
+        .ct-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;}
+        .ct-chip{border:1.5px solid #dfe4ea;background:transparent;color:#2c3e50;font-family:inherit;font-size:11px;font-weight:700;padding:4px 8px;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:4px;}
+        .app-content.dark .ct-chip{border-color:#2d3561;color:#e0e0e0;}
+        .ct-chip:active{background:#f4f6f9;}
+        .ct-chip.vacio{color:#95a5a6;border-style:dashed;}
+        .ct-chip.grupo{border-color:var(--g1);color:var(--g1);}
+        .ct-chip.aviso{border-color:#e67e22;color:#e67e22;}
+        .ct-t{font-size:10px;font-weight:800;color:#fff;border-radius:7px;padding:1px 5px;}
+        .ct-t.M{background:#f39c12;} .ct-t.T{background:#8e44ad;} .ct-t.N{background:#2c3e50;}
         .cuad-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 2px 0;flex-shrink:0;}
         .cuad-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:#7f8c8d;}
         .app-content.dark .cuad-title{color:#a0a0a0;}
         .cuad-fecha{font-size:10.5px;font-weight:700;color:var(--g1);}
-        .cuad-box{flex:1;min-height:0;display:flex;align-items:flex-start;justify-content:center;background:white;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);overflow:auto;padding:6px;}
+        .cuad-box{flex:0 0 auto;max-height:44vh;min-height:130px;display:flex;align-items:flex-start;justify-content:center;background:white;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);overflow:auto;padding:6px;}
         .app-content.dark .cuad-box{background:#1e2a3a;}
         .cuad-img{max-width:100%;border-radius:8px;cursor:zoom-in;display:block;}
         .cuad-box #cuadVacio{margin:auto;}
@@ -962,6 +991,16 @@
                 <button class="btn-main" onclick="app.subirCuadrante()">📤 Subir foto del cuadrante</button>
                 <button class="btn-secondary" id="cuadBorrar" style="display:none" onclick="app.borrarCuadrante()">Quitar</button>
             </div>
+
+            <div class="sec-head" style="cursor:default;">
+                <span class="cond-title">👥 Trabajadores</span>
+                <span class="sec-cnt" id="ctCnt"></span>
+                <div class="cond-orden" onclick="event.stopPropagation()">
+                    <button id="ctOrdNombre" class="orden-btn activo" onclick="app.ordenarCuadrante('nombre')">Nombre</button>
+                    <button id="ctOrdNumero" class="orden-btn" onclick="app.ordenarCuadrante('numero')">Nº</button>
+                </div>
+            </div>
+            <div id="ctList" class="ct-list"></div>
         </div>
 
         <!-- ── TAB: Notas ── -->
@@ -1417,6 +1456,53 @@
         <div class="modal-body" style="padding:0;">
             <div id="puestoModalQuien" class="pm-quien"></div>
             <div id="puestoModalLista"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Días de la semana que trabaja -->
+<div class="modal" id="diasModal">
+    <div class="modal-card" id="diasModalContent">
+        <div class="modal-header">
+            <h3>📅 Días que trabaja</h3>
+            <button class="modal-close" onclick="document.getElementById('diasModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body">
+            <div id="diasQuien" class="pm-quien" style="margin:-16px -16px 12px;"></div>
+            <div class="lg-dias" id="diasSem"></div>
+            <span class="ops-field-sub" id="diasResumen" style="display:block;margin-top:8px;"></span>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('diasModal').classList.remove('show')">Cancelar</button>
+            <button class="modal-btn modal-btn-confirm" onclick="app._guardarDiasTrab()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Horario asignado -->
+<div class="modal" id="horarioModal">
+    <div class="modal-card" id="horarioModalContent">
+        <div class="modal-header">
+            <h3>🕐 Horario</h3>
+            <button class="modal-close" onclick="document.getElementById('horarioModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div id="horarioQuien" class="pm-quien"></div>
+            <div id="horarioLista"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Grupo de descanso -->
+<div class="modal" id="grupoModal">
+    <div class="modal-card" id="grupoModalContent">
+        <div class="modal-header">
+            <h3>🔄 Grupo de descanso</h3>
+            <button class="modal-close" onclick="document.getElementById('grupoModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div id="grupoQuien" class="pm-quien"></div>
+            <div id="grupoLista"></div>
         </div>
     </div>
 </div>
