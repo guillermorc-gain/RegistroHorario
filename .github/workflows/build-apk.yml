@@ -73,7 +73,7 @@ jobs:
           sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>|' "$MANIFEST"
           sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
           sed -i 's|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />|' "$MANIFEST"
-          sed -i 's|</application>|    <receiver android:name=".MainActivity$GeofenceReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$BootReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/></intent-filter></receiver>\n    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
+          sed -i 's|</application>|    <receiver android:name=".MainActivity$GeofenceReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$ChatReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$BootReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/></intent-filter></receiver>\n    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
 
       - name: Create FileProvider paths config
         run: |
@@ -132,7 +132,17 @@ jobs:
                   requestNotificationPermission();
                   requestLocationPermissions();
                   handleOAuthIntent(getIntent());
+                  anotarAbrirNotas(getIntent());
                   setupJavascriptInterface();
+              }
+
+              // El aviso del chat trae este extra; se deja apuntado para que la
+              // app, al arrancar, sepa que tiene que abrirse en las notas.
+              private void anotarAbrirNotas(Intent intent) {
+                  if (intent != null && intent.getBooleanExtra("abrirNotas", false)) {
+                      getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                          .edit().putString("abrirNotas", "1").apply();
+                  }
               }
 
               private void requestNotificationPermission() {
@@ -183,6 +193,7 @@ jobs:
               @Override
               protected void onNewIntent(Intent intent) {
                   super.onNewIntent(intent);
+                  anotarAbrirNotas(intent);
                   setIntent(intent);
                   handleOAuthIntent(intent);
               }
@@ -229,6 +240,25 @@ jobs:
                       @JavascriptInterface
                       public void requestLocationPermissions() {
                           ((MainActivity) ctx).requestLocationPermissions();
+                      }
+
+                      @JavascriptInterface
+                      public void activarAvisoChat(String email, boolean esGestor, String url) {
+                          ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                              .putString("chatEmail", email == null ? "" : email)
+                              .putBoolean("chatEsGestor", esGestor)
+                              .putString("chatUrl", url == null ? "" : url)
+                              .apply();
+                          programarAvisoChat(ctx);
+                      }
+
+                      @JavascriptInterface
+                      public void chatLeidoHasta(String cuando) {
+                          ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                              .putString("chatVisto", cuando == null ? "" : cuando).apply();
+                          NotificationManager nm = (NotificationManager)
+                              ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                          if (nm != null) nm.cancel(1002);
                       }
 
                       @JavascriptInterface
@@ -678,6 +708,105 @@ jobs:
               }
 
               // Re-register geofences after phone reboot
+              // Aviso de mensajes con la app cerrada. El de trabajo funciona
+              // porque lo lanza Android desde aquí, no la app web; los del chat
+              // dependían de que la pantalla estuviera viva, así que con la app
+              // de fondo no llegaba nada. Esto pregunta cada rato por su cuenta.
+              public static final String CHAT_CHANNEL = "chat_emt";
+
+              public static void programarAvisoChat(Context ctx) {
+                  SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                  if (prefs.getString("chatEmail", "").isEmpty()) return;
+                  android.app.AlarmManager am =
+                      (android.app.AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+                  if (am == null) return;
+                  int flags = PendingIntent.FLAG_UPDATE_CURRENT
+                      | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
+                  Intent i = new Intent(ctx, ChatReceiver.class);
+                  PendingIntent pi = PendingIntent.getBroadcast(ctx, 7777, i, flags);
+                  long cuando = System.currentTimeMillis() + 10 * 60 * 1000L;
+                  // Inexacta y tolerada en Doze: no hace falta permiso especial y
+                  // Android la entrega en sus ventanas de mantenimiento.
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                      am.setAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, cuando, pi);
+                  } else {
+                      am.set(android.app.AlarmManager.RTC_WAKEUP, cuando, pi);
+                  }
+              }
+
+              public static class ChatReceiver extends BroadcastReceiver {
+                  @Override
+                  public void onReceive(Context ctx, Intent intent) {
+                      final Context app = ctx.getApplicationContext();
+                      new Thread(() -> {
+                          try { mirarChat(app); } catch (Exception ignored) {}
+                          programarAvisoChat(app);     // se vuelve a poner siempre
+                      }).start();
+                  }
+
+                  private void mirarChat(Context ctx) throws Exception {
+                      SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                      String email = prefs.getString("chatEmail", "");
+                      if (email.isEmpty()) return;
+                      boolean esGestor = prefs.getBoolean("chatEsGestor", false);
+                      String visto = prefs.getString("chatVisto", "");
+                      String url = prefs.getString("chatUrl", "") + "?resumen=1"
+                          + (esGestor ? "" : "&email=" + java.net.URLEncoder.encode(email, "UTF-8"));
+
+                      java.net.HttpURLConnection c =
+                          (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                      c.setConnectTimeout(15000);
+                      c.setReadTimeout(15000);
+                      c.setRequestProperty("User-Agent", "HorasEMT/1.0");
+                      if (c.getResponseCode() != 200) { c.disconnect(); return; }
+                      StringBuilder sb = new StringBuilder();
+                      java.io.BufferedReader br = new java.io.BufferedReader(
+                          new java.io.InputStreamReader(c.getInputStream(), "UTF-8"));
+                      String linea;
+                      while ((linea = br.readLine()) != null) sb.append(linea);
+                      br.close(); c.disconnect();
+
+                      org.json.JSONArray arr = new org.json.JSONArray(sb.toString());
+                      int nuevos = 0;
+                      String masNuevo = visto;
+                      for (int i = 0; i < arr.length(); i++) {
+                          org.json.JSONObject n = arr.getJSONObject(i);
+                          if (n.optBoolean("archivada", false)) continue;
+                          String en = n.optString("en", "");
+                          String de = n.optString("de", "");
+                          // Lo que he escrito yo no me lo tiene que avisar nadie
+                          boolean mio = esGestor ? "gestor".equals(de)
+                                                 : (email.equalsIgnoreCase(de) || "trabajador".equals(de));
+                          if (mio || en.isEmpty() || en.compareTo(visto) <= 0) continue;
+                          nuevos++;
+                          if (en.compareTo(masNuevo) > 0) masNuevo = en;
+                      }
+                      if (nuevos == 0) return;
+                      prefs.edit().putString("chatVisto", masNuevo).apply();
+
+                      NotificationManager nm =
+                          (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          nm.createNotificationChannel(new NotificationChannel(
+                              CHAT_CHANNEL, "Mensajes", NotificationManager.IMPORTANCE_HIGH));
+                      }
+                      int flags = PendingIntent.FLAG_UPDATE_CURRENT
+                          | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
+                      Intent oi = new Intent(ctx, MainActivity.class);
+                      oi.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                      oi.putExtra("abrirNotas", true);
+                      PendingIntent pi = PendingIntent.getActivity(ctx, 2, oi, flags);
+                      nm.notify(1002, new NotificationCompat.Builder(ctx, CHAT_CHANNEL)
+                          .setSmallIcon(android.R.drawable.ic_dialog_email)
+                          .setContentTitle(nuevos == 1 ? "Tienes un mensaje" : "Tienes " + nuevos + " mensajes")
+                          .setContentText("Toca para leerlo en la aplicación")
+                          .setPriority(NotificationCompat.PRIORITY_HIGH)
+                          .setContentIntent(pi)
+                          .setAutoCancel(true)
+                          .build());
+                  }
+              }
+
               public static class BootReceiver extends BroadcastReceiver {
                   @Override
                   public void onReceive(Context ctx, Intent intent) {

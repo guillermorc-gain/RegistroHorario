@@ -572,6 +572,11 @@ const app = {
             // Al volver se miran los mensajes: es lo que hace que salte el
             // aviso cuando la app estaba de fondo.
             this._iniciarSondeoChat();
+            // Si se ha entrado tocando el aviso nativo, se abre en las notas
+            if (window.AndroidBridge?.getPref?.('abrirNotas') === '1') {
+                window.AndroidBridge?.removePref?.('abrirNotas');
+                this.switchTab(2);
+            }
             if (this.usuarioActual) this._cargarNotas();
             // If RegistrarReceiver updated Drive while in background, refresh the data
             const flag = window.AndroidBridge?.getPref?.('pendingRefresh');
@@ -2287,6 +2292,19 @@ const app = {
         this._pararSondeoChat();
         if (!this.usuarioActual?.email) return;
         this._timerChat = setInterval(() => this._sondearChat(), this.SONDEO_CHAT);
+        // Y el aviso nativo, que es el que sigue mirando con la app de fondo:
+        // el sondeo de aquí arriba solo vive mientras la pantalla esté viva.
+        window.AndroidBridge?.activarAvisoChat?.(
+            this.usuarioActual.email, false, this.NOTAS_URL);
+    },
+
+    // Hasta dónde he leído, para que el aviso nativo no repita lo ya visto
+    _ponerAlDiaElAviso() {
+        const visto = (this._notas || [])
+            .filter(n => !this._sinLeer(n))
+            .map(n => this._ultimoMensaje(n)?.en || '')
+            .sort().pop();
+        if (visto) window.AndroidBridge?.chatLeidoHasta?.(visto);
     },
 
     _pararSondeoChat() {
@@ -2449,6 +2467,7 @@ const app = {
         l[id] = ultimo.en || new Date().toISOString();
         localStorage.setItem('convLeidas', JSON.stringify(l));
         this._retirarAviso(id);
+        this._ponerAlDiaElAviso();
     },
 
     _totalSinLeer() {

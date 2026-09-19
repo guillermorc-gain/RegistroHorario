@@ -225,10 +225,13 @@ export default async function handler(req, res) {
       const soloResumen = req.query?.resumen !== undefined;
       // Con base de datos el filtro y el orden los hace Postgres, que para eso
       // tiene los índices; si no, se filtra aquí como siempre.
+      // Quién mandó el último también va en la huella: el aviso nativo lo
+      // necesita para no avisarte de lo que acabas de escribir tú.
       const huella = notas => notas.map(n => {
         const m = n.mensajes || [];
-        return { id: n.id, n: m.length, en: m.length ? m[m.length - 1].en : n.creado,
-                 estado: n.estado, archivada: !!n.archivada };
+        const ult = m.length ? m[m.length - 1] : null;
+        return { id: n.id, n: m.length, en: ult ? ult.en : n.creado,
+                 de: ult ? ult.de : '', estado: n.estado, archivada: !!n.archivada };
       });
       if (hayBaseDeDatos()) {
         const notas = (await leerNotas(quien)).map(normalizar);
