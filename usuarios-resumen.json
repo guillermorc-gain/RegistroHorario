@@ -1267,7 +1267,10 @@
     "dias": null,
     "diasAt": 1789820835635,
     "horario": "",
-    "grupo": null
+    "grupo": null,
+    "lugares": {
+      "20260919": "Son Rossinyol"
+    }
   },
   "prueba-1789758756867@prueba.local": {
     "nombre": "Toni Rodríguez",
