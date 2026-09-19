@@ -3372,7 +3372,7 @@ const app = {
             cont.innerHTML = '<div class="tab-empty" style="padding:22px 16px;">'
                 + '<span class="tab-empty-s">Aquí verás a cada trabajador en su lugar<br>'
                 + 'en cuanto abran su app.</span></div>';
-            this._renderFiltroLugares(localStorage.getItem('filtroLugares') || 'todos');
+            this._renderFiltroLugares(localStorage.getItem('filtroLugares') || 'todos', esHoy);
             return;
         }
         const porPuesto = {};
@@ -3391,8 +3391,9 @@ const app = {
                 if (mb === null) return -1;
                 return ma - mb;
             });
-            const trabajando = x =>
-                this._estadoJornada(x.u, x.j, esHoy, esFuturo, x.deAyer, x.enBaja).clase === 'verde';
+            const trabajando = x => esHoy
+                ? this._estadoJornada(x.u, x.j, true, false, x.deAyer, x.enBaja).clase === 'verde'
+                : !!(x.j && !x.j.v && !x.j.p && !x.enBaja);
             const dentro = gente.filter(trabajando).length;
             const delDia = gente.filter(({ j, deAyer, enBaja }) => !enBaja && j && !j.v && !j.p && !deAyer).length;
 
@@ -3432,21 +3433,19 @@ const app = {
         });
         cont.innerHTML = tarjetas.join('') || '<div class="tab-empty" style="padding:22px 16px;">'
             + '<span class="tab-empty-s">Ningún lugar en este grupo.</span></div>';
-        this._renderFiltroLugares(filtro);
+        this._renderFiltroLugares(filtro, esHoy);
     },
 
-    _renderFiltroLugares(sel) {
+    _renderFiltroLugares(sel, esHoy) {
         const cont = document.getElementById('lugFiltros');
         if (!cont) return;
-        cont.innerHTML = [['todos','Todos'],['trabajando','Trabajando'],
-                          ['sincubrir','Sin cubrir'],['sinservicio','Sin servicio']]
-            .map(([id, txt]) => `<button class="${sel === id ? 'activo' : ''}"
+        cont.innerHTML = [
+            ['todos', 'Todos'],
+            ['trabajando',  esHoy ? 'Trabajando'   : 'Con jornada'],
+            ['sincubrir',   'Sin cubrir'],
+            ['sinservicio', esHoy ? 'Sin servicio' : 'Sin jornada'],
+        ].map(([id, txt]) => `<button class="${sel === id ? 'activo' : ''}"
                 onclick="event.stopPropagation();app.filtrarLugares('${id}')">${txt}</button>`).join('');
-    },
-
-    toggleFiltroLugares() {
-        const c = document.getElementById('lugFiltros');
-        if (c) c.hidden = !c.hidden;
     },
 
     filtrarLugares(modo) {
