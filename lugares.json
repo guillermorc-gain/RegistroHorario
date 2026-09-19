@@ -92,5 +92,27 @@
       "radio": 50
     },
     "prioridad": 0
+  },
+  "calle": {
+    "nombre": "Calle",
+    "turnos": [
+      {
+        "id": "M",
+        "desde": "06:00",
+        "hasta": "13:00"
+      },
+      {
+        "id": "T",
+        "desde": "13:00",
+        "hasta": "21:00"
+      },
+      {
+        "id": "N",
+        "desde": "21:00",
+        "hasta": "06:00"
+      }
+    ],
+    "ubicacion": null,
+    "prioridad": 0
   }
 }
