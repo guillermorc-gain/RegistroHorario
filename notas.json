@@ -36,5 +36,18 @@
       "gestor": "Guillermo Ríos Correa",
       "en": "2026-09-19T16:51:00.685Z"
     }
+  },
+  "20260919165205639-ek8ou": {
+    "id": "20260919165205639-ek8ou",
+    "email": "guillermo.rc82@gmail.com",
+    "creado": "2026-09-19T16:52:05.639Z",
+    "nombre": "Guillermo Ríos Correa",
+    "conductor": "1418-3",
+    "texto": "Eee",
+    "adjuntos": [],
+    "de": "trabajador",
+    "tipo": "gestion",
+    "estado": "pendiente",
+    "respuesta": null
   }
 }
