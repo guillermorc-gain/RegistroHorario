@@ -57,6 +57,14 @@ function limpiarTurnos(turnos) {
     .map(t => ({ id: t.id, desde: hora(t.desde), hasta: hora(t.hasta) }));
 }
 
+// Días de la semana en que se trabaja ahí, 0 domingo a 6 sábado. Sin lista se
+// entiende que todos: es lo que había antes de existir este campo.
+function limpiarDias(d) {
+  if (!Array.isArray(d)) return null;
+  const dias = [...new Set(d.map(Number).filter(n => Number.isInteger(n) && n >= 0 && n <= 6))].sort();
+  return dias.length && dias.length < 7 ? dias : null;
+}
+
 function limpiarUbicacion(u) {
   if (!u || typeof u !== 'object') return null;
   const lat = Number(u.lat), lng = Number(u.lng);
@@ -98,6 +106,7 @@ export default async function handler(req, res) {
           nombre:    String(nombre).trim().slice(0, 40),
           turnos:    b.turnos !== undefined ? limpiarTurnos(b.turnos) : (previo.turnos || []),
           ubicacion: b.ubicacion !== undefined ? limpiarUbicacion(b.ubicacion) : (previo.ubicacion || null),
+          dias:      b.dias !== undefined ? limpiarDias(b.dias) : (previo.dias || null),
           // Con dos lugares en la misma ubicación gana el de prioridad más alta
           prioridad: b.prioridad !== undefined ? (Number(b.prioridad) || 0) : (previo.prioridad || 0),
         };

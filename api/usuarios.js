@@ -60,6 +60,14 @@ function enBajaHoy(bajas) {
   return (bajas || []).some(b => b.d <= f && (!b.h || b.h >= f));
 }
 
+function recortarNotas(notas) {
+  const claves = Object.keys(notas).sort();
+  if (claves.length <= MAX_LUGARES) return notas;
+  const recorte = {};
+  claves.slice(-MAX_LUGARES).forEach(k => { recorte[k] = notas[k]; });
+  return recorte;
+}
+
 function recortarLugares(lugares) {
   const claves = Object.keys(lugares).sort();
   if (claves.length <= MAX_LUGARES) return lugares;
@@ -175,7 +183,7 @@ export default async function handler(req, res) {
     // Solo el gestor asigna el puesto de trabajo
     if (req.method === 'PATCH' || req.method === 'DELETE') {
       if (!await exigirAdmin(req, res, ADMIN_EMAIL)) return;
-      const { email, puesto, ficticio, baja, bajas, vacaciones, desde, hasta } = req.body || {};
+      const { email, puesto, ficticio, baja, bajas, vacaciones, nota, fecha, desde, hasta } = req.body || {};
       const clave = (email || '').toLowerCase().trim();
       if (!clave) return res.status(400).json({ error: 'Falta el email' });
       // Los usuarios de prueba solo pueden vivir bajo este dominio, para que no
@@ -197,6 +205,12 @@ export default async function handler(req, res) {
         }
         // La baja (BE) y el lugar de trabajo son campos del gestor; una
         // publicación del trabajador los conserva porque no los sobrescribe.
+        else if (data[clave] && nota !== undefined && /^\d{8}$/.test(String(fecha || ''))) {
+          const notas = { ...(data[clave].notas || {}) };
+          if (nota) notas[fecha] = String(nota).slice(0, 40);
+          else delete notas[fecha];
+          data[clave].notas = recortarNotas(notas);
+        }
         else if (data[clave] && vacaciones !== undefined) {
           data[clave].vacaciones   = limpiarVacaciones(vacaciones);
           data[clave].vacacionesAt = Date.now();
@@ -228,6 +242,7 @@ export default async function handler(req, res) {
       }, req.method === 'DELETE' ? `Quitar ${clave}`
          : ficticio ? `Usuario de prueba ${clave}`
          : baja !== undefined ? `${baja ? 'Baja' : 'Alta'} de ${clave}`
+         : nota !== undefined ? `Descripción de ${clave}`
          : vacaciones !== undefined ? `Vacaciones de ${clave}`
          : bajas !== undefined ? `Bajas de ${clave}`
          : desde && hasta ? `Lugar de ${clave} del ${desde} al ${hasta}`
