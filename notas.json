@@ -72,21 +72,5 @@
       "gestor": "Guillermo Ríos Correa",
       "en": "2026-09-19T17:00:23.475Z"
     }
-  },
-  "20260919165722012-z2avl": {
-    "id": "20260919165722012-z2avl",
-    "email": "guillermo.rc82@gmail.com",
-    "creado": "2026-09-19T16:57:22.012Z",
-    "nombre": "Guillermo Ríos Correa",
-    "conductor": "1418-3",
-    "texto": "Grc",
-    "adjuntos": [],
-    "de": "trabajador",
-    "tipo": "companero",
-    "deEmail": "guillermo.rcxx@gmail.com",
-    "deNombre": "Guillermo Ríos Correa",
-    "deConductor": "1234-5",
-    "estado": "pendiente",
-    "respuesta": null
   }
 }
