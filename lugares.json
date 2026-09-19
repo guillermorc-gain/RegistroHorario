@@ -76,5 +76,15 @@
       "radio": 80
     },
     "prioridad": 0
+  },
+  "anselmo clave": {
+    "nombre": "Anselmo Clavé",
+    "turnos": [],
+    "ubicacion": {
+      "lat": 39.573326,
+      "lng": 2.655056,
+      "radio": 50
+    },
+    "prioridad": 0
   }
 }
