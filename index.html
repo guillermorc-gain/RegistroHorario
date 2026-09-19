@@ -243,6 +243,14 @@
         .comp-vacio{padding:22px 16px;text-align:center;font-size:12.5px;color:#95a5a6;}
         .app-header-center:empty{display:none;}
         .app-header-date{font-size:11px;opacity:0.85;margin-top:1px;}
+        .campana{position:relative;width:38px;height:38px;border-radius:50%;border:2px solid rgba(255,255,255,0.35);background:rgba(255,255,255,0.15);color:#fff;font-size:17px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:0;margin-right:7px;}
+        .campana-n{position:absolute;top:-5px;right:-5px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#e74c3c;color:#fff;font-size:10.5px;font-weight:800;display:none;align-items:center;justify-content:center;border:2px solid var(--g1);}
+        .campana-n.hay{display:flex;}
+        .cv-card.nueva{box-shadow:0 1px 4px rgba(0,0,0,0.07),inset 3px 0 0 #e74c3c;}
+        .cv-card.nueva .cv-quien{font-weight:800;}
+        .cv-card.nueva .cv-ultimo{color:#2c3e50;font-weight:700;}
+        .app-content.dark .cv-card.nueva .cv-ultimo{color:#e0e0e0;}
+        .cv-punto{width:8px;height:8px;border-radius:50%;background:#e74c3c;flex-shrink:0;}
         .profile-btn{width:42px;height:42px;border-radius:50%;border:2px solid rgba(255,255,255,0.4);cursor:pointer;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;flex-shrink:0;color:white;overflow:hidden;padding:0;}
 
         .app-content{flex:1;min-height:0;padding:10px;overflow:hidden;display:flex;flex-direction:column;gap:8px;}
@@ -682,6 +690,7 @@
                         id="cabeceraLugar" class="cab-lugar" onclick="app.verCompaneros()"></span><span
                         id="cabeceraResto"></span></span>
                 </div>
+                <button class="campana" id="campanaBtn" onclick="app.irANotas()" title="Mensajes sin leer">🔔<span class="campana-n" id="campanaN"></span></button>
                 <button class="profile-btn" id="profileBtn" onclick="app.mostrarOpciones()"></button>
             </div>
         </div>
@@ -1007,6 +1016,21 @@
                             <option value="notif_suave">Suave</option>
                         </select>
                         <span class="ops-row-sub">Solo en Android. Los cambios aplican desde la próxima notificación.</span>
+                    </div>
+                    <div class="ops-field" style="gap:8px;padding-top:2px;">
+                        <span class="ops-field-label">💬 Sonido de los mensajes</span>
+                        <select id="notifSoundChat" onchange="app.guardarSonidoChat(this.value)" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit;width:100%;">
+                            <option value="ninguno">Sin sonido</option>
+                            <option value="default">Predeterminado</option>
+                            <option value="notif_ding">Ding</option>
+                            <option value="notif_campana">Campana</option>
+                            <option value="notif_alerta">Alerta</option>
+                            <option value="notif_silbido">Silbido</option>
+                            <option value="notif_doble">Doble pitido</option>
+                            <option value="notif_fanfare">Fanfare</option>
+                            <option value="notif_suave">Suave</option>
+                        </select>
+                        <span class="ops-row-sub">Suena al llegar un mensaje nuevo con la app abierta.</span>
                     </div>
                     <button class="ops-btn" onclick="app.probarNotificacion()">🔔 Probar notificación <span class="ops-arrow">›</span></button>
                 </div>
