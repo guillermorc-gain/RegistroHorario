@@ -3457,7 +3457,7 @@ const app = {
     _estadoTrabajador(u, fecha) {
         if (this._enBaja(u, fecha) || (!this._bajasDe(u).length && u.baja)) return 'be';
         const { j } = this._jornadaVisible(u, fecha);
-        if (j?.v) return 'vacaciones';
+        if (j?.v || this._enVacaciones(u, fecha)) return 'vacaciones';
         return 'activo';
     },
 
@@ -3520,7 +3520,8 @@ const app = {
             const ver = u.version ? this._buildNumToVersion(parseInt(String(u.version).replace('build-',''),10) || 0) : '—';
             const cerrada = this._estaPlegado('t:' + u.email, true);
             const enBaja = this._enBaja(u, fecha) || (!this._bajasDe(u).length && !!u.baja);
-            return `<div class="cond-card${cerrada ? ' plegada' : ''}${enBaja ? ' baja' : ''}">
+            const enVac  = this._enVacaciones(u, fecha);
+            return `<div class="cond-card${cerrada ? ' plegada' : ''}${enBaja ? ' baja' : enVac ? ' vacaciones' : ''}">
                 <div class="cond-top" onclick="app._plegarTrabajador('${esc(u.email)}')">
                     ${av}
                     <div class="cond-id">
@@ -3530,6 +3531,8 @@ const app = {
                         <div class="cond-num">${esc(u.conductor) || 'sin nº'}
                             <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app._editarPuesto('${esc(u.email)}','${esc(fecha)}')">· ${esc(lugarHoy) || 'asignar lugar'}${excepcion ? ' ·' : ''} ✎</span></div>
                     </div>
+                    <button class="be-btn vc-btn${enVac ? ' on' : ''}" title="Vacaciones"
+                            onclick="event.stopPropagation();app.editarVacaciones('${esc(u.email)}')">VC</button>
                     <button class="be-btn${enBaja ? ' on' : ''}" title="Fechas de baja"
                             onclick="event.stopPropagation();app.editarBajas('${esc(u.email)}')">BE</button>
                     <span class="cond-chev">▾</span>
@@ -3864,6 +3867,94 @@ const app = {
             }
         });
         return dias.size;
+    },
+
+    // ── Vacaciones (VC) ─────────────────────────────────────────────────────
+    // Las pone el trabajador desde su app o el gestor desde aquí; el endpoint
+    // se queda con el cambio más reciente.
+
+    _vacacionesDe(u) { return Array.isArray(u?.vacaciones) ? u.vacaciones : []; },
+
+    // El día llega como YYYYMMDD y los rangos van en ISO
+    _enVacaciones(u, fecha) {
+        const iso = `${fecha.slice(0,4)}-${fecha.slice(4,6)}-${fecha.slice(6,8)}`;
+        return this._vacacionesDe(u).some(v => v.desde <= iso && v.hasta >= iso);
+    },
+
+    _diasVacaciones(u, anio) {
+        let n = 0;
+        this._vacacionesDe(u).forEach(v => {
+            const d = new Date(v.desde + 'T12:00:00'), f = new Date(v.hasta + 'T12:00:00');
+            for (let i = 0; d <= f && i < 400; d.setDate(d.getDate() + 1), i++) {
+                if (String(d.getFullYear()) === anio) n++;
+            }
+        });
+        return n;
+    },
+
+    editarVacaciones(email) {
+        const u = (this._conductores || {})[email];
+        if (!u) return;
+        this._vacEditando = email;
+        this._vacTmp = this._vacacionesDe(u).map(v => ({ ...v }));
+        document.getElementById('vacQuien').textContent =
+            `${u.conductor ? u.conductor + ' · ' : ''}${u.nombre || email}`;
+        this._renderVacacionesGestor();
+        document.getElementById('vacModal').classList.add('show');
+        if (this.darkMode) document.getElementById('vacModalContent').classList.add('dark');
+    },
+
+    _renderVacacionesGestor() {
+        const cont = document.getElementById('vacLista');
+        cont.innerHTML = this._vacTmp.map((v, i) => `<div class="baja-fila">
+                <label>Desde<input type="date" value="${v.desde || ''}"
+                    onchange="app._editarVac(${i},'desde',this.value)"></label>
+                <label>Hasta<input type="date" value="${v.hasta || ''}"
+                    onchange="app._editarVac(${i},'hasta',this.value)"></label>
+                <button class="baja-x" onclick="app._quitarVac(${i})">×</button>
+            </div>`).join('')
+            || '<div class="baja-vacio">Sin vacaciones registradas</div>';
+        const dias = this._diasVacaciones({ vacaciones: this._vacTmp }, String(new Date().getFullYear()));
+        document.getElementById('vacResumen').textContent = dias
+            ? `${dias} día${dias === 1 ? '' : 's'} este año`
+            : 'Los tramos que añadas le llegan a su app';
+    },
+
+    _editarVac(i, campo, valor) {
+        if (!this._vacTmp[i]) return;
+        this._vacTmp[i][campo] = valor;
+        this._renderVacacionesGestor();
+    },
+
+    _quitarVac(i) { this._vacTmp.splice(i, 1); this._renderVacacionesGestor(); },
+
+    _nuevaVac() {
+        const hoy = new Date().toISOString().slice(0, 10);
+        this._vacTmp.push({ desde: hoy, hasta: hoy });
+        this._renderVacacionesGestor();
+    },
+
+    async _guardarVacaciones() {
+        const email = this._vacEditando;
+        const vacaciones = this._vacTmp
+            .filter(v => v.desde && v.hasta && v.hasta >= v.desde)
+            .sort((a, b) => a.desde.localeCompare(b.desde));
+        document.getElementById('vacModal').classList.remove('show');
+        try {
+            const resp = await fetch(this.USUARIOS_URL, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ email, vacaciones })
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._conductores = data;
+            this._renderConductores();
+            this._mostrarToast(vacaciones.length
+                ? `🏖️ ${vacaciones.length} tramo${vacaciones.length === 1 ? '' : 's'} de vacaciones`
+                : 'Sin vacaciones', 2500);
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
     editarBajas(email) {
