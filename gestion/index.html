@@ -325,9 +325,16 @@
         .cond-alerta{display:inline-flex;align-items:center;gap:1px;background:#e67e22;color:#fff;font-size:9.5px;font-weight:800;border-radius:9px;padding:1px 6px;margin-left:5px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
         .rev-fila{display:flex;align-items:center;gap:9px;padding:10px 16px;border-bottom:1px solid #f4f4f4;}
         .modal-card.dark .rev-fila{border-color:#2d3561;}
-        .rev-dia{flex-shrink:0;font-size:11px;font-weight:800;color:#7f8c8d;width:62px;}
+        .rev-dia{flex-shrink:0;font-size:11.5px;font-weight:800;color:#7f8c8d;width:42px;}
         .rev-cols{flex:1;min-width:0;display:flex;gap:10px;}
-        .rev-col{display:flex;flex-direction:column;gap:2px;min-width:0;}
+        .rev-col{flex:1 1 0;display:flex;flex-direction:column;gap:2px;min-width:0;padding:5px 7px;border:1.5px solid #e8eaf0;border-radius:9px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+        .modal-card.dark .rev-col{border-color:#2d3561;}
+        .rev-col:active{background:#f4f6f9;}
+        .rev-col.plan.elegida{border-color:var(--g1);background:#eaf1fb;}
+        .rev-col.real.elegida{border-color:#e67e22;background:#fdf1e5;}
+        .modal-card.dark .rev-col.plan.elegida{background:#16264a;}
+        .modal-card.dark .rev-col.real.elegida{background:#3a2a14;}
+        .rev-fila.hecha .rev-dia{color:#27ae60;}
         .rev-lbl{font-size:8.5px;font-weight:800;color:#95a5a6;text-transform:uppercase;letter-spacing:.4px;}
         .rev-h{font-size:12.5px;font-weight:700;white-space:nowrap;}
         .rev-h.plan{color:var(--g1);} .rev-h.real{color:#e67e22;}
@@ -451,6 +458,27 @@
         .pm-op:active{background:#f4f6f9;}
         .pm-op.sel{background:#eaf2fd;font-weight:700;color:var(--g1);}
         .modal-card.dark .pm-op.sel{background:#14283f;}
+        .pst-horario.previsto{color:#8e9aa8;font-style:italic;}
+        .pst-horario.ponible{cursor:pointer;-webkit-tap-highlight-color:transparent;
+            border-bottom:1.5px dashed #c3ccd8;padding-bottom:1px;}
+        .jor-turnos{display:flex;gap:7px;margin-bottom:4px;}
+        .jor-turno{flex:1 1 0;min-width:0;background:#f4f6f9;border:1.5px solid #e8eaf0;border-radius:10px;padding:7px 5px;font-size:11px;font-weight:700;color:#5a6b7d;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+        .jor-turno b{font-size:12.5px;}
+        .jor-turno span{font-size:10.5px;font-weight:600;color:#95a5a6;white-space:nowrap;}
+        .jor-turno.on{background:var(--g1);border-color:var(--g1);color:#fff;}
+        .jor-turno.on span{color:#dbe7f7;}
+        .modal-card.dark .jor-turno{background:#232b45;border-color:#2d3561;color:#c8cfe0;}
+        .jor-sinturnos{font-size:11px;color:#95a5a6;padding:2px 0 4px;}
+        .jor-lugares,.jor-tramos{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;}
+        .jor-lugar{background:#f4f6f9;border:1.5px solid #e8eaf0;border-radius:9px;padding:7px 11px;font-size:12px;font-weight:700;color:#5a6b7d;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+        .jor-lugar.on{background:var(--g1);border-color:var(--g1);color:#fff;}
+        .jor-tramo{flex:1 1 30%;background:#f4f6f9;border:1.5px solid #e8eaf0;border-radius:10px;padding:7px 6px;font-size:11.5px;font-weight:800;color:#5a6b7d;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+        .jor-tramo span{font-size:10px;font-weight:600;color:#95a5a6;}
+        .jor-tramo.on{background:var(--g1);border-color:var(--g1);color:#fff;}
+        .jor-tramo.on span{color:#dbe7f7;}
+        .modal-card.dark .jor-lugar,.modal-card.dark .jor-tramo{background:#232b45;border-color:#2d3561;color:#c8cfe0;}
+        .jor-resumen{margin-top:10px;font-size:12px;font-weight:700;color:#5a6b7d;background:#f4f6f9;border-radius:9px;padding:9px 11px;}
+        .modal-card.dark .jor-resumen{background:#232b45;color:#c8cfe0;}
         .lg-turno{display:flex;align-items:flex-end;gap:8px;}
         .lg-turno .edit-field{flex:1 1 0;min-width:0;}
         .lg-turno.off .edit-field{opacity:.4;}
@@ -1640,7 +1668,38 @@
         </div>
         <div class="modal-footer">
             <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('revModal').classList.remove('show')">Cancelar</button>
-            <button class="modal-btn modal-btn-confirm" onclick="app._guardarRevisiones()">Guardar</button>
+            <button class="modal-btn modal-btn-confirm" id="revConfirmar"
+                    onclick="app._guardarRevisiones()">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Ponerle jornada a un trabajador: horario, lugar y para cuántos días -->
+<div class="modal" id="jornadaModal">
+    <div class="modal-card" id="jornadaModalContent">
+        <div class="modal-header">
+            <h3>🕒 Poner jornada</h3>
+            <button class="modal-close" onclick="document.getElementById('jornadaModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body">
+            <div id="jorQuien" class="pm-quien" style="margin:-16px -16px 12px;"></div>
+            <div class="f-sep">Horario</div>
+            <div class="edit-row">
+                <div class="edit-field"><label>Entrada</label>
+                    <input type="time" id="jorEntrada" onchange="app._renderJornadaModal()"></div>
+                <div class="edit-field"><label>Salida</label>
+                    <input type="time" id="jorSalida" onchange="app._renderJornadaModal()"></div>
+            </div>
+            <div class="jor-turnos" id="jorTurnos"></div>
+            <div class="f-sep">Lugar de trabajo</div>
+            <div class="jor-lugares" id="jorLugares"></div>
+            <div class="f-sep">¿Para cuántos días?</div>
+            <div class="jor-tramos" id="jorTramos"></div>
+            <div class="jor-resumen" id="jorResumen"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" onclick="app._quitarJornada()">Quitar</button>
+            <button class="modal-btn modal-btn-confirm" onclick="app._guardarJornada()">Guardar</button>
         </div>
     </div>
 </div>

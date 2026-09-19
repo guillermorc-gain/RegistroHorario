@@ -2851,6 +2851,153 @@ const app = {
     // dentro del hilo, como en cualquier chat.
     _guardarRespuesta() { return this._enviarNotaAGestor(); },
 
+    // ── Ponerle la jornada a un trabajador ───────────────────────────────────
+    // Se abre tocando el horario en el cuadro de lugares. Se elige a qué hora
+    // entra y sale, en qué lugar y para cuántos días: ese día, esa semana o el
+    // mes entero. Queda guardado aparte de las jornadas que registra él, así
+    // que su próxima publicación no se lo lleva por delante.
+
+    ponerJornada(email, fecha, lugar) {
+        const u = (this._conductores || {})[email];
+        if (!u) return;
+        this._jorEditando = email;
+        this._jorFecha = /^\d{8}$/.test(String(fecha || '')) ? fecha : this._fechaOffset(0);
+        const h = this._horasPlan(u, this._jorFecha);
+        this._jorLugar = String(lugar || '').trim() || this._lugarDe(u, this._jorFecha,
+            this._jornadaDe(u, this._jorFecha)).trim();
+        // Los grupos de pega del cuadro no son lugares de verdad
+        if (['Sin asignar', 'Sin servicio'].includes(this._jorLugar)) this._jorLugar = '';
+        this._jorAlcance = 'dia';
+        document.getElementById('jorEntrada').value = h?.i || '';
+        document.getElementById('jorSalida').value  = h?.f || '';
+        document.getElementById('jorQuien').textContent = this._quienEs(u, email)
+            + ` · ${this._jorFecha.slice(6,8)}/${this._jorFecha.slice(4,6)}/${this._jorFecha.slice(0,4)}`;
+        this._renderJornadaModal();
+        document.getElementById('jornadaModal').classList.add('show');
+        if (this.darkMode) document.getElementById('jornadaModalContent').classList.add('dark');
+    },
+
+    // Todos los lugares conocidos, los definidos y los que ya se usan
+    _lugaresTodos() {
+        const usados = [...new Set(Object.values(this._conductores || {})
+            .flatMap(x => [x.puesto || '', ...Object.values(x.lugares || {})])
+            .map(v => v.trim()).filter(Boolean))];
+        const todos = [...PUESTOS_DEFINIDOS];
+        usados.forEach(p => {
+            if (!todos.some(d => this._clavePuesto(d) === this._clavePuesto(p))) todos.push(p);
+        });
+        return todos;
+    },
+
+    // Los tramos del lugar elegido, para no tener que escribir las horas
+    _renderJornadaModal() {
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const q = t => String(t || '').replace(/'/g, "\\'");
+
+        const franjas = TURNOS_POR_PUESTO[this._clavePuesto(this._jorLugar)] || [];
+        const NOMBRE = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
+        const turnos = document.getElementById('jorTurnos');
+        turnos.innerHTML = franjas.length
+            ? franjas.map(f => {
+                const on = document.getElementById('jorEntrada').value === f.desde
+                        && document.getElementById('jorSalida').value === f.hasta;
+                return `<button class="jor-turno ${f.id}${on ? ' on' : ''}"
+                    onclick="app._turnoAlHorario('${f.id}','${f.desde}','${f.hasta}')">
+                    <b>${f.id}</b> ${esc(NOMBRE[f.id] || f.id)}<br>
+                    <span>${esc(f.desde)}–${esc(f.hasta)}</span></button>`;
+              }).join('')
+            : `<div class="jor-sinturnos">${this._jorLugar
+                ? 'Este lugar no tiene turnos definidos. Pon las horas a mano.'
+                : 'Elige un lugar y te salen sus turnos.'}</div>`;
+
+        document.getElementById('jorLugares').innerHTML = this._lugaresTodos().map(p => {
+            const sel = this._clavePuesto(p) === this._clavePuesto(this._jorLugar);
+            return `<button class="jor-lugar${sel ? ' on' : ''}"
+                onclick="app._lugarDeLaJornada('${q(esc(p))}')">${esc(p)}</button>`;
+        }).join('')
+        + `<button class="jor-lugar${this._jorLugar ? '' : ' on'}"
+                onclick="app._lugarDeLaJornada('')">Sin lugar</button>`;
+
+        document.getElementById('jorTramos').innerHTML = this._tramosJornada().map(t =>
+            `<button class="jor-tramo${this._jorAlcance === t.id ? ' on' : ''}"
+                onclick="app._alcanceDeLaJornada('${t.id}')">${esc(t.titulo)}<br>
+                <span>${esc(t.detalle)}</span></button>`).join('');
+
+        this._resumenJornada();
+    },
+
+    // Los mismos tramos que para el lugar, pero sin "siempre": un horario para
+    // toda la vida es el del mes, y eso ya se pone desde el cuadrante.
+    _tramosJornada() {
+        const guardar = this._fechaEditando;
+        this._fechaEditando = this._jorFecha;
+        const tramos = this._tramos().filter(t => t.desde);
+        this._fechaEditando = guardar;
+        return tramos;
+    },
+
+    _turnoAlHorario(id, desde, hasta) {
+        document.getElementById('jorEntrada').value = desde;
+        document.getElementById('jorSalida').value  = hasta;
+        this._renderJornadaModal();
+    },
+
+    _lugarDeLaJornada(lugar) {
+        this._jorLugar = lugar;
+        this._renderJornadaModal();
+    },
+
+    _alcanceDeLaJornada(id) {
+        this._jorAlcance = id;
+        this._renderJornadaModal();
+    },
+
+    _resumenJornada() {
+        const i = document.getElementById('jorEntrada').value;
+        const f = document.getElementById('jorSalida').value;
+        const tramo = this._tramosJornada().find(t => t.id === this._jorAlcance);
+        const el = document.getElementById('jorResumen');
+        if (!el || !tramo) return;
+        if (!i || !f) {
+            el.textContent = 'Pon la hora de entrada y la de salida.';
+            return;
+        }
+        const dias = this._diasDelTramo(tramo);
+        el.textContent = `${i}–${f} (${this._enHoras(this._duracion(i, f))})`
+            + `${this._jorLugar ? ' en ' + this._jorLugar : ''}`
+            + ` · ${dias} día${dias === 1 ? '' : 's'}, ${tramo.detalle}.`;
+    },
+
+    _diasDelTramo(tramo) {
+        const aFecha = x => new Date(+x.slice(0,4), +x.slice(4,6) - 1, +x.slice(6,8), 12);
+        return Math.round((aFecha(tramo.hasta) - aFecha(tramo.desde)) / 86400000) + 1;
+    },
+
+    async _guardarJornada() {
+        const i = document.getElementById('jorEntrada').value;
+        const f = document.getElementById('jorSalida').value;
+        if (!i || !f) { this._mostrarToast('Pon la hora de entrada y la de salida', 3000); return; }
+        const tramo = this._tramosJornada().find(t => t.id === this._jorAlcance);
+        if (!tramo) return;
+        document.getElementById('jornadaModal').classList.remove('show');
+        const dias = this._diasDelTramo(tramo);
+        await this._guardarCampoTrab(this._jorEditando,
+            { horario: { i, f }, desde: tramo.desde, hasta: tramo.hasta, puesto: this._jorLugar },
+            `✅ ${i}–${f}${this._jorLugar ? ' en ' + this._jorLugar : ''} · ${dias} día${dias === 1 ? '' : 's'}`);
+        this._renderPuestos();
+    },
+
+    // Quitar lo asignado en ese tramo y dejarlo como estaba
+    async _quitarJornada() {
+        const tramo = this._tramosJornada().find(t => t.id === this._jorAlcance);
+        if (!tramo) return;
+        document.getElementById('jornadaModal').classList.remove('show');
+        await this._guardarCampoTrab(this._jorEditando,
+            { horario: '', desde: tramo.desde, hasta: tramo.hasta },
+            'Jornada quitada de esos días');
+        this._renderPuestos();
+    },
+
     // ── Trabajadores del cuadrante ───────────────────────────────────────────
     // La misma gente que la pestaña de trabajadores, pero en una fila por
     // persona con lo que hace falta para montar el cuadrante: lugar, horario,
@@ -2874,11 +3021,25 @@ const app = {
         return (suelto && typeof suelto === 'object' && suelto.i && suelto.f) ? suelto : null;
     },
 
+    // El horario que le toca ese día. Manda lo que se le haya puesto para esa
+    // fecha —un día suelto, una semana— y por debajo queda el del mes.
+    _horasPlan(u, fecha) {
+        const delDia = u?.horariosDia?.[fecha];
+        if (delDia && delDia.i && delDia.f) return { ...delDia, delDia: true };
+        return this._horasAsignadas(u, this._mesDe(fecha));
+    },
+
     // El horario que cuenta es el que registra el trabajador: el asignado solo
-    // vale mientras no haya fichado ese día.
+    // vale mientras no haya fichado ese día. Salvo que al revisar el día el
+    // gestor haya dicho que el bueno era el suyo, y entonces manda ese.
     _horasDelDia(u, fecha, j) {
-        if (j?.i) return { i: j.i, f: j.o || '', real: true };
-        const h = this._horasAsignadas(u, this._mesDe(fecha));
+        if (u?.revisiones?.[fecha] === 'plan') {
+            const h = this._horasPlan(u, fecha);
+            if (h) return { ...h, real: false, elegido: true };
+        }
+        if (j?.i) return { i: j.i, f: j.o || '', real: true,
+                           elegido: u?.revisiones?.[fecha] === 'real' };
+        const h = this._horasPlan(u, fecha);
         return h ? { ...h, real: false } : null;
     },
 
@@ -2902,21 +3063,25 @@ const app = {
         return d;
     },
 
-    // Días en que lo asignado y lo que fichó no cuadran. Los ya confirmados
-    // desaparecen; los marcados con el ojo siguen, que es lo que significan.
+    // Días en que lo asignado y lo que fichó no cuadran. Los ya decididos
+    // —da igual a favor de quién— desaparecen; los marcados con el ojo siguen,
+    // que es lo que significan. 'ok' es como se guardaba antes de poder elegir
+    // horario, y vale como decidido.
+    DECIDIDO: ['ok', 'plan', 'real'],
+
     _desajustes(u, mes) {
         const revis = u?.revisiones || {};
         return (u?.jornadas || []).filter(j => {
             if (!j?.i) return false;
             if (mes && this._mesDe(j.f) !== mes) return false;
-            if (revis[j.f] === 'ok') return false;
-            const h = this._horasAsignadas(u, this._mesDe(j.f));
+            if (this.DECIDIDO.includes(revis[j.f])) return false;
+            const h = this._horasPlan(u, j.f);
             if (!h) return false;
             return this._minDif(j.i, h.i) > this.MARGEN_HORARIO
                 || (j.o && h.f && this._minDif(j.o, h.f) > this.MARGEN_HORARIO);
         }).map(j => ({
             f: j.f,
-            plan: this._horasAsignadas(u, this._mesDe(j.f)),
+            plan: this._horasPlan(u, j.f),
             real: { i: j.i, o: j.o || '' },
             estado: revis[j.f] === 'ojo' ? 'ojo' : 'pendiente',
         })).sort((a, b) => b.f.localeCompare(a.f));
@@ -2925,11 +3090,19 @@ const app = {
     _desviaciones(u, mes) { return this._desajustes(u, mes).length; },
 
     // ── Revisar los horarios que no cuadran ──
+    // De cada día se ven los dos horarios, el que puso gestión y el que fichó
+    // el trabajador, y se elige cuál es el bueno tocándolo. Lo elegido es lo
+    // que manda a partir de ahí en el cuadrante. Nada se guarda hasta
+    // confirmar, así que se puede repasar el mes entero y decidir al final.
+
     revisarHorarios(email) {
         const u = (this._conductores || {})[email];
         if (!u) return;
         this._revEditando = email;
         this._revTmp = { ...(u.revisiones || {}) };
+        // La lista se congela al abrir: si se recalculara, el día elegido
+        // desaparecería en el acto y ya no se vería lo que se acaba de elegir.
+        this._revLista = this._desajustes(u);
         document.getElementById('revQuien').textContent = this._quienEs(u, email);
         this._renderRevisiones();
         document.getElementById('revModal').classList.add('show');
@@ -2937,48 +3110,59 @@ const app = {
     },
 
     _renderRevisiones() {
-        const u = (this._conductores || {})[this._revEditando] || {};
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-        // Con lo que se lleva marcado en el momento, no con lo guardado
-        const lista = this._desajustes({ ...u, revisiones: this._revTmp });
+        const lista = this._revLista || [];
         const cont = document.getElementById('revLista');
         cont.innerHTML = lista.length ? lista.map(d => {
-            const dia = `${d.f.slice(6,8)}/${d.f.slice(4,6)}/${d.f.slice(0,4)}`;
-            const ojo = this._revTmp[d.f] === 'ojo';
-            return `<div class="rev-fila">
+            const dia = `${d.f.slice(6,8)}/${d.f.slice(4,6)}`;
+            const elegido = this._revTmp[d.f];
+            const ojo = elegido === 'ojo';
+            const marca = cual => elegido === cual ? ' elegida' : '';
+            return `<div class="rev-fila${elegido && !ojo ? ' hecha' : ''}">
                 <div class="rev-dia">${esc(dia)}</div>
                 <div class="rev-cols">
-                    <div class="rev-col"><span class="rev-lbl">Gestión</span>
+                    <div class="rev-col plan${marca('plan')}" onclick="app._marcarRevision('${d.f}','plan')">
+                        <span class="rev-lbl">${elegido === 'plan' ? '✓ ' : ''}Gestión</span>
                         <span class="rev-h plan">${esc(d.plan.i)}–${esc(d.plan.f)}</span></div>
-                    <div class="rev-col"><span class="rev-lbl">Registrado</span>
+                    <div class="rev-col real${marca('real')}" onclick="app._marcarRevision('${d.f}','real')">
+                        <span class="rev-lbl">${elegido === 'real' ? '✓ ' : ''}Trabajador</span>
                         <span class="rev-h real">${esc(d.real.i)}${d.real.o ? '–' + esc(d.real.o) : ''}</span></div>
                 </div>
                 <div class="rev-btns">
-                    <button class="rev-btn ok" onclick="app._marcarRevision('${d.f}','ok')"
-                        title="Está correcto">✔</button>
                     <button class="rev-btn ojo${ojo ? ' on' : ''}" onclick="app._marcarRevision('${d.f}','ojo')"
-                        title="Visto, pero sin resolver">👁</button>
+                        title="Dejarlo marcado para mirarlo luego">👁</button>
                 </div>
             </div>`;
         }).join('') : '<div class="baja-vacio">Todo cuadra: no queda ningún día por revisar.</div>';
-        const n = lista.length;
-        document.getElementById('revResumen').textContent = n
-            ? `${n} día${n === 1 ? '' : 's'} sin cuadrar. ✔ lo da por bueno y lo quita; 👁 lo deja marcado.`
-            : 'Al guardar desaparecerá la exclamación.';
+        const elegidos = lista.filter(d => ['plan', 'real'].includes(this._revTmp[d.f])).length;
+        const quedan = lista.length - elegidos;
+        document.getElementById('revResumen').textContent = !lista.length
+            ? 'Al confirmar desaparecerá la exclamación.'
+            : elegidos
+            ? `${elegidos} de ${lista.length} elegido${elegidos === 1 ? '' : 's'}.`
+              + (quedan ? ` Queda${quedan === 1 ? '' : 'n'} ${quedan}.` : ' Dale a Confirmar.')
+            : `${lista.length} día${lista.length === 1 ? '' : 's'} sin cuadrar.`
+              + ' Toca el horario que sea el bueno; 👁 lo deja para luego.';
+        const btn = document.getElementById('revConfirmar');
+        if (btn) btn.textContent = elegidos ? `Confirmar ${elegidos}` : 'Confirmar';
     },
 
-    _marcarRevision(fecha, estado) {
-        // Volver a pulsar el ojo lo deja como estaba
-        if (estado === 'ojo' && this._revTmp[fecha] === 'ojo') delete this._revTmp[fecha];
-        else this._revTmp[fecha] = estado;
+    _marcarRevision(fecha, cual) {
+        // Volver a tocar lo mismo lo deshace: el día vuelve a estar sin decidir
+        if (this._revTmp[fecha] === cual) delete this._revTmp[fecha];
+        else this._revTmp[fecha] = cual;
         this._renderRevisiones();
     },
 
     async _guardarRevisiones() {
         document.getElementById('revModal').classList.remove('show');
-        const n = Object.values(this._revTmp).filter(v => v === 'ok').length;
+        const dice = v => Object.values(this._revTmp).filter(x => x === v).length;
+        const conGestion = dice('plan'), conTrabajador = dice('real');
+        const partes = [];
+        if (conGestion)    partes.push(`${conGestion} con el horario de gestión`);
+        if (conTrabajador) partes.push(`${conTrabajador} con el del trabajador`);
         await this._guardarCampoTrab(this._revEditando, { revisiones: this._revTmp },
-            n ? `✔ ${n} día${n === 1 ? '' : 's'} dado${n === 1 ? '' : 's'} por bueno${n === 1 ? '' : 's'}` : 'Revisión guardada');
+            partes.length ? '✔ ' + partes.join(' y ') : 'Revisión guardada');
     },
 
     _duracion(i, f) {
@@ -4761,6 +4945,10 @@ const app = {
                      // Sin jornada y sin ese día en su semana, ese día no es
                      // suyo: ni cubre el lugar ni tiene sentido listarlo.
                      fueraDeSemana: !v.j && !this._trabajaEseDia(u, fecha),
+                     // Lo que tiene asignado ese día, para cuando aún no ha
+                     // fichado: de hoy en adelante eso ya cubre el turno, así
+                     // que el lugar no sale como vacío teniendo gente puesta.
+                     plan: (esHoy || esFuturo) && !v.j ? this._horasPlan(u, fecha) : null,
                      lugar: this._lugarDe(u, fecha, v.j).trim() || SIN };
         // Quien está de vacaciones o de baja no ocupa lugar ese día, así que no
         // sale en el cuadro. Sigue en la lista de trabajadores, con su botón.
@@ -4844,34 +5032,46 @@ const app = {
             // Turnos del lugar que ese día no cubre nadie. El que viene de la
             // víspera cubre el turno de su hora de entrada, no el de ahora.
             const franjas = TURNOS_POR_PUESTO[this._clavePuesto(puesto)] || [];
+            // La hora que cuenta para el turno: la que fichó, y si aún no ha
+            // fichado, la que tiene asignada.
+            const horaTurno = x => (x.j && !x.j.v && !x.j.p) ? x.j.i : (x.plan?.i || '');
             const cubiertos = new Set(gente
-                .filter(x => x.j && !x.j.v && !x.j.p)
-                .map(x => this._turnoDe(puesto, x.j.i))
+                .map(x => this._turnoDe(puesto, horaTurno(x)))
                 .filter(Boolean));
             const huecos = franjas.filter(f => !cubiertos.has(f.id));
+            // Los que tienen turno puesto ese día pero todavía no han entrado
+            const previstos = gente.filter(x => !x.j && x.plan).length;
 
             // El filtro escoge qué trabajadores se ven, salvo "sin cubrir", que
             // es una propiedad del lugar: el que tiene algún turno sin nadie.
-            if (filtro === 'sincubrir' && (franjas.length ? !huecos.length : dentro > 0)) return;
+            if (filtro === 'sincubrir'
+                && (franjas.length ? !huecos.length : dentro + previstos > 0)) return;
             const visibles = filtro === 'trabajando'  ? gente.filter(trabajando)
                            : filtro === 'sinservicio' ? gente.filter(x => !conJornada(x))
                            : gente;
             if (!visibles.length) return;
 
-            const filas = visibles.map(({ u, j, deAyer, enBaja, enVac, sinServicio }) => {
+            const filas = visibles.map(({ u, j, deAyer, enBaja, enVac, sinServicio, plan }) => {
                 const e = this._estadoJornada(u, j, esHoy, esFuturo, deAyer, enBaja, enVac);
+                const previsto = !j && !enBaja && !enVac && plan;
                 const horario = sinServicio
                     ? `${String(sinServicio).replace('.', ',')}h sin lugar`
                     : (j?.i && j?.o && !enVac)
                     ? (deAyer ? `→${esc(j.o)}` : `${esc(j.i)}–${esc(j.o)}`)
-                    : (enBaja ? 'BE' : enVac ? '🏖️ VC' : '—');
-                const t = this._turnoDe(puesto, j?.i) || '';
+                    : enBaja ? 'BE' : enVac ? '🏖️ VC'
+                    : previsto ? `${esc(plan.i)}–${esc(plan.f)}` : '—';
+                const t = this._turnoDe(puesto, j?.i || (previsto ? plan.i : '')) || '';
+                // El horario se toca para ponerle la jornada: a qué hora, qué
+                // días y en qué lugar. Sin jornada registrada sale un guión, y
+                // ese guión es justo por donde se empieza.
                 return `<div class="pst-fila${enBaja ? ' baja' : ''}${enVac ? ' vac' : ''}">
                     <span class="pst-dot ${e.clase}" title="${esc(e.texto)}"></span>
                     <span class="pst-quien" onclick="app.editarNota('${esc(u.email)}','${esc(fecha)}')"><b>${esc(u.conductor) || '—'}</b> ${esc(u.nombre)}${
                         this._notaDe(u, fecha) ? `<span class="pst-nota">${esc(this._notaDe(u, fecha))}</span>` : ''}</span>
                     ${t ? `<span class="cond-turno ${t}">${t}</span>` : ''}
-                    <span class="pst-horario">${horario}</span>
+                    <span class="pst-horario${previsto ? ' previsto' : ''}${j ? '' : ' ponible'}"
+                          onclick="event.stopPropagation();app.ponerJornada('${esc(u.email)}','${esc(fecha)}','${esc(puesto)}')"
+                          title="Ponerle jornada">${horario}</span>
                 </div>`;
             }).join('');
             // Hoy interesa quién está dentro; en otro día, cuántos lo cubrieron.
@@ -4881,9 +5081,11 @@ const app = {
             const cob = dePega
                 ? `${visibles.length} ${visibles.length === 1 ? 'persona' : 'personas'}`
                 : esHoy
-                ? (dentro > 0 ? `${dentro} en turno` : 'sin cubrir')
-                : (delDia > 0 ? `${delDia} ${esFuturo ? 'previstos' : 'ese día'}` : 'sin cubrir');
-            const vacio = !dePega && (esHoy ? dentro === 0 : delDia === 0);
+                ? (dentro > 0 ? `${dentro} en turno`
+                   : previstos > 0 ? `${previstos} previsto${previstos === 1 ? '' : 's'}` : 'sin cubrir')
+                : (delDia + previstos > 0
+                   ? `${delDia + previstos} ${esFuturo ? 'previstos' : 'ese día'}` : 'sin cubrir');
+            const vacio = !dePega && (esHoy ? dentro + previstos === 0 : delDia + previstos === 0);
             const NOMBRE_TURNO = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
             tarjetas.push(`<div class="pst-card">
                 <div class="pst-head">
