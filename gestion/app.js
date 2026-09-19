@@ -3354,7 +3354,7 @@ const app = {
         Object.values(this._conductores || {}).forEach(u => {
             (u.jornadas || []).forEach(j => filas.push({
                 f: j.f, horas: j.h || 0, ini: j.i || '', fin: j.o || '',
-                extra: j.x === 1, festivo: !!j.fe, vac: !!j.v, pr: !!j.p,
+                extra: j.x === 1, festivo: !!j.fe, vac: !!j.v, pr: !!j.p, be: !!j.b,
                 nombre: u.nombre || u.email, num: u.conductor || '',
                 email: u.email,
                 puesto: this._lugarDe(u, j.f, j) || 'Sin lugar',
@@ -3382,7 +3382,7 @@ const app = {
                 ${r.puesto ? `<br><span class="rg-pt">${esc(r.puesto)}</span>` : ''}</span>
             ${r.extra ? '<span class="rg-x">extra</span>' : ''}
             ${r.festivo ? '<span class="festivo-badge">🎉</span>' : ''}
-            ${r.vac ? '<span class="vacaciones-badge">🏖️</span>' : ''}
+            ${r.vac ? '<span class="vacaciones-badge">🏖️</span>' : ''}${r.be ? '<span class="be-badge2">🩺 BE</span>' : ''}
             <span class="rg-hor">${esc(r.ini && r.fin ? r.ini + '–' + r.fin : '—')}</span>
             <span class="rg-h2">${r.horas}h</span>
             ${lapiz(r)}
@@ -3421,7 +3421,7 @@ const app = {
                       : modo === 'numero' ? ` · <span class="rg-pt">${esc(r.puesto)}</span>` : ''}</span>
                         ${r.extra ? '<span class="rg-x">extra</span>' : ''}
                         ${r.festivo ? '<span class="festivo-badge">🎉</span>' : ''}
-                        ${r.vac ? '<span class="vacaciones-badge">🏖️</span>' : ''}
+                        ${r.vac ? '<span class="vacaciones-badge">🏖️</span>' : ''}${r.be ? '<span class="be-badge2">🩺 BE</span>' : ''}
                         <span class="rg-hor">${esc(r.ini && r.fin ? r.ini + '–' + r.fin : '—')}</span>
                         <span class="rg-h2">${r.horas}h</span>
                         ${lapiz(r)}
@@ -3850,7 +3850,7 @@ const app = {
             if (j.f.slice(0, 6) === mes) { delMes += h; dias++; }
             if (j.x === 1) { extras += h; return; }
             if (j.fe && h > 0) festTrabajados++;
-            anual += this._horasEfectivas(j, jor);
+            anual += this._horasEfectivas(j, jor, u);
         });
         const exceso = Math.max(0, anual - tope);
         const r1 = n => Math.round(n * 10) / 10;
@@ -3861,8 +3861,14 @@ const app = {
 
     // Misma regla que en la app del trabajador: un festivo sin trabajar cuenta
     // como jornada entera, y uno trabajado cuenta sus horas.
-    _horasEfectivas(j, jornada) {
+    _horasEfectivas(j, jornada, u) {
         const h = j.h || 0;
+        // Un día de baja apuntado por el trabajador cuenta como jornada hecha:
+        // media jornada 3,5h y jornada completa las suyas.
+        if (j.b && h === 0) {
+            return (Number(u?.horasAnuales) || 777) >= this.ANUALES_COMPLETA
+                ? (Number(u?.jornadaHoras) || 7) : this.HORAS_BAJA;
+        }
         return (j.fe && h === 0) ? jornada : h;
     },
 
