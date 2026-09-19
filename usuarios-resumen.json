@@ -1221,7 +1221,7 @@
     "diasMes": 3,
     "turno": "T",
     "puesto": "Son Rossinyol",
-    "actualizado": "2026-09-19T12:26:07.920Z",
+    "actualizado": "2026-09-19T12:26:08.912Z",
     "horaInicio": "18:00",
     "horaFin": "22:00",
     "horarioDe": "anterior",
@@ -1251,7 +1251,7 @@
         "pu": "Son Rossinyol"
       }
     ],
-    "horasAnuales": 1700,
+    "horasAnuales": 777,
     "jornadaHoras": 7,
     "vacaciones": [],
     "vacacionesAt": 0,
