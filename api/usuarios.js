@@ -1,4 +1,5 @@
 import { emailDelToken, tokenDe, exigirAdmin } from './_auth.js';
+import { hayBaseDeDatos, leerUsuarios, leerUsuario, guardarUsuario, borrarUsuario } from './_almacen.js';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO         = 'guillermorc-gain/RegistroHorario';
@@ -187,6 +188,30 @@ async function setFile(data, sha, mensaje) {
 
 // Dos apps escribiendo a la vez chocan en el sha; reintentar una vez releyendo
 // basta cuando cada usuario publica una vez al día.
+// Todo lo que se guarda aquí toca a un solo trabajador. Con base de datos eso
+// es leer y escribir su fila, sin tocar las de los demás: se acabaron las
+// colisiones del relevo y el fichero que crece sin parar. Sin base de datos se
+// sigue reescribiendo el fichero entero, igual que siempre.
+async function mutarUsuario(clave, mutar, mensaje, devolverTodo) {
+  if (!hayBaseDeDatos()) return guardarConReintento(mutar, mensaje);
+  const previo = await leerUsuario(clave);
+  const nuevo = mutar(previo ? { [clave]: previo } : {});
+  if (!nuevo) return null;
+  // Solo se borra si de verdad había algo y la mutación lo ha quitado; si no
+  // existía y sigue sin existir, no hay nada que hacer.
+  if (nuevo[clave] !== undefined) await guardarUsuario(clave, nuevo[clave]);
+  else if (previo) await borrarUsuario(clave);
+  // Gestión espera la plantilla entera de vuelta; el trabajador que publica,
+  // solo lo suyo, y no tiene sentido hacerle leer las jornadas de los demás.
+  return devolverTodo ? leerUsuarios() : nuevo;
+}
+
+async function leerTodo() {
+  if (hayBaseDeDatos()) return leerUsuarios();
+  const { data } = await getFile();
+  return data;
+}
+
 async function guardarConReintento(mutar, mensaje) {
   for (let intento = 0; intento < 3; intento++) {
     const { data, sha } = await getFile();
@@ -256,7 +281,7 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const { data } = await getFile();
+      const data = await leerTodo();
       res.setHeader('Cache-Control', 'no-store');
       // Con ?lugar= se devuelve solo quién trabaja ahí ese día. Lo usa la app
       // del trabajador para enseñarle con quién va, sin bajarse todo.
@@ -287,7 +312,7 @@ export default async function handler(req, res) {
       const b = req.body || {};
       if (typeof b.avatar === 'string' && b.avatar.length > MAX_AVATAR) b.avatar = null;
 
-      const nuevo = await guardarConReintento(data => {
+      const nuevo = await mutarUsuario(quien, data => {
         const previo = data[quien] || {};
         data[quien] = {
           ...previo,
@@ -340,7 +365,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Los usuarios de prueba usan @prueba.local' });
       }
 
-      const nuevo = await guardarConReintento(data => {
+      const nuevo = await mutarUsuario(clave, data => {
         if (req.method === 'DELETE') delete data[clave];
         else if (ficticio) {
           data[clave] = {
@@ -418,7 +443,7 @@ export default async function handler(req, res) {
          : revisiones !== undefined ? `Horarios revisados de ${clave}`
          : horario !== undefined ? `Horario de ${clave}`
          : desde && hasta ? `Lugar de ${clave} del ${desde} al ${hasta}`
-         : `Lugar de ${clave}`);
+         : `Lugar de ${clave}`, true);
 
       return nuevo ? res.status(200).json(nuevo) : res.status(500).json({ error: 'No se pudo guardar' });
     }
