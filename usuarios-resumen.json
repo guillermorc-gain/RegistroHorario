@@ -1570,6 +1570,13 @@
     ],
     "email": "prueba-1789766856622@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T08:44:02.048Z"
+    "actualizado": "2026-09-19T08:44:02.048Z",
+    "vacaciones": [
+      {
+        "desde": "2026-08-01",
+        "hasta": "2026-08-31"
+      }
+    ],
+    "vacacionesAt": 1789807475806
   }
 }
