@@ -1700,7 +1700,7 @@
     "conductor": "1246-0",
     "puesto": "Calle",
     "avatar": null,
-    "version": "build-63",
+    "version": "build-68",
     "horasMes": 21,
     "horasTotales": 21,
     "diasMes": 3,
@@ -1711,6 +1711,7 @@
     "jornadaHoras": 7,
     "horasAnuales": 1700,
     "ritmo": "6y2",
+    "dias": null,
     "jornadas": [
       {
         "f": "20260918",
@@ -1736,7 +1737,7 @@
     ],
     "email": "prueba-1789766752991@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T09:05:57.903Z"
+    "actualizado": "2026-09-19T09:38:01.565Z"
   },
   "prueba-1789766856622@prueba.local": {
     "nombre": "Juan Valera",
