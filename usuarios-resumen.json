@@ -10,7 +10,7 @@
     "diasMes": 16,
     "turno": "M",
     "puesto": "Control",
-    "actualizado": "2026-09-19T09:50:51.155Z",
+    "actualizado": "2026-09-19T10:44:11.069Z",
     "horaInicio": "09:00",
     "horaFin": "12:30",
     "horarioDe": "hoy",
@@ -1053,7 +1053,7 @@
         "pu": "Control"
       }
     ],
-    "horasAnuales": 777,
+    "horasAnuales": 1700,
     "jornadaHoras": 7,
     "lugares": {
       "20260301": "Son Rossinyol",
