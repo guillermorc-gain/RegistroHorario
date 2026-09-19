@@ -2425,7 +2425,13 @@
     ],
     "email": "prueba-1789766856622@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T20:31:40.825Z"
+    "actualizado": "2026-09-19T20:31:40.825Z",
+    "horarios": {
+      "202609": {
+        "i": "08:00",
+        "f": "14:00"
+      }
+    }
   },
   "prueba-1789812365837@prueba.local": {
     "nombre": "Juan Cantos",
