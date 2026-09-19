@@ -1,1 +1,24 @@
-{}
+{
+  "son rossinyol": {
+    "nombre": "Son Rossinyol",
+    "turnos": [
+      {
+        "id": "M",
+        "desde": "06:00",
+        "hasta": "13:30"
+      },
+      {
+        "id": "T",
+        "desde": "13:30",
+        "hasta": "21:00"
+      },
+      {
+        "id": "N",
+        "desde": "21:00",
+        "hasta": "06:00"
+      }
+    ],
+    "ubicacion": null,
+    "prioridad": 0
+  }
+}
