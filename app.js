@@ -1451,7 +1451,18 @@ const app = {
     // Los días de la semana también los puede cambiar el gestor desde el
     // cuadrante, así que van sellados para que gane el último cambio.
     _diasAt() { return parseInt(localStorage.getItem('diasSemanaAt') || '0', 10); },
+
+    // Grupo de días libres de la jornada completa. Lo asigna gestión; aquí solo
+    // se enseña.
+    grupoDescanso: parseInt(localStorage.getItem('grupoDescanso') || '0', 10) || null,
     _sellarDias() { localStorage.setItem('diasSemanaAt', String(Date.now())); },
+
+    _etiquetaDias() {
+        const d = Array.isArray(this.diasSemana) && this.diasSemana.length ? this.diasSemana : null;
+        if (!d) return 'todos';
+        const letra = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+        return this.DIAS_MEDIA.filter(x => d.includes(x)).map(x => letra[x]).join(' ');
+    },
 
     _hoyISO() {
         const d = new Date();
@@ -1569,6 +1580,13 @@ const app = {
     // pregunta cuáles y cuántas horas en vez de darlo por supuesto.
     _esMedia(n) { return n < this.JORNADA_COMPLETA; },
 
+    // Desde Trabajo se va derecho a los días, sin pasar por elegir jornada
+    mostrarDiasJornada() {
+        document.getElementById('jornadaModal').classList.add('show');
+        if (this.darkMode) document.getElementById('jornadaModalContent').classList.add('dark');
+        this._pasoDiasJornada(this.jornadaHoras);
+    },
+
     _volverJornada() {
         document.getElementById('jornadaDias').hidden = true;
         document.getElementById('jornadaPie').hidden = true;
@@ -1630,8 +1648,10 @@ const app = {
         if (n === this.jornadaHoras && saltarPaso !== true) return;
         this.jornadaHoras = n;
         localStorage.setItem('jornadaHoras', String(n));
-        // La jornada completa no lleva días fijos: se trabaja lo que toque
-        if (!this._esMedia(n)) { this.diasSemana = null; localStorage.removeItem('diasSemana'); this._sellarDias(); }
+        // La jornada completa no lleva días fijos: se trabaja lo que toque. Lo
+        // manda la jornada anual, no las horas del día: el que hace 7h tres
+        // días a la semana va por las 777h y sí tiene días fijos.
+        if (this._esJornadaCompleta()) { this.diasSemana = null; localStorage.removeItem('diasSemana'); this._sellarDias(); }
         this._actualizarJornadaDisplay();
         await this._guardarPreferencias(true);
         localStorage.removeItem('resumenHuella');    // que se publique el cambio
@@ -1678,9 +1698,92 @@ const app = {
 
     _actualizarCabeceraUsuario() {
         const nom = document.getElementById('cabeceraNombre');
-        const num = document.getElementById('cabeceraNum');
         if (nom) nom.textContent = this.usuarioActual?.name || '';
-        if (num) num.textContent = [this.puestoTrabajo, this.numConductor].filter(Boolean).join(' · ');
+        const lug = document.getElementById('cabeceraLugar');
+        const res = document.getElementById('cabeceraResto');
+        if (lug) lug.textContent = this.puestoTrabajo || '';
+        if (res) res.textContent = (this.puestoTrabajo && this.numConductor ? ' · ' : '')
+            + (this.numConductor || '');
+        this._pintarCompaneros();
+    },
+
+    // ── Con quién trabajas ───────────────────────────────────────────────────
+    // El lugar de la cabecera se pone verde cuando hay alguien más ahí hoy, y
+    // al tocarlo se ve quién es.
+
+    COMPANEROS_TTL: 10 * 60 * 1000,
+
+    _claveCompaneros() {
+        return `${this._clavePuesto(this.puestoTrabajo)}|${new Date().toISOString().slice(0, 10)}`;
+    },
+
+    _companerosEnCache() {
+        try {
+            const c = JSON.parse(localStorage.getItem('companeros') || 'null');
+            if (c && c.clave === this._claveCompaneros() && Date.now() - c.at < this.COMPANEROS_TTL) return c;
+        } catch (_) {}
+        return null;
+    },
+
+    async _cargarCompaneros(forzar) {
+        if (!this.puestoTrabajo) return null;
+        const cache = this._companerosEnCache();
+        if (cache && !forzar) return cache;
+        const resp = await fetch(`${this.USUARIOS_URL}?lugar=${encodeURIComponent(this.puestoTrabajo)}`,
+            { cache: 'no-store' });
+        if (!resp.ok) throw new Error(resp.status);
+        const data = await resp.json();
+        const c = { clave: this._claveCompaneros(), at: Date.now(), gente: data.gente || [] };
+        localStorage.setItem('companeros', JSON.stringify(c));
+        return c;
+    },
+
+    // Verde solo si hay alguien más: si va solo, la cabecera no cambia
+    _pintarCompaneros() {
+        const lug = document.getElementById('cabeceraLugar');
+        if (!lug) return;
+        const c = this._companerosEnCache();
+        lug.classList.toggle('juntos', !!c && c.gente.length > 1);
+        if (!c && this.puestoTrabajo) {
+            this._cargarCompaneros().then(() => this._pintarCompaneros()).catch(() => {});
+        }
+    },
+
+    async verCompaneros() {
+        if (!this.puestoTrabajo) {
+            this._mostrarToast('Todavía no tienes lugar de trabajo', 3000);
+            return;
+        }
+        const esc = t => String(t || '').replace(/[<>&"]/g, x => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[x]));
+        document.getElementById('compTitulo').textContent = `👥 Hoy en ${this.puestoTrabajo}`;
+        document.getElementById('compLista').innerHTML = '<div class="comp-vacio">Cargando…</div>';
+        document.getElementById('compModal').classList.add('show');
+        if (this.darkMode) document.getElementById('compModalContent').classList.add('dark');
+        let c;
+        try { c = await this._cargarCompaneros(true); }
+        catch (_) {
+            document.getElementById('compLista').innerHTML =
+                '<div class="comp-vacio">No se ha podido consultar. Inténtalo luego.</div>';
+            return;
+        }
+        this._pintarCompaneros();
+        const gente = c.gente || [];
+        document.getElementById('compLista').innerHTML = gente.length
+            ? gente.map(g => {
+                const yo = g.email && this.usuarioActual?.email
+                    && g.email.toLowerCase() === this.usuarioActual.email.toLowerCase();
+                const h = g.horario;
+                return `<div class="comp-fila${yo ? ' yo' : ''}">
+                    <span class="comp-num">${esc(g.conductor) || '—'}</span>
+                    <span class="comp-nom">${esc(g.nombre) || 'Sin nombre'}${yo ? ' (tú)' : ''}</span>
+                    ${h ? `<span class="comp-hora${h.real ? '' : ' plan'}">${esc(h.i)}${
+                        h.f ? '–' + esc(h.f) : ''}</span>` : ''}
+                </div>`;
+            }).join('')
+              + (gente.length > 1
+                    ? ''
+                    : '<div class="comp-vacio">Hoy no hay nadie más aquí.</div>')
+            : '<div class="comp-vacio">Hoy no hay nadie asignado aquí.</div>';
     },
 
     // Record ids are YYYYMMDD for the first entry of a day, then YYYYMMDD-2, -3…
@@ -2595,6 +2698,13 @@ const app = {
                     if (this.diasSemana) localStorage.setItem('diasSemana', JSON.stringify(this.diasSemana));
                     else localStorage.removeItem('diasSemana');
                 }
+                const grupo = Number(mio?.grupo) || null;
+                if (grupo !== this.grupoDescanso) {
+                    this.grupoDescanso = grupo;
+                    if (grupo) localStorage.setItem('grupoDescanso', String(grupo));
+                    else localStorage.removeItem('grupoDescanso');
+                    this._actualizarCampoFestivo();
+                }
                 if (mio?.puesto !== undefined) {
                     this.puestoTrabajo = mio.puesto || '';
                     localStorage.setItem('puestoTrabajo', this.puestoTrabajo);
@@ -2738,6 +2848,20 @@ const app = {
         if (campo) campo.hidden = !this._esJornadaCompleta();
         const inp = document.getElementById('precioFestivoGlobal');
         if (inp && this.precioFestivoDefault > 0) inp.value = this.precioFestivoDefault;
+
+        // Los días fijos son cosa de quien va por las 777h —tanto el de 3,5h
+        // como el que hace 7h tres días—, y el grupo de libres, de la jornada
+        // completa. Nunca se enseñan los dos.
+        const completa = this._esJornadaCompleta();
+        const btnDias = document.getElementById('btnDiasJornada');
+        if (btnDias) btnDias.hidden = completa;
+        const txtDias = document.getElementById('diasJornadaDisplay');
+        if (txtDias) txtDias.textContent = this._etiquetaDias();
+
+        const campoGr = document.getElementById('campoGrupoDescanso');
+        if (campoGr) campoGr.hidden = !completa;
+        const txtGr = document.getElementById('grupoDescansoDisplay');
+        if (txtGr) txtGr.textContent = this.grupoDescanso ? 'Grupo ' + this.grupoDescanso : 'sin asignar';
     },
 
     async guardarPrecioNoche() {

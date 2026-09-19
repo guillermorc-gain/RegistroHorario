@@ -171,6 +171,56 @@ async function guardarConReintento(mutar, mensaje) {
   return null;
 }
 
+// ── Quién trabaja en un lugar un día ────────────────────────────────────────
+const clavePuesto = p => String(p || '').trim().toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+function deBajaEse(u, f) {
+  return (u.bajas || []).some(b => b.d <= f && (!b.h || b.h >= f));
+}
+
+function deVacacionesEse(u, f) {
+  const iso = `${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6, 8)}`;
+  return (u.vacaciones || []).some(v => v.desde <= iso && v.hasta >= iso);
+}
+
+// Sin lista de días se entiende que le puede tocar cualquiera
+function leTocaEse(u, f) {
+  if (!Array.isArray(u.dias) || !u.dias.length) return true;
+  const d = new Date(+f.slice(0, 4), +f.slice(4, 6) - 1, +f.slice(6, 8), 12).getDay();
+  return u.dias.includes(d);
+}
+
+// El horario que vale es el que fichó; si no ha fichado, el asignado del mes.
+function horarioDelDia(u, f) {
+  const suya = (u.jornadas || []).filter(j => j && j.f === f).pop();
+  if (suya?.i) return { i: suya.i, f: suya.o || '', real: true };
+  const delMes = u.horarios?.[f.slice(0, 6)];
+  if (delMes?.i) return { ...delMes, real: false };
+  const suelto = u.horario;
+  return (suelto && typeof suelto === 'object' && suelto.i) ? { ...suelto, real: false } : null;
+}
+
+function quienHayEn(data, lugar, fecha) {
+  const hoy = new Date();
+  const f = /^\d{8}$/.test(String(fecha || '')) ? fecha
+    : `${hoy.getFullYear()}${String(hoy.getMonth() + 1).padStart(2, '0')}${String(hoy.getDate()).padStart(2, '0')}`;
+  const clave = clavePuesto(lugar);
+  const gente = Object.values(data || {})
+    .filter(u => u && !u.ficticio)
+    .filter(u => clavePuesto((u.lugares || {})[f] || u.puesto) === clave && clave)
+    .filter(u => !deBajaEse(u, f) && !deVacacionesEse(u, f) && leTocaEse(u, f))
+    .map(u => ({
+      email:     u.email,
+      nombre:    u.nombre || '',
+      conductor: u.conductor || '',
+      horario:   horarioDelDia(u, f),
+    }))
+    .sort((a, b) => (a.horario?.i || '\uffff').localeCompare(b.horario?.i || '\uffff')
+                 || (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+  return { lugar: String(lugar || ''), fecha: f, gente };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
@@ -181,6 +231,12 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const { data } = await getFile();
       res.setHeader('Cache-Control', 'no-store');
+      // Con ?lugar= se devuelve solo quién trabaja ahí ese día. Lo usa la app
+      // del trabajador para enseñarle con quién va, sin bajarse todo.
+      const { lugar, fecha } = req.query || {};
+      if (lugar !== undefined) {
+        return res.status(200).json(quienHayEn(data, lugar, fecha));
+      }
       return res.status(200).json(data);
     }
 
