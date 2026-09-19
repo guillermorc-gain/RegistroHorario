@@ -2124,20 +2124,41 @@ const app = {
         }
         const etiqueta = { ok: 'Aceptada', no: 'Denegada', pendiente: 'Pendiente' };
         cont.innerHTML = this._notas.map(n => {
+            // Las que escribe gestión no tienen estado: son un mensaje suyo
+            const deGestor = n.de === 'gestor';
             const e = ['ok', 'no'].includes(n.estado) ? n.estado : 'pendiente';
-            return `<div class="nt-card ${e}">
+            return `<div class="nt-card ${deGestor ? 'degestor' : e}">
                 <div class="nt-top">
                     <span class="nt-fecha">${esc(this._fechaNota(n.creado))}</span>
-                    <span class="nt-estado ${e}">${etiqueta[e]}</span>
+                    <span class="nt-estado ${deGestor ? 'degestor' : e}">${
+                        deGestor ? esc(n.gestor) || 'Gestión' : etiqueta[e]}</span>
                 </div>
                 <div class="nt-cuerpo">${esc(n.texto)}</div>
-                ${n.respuesta?.texto ? `<div class="nt-resp">
+                ${this._pintarAdjuntos(n.adjuntos)}
+                ${(n.respuesta?.texto || n.respuesta?.adjuntos?.length) ? `<div class="nt-resp">
                     <div class="nt-resp-quien">${esc(n.respuesta.gestor) || 'Gestión'} · ${
                         esc(this._fechaNota(n.respuesta.en))}</div>
                     <div class="nt-resp-txt">${esc(n.respuesta.texto)}</div>
+                    ${this._pintarAdjuntos(n.respuesta.adjuntos)}
                 </div>` : ''}
             </div>`;
         }).join('');
+    },
+
+// Un adjunto de imagen se ve; lo demás se descarga
+    _pintarAdjuntos(lista) {
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        if (!Array.isArray(lista) || !lista.length) return '';
+        return `<div class="nt-adj">` + lista.map(a => a.tipo?.startsWith('image/')
+            ? `<img src="${esc(a.datos)}" alt="${esc(a.nombre)}" onclick="app._verFoto('${esc(a.datos)}')">`
+            : `<a href="${esc(a.datos)}" download="${esc(a.nombre)}">📎 ${esc(a.nombre)}</a>`).join('') + `</div>`;
+    },
+
+    _verFoto(datos) {
+        const v = document.getElementById('fotoVisor');
+        if (!v) { window.open(datos, '_blank'); return; }
+        document.getElementById('fotoVisorImg').src = datos;
+        v.classList.add('show');
     },
 
     async enviarNota() {
