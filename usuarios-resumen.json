@@ -1488,7 +1488,7 @@
     "conductor": "8959-9",
     "puesto": "Calle",
     "avatar": null,
-    "version": "build-67",
+    "version": "build-69",
     "horasMes": 7,
     "horasTotales": 7,
     "diasMes": 1,
@@ -1515,7 +1515,7 @@
     ],
     "email": "prueba-1789760248885@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T09:32:29.733Z"
+    "actualizado": "2026-09-19T10:20:09.280Z"
   },
   "prueba-1789760390735@prueba.local": {
     "nombre": "Miguel Moyà",
