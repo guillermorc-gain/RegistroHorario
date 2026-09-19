@@ -1489,14 +1489,14 @@
     "puesto": "Calle",
     "avatar": null,
     "version": "build-69",
-    "horasMes": 7,
-    "horasTotales": 7,
-    "diasMes": 1,
+    "horasMes": 21,
+    "horasTotales": 21,
+    "diasMes": 3,
     "horaInicio": "06:00",
     "horaFin": "13:00",
     "horarioDe": "anterior",
     "turno": "M",
-    "jornadaHoras": 7,
+    "jornadaHoras": 3.5,
     "horasAnuales": 777,
     "ritmo": "lv",
     "dias": [
@@ -1511,11 +1511,25 @@
         "o": "13:00",
         "h": 7,
         "n": 0
+      },
+      {
+        "f": "20260921",
+        "i": "06:00",
+        "o": "13:00",
+        "h": 7,
+        "n": 0
+      },
+      {
+        "f": "20260923",
+        "i": "06:00",
+        "o": "13:00",
+        "h": 7,
+        "n": 0
       }
     ],
     "email": "prueba-1789760248885@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T10:20:09.280Z"
+    "actualizado": "2026-09-19T10:21:08.221Z"
   },
   "prueba-1789760390735@prueba.local": {
     "nombre": "Miguel Moyà",
