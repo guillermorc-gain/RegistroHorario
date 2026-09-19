@@ -3326,10 +3326,13 @@ const app = {
         return ayer ? { j: ayer, deAyer: true } : { j: null, deAyer: false };
     },
 
-    _estadoJornada(u, j, esHoy, esFuturo, deAyer, enBaja) {
+    _estadoJornada(u, j, esHoy, esFuturo, deAyer, enBaja, enVac) {
         if (enBaja) return { clase: 'baja', texto: 'de baja (BE)' };
+        // Las vacaciones son un tramo de fechas, no una jornada: sin esto solo
+        // salían el día suelto que el trabajador hubiera registrado.
+        if (enVac)  return { clase: 'vac',  texto: 'de vacaciones' };
         if (!j)      return { clase: 'gris', texto: esFuturo ? 'sin previsión' : 'sin registro' };
-        if (j.v)     return { clase: 'gris', texto: 'vacaciones' };
+        if (j.v)     return { clase: 'vac',  texto: 'vacaciones' };
         if (j.p)     return { clase: 'gris', texto: 'permiso retribuido' };
         if (esFuturo) return { clase: 'gris', texto: 'previsto' };
         const ini = this._minutos(j.i), fin = this._minutos(j.o);
@@ -3377,6 +3380,7 @@ const app = {
             const v = this._jornadaVisible(u, fecha);
             return { u, j: v.j, deAyer: v.deAyer,
                      enBaja: this._enBaja(u, fecha) || (!this._bajasDe(u).length && !!u.baja),
+                     enVac:  this._enVacaciones(u, fecha),
                      lugar: this._lugarDe(u, fecha, v.j).trim() || SIN };
         });
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
@@ -3384,10 +3388,10 @@ const app = {
         // Contadores de la cabecera: quién ha trabajado ese día y quién está
         // dentro ahora mismo (esto último solo tiene sentido en el día de hoy).
         let trabajaron = 0, ahoraMismo = 0;
-        conPuesto.forEach(({ u, j, deAyer, enBaja }) => {
-            if (enBaja || !j || j.v || j.p) return;
+        conPuesto.forEach(({ u, j, deAyer, enBaja, enVac }) => {
+            if (enBaja || enVac || !j || j.v || j.p) return;
             if (!deAyer) trabajaron++;          // la de ayer ya se contó en su día
-            if (esHoy && this._estadoJornada(u, j, true, false, deAyer, false).clase === 'verde') ahoraMismo++;
+            if (esHoy && this._estadoJornada(u, j, true, false, deAyer, false, false).clase === 'verde') ahoraMismo++;
         });
         const cnt = document.getElementById('puestosCnt');
         if (cnt) {
@@ -3421,10 +3425,11 @@ const app = {
                 return ma - mb;
             });
             const trabajando = x => esHoy
-                ? this._estadoJornada(x.u, x.j, true, false, x.deAyer, x.enBaja).clase === 'verde'
-                : !!(x.j && !x.j.v && !x.j.p && !x.enBaja);
+                ? this._estadoJornada(x.u, x.j, true, false, x.deAyer, x.enBaja, x.enVac).clase === 'verde'
+                : !!(x.j && !x.j.v && !x.j.p && !x.enBaja && !x.enVac);
             const dentro = gente.filter(trabajando).length;
-            const delDia = gente.filter(({ j, deAyer, enBaja }) => !enBaja && j && !j.v && !j.p && !deAyer).length;
+            const delDia = gente.filter(({ j, deAyer, enBaja, enVac }) =>
+                !enBaja && !enVac && j && !j.v && !j.p && !deAyer).length;
 
             // El filtro escoge qué trabajadores se ven, salvo "sin cubrir", que
             // es una propiedad del lugar: los que ahora no tienen a nadie dentro.
@@ -3434,13 +3439,13 @@ const app = {
                            : gente;
             if (!visibles.length) return;
 
-            const filas = visibles.map(({ u, j, deAyer, enBaja }) => {
-                const e = this._estadoJornada(u, j, esHoy, esFuturo, deAyer, enBaja);
-                const horario = (j?.i && j?.o)
+            const filas = visibles.map(({ u, j, deAyer, enBaja, enVac }) => {
+                const e = this._estadoJornada(u, j, esHoy, esFuturo, deAyer, enBaja, enVac);
+                const horario = (j?.i && j?.o && !enVac)
                     ? (deAyer ? `→${esc(j.o)}` : `${esc(j.i)}–${esc(j.o)}`)
-                    : (enBaja ? 'BE' : '—');
+                    : (enBaja ? 'BE' : enVac ? '🏖️ VC' : '—');
                 const t = this._turnoDe(puesto, j?.i) || '';
-                return `<div class="pst-fila${enBaja ? ' baja' : ''}">
+                return `<div class="pst-fila${enBaja ? ' baja' : ''}${enVac ? ' vac' : ''}">
                     <span class="pst-dot ${e.clase}" title="${esc(e.texto)}"></span>
                     <span class="pst-quien"><b>${esc(u.conductor) || '—'}</b> ${esc(u.nombre)}</span>
                     ${t ? `<span class="cond-turno ${t}">${t}</span>` : ''}
