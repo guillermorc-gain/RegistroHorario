@@ -106,21 +106,5 @@
       "gestor": "Guillermo Ríos Correa",
       "en": "2026-09-19T17:02:41.787Z"
     }
-  },
-  "20260919170214199-xrqcq": {
-    "id": "20260919170214199-xrqcq",
-    "email": "guillermo.rcxx@gmail.com",
-    "creado": "2026-09-19T17:02:14.199Z",
-    "nombre": "Guillermo Ríos Correa",
-    "conductor": "1234-5",
-    "texto": "Me voy a las 12h",
-    "adjuntos": [],
-    "de": "trabajador",
-    "tipo": "companero",
-    "deEmail": "guillermo.rc82@gmail.com",
-    "deNombre": "Guillermo Ríos Correa",
-    "deConductor": "1418-3",
-    "estado": "pendiente",
-    "respuesta": null
   }
 }
