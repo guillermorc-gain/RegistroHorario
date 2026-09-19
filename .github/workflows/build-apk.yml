@@ -574,20 +574,12 @@ jobs:
               public void onBackPressed() {
                   android.webkit.WebView wv = (getBridge() != null) ? getBridge().getWebView() : null;
                   if (wv == null) { moveTaskToBack(true); return; }
+                  // Que decida la app: aquí había una copia en Java de una lista
+                  // de tres cuadros, y cualquier cosa nueva que se abriera —una
+                  // conversación, un lugar, el visor de una foto— se saltaba la
+                  // lista y atrás cerraba la aplicación con el cuadro puesto.
                   wv.evaluateJavascript(
-                      "(function(){" +
-                      "try{" +
-                      "var h=document.getElementById('historialModal');" +
-                      "if(h&&h.classList.contains('show')){h.classList.remove('show');return 'modal';}" +
-                      "var e=document.getElementById('editModal');" +
-                      "if(e&&e.classList.contains('show')){e.classList.remove('show');return 'modal';}" +
-                      "var a=document.getElementById('avatarModal');" +
-                      "if(a&&a.classList.contains('show')){a.classList.remove('show');return 'modal';}" +
-                      "var o=document.getElementById('optionsScreen');" +
-                      "if(o&&o.classList.contains('active')){app.mostrarApp();return 'main';}" +
-                      "}catch(ex){}" +
-                      "return 'exit';" +
-                      "})()",
+                      "(function(){try{return app.atras()?'ok':'exit';}catch(e){return 'exit';}})()",
                       result -> {
                           if (result == null || result.contains("exit")) {
                               moveTaskToBack(true);
