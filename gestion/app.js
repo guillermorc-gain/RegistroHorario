@@ -1677,12 +1677,25 @@ const app = {
 
     // Swipe horizontal para cambiar de pestaña. Se ignora si el gesto empieza
     // sobre algo desplazable en horizontal (p. ej. el cuadrante ampliado).
+    // Un dedo que empieza sobre algo que se desplaza de lado —las filas de
+    // filtros, el cuadrante ampliado— es para mover eso, no para cambiar de
+    // pestaña ni de día. Antes se tragaba el gesto y los filtros medio ocultos
+    // no había manera de sacarlos.
+    _sobreCarrusel(destino, hasta) {
+        for (let el = destino; el && el !== hasta && el.nodeType === 1; el = el.parentElement) {
+            if (el.scrollWidth - el.clientWidth < 12) continue;
+            const desborde = getComputedStyle(el).overflowX;
+            if (desborde === 'auto' || desborde === 'scroll') return true;
+        }
+        return false;
+    },
+
     _initSwipeTabs() {
         const cont = document.getElementById('appContent');
         if (!cont) return;
         let x0 = 0, y0 = 0, activo = false;
         cont.addEventListener('touchstart', e => {
-            if (e.touches.length !== 1) { activo = false; return; }
+            if (e.touches.length !== 1 || this._sobreCarrusel(e.target, cont)) { activo = false; return; }
             const t = e.touches[0];
             x0 = t.clientX; y0 = t.clientY; activo = true;
         }, { passive: true });
@@ -4262,7 +4275,7 @@ const app = {
         let x0 = 0, y0 = 0, activo = false;
         cont.addEventListener('touchstart', e => {
             e.stopPropagation();
-            if (e.touches.length !== 1) { activo = false; return; }
+            if (e.touches.length !== 1 || this._sobreCarrusel(e.target, cont)) { activo = false; return; }
             x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; activo = true;
         }, { passive: true });
         cont.addEventListener('touchend', e => {
