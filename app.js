@@ -1632,6 +1632,460 @@ const app = {
         }).join('');
     },
 
+    // ── Exportar mis jornadas ────────────────────────────────────────────────
+    // Solo las jornadas de quien usa la app: aquí no hay nadie más
+    _filasExport() {
+        const filas = [];
+        Object.entries(this._historialFull || {}).forEach(([id, r]) => {
+            const f = this._fechaDeId(id);
+            const lugar = r.puesto || this.puestoTrabajo || '';
+            const t = this._turnoDe(lugar, r.horaInicio) || '';
+            filas.push({
+                fecha: `${f.slice(6,8)}/${f.slice(4,6)}/${f.slice(0,4)}`,
+                orden: f, clugar: this._clavePuesto(lugar),
+                num: this.numConductor || '', nombre: this.usuarioActual?.name || '',
+                puesto: lugar, turno: { M:'Mañana', T:'Tarde', N:'Noche' }[t] || '',
+                ini: r.horaInicio || '', fin: r.horaFin || '',
+                horas: parseFloat(r.horas) || 0, noct: r.horasNocturnas || 0,
+                extra: r.extraDestino === 'extras' ? 'Sí' : '', festivo: r.festivo ? 'Sí' : '',
+                vac: r.vacaciones ? 'Sí' : '', pr: r.pr ? 'Sí' : '',
+                be: r.be ? 'Sí' : '',
+                nota: r.nota || '',
+            });
+        });
+        // Por fecha y, dentro del mismo día, por hora de entrada. Las jornadas
+        // sin horario (vacaciones, festivos no trabajados) van al final del día.
+        const entrada = x => x.ini || '99:99';
+        filas.sort((a, b) => a.orden.localeCompare(b.orden) || entrada(a).localeCompare(entrada(b)));
+        const g = this._filtrosExport();
+        return filas.filter(r =>
+               (!g.desde || r.orden >= g.desde)
+            && (!g.hasta || r.orden <= g.hasta)
+            && (!g.lugares || g.lugares.includes(r.clugar)));
+    },
+
+    // Todas las jornadas, sin filtrar: es contra lo que se ofrecen las opciones
+    _filasTodas() {
+        const guardado = this._filtros;
+        this._filtros = { desde:'', hasta:'', lugares:null };
+        try { return this._filasExport(); } finally { this._filtros = guardado; }
+    },
+
+    // Lista vacía = sin jornadas; null = sin filtro (todas)
+    _filtrosExport() {
+        if (this._filtros) return this._filtros;
+        let g = null;
+        try { g = JSON.parse(localStorage.getItem('filtrosExportMio') || 'null'); } catch (_) {}
+        this._filtros = {
+            desde: typeof g?.desde === 'string' ? g.desde : '',
+            hasta: typeof g?.hasta === 'string' ? g.hasta : '',
+            lugares: Array.isArray(g?.lugares) ? g.lugares : null,
+        };
+        return this._filtros;
+    },
+
+    _guardarFiltros(cambios) {
+        this._filtros = { ...this._filtrosExport(), ...cambios };
+        localStorage.setItem('filtrosExportMio', JSON.stringify(this._filtros));
+        this._renderFiltrosExport();
+        this._renderColsExport();
+    },
+
+    // Cada opción del selector es una o varias columnas de la hoja
+    COLUMNAS_EXPORT: [
+        { id:'fecha',      etiqueta:'Fecha completa',        cabeceras:['Fecha'],                  valores:f => [f.fecha] },
+        { id:'trabajador', etiqueta:'Trabajador',            cabeceras:['Nº trabajador','Nombre'], valores:f => [f.num, f.nombre] },
+        { id:'turno',      etiqueta:'Mañana, tarde o noche', cabeceras:['Turno'],                  valores:f => [f.turno] },
+        { id:'lugar',      etiqueta:'Lugar de trabajo',      cabeceras:['Lugar de trabajo'],       valores:f => [f.puesto] },
+        { id:'horarios',   etiqueta:'Horarios',              cabeceras:['Entrada','Salida'],       valores:f => [f.ini, f.fin] },
+        { id:'horas',      etiqueta:'Horas',                 cabeceras:['Horas'],                  valores:f => [f.horas] },
+        { id:'nocturnas',  etiqueta:'Horas nocturnas',       cabeceras:['Nocturnas'],              valores:f => [f.noct] },
+        { id:'extras',     etiqueta:'Horas extras',          cabeceras:['Extra'],                  valores:f => [f.extra] },
+        { id:'festivos',   etiqueta:'Festivos',              cabeceras:['Festivo'],                valores:f => [f.festivo] },
+        { id:'vacaciones', etiqueta:'Vacaciones',            cabeceras:['Vacaciones'],             valores:f => [f.vac] },
+        { id:'pr',         etiqueta:'PR',                    cabeceras:['PR'],                     valores:f => [f.pr] },
+        { id:'be',         etiqueta:'BE',                    cabeceras:['BE'],                     valores:f => [f.be] },
+        { id:'nota',       etiqueta:'Notas de la jornada',   cabeceras:['Nota'],                   valores:f => [f.nota] },
+    ],
+
+    _colsElegidas() {
+        let guardadas = null;
+        try { guardadas = JSON.parse(localStorage.getItem('colsExportMias') || 'null'); } catch (_) {}
+        const ids = this.COLUMNAS_EXPORT.map(c => c.id);
+        // Sin elección previa se exporta todo, como antes. Una lista vacía sí es
+        // una elección: desmarcar "Todo" tiene que dejar las casillas vacías.
+        if (!Array.isArray(guardadas)) return ids;
+        return guardadas.filter(id => ids.includes(id));
+    },
+
+    _colsActivas() {
+        const elegidas = this._colsElegidas();
+        return this.COLUMNAS_EXPORT.filter(c => elegidas.includes(c.id));
+    },
+
+    get CABECERAS_EXPORT() { return this._colsActivas().flatMap(c => c.cabeceras); },
+
+    _valoresFila(f) { return this._colsActivas().flatMap(c => c.valores(f)); },
+
+    // Los tres filtros comparten estructura: cabecera plegable con un resumen
+    // de lo elegido, y dentro las opciones.
+    _renderFiltrosExport() {
+        const cont = document.getElementById('expFiltros');
+        if (!cont) return;
+        const f = this._filtrosExport();
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const iso = v => v ? `${v.slice(0,4)}-${v.slice(4,6)}-${v.slice(6,8)}` : '';
+        const corta = v => v ? `${v.slice(6,8)}/${v.slice(4,6)}/${v.slice(0,4)}` : '';
+
+        const todas = this._filasTodas();
+        const lugares = [...new Map(todas.map(r => [r.clugar, r.puesto || 'Sin lugar'])).entries()]
+            .sort((a, b) => a[1].localeCompare(b[1], 'es'));
+
+        const resumenFechas = (!f.desde && !f.hasta) ? 'Todas'
+            : `${corta(f.desde) || '…'} – ${corta(f.hasta) || '…'}`;
+        const resumen = (sel, total) => !sel ? 'Todos'
+            : sel.length === total ? 'Todos' : `${sel.length} de ${total}`;
+
+        const casillas = (grupo, items) => {
+            const sel = f[grupo];
+            const todo = !sel || sel.length === items.length;
+            return `<label class="exp-col exp-todo">
+                    <input type="checkbox" ${todo ? 'checked' : ''}
+                           onchange="app._todoFiltro('${grupo}', this.checked)"><span>Todos</span></label>`
+                + items.map(([valor, etiqueta]) => `<label class="exp-col">
+                    <input type="checkbox" data-grupo="${grupo}" value="${esc(valor)}"
+                           ${(!sel || sel.includes(valor)) ? 'checked' : ''}
+                           onchange="app._marcarFiltro('${grupo}')"><span>${esc(etiqueta)}</span></label>`).join('');
+        };
+
+        cont.innerHTML = `
+        <div class="exp-sec${this._secExp === 'fechas' ? ' abierta' : ''}">
+            <div class="exp-sec-h" onclick="app._abrirSecExport('fechas')">
+                <span class="exp-sec-t">📅 Días</span>
+                <span class="exp-sec-r">${esc(resumenFechas)}</span><span class="exp-sec-c">▾</span>
+            </div>
+            <div class="exp-sec-b">
+                <div class="exp-fechas">
+                    <label>Desde<input type="date" value="${iso(f.desde)}"
+                        onchange="app._guardarFiltros({desde:this.value.replace(/-/g,'')})"></label>
+                    <label>Hasta<input type="date" value="${iso(f.hasta)}"
+                        onchange="app._guardarFiltros({hasta:this.value.replace(/-/g,'')})"></label>
+                </div>
+                <div class="exp-chips">
+                    <button onclick="app._rangoRapido('todo')">Todo</button>
+                    <button onclick="app._rangoRapido('mes')">Este mes</button>
+                    <button onclick="app._rangoRapido('anterior')">Mes anterior</button>
+                    <button onclick="app._rangoRapido('anio')">Este año</button>
+                </div>
+            </div>
+        </div>
+        <div class="exp-sec${this._secExp === 'lugar' ? ' abierta' : ''}">
+            <div class="exp-sec-h" onclick="app._abrirSecExport('lugar')">
+                <span class="exp-sec-t">🧩 Lugares de trabajo</span>
+                <span class="exp-sec-r">${resumen(f.lugares, lugares.length)}</span><span class="exp-sec-c">▾</span>
+            </div>
+            <div class="exp-sec-b">${casillas('lugares', lugares)}</div>
+        </div>`;
+    },
+
+    _abrirSecExport(id) {
+        this._secExp = this._secExp === id ? null : id;   // solo una abierta a la vez
+        this._renderFiltrosExport();
+    },
+
+    _rangoRapido(cual) {
+        const hoy = new Date();
+        const cl = d => `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+        if (cual === 'todo')  return this._guardarFiltros({ desde:'', hasta:'' });
+        if (cual === 'anio')  return this._guardarFiltros({
+            desde: cl(new Date(hoy.getFullYear(), 0, 1)), hasta: cl(new Date(hoy.getFullYear(), 11, 31)) });
+        const m = hoy.getMonth() - (cual === 'anterior' ? 1 : 0);
+        this._guardarFiltros({
+            desde: cl(new Date(hoy.getFullYear(), m, 1)),
+            hasta: cl(new Date(hoy.getFullYear(), m + 1, 0)) });
+    },
+
+    _marcarFiltro(grupo) {
+        const todos = [...document.querySelectorAll(`#expFiltros input[data-grupo="${grupo}"]`)];
+        const sel = todos.filter(i => i.checked).map(i => i.value);
+        // Marcado entero equivale a "sin filtro": así una lista que crezca sigue entrando
+        this._guardarFiltros({ [grupo]: sel.length === todos.length ? null : sel });
+    },
+
+    _todoFiltro(grupo, marcar) { this._guardarFiltros({ [grupo]: marcar ? null : [] }); },
+
+    _renderColsExport() {
+        const cont = document.getElementById('expCols');
+        if (!cont) return;
+        const elegidas = this._colsElegidas();
+        const todo = elegidas.length === this.COLUMNAS_EXPORT.length;
+        cont.innerHTML = `<label class="exp-col exp-todo">
+                <input type="checkbox" ${todo ? 'checked' : ''} onchange="app._marcarTodoExport(this.checked)">
+                <span>Todo</span></label>`
+            + this.COLUMNAS_EXPORT.map(c => `<label class="exp-col">
+                <input type="checkbox" value="${c.id}" ${elegidas.includes(c.id) ? 'checked' : ''}
+                       onchange="app._guardarColsExport()">
+                <span>${c.etiqueta}</span></label>`).join('');
+        const n = this._filasExport().length;
+        const pie = document.getElementById('expResumen');
+        if (pie) pie.textContent = n === 1 ? '1 jornada seleccionada' : `${n} jornadas seleccionadas`;
+    },
+
+    _guardarColsExport() {
+        const ids = [...document.querySelectorAll('#expCols input[value]')]
+            .filter(i => i.checked).map(i => i.value);
+        localStorage.setItem('colsExportMias', JSON.stringify(ids));
+        this._renderColsExport();
+    },
+
+    _marcarTodoExport(marcar) {
+        localStorage.setItem('colsExportMias', JSON.stringify(
+            marcar ? this.COLUMNAS_EXPORT.map(c => c.id) : []));
+        this._renderColsExport();
+    },
+
+    // Una hoja sin columnas no sirve de nada: mejor avisar que generarla vacía
+    _hayColumnas() {
+        if (!this._colsElegidas().length) {
+            this._mostrarToast('Elige al menos un dato que exportar', 3000); return false;
+        }
+        if (!this._filasExport().length) {
+            this._mostrarToast('Ninguna jornada pasa los filtros', 3000); return false;
+        }
+        return true;
+    },
+
+    exportarRegistro() {
+        if (!this._filasExport().length) { this._mostrarToast('No hay jornadas que exportar', 3000); return; }
+        this._secExp = null;
+        this._renderFiltrosExport();
+        this._renderColsExport();
+        document.getElementById('expModal').classList.add('show');
+        if (this.darkMode) document.getElementById('expModalContent').classList.add('dark');
+    },
+
+    _nombreExport(ext) { return `mis-jornadas-${this.numConductor || 'emt'}-${new Date().toISOString().slice(0,10)}.${ext}`; },
+
+    _descargar(contenido, nombre, tipo) {
+        if (window.AndroidBridge?.saveFile) { window.AndroidBridge.saveFile(contenido, nombre); return; }
+        const url = URL.createObjectURL(new Blob([contenido], { type: tipo }));
+        const a = document.createElement('a');
+        a.href = url; a.download = nombre; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+    },
+
+    // ── Excel de verdad (.xlsx) ─────────────────────────────────────────────
+    // Antes se guardaba una tabla HTML con extensión .xls. Excel de escritorio
+    // la tragaba, pero Office en Android la rechaza con "este archivo no es
+    // compatible". Un .xlsx es un ZIP con unos cuantos XML dentro, así que se
+    // arma a mano: sin comprimir (método 0) basta y evita meter una librería.
+
+    _crc32(bytes) {
+        let tabla = this._crcTabla;
+        if (!tabla) {
+            tabla = this._crcTabla = new Int32Array(256);
+            for (let n = 0; n < 256; n++) {
+                let c = n;
+                for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+                tabla[n] = c;
+            }
+        }
+        let crc = -1;
+        for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ tabla[(crc ^ bytes[i]) & 0xFF];
+        return (crc ^ -1) >>> 0;
+    },
+
+    _zip(ficheros) {
+        const enc = new TextEncoder();
+        const partes = [], central = [];
+        let offset = 0;
+        const u16 = n => [n & 0xFF, (n >>> 8) & 0xFF];
+        const u32 = n => [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF];
+
+        ficheros.forEach(({ nombre, texto }) => {
+            const datos = enc.encode(texto);
+            const nom   = enc.encode(nombre);
+            const crc   = this._crc32(datos);
+            // Bit 11 = nombres en UTF-8; fecha y hora fijas, no aportan nada aquí
+            const comun = [...u16(20), ...u16(0x800), ...u16(0), ...u16(0), ...u16(0x2100),
+                           ...u32(crc), ...u32(datos.length), ...u32(datos.length),
+                           ...u16(nom.length)];
+            partes.push(new Uint8Array([...u32(0x04034b50), ...comun, ...u16(0)]), nom, datos);
+            // extra, comentario, disco, atributos internos, atributos externos, offset
+            central.push(new Uint8Array([...u32(0x02014b50), ...u16(20), ...comun,
+                ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset)]), nom);
+            offset += 30 + nom.length + datos.length;
+        });
+
+        const tamCentral = central.reduce((n, p) => n + p.length, 0);
+        const fin = new Uint8Array([...u32(0x06054b50), ...u16(0), ...u16(0),
+            ...u16(ficheros.length), ...u16(ficheros.length),
+            ...u32(tamCentral), ...u32(offset), ...u16(0)]);
+
+        const todo = [...partes, ...central, fin];
+        const total = todo.reduce((n, p) => n + p.length, 0);
+        const salida = new Uint8Array(total);
+        let i = 0;
+        todo.forEach(p => { salida.set(p, i); i += p.length; });
+        return salida;
+    },
+
+    _colExcel(n) {                       // 0 -> A, 25 -> Z, 26 -> AA
+        let s = '';
+        for (n += 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s;
+        return s;
+    },
+
+    _xlsxRegistro() {
+        const esc = v => String(v ?? '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+        const cabeceras = this.CABECERAS_EXPORT;
+        const filas = this._filasExport().map(f => this._valoresFila(f));
+
+        const celda = (v, col, fila, estilo) => {
+            const ref = `${this._colExcel(col)}${fila}`;
+            const st  = estilo ? ` s="${estilo}"` : '';
+            if (typeof v === 'number' && isFinite(v)) return `<c r="${ref}"${st}><v>${v}</v></c>`;
+            const t = esc(v);
+            if (t === '') return '';
+            return `<c r="${ref}"${st} t="inlineStr"><is><t xml:space="preserve">${t}</t></is></c>`;
+        };
+
+        const filasXml = [
+            `<row r="1">${cabeceras.map((h, i) => celda(h, i, 1, 1)).join('')}</row>`,
+            ...filas.map((vals, n) => `<row r="${n + 2}">${vals.map((v, i) => celda(v, i, n + 2, 0)).join('')}</row>`),
+        ].join('');
+
+        const ancho = cabeceras.map((h, i) =>
+            `<col min="${i + 1}" max="${i + 1}" width="${Math.min(34, Math.max(9, h.length + 4))}" customWidth="1"/>`).join('');
+
+        const X = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+        const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+        const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+        const DOC = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+        return this._zip([
+            { nombre: '[Content_Types].xml', texto: X
+            + `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`
+            + `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`
+            + `<Default Extension="xml" ContentType="application/xml"/>`
+            + `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>`
+            + `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`
+            + `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>`
+            + `</Types>` },
+            { nombre: '_rels/.rels', texto: X
+            + `<Relationships xmlns="${REL}">`
+            + `<Relationship Id="rId1" Type="${DOC}/officeDocument" Target="xl/workbook.xml"/>`
+            + `</Relationships>` },
+            { nombre: 'xl/workbook.xml', texto: X
+            + `<workbook xmlns="${NS}" xmlns:r="${DOC}">`
+            + `<sheets><sheet name="Registro" sheetId="1" r:id="rId1"/></sheets></workbook>` },
+            { nombre: 'xl/_rels/workbook.xml.rels', texto: X
+            + `<Relationships xmlns="${REL}">`
+            + `<Relationship Id="rId1" Type="${DOC}/worksheet" Target="worksheets/sheet1.xml"/>`
+            + `<Relationship Id="rId2" Type="${DOC}/styles" Target="styles.xml"/>`
+            + `</Relationships>` },
+            { nombre: 'xl/styles.xml', texto: X
+            + `<styleSheet xmlns="${NS}">`
+            + `<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>`
+            + `<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts>`
+            + `<fills count="3"><fill><patternFill patternType="none"/></fill>`
+            + `<fill><patternFill patternType="gray125"/></fill>`
+            + `<fill><patternFill patternType="solid"><fgColor rgb="FF1565C0"/><bgColor indexed="64"/></patternFill></fill></fills>`
+            + `<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>`
+            + `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>`
+            + `<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>`
+            + `<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs>`
+            + `</styleSheet>` },
+            { nombre: 'xl/worksheets/sheet1.xml', texto: X
+            + `<worksheet xmlns="${NS}">`
+            + `<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`
+            + `<cols>${ancho}</cols><sheetData>${filasXml}</sheetData></worksheet>` },
+        ]);
+    },
+
+    _descargarBinario(bytes, nombre, tipo) {
+        if (window.AndroidBridge?.saveFileBase64) {
+            let bin = '';
+            for (let i = 0; i < bytes.length; i += 8192) {
+                bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+            }
+            window.AndroidBridge.saveFileBase64(btoa(bin), nombre);
+            return true;
+        }
+        if (window.AndroidBridge?.saveFile) return false;   // versión antigua sin el puente
+        const url = URL.createObjectURL(new Blob([bytes], { type: tipo }));
+        const a = document.createElement('a');
+        a.href = url; a.download = nombre; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        return true;
+    },
+
+    // Separador ; y coma decimal: es lo que espera Excel en español.
+    // El BOM hace que reconozca los acentos.
+    _csvRegistro() {
+        const esc = v => {
+            const t = String(v ?? '');
+            return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+        };
+        const lineas = [this.CABECERAS_EXPORT.join(';')];
+        this._filasExport().forEach(f => lineas.push(
+            this._valoresFila(f).map(v => esc(typeof v === 'number' ? String(v).replace('.', ',') : v)).join(';')));
+        return '﻿' + lineas.join('\r\n') + '\r\n';
+    },
+
+    exportarCSV() {
+        if (!this._hayColumnas()) return;
+        document.getElementById('expModal').classList.remove('show');
+        const filas = this._filasExport();
+        this._descargar(this._csvRegistro(), this._nombreExport('csv'), 'text/csv;charset=utf-8;');
+        this._mostrarToast(`📊 ${filas.length} jornadas en CSV`, 4000);
+    },
+
+    exportarXLS() {
+        if (!this._hayColumnas()) return;
+        document.getElementById('expModal').classList.remove('show');
+        const filas = this._filasExport();
+        const ok = this._descargarBinario(this._xlsxRegistro(), this._nombreExport('xlsx'),
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        if (!ok) { this._mostrarToast('Actualiza la app para exportar a Excel; de momento usa CSV', 4500); return; }
+        this._mostrarToast(`📗 ${filas.length} jornadas en Excel`, 4000);
+    },
+
+    // Drive convierte un CSV en hoja de cálculo si se le pide ese mimeType
+    async exportarSheets() {
+        if (!this._hayColumnas()) return;
+        document.getElementById('expModal').classList.remove('show');
+        const filas = this._filasExport();
+        this._mostrarToast('☁️ Creando hoja en Drive...', 3000);
+        try {
+            if (!await this._ensureToken()) throw new Error('Sin sesión de Google');
+            const frontera = '-------emt' + Date.now();
+            const meta = JSON.stringify({
+                name: `Mis jornadas EMT ${new Date().toISOString().slice(0,10)}`,
+                mimeType: 'application/vnd.google-apps.spreadsheet',
+            });
+            const cuerpo = `\r\n--${frontera}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}`
+                + `\r\n--${frontera}\r\nContent-Type: text/csv; charset=UTF-8\r\n\r\n${this._csvRegistro()}`
+                + `\r\n--${frontera}--`;
+            const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${this.accessToken}`,
+                           'Content-Type': `multipart/related; boundary=${frontera}` },
+                body: cuerpo,
+            });
+            if (!resp.ok) throw new Error('Drive ' + resp.status);
+            const r = await resp.json();
+            this._mostrarToast(`✅ ${filas.length} jornadas en Google Sheets`, 4000);
+            if (r.webViewLink) {
+                if (window.AndroidBridge?.openExternalUrl) window.AndroidBridge.openExternalUrl(r.webViewLink);
+                else window.open(r.webViewLink, '_blank');
+            }
+        } catch (e) {
+            this._mostrarToast('❌ No se pudo crear la hoja: ' + e.message, 4500);
+        }
+    },
+
     // ── Notas ───────────────────────────────────────────────────────────────
     // El trabajador escribe y gestión contesta. La fecha y la hora las pone el
     // servidor, para que no dependan del reloj del móvil.
