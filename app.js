@@ -1448,6 +1448,11 @@ const app = {
 
     _vacacionesAt() { return parseInt(localStorage.getItem('vacacionesAt') || '0', 10); },
 
+    // Los días de la semana también los puede cambiar el gestor desde el
+    // cuadrante, así que van sellados para que gane el último cambio.
+    _diasAt() { return parseInt(localStorage.getItem('diasSemanaAt') || '0', 10); },
+    _sellarDias() { localStorage.setItem('diasSemanaAt', String(Date.now())); },
+
     _hoyISO() {
         const d = new Date();
         return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -1609,6 +1614,7 @@ const app = {
         if (!this._diasTmp.length) { this._mostrarToast('Marca al menos un día', 3000); return; }
         this.diasSemana = this._diasTmp.slice().sort();
         localStorage.setItem('diasSemana', JSON.stringify(this.diasSemana));
+        this._sellarDias();
         this._volverJornada();
         await this.elegirJornada(h, true);
     },
@@ -1625,7 +1631,7 @@ const app = {
         this.jornadaHoras = n;
         localStorage.setItem('jornadaHoras', String(n));
         // La jornada completa no lleva días fijos: se trabaja lo que toque
-        if (!this._esMedia(n)) { this.diasSemana = null; localStorage.removeItem('diasSemana'); }
+        if (!this._esMedia(n)) { this.diasSemana = null; localStorage.removeItem('diasSemana'); this._sellarDias(); }
         this._actualizarJornadaDisplay();
         await this._guardarPreferencias(true);
         localStorage.removeItem('resumenHuella');    // que se publique el cambio
@@ -2543,6 +2549,13 @@ const app = {
                 horasTotales: t.anualReal,
                 horasAnuales: this.horasAnualesCustom,
                 diasMes:      delMes.length,
+                jornadaHoras: this.jornadaHoras,
+                dias:         this.diasSemana || null,
+                diasAt:       this._diasAt(),
+                // Las vacaciones también viajaban solo hacia el trabajador: el
+                // servidor las arbitra por fecha, pero nunca le llegaban.
+                vacaciones:   this._getVacaciones(),
+                vacacionesAt: this._vacacionesAt(),
                 turno:        this._turnoHabitual(delMes),
                 horaInicio:   ultimo?.horaInicio || '',
                 horaFin:      ultimo?.horaFin || '',
@@ -2575,6 +2588,12 @@ const app = {
                     this._saveVacaciones(mio.vacaciones, true);
                     this._renderVacaciones();
                     this._aplicarModoVacaciones();
+                }
+                if ((mio?.diasAt || 0) > this._diasAt()) {
+                    localStorage.setItem('diasSemanaAt', String(mio.diasAt));
+                    this.diasSemana = Array.isArray(mio.dias) ? mio.dias : null;
+                    if (this.diasSemana) localStorage.setItem('diasSemana', JSON.stringify(this.diasSemana));
+                    else localStorage.removeItem('diasSemana');
                 }
                 if (mio?.puesto !== undefined) {
                     this.puestoTrabajo = mio.puesto || '';

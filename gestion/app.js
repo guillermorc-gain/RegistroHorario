@@ -2147,6 +2147,7 @@ const app = {
     CUADRANTE_URL: 'https://registro-horario-emt.vercel.app/api/cuadrante',
 
     async _cargarCuadrante() {
+        this._renderCuadranteTrab();
         try {
             const resp = await fetch(this.CUADRANTE_URL, { cache: 'no-store' });
             if (!resp.ok) return;
@@ -2176,6 +2177,229 @@ const app = {
                 ? new Date(data.actualizado).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })
                 : '';
         }
+    },
+
+    // ── Trabajadores del cuadrante ───────────────────────────────────────────
+    // La misma gente que la pestaña de trabajadores, pero en una fila por
+    // persona con lo que hace falta para montar el cuadrante: lugar, horario,
+    // días de la semana, BE, VC y —los de jornada completa— grupo de descanso.
+
+    GRUPOS_DESCANSO: 10,
+    DIAS_LETRA: ['D', 'L', 'M', 'X', 'J', 'V', 'S'],
+    DIAS_ORDEN: [1, 2, 3, 4, 5, 6, 0],
+
+    _esCompleta(u) { return (Number(u?.horasAnuales) || 777) >= this.ANUALES_COMPLETA; },
+
+    // El horario que pone el gestor manda; si no hay, el que se deduce de la
+    // hora a la que ficha.
+    _horarioDe(u, fecha, j) {
+        if (u?.horario) return u.horario;
+        return this._turnoDe(this._lugarDe(u, fecha, j), j?.i) || '';
+    },
+
+    _etiquetaDias(u) {
+        const d = Array.isArray(u?.dias) && u.dias.length ? u.dias : null;
+        if (!d) return '';
+        return this.DIAS_ORDEN.filter(x => d.includes(x)).map(x => this.DIAS_LETRA[x]).join(' ');
+    },
+
+    ordenarCuadrante(modo) {
+        localStorage.setItem('ordenCuadrante', modo);
+        this._renderCuadranteTrab();
+    },
+
+    _renderCuadranteTrab() {
+        const cont = document.getElementById('ctList');
+        if (!cont) return;
+        const fecha = this._fechaOffset(0);
+        const orden = localStorage.getItem('ordenCuadrante') || 'nombre';
+        const lista = Object.values(this._conductores || {}).sort((a, b) =>
+            orden === 'numero'
+                ? ((a.conductor || '￿').localeCompare(b.conductor || '￿', 'es', { numeric: true }))
+                : (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+        document.getElementById('ctOrdNombre')?.classList.toggle('activo', orden === 'nombre');
+        document.getElementById('ctOrdNumero')?.classList.toggle('activo', orden === 'numero');
+        const cnt = document.getElementById('ctCnt');
+        if (cnt) cnt.textContent = lista.length ? `${lista.length}` : '';
+        if (!lista.length) {
+            cont.innerHTML = '<div class="tab-empty"><span class="tab-empty-ico">👥</span>'
+                + '<span class="tab-empty-t">Sin trabajadores</span>'
+                + '<span class="tab-empty-s">Aparecerán en cuanto abran su app.</span></div>';
+            return;
+        }
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const q = e => esc(e).replace(/'/g, "\\'");
+        cont.innerHTML = lista.map(u => {
+            const { j } = this._jornadaVisible(u, fecha);
+            const lugar   = this._lugarDe(u, fecha, j);
+            const horario = this._horarioDe(u, fecha, j);
+            const dias    = this._etiquetaDias(u);
+            const completa = this._esCompleta(u);
+            const enBaja = this._enBaja(u, fecha) || (!this._bajasDe(u).length && !!u.baja);
+            const enVac  = this._enVacaciones(u, fecha);
+            const grupo = completa
+                ? `<button class="ct-chip ${u.grupo ? 'grupo' : 'aviso'}"
+                        onclick="app._editarGrupo('${q(u.email)}')">🔄 ${u.grupo ? 'Grupo ' + u.grupo : 'sin grupo'}</button>`
+                : '';
+            return `<div class="ct-row ${enBaja ? 'baja' : enVac ? 'vacaciones' : 'activo'}">
+                <div class="ct-top">
+                    <span class="ct-num">${esc(u.conductor) || '—'}</span>
+                    <span class="ct-nom">${esc(u.nombre) || esc(u.email)}</span>
+                    <span class="ct-jor ${completa ? 'completa' : 'media'}">${completa ? 'COMPLETA' : 'MEDIA'} ${
+                        String(Number(u.jornadaHoras) || 7).replace('.', ',')}h</span>
+                    <button class="be-btn vc-btn${enVac ? ' on' : ''}" title="Vacaciones"
+                            onclick="app.editarVacaciones('${q(u.email)}')">VC</button>
+                    <button class="be-btn${enBaja ? ' on' : ''}" title="Fechas de baja"
+                            onclick="app.editarBajas('${q(u.email)}')">BE</button>
+                </div>
+                <div class="ct-chips">
+                    <button class="ct-chip${lugar ? '' : ' vacio'}"
+                            onclick="app._editarPuesto('${q(u.email)}','${fecha}')">📍 ${esc(lugar) || 'sin lugar'}</button>
+                    <button class="ct-chip${horario ? '' : ' vacio'}"
+                            onclick="app._editarHorario('${q(u.email)}')">🕐 ${horario
+                                ? `<span class="ct-t ${horario}">${horario}</span>` : 'sin horario'}</button>
+                    <button class="ct-chip${dias ? '' : ' vacio'}"
+                            onclick="app._editarDiasTrab('${q(u.email)}')">📅 ${dias || 'todos los días'}</button>
+                    ${grupo}
+                </div>
+            </div>`;
+        }).join('');
+    },
+
+    _quienEs(u, email) {
+        return `${u.conductor ? u.conductor + ' · ' : ''}${u.nombre || email}`;
+    },
+
+    // Todos los campos del cuadrante se guardan igual: un PATCH y a repintar.
+    async _guardarCampoTrab(email, cuerpo, mensaje) {
+        try {
+            const resp = await fetch(this.USUARIOS_URL, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ email, ...cuerpo })
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._conductores = data;
+            this._renderConductores();
+            this._mostrarToast(mensaje, 2500);
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
+    },
+
+    // ── Días de la semana ──
+    _editarDiasTrab(email) {
+        const u = (this._conductores || {})[email];
+        if (!u) return;
+        this._diasTrabEditando = email;
+        this._diasTrabTmp = Array.isArray(u.dias) ? u.dias.slice() : [];
+        document.getElementById('diasQuien').textContent = this._quienEs(u, email);
+        this._renderDiasTrab();
+        document.getElementById('diasModal').classList.add('show');
+        if (this.darkMode) document.getElementById('diasModalContent').classList.add('dark');
+    },
+
+    _renderDiasTrab() {
+        document.getElementById('diasSem').innerHTML = this.DIAS_ORDEN
+            .map(d => `<button class="${this._diasTrabTmp.includes(d) ? 'on' : ''}"
+                onclick="app._toggleDiaTrab(${d})">${this.DIAS_LETRA[d]}</button>`).join('');
+        const n = this._diasTrabTmp.length;
+        document.getElementById('diasResumen').textContent = (!n || n === 7)
+            ? 'Sin marcar días se entiende que puede trabajar cualquiera.'
+            : `${n} día${n === 1 ? '' : 's'} a la semana; los demás cuentan como libres.`;
+    },
+
+    _toggleDiaTrab(d) {
+        const i = this._diasTrabTmp.indexOf(d);
+        if (i === -1) this._diasTrabTmp.push(d); else this._diasTrabTmp.splice(i, 1);
+        this._renderDiasTrab();
+    },
+
+    async _guardarDiasTrab() {
+        const dias = this._diasTrabTmp.slice().sort();
+        document.getElementById('diasModal').classList.remove('show');
+        await this._guardarCampoTrab(this._diasTrabEditando, { dias },
+            dias.length && dias.length < 7
+                ? `📅 ${dias.map(d => this.DIAS_LETRA[d]).join(' ')}`
+                : 'Sin días fijos');
+    },
+
+    // ── Horario ──
+    _editarHorario(email) {
+        const u = (this._conductores || {})[email];
+        if (!u) return;
+        this._horarioEditando = email;
+        document.getElementById('horarioQuien').textContent = this._quienEs(u, email);
+        this._renderHorarioModal();
+        document.getElementById('horarioModal').classList.add('show');
+        if (this.darkMode) document.getElementById('horarioModalContent').classList.add('dark');
+    },
+
+    _renderHorarioModal() {
+        const u = (this._conductores || {})[this._horarioEditando] || {};
+        const fecha = this._fechaOffset(0);
+        const lugar = this._lugarDe(u, fecha, this._jornadaDe(u, fecha));
+        const franjas = TURNOS_POR_PUESTO[this._clavePuesto(lugar)] || [];
+        const nombres = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        document.getElementById('horarioLista').innerHTML = ['M', 'T', 'N'].map(id => {
+            const f = franjas.find(x => x.id === id);
+            const detalle = f ? `${f.desde}–${f.hasta}`
+                : lugar ? `sin turno de ${nombres[id].toLowerCase()} en ${lugar}` : 'sin lugar asignado';
+            const sel = (u.horario || '') === id;
+            return `<div class="pm-op${sel ? ' sel' : ''}" onclick="app._elegirHorario('${id}')">
+                <div style="flex:1;min-width:0;">${nombres[id]}<br><span class="pm-turnos">${esc(detalle)}</span></div>
+                ${sel ? '<span class="pm-check">✓</span>' : ''}
+            </div>`;
+        }).join('')
+        + (u.horario ? `<div class="pm-op pm-quitar" onclick="app._elegirHorario('')">✕ Quitar el horario fijo</div>` : '')
+        + `<div class="pm-paso pm-nota">Sin horario fijo se usa el que salga de su hora de entrada.</div>`;
+    },
+
+    async _elegirHorario(id) {
+        document.getElementById('horarioModal').classList.remove('show');
+        const nombres = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
+        await this._guardarCampoTrab(this._horarioEditando, { horario: id },
+            id ? `🕐 ${nombres[id]}` : 'Horario quitado');
+    },
+
+    // ── Grupo de descanso ──
+    _editarGrupo(email) {
+        const u = (this._conductores || {})[email];
+        if (!u) return;
+        this._grupoEditando = email;
+        document.getElementById('grupoQuien').textContent = this._quienEs(u, email);
+        this._renderGrupoModal();
+        document.getElementById('grupoModal').classList.add('show');
+        if (this.darkMode) document.getElementById('grupoModalContent').classList.add('dark');
+    },
+
+    _renderGrupoModal() {
+        const u = (this._conductores || {})[this._grupoEditando] || {};
+        const actual = Number(u.grupo) || 0;
+        // Cuántos hay ya en cada grupo, para repartirlos sin tener que contar
+        const cuantos = {};
+        Object.values(this._conductores || {}).forEach(x => {
+            if (x.grupo) cuantos[x.grupo] = (cuantos[x.grupo] || 0) + 1;
+        });
+        document.getElementById('grupoLista').innerHTML =
+            Array.from({ length: this.GRUPOS_DESCANSO }, (_, i) => i + 1).map(n => {
+                const sel = n === actual;
+                const gente = cuantos[n] || 0;
+                return `<div class="pm-op${sel ? ' sel' : ''}" onclick="app._elegirGrupo(${n})">
+                    <div style="flex:1;min-width:0;">Grupo ${n}<br><span class="pm-turnos">${
+                        gente ? `${gente} trabajador${gente === 1 ? '' : 'es'}` : 'sin nadie todavía'}</span></div>
+                    ${sel ? '<span class="pm-check">✓</span>' : ''}
+                </div>`;
+            }).join('')
+            + (actual ? `<div class="pm-op pm-quitar" onclick="app._elegirGrupo(0)">✕ Quitar el grupo</div>` : '')
+            + `<div class="pm-paso pm-nota">Cada grupo libra unos días seguidos al mes. De momento solo se elige el grupo; los días llegarán al subir el cuadro de descansos.</div>`;
+    },
+
+    async _elegirGrupo(n) {
+        document.getElementById('grupoModal').classList.remove('show');
+        await this._guardarCampoTrab(this._grupoEditando, { grupo: n || null },
+            n ? `🔄 Grupo ${n}` : 'Sin grupo');
     },
 
     verCuadranteGrande() {
@@ -3719,6 +3943,7 @@ const app = {
                   + '<span class="tab-empty-s">Aparecerán en cuanto abran su app.</span></div>';
             this._renderPuestos();
             this._renderRegistro();
+            this._renderCuadranteTrab();
             return;
         }
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
@@ -3776,6 +4001,7 @@ const app = {
         if (cnt) cnt.textContent = `${activos} activos${bajas ? ` · ${bajas} BE` : ''}`;
         this._renderPuestos();
         this._renderRegistro();
+        this._renderCuadranteTrab();
     },
 
     toggleSeccion(id) {
