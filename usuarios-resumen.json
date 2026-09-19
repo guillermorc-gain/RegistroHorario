@@ -1693,7 +1693,7 @@
     "conductor": "7858-5",
     "puesto": "Calle",
     "avatar": null,
-    "version": "build-66",
+    "version": "build-67",
     "horasMes": 56,
     "horasTotales": 59.5,
     "diasMes": 15,
@@ -1701,7 +1701,7 @@
     "horaFin": "15:00",
     "horarioDe": "anterior",
     "turno": "M",
-    "jornadaHoras": 3.5,
+    "jornadaHoras": 7,
     "horasAnuales": 777,
     "ritmo": "lv",
     "dias": [
@@ -1840,6 +1840,6 @@
     ],
     "email": "prueba-1789766856622@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T09:29:41.608Z"
+    "actualizado": "2026-09-19T09:32:04.419Z"
   }
 }
