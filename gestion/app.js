@@ -5023,10 +5023,6 @@ const app = {
             const trabajando = x => esHoy
                 ? this._estadoJornada(x.u, x.j, true, false, x.deAyer, x.enBaja, x.enVac).clase === 'verde'
                 : !!(x.j && !x.j.v && !x.j.p && !x.enBaja && !x.enVac);
-            // "Sin servicio" son los que ese día no tienen jornada, no los que
-            // ahora mismo no están dentro: el que entró a las 6 y ya salió sí
-            // ha trabajado hoy y no pinta nada en esa lista.
-            const conJornada = x => !!(x.j && !x.j.v && !x.j.p);
             const dentro = gente.filter(trabajando).length;
             const delDia = gente.filter(({ j, deAyer, enBaja, enVac }) =>
                 !enBaja && !enVac && j && !j.v && !j.p && !deAyer).length;
@@ -5048,8 +5044,12 @@ const app = {
             // es una propiedad del lugar: el que tiene algún turno sin nadie.
             if (filtro === 'sincubrir'
                 && (franjas.length ? !huecos.length : dentro + previstos > 0)) return;
+            // "Sin servicio asignado" es lo mismo aquí que en la lista de
+            // trabajadores: el que ese día no tiene lugar. Antes esto miraba
+            // quién no había fichado, así que asignarle el lugar no le sacaba
+            // de la lista, que es justo para lo que sirve el filtro.
             const visibles = filtro === 'trabajando'  ? gente.filter(trabajando)
-                           : filtro === 'sinservicio' ? gente.filter(x => !conJornada(x))
+                           : filtro === 'sinservicio' ? gente.filter(x => this._sinServicio(x.u, fecha))
                            : gente;
             if (!visibles.length) return;
 
@@ -5100,8 +5100,15 @@ const app = {
                 ${filas}
             </div>`);
         });
+        // Vacío aquí casi siempre es buena noticia, así que se dice lo que
+        // significa en vez de "no hay nada".
+        const VACIO = {
+            sincubrir:   'Ningún lugar se queda con un turno sin cubrir.',
+            sinservicio: 'Todos tienen lugar asignado.',
+            trabajando:  esHoy ? 'Ahora mismo no hay nadie dentro.' : 'Nadie con jornada ese día.',
+        };
         cont.innerHTML = tarjetas.join('') || '<div class="tab-empty" style="padding:22px 16px;">'
-            + '<span class="tab-empty-s">Ningún lugar en este grupo.</span></div>';
+            + `<span class="tab-empty-s">${VACIO[filtro] || 'Ningún lugar en este grupo.'}</span></div>`;
         this._renderFiltroLugares(filtro, esHoy);
     },
 
