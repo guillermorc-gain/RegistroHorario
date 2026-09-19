@@ -82,18 +82,31 @@
         "texto": "No veo el visto",
         "adjuntos": [],
         "en": "2026-09-19T18:24:42.612Z"
-      },
-      {
-        "de": "guillermo.rc82@gmail.com",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Bj",
-        "adjuntos": [],
-        "en": "2026-09-19T18:31:29.301Z"
       }
     ],
     "archivada": false,
     "de": "trabajador",
     "tipo": "gestion",
     "estado": "ok"
+  },
+  "20260919183223733-808ri": {
+    "id": "20260919183223733-808ri",
+    "email": "guillermo.rcxx@gmail.com",
+    "creado": "2026-09-19T18:32:23.733Z",
+    "nombre": "Guillermo Ríos Correa",
+    "conductor": "1234-5",
+    "mensajes": [
+      {
+        "de": "trabajador",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Eff",
+        "adjuntos": [],
+        "en": "2026-09-19T18:32:23.733Z"
+      }
+    ],
+    "archivada": false,
+    "de": "trabajador",
+    "tipo": "gestion",
+    "estado": "pendiente"
   }
 }
