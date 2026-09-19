@@ -1398,10 +1398,10 @@
     "vacaciones": [
       {
         "desde": "2026-09-17",
-        "hasta": "2026-09-19"
+        "hasta": "2026-09-30"
       }
     ],
-    "vacacionesAt": 1789806802781
+    "vacacionesAt": 1789806810695
   },
   "prueba-1789764004986@prueba.local": {
     "nombre": "Pepe",
