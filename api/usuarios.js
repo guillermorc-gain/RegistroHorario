@@ -95,7 +95,10 @@ function limpiarRevisiones(r) {
   if (!r || typeof r !== 'object') return {};
   const out = {};
   Object.keys(r).sort().slice(-MAX_REVISIONES).forEach(f => {
-    if (/^\d{8}$/.test(f) && ['ok', 'ojo'].includes(r[f])) out[f] = r[f];
+    // 'plan' y 'real' dicen con qué horario se queda ese día: el que puso
+    // gestión o el que fichó el trabajador. 'ok' es de antes de poder elegir
+    // y vale como decidido; 'ojo' es dejarlo marcado sin decidir.
+    if (/^\d{8}$/.test(f) && ['ok', 'ojo', 'plan', 'real'].includes(r[f])) out[f] = r[f];
   });
   return out;
 }
@@ -127,6 +130,20 @@ function recortarNotas(notas) {
   const recorte = {};
   claves.slice(-MAX_LUGARES).forEach(k => { recorte[k] = notas[k]; });
   return recorte;
+}
+
+// Horario puesto solo para unas fechas: { '20260915': {i,f}, ... }. Va aparte
+// del horario del mes porque se asigna por tramos —un día, una semana, el mes
+// entero— y aparte de las jornadas porque esas las reescribe el trabajador
+// cada vez que publica y se llevarían por delante lo que ponga el gestor.
+function limpiarHorariosDia(hs) {
+  if (!hs || typeof hs !== 'object') return {};
+  const out = {};
+  Object.keys(hs).sort().slice(-MAX_LUGARES).forEach(f => {
+    const h = limpiarHorario(hs[f]);
+    if (/^\d{8}$/.test(f) && h) out[f] = h;
+  });
+  return out;
 }
 
 function recortarLugares(lugares) {
@@ -352,6 +369,7 @@ export default async function handler(req, res) {
           // eligen desde el cuadrante y el trabajador no envía.
           horario:      previo.horario || '',
           horarios:     previo.horarios || {},
+          horariosDia:  previo.horariosDia || {},
           revisiones:   previo.revisiones || {},
           grupo:        previo.grupo ?? null,
           actualizado:  new Date().toISOString(),
@@ -415,6 +433,27 @@ export default async function handler(req, res) {
         else if (data[clave] && revisiones !== undefined) {
           data[clave].revisiones = limpiarRevisiones(revisiones);
         }
+        // Horario para unas fechas concretas. Tiene que ir antes que las dos
+        // ramas de abajo: una mira solo `horario` y la otra solo el tramo, y
+        // cualquiera de las dos se quedaría con esta petición.
+        else if (data[clave] && horario !== undefined && desde && hasta) {
+          const hs = { ...(data[clave].horariosDia || {}) };
+          const limpio = limpiarHorario(horario);
+          for (const f of diasEntre(desde, hasta)) {
+            if (limpio) hs[f] = limpio; else delete hs[f];
+          }
+          data[clave].horariosDia = limpiarHorariosDia(hs);
+          // Y el lugar del tramo, si viene en la misma petición: asignar la
+          // jornada es decir a qué hora y dónde, y son un solo gesto.
+          if (puesto !== undefined) {
+            const lugares = { ...(data[clave].lugares || {}) };
+            for (const f of diasEntre(desde, hasta)) {
+              if (puesto) lugares[f] = String(puesto).slice(0, 40);
+              else delete lugares[f];
+            }
+            data[clave].lugares = recortarLugares(lugares);
+          }
+        }
         else if (data[clave] && horario !== undefined) {
           // Con mes va al horario de ese mes; sin mes, al de siempre.
           if (/^\d{6}$/.test(String(mes || ''))) {
@@ -451,6 +490,7 @@ export default async function handler(req, res) {
          : dias !== undefined ? `Días de ${clave}`
          : grupo !== undefined ? `Grupo de descanso de ${clave}`
          : revisiones !== undefined ? `Horarios revisados de ${clave}`
+         : horario !== undefined && desde && hasta ? `Jornada de ${clave} del ${desde} al ${hasta}`
          : horario !== undefined ? `Horario de ${clave}`
          : desde && hasta ? `Lugar de ${clave} del ${desde} al ${hasta}`
          : `Lugar de ${clave}`, true);
