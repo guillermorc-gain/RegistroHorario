@@ -16,5 +16,25 @@
       "gestor": "Guillermo Ríos Correa",
       "en": "2026-09-19T17:00:23.475Z"
     }
+  },
+  "20260919175722862-r5p9x": {
+    "id": "20260919175722862-r5p9x",
+    "email": "guillermo.rc82@gmail.com",
+    "creado": "2026-09-19T17:57:22.862Z",
+    "nombre": "Guillermo Ríos Correa",
+    "conductor": "1418-3",
+    "mensajes": [
+      {
+        "de": "trabajador",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Hola",
+        "adjuntos": [],
+        "en": "2026-09-19T17:57:22.862Z"
+      }
+    ],
+    "archivada": false,
+    "de": "trabajador",
+    "tipo": "gestion",
+    "estado": "pendiente"
   }
 }
