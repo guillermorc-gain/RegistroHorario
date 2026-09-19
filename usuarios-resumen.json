@@ -1964,5 +1964,35 @@
     "email": "prueba-1789812576607@prueba.local",
     "ficticio": true,
     "actualizado": "2026-09-19T10:10:09.081Z"
+  },
+  "prueba-1789812974724@prueba.local": {
+    "nombre": "Pepe Tur",
+    "conductor": "1070-8",
+    "puesto": "Calle",
+    "avatar": null,
+    "version": "build-69",
+    "horasMes": 7,
+    "horasTotales": 7,
+    "diasMes": 1,
+    "horaInicio": "06:00",
+    "horaFin": "13:00",
+    "horarioDe": "hoy",
+    "turno": "M",
+    "jornadaHoras": 7,
+    "horasAnuales": 1700,
+    "ritmo": "6y2",
+    "dias": null,
+    "jornadas": [
+      {
+        "f": "20260919",
+        "i": "06:00",
+        "o": "13:00",
+        "h": 7,
+        "n": 0
+      }
+    ],
+    "email": "prueba-1789812974724@prueba.local",
+    "ficticio": true,
+    "actualizado": "2026-09-19T10:16:44.884Z"
   }
 }
