@@ -5002,8 +5002,14 @@ const app = {
 
         const filtro = localStorage.getItem('filtroLugares') || 'todos';
         const tarjetas = [];
+        // Lo que cuenta cada filtro, para poder enseñarlo en su botón igual que
+        // en la lista de trabajadores: así se ve de un vistazo que los dos
+        // "sin servicio asignado" dicen lo mismo.
+        const cuenta = { todos: 0, trabajando: 0, sincubrir: 0, sinservicio: 0 };
+        const personas = filas => new Set(filas.map(x => x.u.email)).size;
         const diaSemana = new Date(+fecha.slice(0,4), +fecha.slice(4,6) - 1, +fecha.slice(6,8), 12).getDay();
         const alFinal = p => (p === SIN_SERVICIO ? 2 : p === SIN ? 1 : 0);
+        const dePegaPuesto = p => p === SIN || p === SIN_SERVICIO;
         Object.keys(porPuesto).sort((a, b) =>
             (alFinal(a) - alFinal(b)) || a.localeCompare(b, 'es')).forEach(puesto => {
             // Los días que ese lugar no abre no se enseña, salvo que alguien
@@ -5039,6 +5045,14 @@ const app = {
             const huecos = franjas.filter(f => !cubiertos.has(f.id));
             // Los que tienen turno puesto ese día pero todavía no han entrado
             const previstos = gente.filter(x => !x.j && x.plan).length;
+
+            // Las cuentas van aquí, antes de descartar nada por el filtro, para
+            // que cada botón diga lo suyo y no solo el que esté puesto.
+            cuenta.todos       += personas(gente);
+            cuenta.trabajando  += personas(gente.filter(trabajando));
+            cuenta.sinservicio += personas(gente.filter(x => this._sinServicio(x.u, fecha)));
+            if (!dePegaPuesto(puesto)
+                && (franjas.length ? huecos.length > 0 : dentro + previstos === 0)) cuenta.sincubrir++;
 
             // El filtro escoge qué trabajadores se ven, salvo "sin cubrir", que
             // es una propiedad del lugar: el que tiene algún turno sin nadie.
@@ -5079,7 +5093,7 @@ const app = {
             // Hoy interesa quién está dentro; en otro día, cuántos lo cubrieron.
             // Los dos grupos de pega no son lugares: no tiene sentido decir
             // que están sin cubrir.
-            const dePega = puesto === SIN || puesto === SIN_SERVICIO;
+            const dePega = dePegaPuesto(puesto);
             const cob = dePega
                 ? `${visibles.length} ${visibles.length === 1 ? 'persona' : 'personas'}`
                 : esHoy
@@ -5109,12 +5123,13 @@ const app = {
         };
         cont.innerHTML = tarjetas.join('') || '<div class="tab-empty" style="padding:22px 16px;">'
             + `<span class="tab-empty-s">${VACIO[filtro] || 'Ningún lugar en este grupo.'}</span></div>`;
-        this._renderFiltroLugares(filtro, esHoy);
+        this._renderFiltroLugares(filtro, esHoy, cuenta);
     },
 
-    _renderFiltroLugares(sel, esHoy) {
+    _renderFiltroLugares(sel, esHoy, cuenta) {
         const cont = document.getElementById('lugFiltros');
         if (!cont) return;
+        const n = id => (cuenta && cuenta[id] !== undefined) ? ` ${cuenta[id]}` : '';
         cont.innerHTML = [
             ['todos', 'Todos'],
             ['trabajando',  esHoy ? 'Trabajando' : 'Con jornada'],
@@ -5122,7 +5137,7 @@ const app = {
             ['sinservicio', 'Sin servicio asignado'],
         ].map(([id, txt]) => `<button class="${sel === id ? 'activo' : ''}"
                 onclick="event.stopPropagation();app.filtrarLugares('${id}')">${
-                    sel === id ? '✓ ' : ''}${txt}</button>`).join('');
+                    sel === id ? '✓ ' : ''}${txt}${n(id)}</button>`).join('');
     },
 
     filtrarLugares(modo) {
