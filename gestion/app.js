@@ -2323,7 +2323,7 @@ const app = {
                     : 'versión publicada';
                 return `<div class="ver-item${activa ? ' activa' : ''}">
                     <span class="ver-n">${this._buildNumToVersion(b.n)}<br><span class="ver-fecha">${f}</span></span>
-                    ${activa ? '<span class="ver-badge">PUBLICADA</span>'
+                    ${activa ? '<span class="ver-badge">Publicada</span>'
                              : `<button class="ver-btn" onclick="app._publicarVersion(${b.n})">Publicar</button>`}
                 </div>`;
             }).join('');
