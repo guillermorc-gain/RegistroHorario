@@ -118,7 +118,6 @@ const app = {
         this.setupUI();
         if (this.darkMode) this.aplicarDarkMode();
         this._restaurarTabs();
-        this._initSwipeTabs();
         this._restaurarMensual();
         this._cargarCuadrante();
         this._aplicarModoVacaciones();
@@ -3302,31 +3301,6 @@ const app = {
         return false;
     },
 
-    _initSwipeTabs() {
-        const cont = document.getElementById('appContent');
-        if (!cont) return;
-        let x0 = 0, y0 = 0, activo = false;
-        cont.addEventListener('touchstart', e => {
-            if (e.touches.length !== 1 || this._sobreCarrusel(e.target, cont)) { activo = false; return; }
-            const t = e.touches[0];
-            x0 = t.clientX; y0 = t.clientY; activo = true;
-        }, { passive: true });
-        cont.addEventListener('touchend', e => {
-            if (!activo) return;
-            activo = false;
-            const t = e.changedTouches[0];
-            const dx = t.clientX - x0, dy = t.clientY - y0;
-            // Debe ser claramente horizontal y suficientemente largo
-            if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
-            const orden = [...document.querySelectorAll('#tabBar .tab-btn')]
-                .map(b => parseInt(b.dataset.tab, 10));
-            const pos = orden.indexOf(this._activeTab);
-            if (pos === -1) return;
-            const destino = dx < 0 ? pos + 1 : pos - 1;
-            if (destino < 0 || destino >= orden.length) return;
-            this.switchTab(orden[destino]);
-        }, { passive: true });
-    },
 
     switchTab(idx) {
         this._activeTab = idx;
