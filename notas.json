@@ -1,27 +1,4 @@
 {
-  "20260919190144835-j6f2i": {
-    "id": "20260919190144835-j6f2i",
-    "email": "guillermo.rc82@gmail.com",
-    "creado": "2026-09-19T19:01:44.835Z",
-    "nombre": "Guillermo Ríos Correa",
-    "conductor": "1418-3",
-    "mensajes": [
-      {
-        "de": "guillermo.rcxx@gmail.com",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Wed",
-        "adjuntos": [],
-        "en": "2026-09-19T19:01:44.835Z"
-      }
-    ],
-    "archivada": false,
-    "de": "trabajador",
-    "tipo": "companero",
-    "deEmail": "guillermo.rcxx@gmail.com",
-    "deNombre": "Guillermo Ríos Correa",
-    "deConductor": "1234-5",
-    "estado": "pendiente"
-  },
   "20260919190556570-icndr": {
     "id": "20260919190556570-icndr",
     "email": "guillermo.rc82@gmail.com",
