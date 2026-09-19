@@ -1641,14 +1641,24 @@
     "conductor": "1100-5",
     "puesto": "Anselmo Clavé",
     "avatar": null,
-    "version": "build-40",
+    "version": "build-67",
     "horasMes": 7,
     "horasTotales": 7,
     "diasMes": 1,
     "horaInicio": "07:00",
     "horaFin": "14:00",
-    "horarioDe": "hoy",
+    "horarioDe": "anterior",
     "turno": "M",
+    "jornadaHoras": 7,
+    "horasAnuales": 1700,
+    "ritmo": "lv",
+    "dias": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
     "jornadas": [
       {
         "f": "20260918",
@@ -1660,7 +1670,7 @@
     ],
     "email": "prueba-1789766365436@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-18T21:21:00.959Z"
+    "actualizado": "2026-09-19T09:33:58.155Z"
   },
   "prueba-1789766752991@prueba.local": {
     "nombre": "Emilio Espadas",
