@@ -1990,13 +1990,7 @@
     "jornadaHoras": 3.5,
     "horasAnuales": 777,
     "ritmo": "lv",
-    "dias": [
-      1,
-      2,
-      3,
-      4,
-      5
-    ],
+    "dias": null,
     "jornadas": [
       {
         "f": "20260918",
@@ -2023,7 +2017,8 @@
         "hasta": "2026-09-30"
       }
     ],
-    "vacacionesAt": 1789812229380
+    "vacacionesAt": 1789812229380,
+    "diasAt": 1789822391659
   },
   "prueba-1789764004986@prueba.local": {
     "nombre": "Pepe",
