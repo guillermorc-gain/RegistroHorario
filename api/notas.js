@@ -202,10 +202,20 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       res.setHeader('Cache-Control', 'no-store');
       const quien = String(req.query?.email || '').toLowerCase().trim();
+      // Con ?resumen=1 solo se devuelve una huella por conversación: es lo que
+      // consultan las apps cada poco para saber si hay algo nuevo sin bajarse
+      // los mensajes enteros, que con adjuntos pesan lo suyo.
+      const soloResumen = req.query?.resumen !== undefined;
       // Con base de datos el filtro y el orden los hace Postgres, que para eso
       // tiene los índices; si no, se filtra aquí como siempre.
+      const huella = notas => notas.map(n => {
+        const m = n.mensajes || [];
+        return { id: n.id, n: m.length, en: m.length ? m[m.length - 1].en : n.creado,
+                 estado: n.estado, archivada: !!n.archivada };
+      });
       if (hayBaseDeDatos()) {
-        return res.status(200).json((await leerNotas(quien)).map(normalizar));
+        const notas = (await leerNotas(quien)).map(normalizar);
+        return res.status(200).json(soloResumen ? huella(notas) : notas);
       }
       const { data } = await getFile();
       // Las mías son las que me llegan y las que he mandado a un compañero
@@ -214,7 +224,7 @@ export default async function handler(req, res) {
                             || (n.deEmail || '').toLowerCase() === quien)
         .sort((a, b) => (b.creado || '').localeCompare(a.creado || ''))
         .map(normalizar);
-      return res.status(200).json(notas);
+      return res.status(200).json(soloResumen ? huella(notas) : notas);
     }
 
     // El trabajador escribe las suyas. El correo sale del token; la cabecera

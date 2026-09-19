@@ -566,12 +566,14 @@ const app = {
 
     _setupAppLifecycleBackup() {
         const onBackground = () => {
+            this._pararSondeoChat();
             if (this.backupFreq !== 'cerrar') return;
             if (this.accessToken && Date.now() < this.tokenExpiry) this._autoBackup();
         };
         const onForeground = () => {
             // Al volver se miran los mensajes: es lo que hace que salte el
             // aviso cuando la app estaba de fondo.
+            this._iniciarSondeoChat();
             if (this.usuarioActual) this._cargarNotasGestor();
             // If RegistrarReceiver updated Drive while in background, refresh the data
             const flag = window.AndroidBridge?.getPref?.('pendingRefresh');
@@ -2209,6 +2211,7 @@ const app = {
         this._renderNotasGestor();
         this._avisarSiHayNuevos();
         this._atenderChatPendiente();
+        this._iniciarSondeoChat();     // idempotente: reinicia el que hubiera
     },
 
     filtrarNotas(modo) {
@@ -2447,6 +2450,39 @@ const app = {
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
+    // ── Estar al tanto de los mensajes ───────────────────────────────────────
+    // Sin esto las notas solo se recargaban al cambiar de pestaña o al volver
+    // a la app: una respuesta podía estar horas en el servidor sin que saltara
+    // nada. Ahora se pregunta cada poco, pero solo por la huella —un id y la
+    // hora del último mensaje de cada conversación—, que ocupa nada. Los
+    // mensajes enteros, con sus fotos, solo se bajan si algo ha cambiado.
+
+    SONDEO_CHAT: 45 * 1000,
+    _timerChat: null,
+    _huellaChat: null,
+
+    _iniciarSondeoChat() {
+        this._pararSondeoChat();
+        if (!this.usuarioActual?.email) return;
+        this._timerChat = setInterval(() => this._sondearChat(), this.SONDEO_CHAT);
+    },
+
+    _pararSondeoChat() {
+        clearInterval(this._timerChat);
+        this._timerChat = null;
+    },
+
+    async _sondearChat() {
+        if (!this.usuarioActual?.email || document.hidden) return;
+        try {
+            const r = await fetch(`${this.NOTAS_URL}?resumen=1`, { cache: 'no-store' });
+            if (!r.ok) return;
+            const huella = JSON.stringify(await r.json());
+            if (huella === this._huellaChat) return;    // nada nuevo, ni se baja
+            this._huellaChat = huella;
+            await this._cargarNotasGestor();
+        } catch (_) { /* sin red se reintenta al siguiente */ }
+    },
     // ── Avisos del chat en la barra de Android ───────────────────────────────
     // Un aviso por conversación, que se actualiza si llegan más mensajes y se
     // retira al leerla. Desde él se puede contestar sin abrir la app, o
