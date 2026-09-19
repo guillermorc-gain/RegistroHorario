@@ -3416,7 +3416,9 @@ const app = {
                      enBaja: this._enBaja(u, fecha) || (!this._bajasDe(u).length && !!u.baja),
                      enVac:  this._enVacaciones(u, fecha),
                      lugar: this._lugarDe(u, fecha, v.j).trim() || SIN };
-        }).filter(x => !(x.lugar === SIN && x.enVac));   // de vacaciones no hay lugar que asignar
+        // Quien está de vacaciones o de baja no ocupa lugar ese día, así que no
+        // sale en el cuadro. Sigue en la lista de trabajadores, con su botón.
+        }).filter(x => !x.enVac && !x.enBaja);
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
 
         // Contadores de la cabecera: quién ha trabajado ese día y quién está
@@ -3596,7 +3598,8 @@ const app = {
             const cerrada = this._estaPlegado('t:' + u.email, true);
             const enBaja = this._enBaja(u, fecha) || (!this._bajasDe(u).length && !!u.baja);
             const enVac  = this._enVacaciones(u, fecha);
-            return `<div class="cond-card${cerrada ? ' plegada' : ''}${enBaja ? ' baja' : enVac ? ' vacaciones' : ''}">
+            return `<div class="cond-card${cerrada ? ' plegada' : ''}${
+                enBaja ? ' baja' : enVac ? ' vacaciones' : ' activo'}">
                 <div class="cond-top" onclick="app._plegarTrabajador('${esc(u.email)}')">
                     ${av}
                     <div class="cond-id">

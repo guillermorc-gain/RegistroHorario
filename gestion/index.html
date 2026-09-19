@@ -457,19 +457,23 @@
         .app-content.dark .pst-nav{background:#16202e;color:#e0e0e0;}
         .pst-nav:disabled{opacity:.3;}
         .pst-dot.baja{background:#95a5a6;box-shadow:none;}
-        .pst-dot.vac{background:#16a085;box-shadow:0 0 0 3px rgba(22,160,133,.18);}
-        .pst-fila.vac .pst-horario{color:#16a085;font-weight:800;}
+        .pst-dot.vac{background:#f0b429;box-shadow:0 0 0 3px rgba(240,180,41,.2);}
+        .pst-fila.vac .pst-horario{color:#c9931a;font-weight:800;}
         .pst-fila.baja .pst-quien,.pst-fila.baja .pst-horario{opacity:.5;filter:grayscale(1);}
         /* BE = baja del trabajador: la tarjeta se apaga pero el botón sigue legible */
         .be-btn{flex-shrink:0;border:1.5px solid #d5dbe3;background:transparent;color:#95a5a6;font-size:10.5px;font-weight:800;letter-spacing:.6px;padding:4px 9px;border-radius:8px;cursor:pointer;font-family:inherit;}
         .app-content.dark .be-btn{border-color:#2d3561;}
         .be-btn.on{background:#7f8c8d;border-color:#7f8c8d;color:#fff;}
-        .vc-btn.on{background:#16a085;border-color:#16a085;color:#fff;}
+        .vc-btn.on{background:#f0b429;border-color:#f0b429;color:#2c3e50;}
         /* Verde para vacaciones y gris para baja, con franja lateral: el tinte
            solo, en modo oscuro, quedaba más oscuro que la tarjeta normal y se
            leía como apagado en vez de como verde. */
-        .cond-card.vacaciones{background:#e4f7ef;border-left-color:#16a085;}
-        .app-content.dark .cond-card.vacaciones{background:#1c3d34;border-left-color:#1abc9c;}
+        /* Tres estados con el mismo tratamiento: franja y tinte. Verde en
+           activo, amarillo de vacaciones, gris de baja. */
+        .cond-card.activo{background:#e8f8ee;border-left-color:#27ae60;}
+        .app-content.dark .cond-card.activo{background:#17332a;border-left-color:#2ecc71;}
+        .cond-card.vacaciones{background:#fdf6e0;border-left-color:#f0b429;}
+        .app-content.dark .cond-card.vacaciones{background:#3a3117;border-left-color:#f1c40f;}
         .cond-card.baja{background:#e9edf2;border-left-color:#95a5a6;}
         .app-content.dark .cond-card.baja{background:#151d29;border-left-color:#7f8c8d;}
         .cond-card.baja .cond-avatar,.cond-card.baja .cond-id,
