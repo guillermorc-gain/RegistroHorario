@@ -1680,7 +1680,10 @@
     ],
     "email": "prueba-1789759539366@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T10:42:29.928Z"
+    "actualizado": "2026-09-19T10:42:29.928Z",
+    "lugares": {
+      "20260919": "Control"
+    }
   },
   "prueba-1789760248885@prueba.local": {
     "nombre": "Timi",
