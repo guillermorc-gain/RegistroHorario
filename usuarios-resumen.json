@@ -1359,7 +1359,7 @@
     "conductor": "0928-8",
     "puesto": "Son Rossinyol",
     "avatar": null,
-    "version": "build-66",
+    "version": "build-67",
     "horasMes": 14,
     "horasTotales": 14,
     "diasMes": 2,
@@ -1395,7 +1395,7 @@
     ],
     "email": "prueba-1789759132382@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T09:28:39.706Z"
+    "actualizado": "2026-09-19T09:32:44.076Z"
   },
   "prueba-1789759514777@prueba.local": {
     "nombre": "Xisca",
