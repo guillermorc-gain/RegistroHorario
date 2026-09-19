@@ -2714,6 +2714,13 @@ const app = {
             // Sin saltos ni sangría dentro del globo: el texto va con
             // pre-wrap, así que la propia plantilla se vería como líneas en
             // blanco.
+            // El visto del gestor va centrado y sin globo: es un apunte del
+            // sistema, no algo que haya escrito nadie.
+            if (m.sistema) {
+                return `<div class="bub sistema">${esc(m.texto)}`
+                    + (m.autor ? ` · ${esc(m.autor)}` : '')
+                    + ` · ${esc(this._horaCorta(m.en))}</div>`;
+            }
             return `<div class="bub ${mio ? 'mio' : 'suyo'}">`
                 + (mio ? '' : `<div class="bub-autor">${esc(m.autor) || (m.de === 'gestor' ? 'Gestión' : '')}</div>`)
                 + `<span class="bub-txt">${esc(m.texto)}</span>${adj}`
@@ -2804,7 +2811,7 @@ const app = {
 
     _estadoNota(id, estado) {
         const txt = { ok: '✅ Aceptada', no: '❌ Denegada', pendiente: 'Vuelve a pendiente' };
-        return this._tocarConversacion(id, { estado }, txt[estado]);
+        return this._tocarConversacion(id, { estado, gestor: this._nombreGestor() }, txt[estado]);
     },
 
     _nombreGestor() {
