@@ -237,20 +237,38 @@ const app = {
             window.Capacitor.Plugins.App?.addListener('appUrlOpen', (data) => {
                 this._processOAuthUrl(data?.url);
             });
-            window.Capacitor.Plugins.App?.addListener('backButton', () => {
-                if (document.getElementById('historialModal')?.classList.contains('show')) {
-                    document.getElementById('historialModal').classList.remove('show');
-                } else if (document.getElementById('editModal')?.classList.contains('show')) {
-                    document.getElementById('editModal').classList.remove('show');
-                } else if (document.getElementById('avatarModal')?.classList.contains('show')) {
-                    document.getElementById('avatarModal')?.classList.remove('show');
-                } else if (document.getElementById('optionsScreen')?.classList.contains('active')) {
-                    this.mostrarApp();
-                } else {
-                    window.Capacitor.Plugins.App?.minimizeApp?.();
-                }
-            });
+            window.Capacitor.Plugins.App?.addListener('backButton', () => this.atras());
         } catch (_) {}
+    },
+
+    // Atrás cierra lo que haya abierto, de lo último a lo primero, y solo
+    // cierra la app cuando ya no queda nada. Antes esto era una lista de tres
+    // modales escrita a mano: cualquier cuadro nuevo —una conversación, un
+    // lugar, el visor de una foto— se saltaba la lista y cerraba la app.
+    atras() {
+        // Los visores van por encima de todo
+        const visor = [...document.querySelectorAll('.foto-visor.show, .cuad-visor.show')].pop();
+        if (visor) {
+            visor.classList.remove('show');
+            document.getElementById('fotoVisorImg')?.removeAttribute('src');
+            return true;
+        }
+        // De los cuadros abiertos, el de encima: el que más z-index tenga y,
+        // a igualdad, el último del documento, que es como se apilan aquí.
+        const abiertos = [...document.querySelectorAll('.modal.show')];
+        if (abiertos.length) {
+            const z = el => parseInt(getComputedStyle(el).zIndex, 10) || 0;
+            const arriba = abiertos.reduce((a, b) => (z(b) >= z(a) ? b : a));
+            arriba.classList.remove('show');
+            return true;
+        }
+        if (document.getElementById('optionsScreen')?.classList.contains('active')) {
+            this.mostrarApp();
+            return true;
+        }
+        // Nada abierto: que se encargue Android
+        window.Capacitor.Plugins.App?.minimizeApp?.();
+        return false;
     },
 
     _processOAuthUrl(url) {
