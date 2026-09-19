@@ -718,6 +718,7 @@ const app = {
 
     setupUI() {
         this._aplicarCuadros();
+        this._renderLugarJornada();
         this.establecerFechaHoy();
         this.actualizarFecha();
         if (this.precioExtraDefault > 0) {
@@ -990,6 +991,10 @@ const app = {
         if (horas < 0) { alert('❌ Las horas no pueden ser negativas'); return; }
         const horaInicio     = document.getElementById('horaInicio').value;
         const horaFin        = document.getElementById('horaFin').value;
+        // Solo los tramos con lugar y las dos horas: uno a medias no dice nada
+        const tramos = this._tramosConHoras()
+            .filter(t => t.p && t.i && t.o)
+            .map(t => ({ p: t.p, i: t.i, o: t.o }));
         const esNoche        = document.getElementById('nocheToggle').checked;
         const esPR           = this.prActivo;
         const esExtra        = this.extraActivo;
@@ -1020,7 +1025,8 @@ const app = {
                 ...(this.puestoTrabajo ? { puesto: this.puestoTrabajo } : {}),
                 ...(esExtra ? { extraManual: true, extraDestino } : {}),
                 ...(esVacaciones ? { vacaciones: true } : {}),
-                ...(esBaja ? { be: true } : {})
+                ...(esBaja ? { be: true } : {}),
+                ...(tramos.length ? { tramos } : {})
             };
             if (esPR && this._prUsados(datos.historial) > this.PR_ANUALES) {
                 delete datos.historial[registroId];
@@ -1441,6 +1447,7 @@ const app = {
         if (mins < 0) mins += 1440;
         const horas = Math.round(mins / 60 * 2) / 2;
         if (horas > 0) document.getElementById('horasInput').value = horas;
+        this._renderTramos();            // cambian las horas sin lugar
         const nocturnas = this._calcHorasNocturnas(inicio, fin);
         const nocheExtra = document.getElementById('nocheExtra');
         const nocheBtn   = document.querySelector('.noche-compact');
@@ -1622,6 +1629,99 @@ const app = {
                 <button class="vac-del" onclick="app.borrarVacaciones(${i})">×</button>
             </div>`;
         }).join('');
+    },
+
+    // ── Lugar de trabajo de la jornada ───────────────────────────────────────
+    // El lugar se elige aquí, y quien pasa por varios sitios en el día —los de
+    // calle— puede apuntar cada uno con su horario. La primera entrada y la
+    // última salida no hace falta escribirlas: son las de la jornada.
+
+    _tramos: [],
+
+    _lugaresConocidos() {
+        const cat = Object.values(LUGARES_CATALOGO || {}).map(l => l?.nombre).filter(Boolean);
+        const todos = [...cat];
+        [this.puestoTrabajo, ...this._tramos.map(t => t.p)].forEach(p => {
+            if (p && !todos.some(x => this._clavePuesto(x) === this._clavePuesto(p))) todos.push(p);
+        });
+        return todos;
+    },
+
+    _opcionesLugar(actual) {
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        return '<option value="">Sin lugar</option>' + this._lugaresConocidos().map(p =>
+            `<option${this._clavePuesto(p) === this._clavePuesto(actual) ? ' selected' : ''}>${esc(p)}</option>`).join('');
+    },
+
+    _renderLugarJornada() {
+        const sel = document.getElementById('lugarJornada');
+        if (sel) sel.innerHTML = this._opcionesLugar(this.puestoTrabajo);
+        this._renderTramos();
+    },
+
+    _cambiarLugarJornada(v) {
+        this.puestoTrabajo = v || '';
+        localStorage.setItem('puestoTrabajo', this.puestoTrabajo);
+        this._actualizarCabeceraUsuario();
+        this._actualizarConductorDisplay();
+        this._renderTramos();
+    },
+
+    _nuevoTramo() {
+        this._tramos.push({ p: this.puestoTrabajo || '', i: '', o: '' });
+        this._renderTramos();
+    },
+
+    _setTramo(k, campo, valor) {
+        if (!this._tramos[k]) return;
+        this._tramos[k][campo] = valor;
+        this._renderTramos();
+    },
+
+    _quitarTramo(k) { this._tramos.splice(k, 1); this._renderTramos(); },
+
+    // Horas del día ya repartidas entre lugares. La primera y la última heredan
+    // la entrada y la salida de la jornada, que es lo que se pide no repetir.
+    _tramosConHoras() {
+        const ini = document.getElementById('horaInicio')?.value || '';
+        const fin = document.getElementById('horaFin')?.value || '';
+        return this._tramos.map((t, k) => ({
+            ...t,
+            i: t.i || (k === 0 ? ini : ''),
+            o: t.o || (k === this._tramos.length - 1 ? fin : ''),
+        }));
+    },
+
+    _horasRepartidas() {
+        return this._tramosConHoras().reduce((s, t) =>
+            s + (t.i && t.o ? this._horasEntre(t.i, t.o) : 0), 0);
+    },
+
+    _renderTramos() {
+        const cont = document.getElementById('tramosLista');
+        if (!cont) return;
+        const conHoras = this._tramosConHoras();
+        cont.innerHTML = this._tramos.map((t, k) => `<div class="tramo">
+            <select onchange="app._setTramo(${k},'p',this.value)">${this._opcionesLugar(t.p)}</select>
+            <input type="time" value="${t.i}" placeholder="entrada"
+                onchange="app._setTramo(${k},'i',this.value)" title="${k === 0 ? 'En blanco: la hora de entrada' : ''}">
+            <input type="time" value="${t.o}"
+                onchange="app._setTramo(${k},'o',this.value)" title="${k === this._tramos.length - 1 ? 'En blanco: la hora de salida' : ''}">
+            <button class="tramo-x" onclick="app._quitarTramo(${k})">×</button>
+        </div>`).join('');
+        const resto = document.getElementById('lugarResto');
+        if (!resto) return;
+        if (!this._tramos.length) { resto.textContent = ''; resto.classList.remove('falta'); return; }
+        const total = parseFloat(document.getElementById('horasInput')?.value) || 0;
+        const puestas = Math.round(this._horasRepartidas() * 10) / 10;
+        const falta = Math.round((total - puestas) * 10) / 10;
+        const h = n => String(n).replace('.', ',') + 'h';
+        const sitios = conHoras.filter(t => t.p && t.i && t.o)
+            .map(t => `${h(this._horasEntre(t.i, t.o))} en ${t.p}`).join(' · ');
+        resto.classList.toggle('falta', falta > 0);
+        resto.textContent = falta > 0
+            ? `${sitios}${sitios ? ' · ' : ''}faltan ${h(falta)} sin lugar: saldrán como sin servicio`
+            : sitios;
     },
 
     // ── Cuadros del registro ─────────────────────────────────────────────────
@@ -2326,6 +2426,8 @@ const app = {
         this.bajaActiva = false;
         document.getElementById('beCompact')?.classList.remove('active');
         const bt = document.getElementById('beToggle'); if (bt) bt.checked = false;
+        this._tramos = [];
+        this._renderLugarJornada();
         // Horas del horario recuperado, sin activar nada nocturno
         document.getElementById('horasInput').value = (lastInicio && lastFin)
             ? this._horasEntre(lastInicio, lastFin) : '';
@@ -2800,15 +2902,20 @@ const app = {
         if (!pos) return;
         const cerca = this._lugarPorUbicacion(pos.lat, pos.lng);
         if (!cerca) return;
-        if (this._clavePuesto(cerca.nombre) === this._clavePuesto(this.puestoTrabajo)) return;
-        if (!confirm(`Parece que estás en ${cerca.nombre}.\n\n¿Lo pongo como tu lugar de trabajo?`)) return;
+        const puesto = this.puestoTrabajo;
+        if (this._clavePuesto(cerca.nombre) === this._clavePuesto(puesto)) return;
+        // Donde estás manda sobre lo que hayas elegido: si el GPS te sitúa en
+        // otro sitio, cuenta ese. Se avisa, no se pregunta.
         this.puestoTrabajo = cerca.nombre;
         localStorage.setItem('puestoTrabajo', this.puestoTrabajo);
         this._actualizarCabeceraUsuario();
         this._actualizarConductorDisplay();
+        this._renderLugarJornada();
         localStorage.removeItem('resumenHuella');     // forzar que se vuelva a publicar
         this._publicarResumen();
-        this._mostrarToast(`📍 Lugar: ${cerca.nombre}`, 3000);
+        this._mostrarToast(puesto
+            ? `📍 El GPS te sitúa en ${cerca.nombre}: cuenta ese, no ${puesto}`
+            : `📍 Lugar: ${cerca.nombre}`, 5000);
     },
 
     async _publicarResumen() {
@@ -2848,6 +2955,7 @@ const app = {
                     ...(r.festivo ? { fe: 1 } : {}),
                     ...(r.vacaciones ? { v: 1 } : {}),
                     ...(r.be ? { b: 1 } : {}),
+                    ...(Array.isArray(r.tramos) && r.tramos.length ? { tr: r.tramos } : {}),
                     ...(r.pr ? { p: 1 } : {}),
                 }));
             const payload = {
