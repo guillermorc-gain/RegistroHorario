@@ -73,7 +73,6 @@
       "destination": "/index.html"
     }
   ],
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ':(exclude)usuarios-resumen.json' ':(exclude)cuadrante.json' ':(exclude)allowed-users.json' ':(exclude)allowed-users-gestion.json' ':(exclude)version-publicada.json' ':(exclude)lugares.json'",
   "git": {
     "deploymentEnabled": {
       "datos": false
