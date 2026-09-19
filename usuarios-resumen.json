@@ -2214,7 +2214,13 @@
     ],
     "email": "prueba-1789764004986@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T09:32:21.277Z"
+    "actualizado": "2026-09-19T09:32:21.277Z",
+    "horarios": {
+      "202609": {
+        "i": "07:00",
+        "f": "13:00"
+      }
+    }
   },
   "prueba-1789766365436@prueba.local": {
     "nombre": "Toni Valverde",
