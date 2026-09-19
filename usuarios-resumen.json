@@ -2107,7 +2107,13 @@
     "email": "prueba-1789760390735@prueba.local",
     "ficticio": true,
     "actualizado": "2026-09-19T13:54:29.316Z",
-    "horario": ""
+    "horario": "",
+    "horarios": {
+      "202609": {
+        "i": "20:00",
+        "f": "03:00"
+      }
+    }
   },
   "prueba-1789763845092@prueba.local": {
     "nombre": "Toni Sánchez",
