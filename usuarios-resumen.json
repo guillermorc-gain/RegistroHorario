@@ -1359,7 +1359,7 @@
     "conductor": "0928-8",
     "puesto": "Son Rossinyol",
     "avatar": null,
-    "version": "build-58",
+    "version": "build-66",
     "horasMes": 14,
     "horasTotales": 14,
     "diasMes": 2,
@@ -1367,6 +1367,16 @@
     "horaFin": "19:00",
     "horarioDe": "anterior",
     "turno": "M",
+    "jornadaHoras": 7,
+    "horasAnuales": 1700,
+    "ritmo": "lv",
+    "dias": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
     "jornadas": [
       {
         "f": "20260918",
@@ -1385,7 +1395,7 @@
     ],
     "email": "prueba-1789759132382@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T08:38:02.697Z"
+    "actualizado": "2026-09-19T09:28:39.706Z"
   },
   "prueba-1789759514777@prueba.local": {
     "nombre": "Xisca",
