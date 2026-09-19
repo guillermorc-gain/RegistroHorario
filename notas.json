@@ -12,5 +12,18 @@
     "gestor": "Guillermo Ríos Correa",
     "estado": "pendiente",
     "respuesta": null
+  },
+  "20260919164703913-24f2h": {
+    "id": "20260919164703913-24f2h",
+    "email": "guillermo.rc82@gmail.com",
+    "creado": "2026-09-19T16:47:03.913Z",
+    "nombre": "Guillermo Ríos Correa",
+    "conductor": "1418-3",
+    "texto": "Hola que tal",
+    "adjuntos": [],
+    "de": "trabajador",
+    "tipo": "gestion",
+    "estado": "pendiente",
+    "respuesta": null
   }
 }
