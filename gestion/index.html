@@ -354,6 +354,11 @@
         .f-chev{margin-left:auto;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#f1f4f8;color:#7f8c8d;font-size:14px;transition:transform .2s;}
         .modal-card.dark .f-chev{background:#16202e;color:#a0a0a0;}
         .f-sep-pleg.cerrado .f-chev{transform:rotate(-90deg);}
+        .f-horas{display:flex;align-items:center;gap:10px;margin:8px 0 2px;}
+        .f-horas label{flex:1;font-size:12.5px;font-weight:700;color:#2c3e50;}
+        .modal-card.dark .f-horas label{color:#e0e0e0;}
+        .f-horas input{width:90px;border:1.5px solid #dfe4ea;border-radius:8px;padding:9px 10px;font-family:inherit;font-size:14px;text-align:center;color:#2c3e50;background:#fff;}
+        .modal-card.dark .f-horas input{background:#16202e;border-color:#2d3561;color:#e0e0e0;}
         .lg-dias{display:flex;gap:5px;margin-bottom:6px;}
         .lg-dias button{flex:1;min-width:0;border:1.5px solid #dfe4ea;background:transparent;color:#95a5a6;font-family:inherit;font-size:12px;font-weight:800;padding:8px 0;border-radius:8px;cursor:pointer;}
         .modal-card.dark .lg-dias button{border-color:#2d3561;}
@@ -1432,6 +1437,10 @@
             <div class="f-sep">Tipo de jornada</div>
             <div class="lg-dias" id="fTipo"></div>
             <div class="lg-dias" id="fRitmo"></div>
+            <div class="f-horas" id="fHorasFila" hidden>
+                <label>Horas al día</label>
+                <input type="text" inputmode="decimal" id="fHoras" placeholder="3,5" oninput="app._renderTipoFict()">
+            </div>
             <span class="ops-field-sub" id="fRitmoSub" style="display:block;margin-top:4px;"></span>
             <div class="f-sep f-sep-pleg" onclick="app._plegarJornadasFict()">
                 <span>Jornadas</span>
