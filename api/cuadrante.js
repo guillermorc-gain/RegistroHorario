@@ -10,7 +10,11 @@ const FILE_PATH    = 'cuadrante.json';
 const ADMIN_EMAIL  = 'g.rioscorrea@gmail.com';
 // A data URL costs ~33% more than the raw bytes, and GitHub's contents API
 // starts failing around 1 MB of base64, so keep the payload well under it.
-const MAX_CHARS    = 700 * 1024;
+// Al escribir, el JSON se manda en base64, que abulta un tercio más. Con
+// 700 KB la petición rondaba los 930 KB y se acercaba al tope de 1 MB de la
+// API de contenidos: pasado ese punto la escritura falla y la foto no entra,
+// que es lo que ya pasó con las notas.
+const MAX_CHARS    = 450 * 1024;
 
 const ghHeaders = () => ({
   'User-Agent': 'horasemt-app',
