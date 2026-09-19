@@ -283,10 +283,12 @@
         .sec.cerrada .sec-body{display:none;}
         .sec-body{padding-top:4px;}
         .cond-orden{display:flex;gap:0;background:#e8eaf0;border-radius:8px;padding:2px;}
-        .app-content.dark .cond-orden{background:#16202e;}
+        .app-content.dark .cond-orden,.options-content.dark .cond-orden{background:#16202e;}
+        .ops-orden{display:flex;align-items:center;gap:10px;padding:2px 14px 10px;}
+        .ops-orden-t{flex:1;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#95a5a6;}
         .orden-btn{border:none;background:transparent;color:#7f8c8d;font-size:11px;font-weight:700;padding:4px 8px;border-radius:6px;cursor:pointer;font-family:inherit;}
         .orden-btn.activo{background:white;color:var(--g1);box-shadow:0 1px 2px rgba(0,0,0,.08);}
-        .app-content.dark .orden-btn.activo{background:#1e2a3a;}
+        .app-content.dark .orden-btn.activo,.options-content.dark .orden-btn.activo{background:#1e2a3a;}
         .cond-refresh{flex-shrink:0;width:30px;height:30px;background:linear-gradient(135deg,var(--g1),var(--g2));border:none;border-radius:8px;color:#fff;font-size:16px;cursor:pointer;}
         .cond-filtros{display:flex;gap:6px;overflow-x:auto;padding:2px 0 9px;}
         .cond-filtros button{flex-shrink:0;border:none;border-radius:9px;padding:6px 12px;font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer;background:#eef1f6;color:#7f8c8d;}
@@ -346,6 +348,12 @@
         .pm-volver{color:#7f8c8d;font-weight:700;justify-content:center;}
         .pm-paso{padding:11px 16px;font-size:12.5px;color:#2c3e50;background:#f4f6f9;border-bottom:1px solid #efefef;}
         .modal-card.dark .pm-paso{color:#e0e0e0;background:#16202e;border-color:#2d3561;}
+        .f-sep-pleg{display:flex;align-items:center;gap:8px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+        .f-cnt{font-size:10px;font-weight:800;color:var(--g1);background:#eaf2fd;padding:2px 8px;border-radius:9px;}
+        .modal-card.dark .f-cnt{background:#14283f;}
+        .f-chev{margin-left:auto;width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#f1f4f8;color:#7f8c8d;font-size:14px;transition:transform .2s;}
+        .modal-card.dark .f-chev{background:#16202e;color:#a0a0a0;}
+        .f-sep-pleg.cerrado .f-chev{transform:rotate(-90deg);}
         .lg-dias{display:flex;gap:5px;margin-bottom:6px;}
         .lg-dias button{flex:1;min-width:0;border:1.5px solid #dfe4ea;background:transparent;color:#95a5a6;font-family:inherit;font-size:12px;font-weight:800;padding:8px 0;border-radius:8px;cursor:pointer;}
         .modal-card.dark .lg-dias button{border-color:#2d3561;}
@@ -1100,9 +1108,12 @@
                     <div class="ops-field">
                         <span class="ops-field-sub">Trabajadores inventados para probar las pantallas. Se ven igual que los reales pero llevan la marca PRUEBA, y puedes borrarlos cuando quieras.</span>
                     </div>
-                    <div class="cond-orden" style="margin-bottom:8px;">
-                        <button id="ordenPruebaNombre" class="orden-btn activo" onclick="app.ordenarPrueba('nombre')">Nombre</button>
-                        <button id="ordenPruebaNumero" class="orden-btn" onclick="app.ordenarPrueba('numero')">Nº</button>
+                    <div class="ops-orden">
+                        <span class="ops-orden-t">Ordenar por</span>
+                        <div class="cond-orden">
+                            <button id="ordenPruebaNombre" class="orden-btn activo" onclick="app.ordenarPrueba('nombre')">Nombre</button>
+                            <button id="ordenPruebaNumero" class="orden-btn" onclick="app.ordenarPrueba('numero')">Nº</button>
+                        </div>
                     </div>
                     <div id="pruebaList"></div>
                     <button class="ops-btn" onclick="app._nuevoFicticio()">➕ Añadir usuario de prueba <span class="ops-arrow">›</span></button>
@@ -1422,14 +1433,20 @@
             <div class="lg-dias" id="fTipo"></div>
             <div class="lg-dias" id="fRitmo"></div>
             <span class="ops-field-sub" id="fRitmoSub" style="display:block;margin-top:4px;"></span>
-            <div class="f-sep">Jornadas</div>
+            <div class="f-sep f-sep-pleg" onclick="app._plegarJornadasFict()">
+                <span>Jornadas</span>
+                <span class="f-cnt" id="fCuenta">0</span>
+                <span class="f-chev" id="fChev">▾</span>
+            </div>
             <div class="exp-fechas" style="padding:0 0 8px;">
                 <label>Generar desde<input type="date" id="fDesde"></label>
                 <label>hasta<input type="date" id="fHasta"></label>
             </div>
             <button class="ops-btn" style="border-radius:8px;margin-bottom:10px;" onclick="app._generarJornadasFict()">🎲 Generar según el patrón</button>
+            <div id="fPlegable">
             <div id="fJornadas"></div>
             <button class="ops-btn" style="border-radius:8px;" onclick="app._addJornadaFict()">➕ Añadir jornada</button>
+            </div>
         </div>
         <div class="modal-footer">
             <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('fictModal').classList.remove('show')">Cancelar</button>
