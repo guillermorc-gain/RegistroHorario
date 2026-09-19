@@ -1540,10 +1540,14 @@ const app = {
         // Lo que cambia las reglas es si es media jornada o completa, así que se
         // elige entre las dos en vez de escribir un número a ojo.
         this._volverJornada();
-        document.querySelectorAll('#jornadaModal .jm-op').forEach(op => {
-            const c = op.querySelector('.jm-check');
-            op.classList.toggle('sel', !!c && parseFloat(c.dataset.jor) === this.jornadaHoras);
-        });
+        // Media jornada no son solo 3,5h: si tiene otras puestas, la fila lo
+        // enseña y queda marcada. Antes con 4h no se marcaba ninguna y al
+        // entrar por la de 3,5 se le borraba su valor.
+        const media = this._esMedia(this.jornadaHoras);
+        const txt = document.getElementById('jmMediaTxt');
+        if (txt) txt.textContent = (media ? String(this.jornadaHoras).replace('.', ',') : '3,5') + ' h';
+        document.getElementById('jmMedia')?.classList.toggle('sel', media);
+        document.getElementById('jmCompleta')?.classList.toggle('sel', !media);
         document.getElementById('jornadaModal').classList.add('show');
         if (this.darkMode) document.getElementById('jornadaModalContent').classList.add('dark');
     },
@@ -1610,7 +1614,12 @@ const app = {
     },
 
     async elegirJornada(n, saltarPaso) {
-        if (this._esMedia(n) && !saltarPaso) return this._pasoDiasJornada(n);
+        // Al entrar por la fila de media jornada se conservan sus horas, que
+        // pueden no ser 3,5; solo se usa el valor de la fila si venía de la
+        // jornada completa.
+        if (this._esMedia(n) && !saltarPaso) {
+            return this._pasoDiasJornada(this._esMedia(this.jornadaHoras) ? this.jornadaHoras : n);
+        }
         document.getElementById('jornadaModal').classList.remove('show');
         if (n === this.jornadaHoras && saltarPaso !== true) return;
         this.jornadaHoras = n;
@@ -3130,6 +3139,7 @@ const app = {
             precioFestivoDefault: this.precioFestivoDefault,
             horasAnualesCustom: this.horasAnualesCustom,
             jornadaHoras: this.jornadaHoras,
+            diasSemana: this.diasSemana || null,
             numConductor: this.numConductor,
             backupFreq: this.backupFreq,
             vacaciones: this._getVacaciones(),
@@ -3197,6 +3207,15 @@ const app = {
         if (prefs.jornadaHoras) {
             this.jornadaHoras = prefs.jornadaHoras;
             localStorage.setItem('jornadaHoras', String(prefs.jornadaHoras));
+        }
+        // Los días de la media jornada viajaban solo en localStorage: al
+        // reinstalar se perdían aunque el resto de ajustes volviera.
+        if (Array.isArray(prefs.diasSemana)) {
+            this.diasSemana = prefs.diasSemana;
+            localStorage.setItem('diasSemana', JSON.stringify(prefs.diasSemana));
+        } else if (prefs.diasSemana === null) {
+            this.diasSemana = null;
+            localStorage.removeItem('diasSemana');
         }
         if (prefs.horasAnualesCustom) {
             this.horasAnualesCustom = prefs.horasAnualesCustom;
