@@ -1714,6 +1714,7 @@ const app = {
         localStorage.setItem('activeTab', String(idx));
         if (idx === 0) this._cargarConductores();
         if (idx === 1) this._cargarCuadrante();
+        if (idx === 2) this._cargarNotasGestor();
         if (idx === 3) this._cargarConductores();
     },
 
@@ -2177,6 +2178,134 @@ const app = {
                 ? new Date(data.actualizado).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })
                 : '';
         }
+    },
+
+    // ── Notas ───────────────────────────────────────────────────────────────
+    // Lo que escriben los trabajadores: se acepta, se deniega o se contesta.
+    // La respuesta va firmada con el nombre del gestor, que es lo que ven.
+
+    NOTAS_URL: 'https://registro-horario-emt.vercel.app/api/notas',
+    _notas: [],
+
+    async _cargarNotasGestor() {
+        try {
+            const r = await fetch(this.NOTAS_URL, { cache: 'no-store' });
+            if (!r.ok) throw new Error(r.status);
+            this._notas = await r.json();
+            localStorage.setItem('notasCache', JSON.stringify(this._notas));
+        } catch (_) {
+            try { this._notas = JSON.parse(localStorage.getItem('notasCache') || '[]'); } catch (__) {}
+        }
+        this._renderNotasGestor();
+    },
+
+    filtrarNotas(modo) {
+        localStorage.setItem('filtroNotas', modo);
+        this._renderNotasGestor();
+    },
+
+    _fechaNota(iso) {
+        const d = new Date(iso);
+        return isNaN(d) ? '' : d.toLocaleString('es-ES',
+            { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    },
+
+    _renderNotasGestor() {
+        const cont = document.getElementById('ntLista');
+        if (!cont) return;
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const estado = n => ['ok', 'no'].includes(n.estado) ? n.estado : 'pendiente';
+        const sel = localStorage.getItem('filtroNotas') || 'pendiente';
+        const fil = document.getElementById('ntFiltros');
+        if (fil) {
+            fil.innerHTML = [['pendiente', 'Pendientes'], ['ok', 'Aceptadas'],
+                             ['no', 'Denegadas'], ['todas', 'Todas']]
+                .map(([id, txt]) => {
+                    const n = id === 'todas' ? this._notas.length
+                        : this._notas.filter(x => estado(x) === id).length;
+                    return `<button class="${sel === id ? 'activo' : ''}"
+                        onclick="app.filtrarNotas('${id}')">${sel === id ? '✓ ' : ''}${txt} ${n}</button>`;
+                }).join('');
+        }
+        const pend = this._notas.filter(n => estado(n) === 'pendiente').length;
+        const cnt = document.getElementById('ntCnt');
+        if (cnt) cnt.textContent = pend ? `${pend} sin ver` : 'al día';
+        const lista = this._notas.filter(n => sel === 'todas' || estado(n) === sel);
+        if (!lista.length) {
+            cont.innerHTML = `<div class="nt-vacio">${this._notas.length
+                ? 'Ninguna nota en este grupo.' : 'Todavía no hay notas.'}</div>`;
+            return;
+        }
+        cont.innerHTML = lista.map(n => {
+            const e = estado(n);
+            return `<div class="nt-card ${e}">
+                <div class="nt-top">
+                    <span class="nt-num">${esc(n.conductor) || '—'}</span>
+                    <span class="nt-nom">${esc(n.nombre) || esc(n.email)}</span>
+                    <span class="nt-fecha">${esc(this._fechaNota(n.creado))}</span>
+                </div>
+                <div class="nt-cuerpo">${esc(n.texto)}</div>
+                ${n.respuesta?.texto ? `<div class="nt-resp">
+                    <div class="nt-resp-quien">${esc(n.respuesta.gestor) || 'Gestión'} · ${
+                        esc(this._fechaNota(n.respuesta.en))}</div>
+                    <div class="nt-resp-txt">${esc(n.respuesta.texto)}</div>
+                </div>` : ''}
+                <div class="nt-acciones">
+                    <button class="nt-btn si${e === 'ok' ? ' on' : ''}"
+                        onclick="app._estadoNota('${esc(n.id)}','${e === 'ok' ? 'pendiente' : 'ok'}')">✅</button>
+                    <button class="nt-btn no${e === 'no' ? ' on' : ''}"
+                        onclick="app._estadoNota('${esc(n.id)}','${e === 'no' ? 'pendiente' : 'no'}')">❌</button>
+                    <button class="nt-btn" onclick="app._responderNota('${esc(n.id)}')">💬 Responder</button>
+                </div>
+            </div>`;
+        }).join('');
+    },
+
+    async _patchNota(cuerpo, mensaje) {
+        try {
+            const r = await fetch(this.NOTAS_URL, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify(cuerpo)
+            });
+            const data = await r.json();
+            if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return false; }
+            this._notas = this._notas.map(n => n.id === data.id ? data : n);
+            this._renderNotasGestor();
+            if (mensaje) this._mostrarToast(mensaje, 2500);
+            return true;
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); return false; }
+    },
+
+    _estadoNota(id, estado) {
+        const txt = { ok: '✅ Aceptada', no: '❌ Denegada', pendiente: 'Vuelve a pendiente' };
+        return this._patchNota({ id, estado }, txt[estado]);
+    },
+
+    _responderNota(id) {
+        const n = this._notas.find(x => x.id === id);
+        if (!n) return;
+        this._notaRespondiendo = id;
+        document.getElementById('respQuien').textContent =
+            `${n.conductor ? n.conductor + ' · ' : ''}${n.nombre || n.email}`;
+        document.getElementById('respOriginal').textContent = n.texto;
+        document.getElementById('respTexto').value = n.respuesta?.texto || '';
+        document.getElementById('respFirma').textContent =
+            `Firmarás como ${this._nombreGestor()}.`;
+        document.getElementById('respModal').classList.add('show');
+        if (this.darkMode) document.getElementById('respModalContent').classList.add('dark');
+    },
+
+    _nombreGestor() {
+        return this.usuarioActual?.name || this.usuarioActual?.email || 'Gestión';
+    },
+
+    async _guardarRespuesta() {
+        const texto = (document.getElementById('respTexto').value || '').trim();
+        document.getElementById('respModal').classList.remove('show');
+        await this._patchNota({ id: this._notaRespondiendo, respuesta: texto,
+            gestor: this._nombreGestor() }, texto ? '💬 Respuesta enviada' : 'Respuesta quitada');
     },
 
     // ── Trabajadores del cuadrante ───────────────────────────────────────────

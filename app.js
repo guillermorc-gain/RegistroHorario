@@ -957,6 +957,7 @@ const app = {
             this._updateGpsState();
             this._exportarMesesPendientes();
             this._publicarResumen();
+            this._cargarNotas();
             this._cargarLugares();
             this._pedirPermisosIniciales();
             if (this._pendingNotifAction === 'registro-rapido') {
@@ -1631,6 +1632,82 @@ const app = {
         }).join('');
     },
 
+    // ── Notas ───────────────────────────────────────────────────────────────
+    // El trabajador escribe y gestión contesta. La fecha y la hora las pone el
+    // servidor, para que no dependan del reloj del móvil.
+
+    NOTAS_URL: 'https://registro-horario-emt.vercel.app/api/notas',
+    _notas: [],
+
+    async _cargarNotas() {
+        if (!this.usuarioActual?.email) return;
+        try {
+            const r = await fetch(`${this.NOTAS_URL}?email=${encodeURIComponent(this.usuarioActual.email)}`,
+                { cache: 'no-store' });
+            if (!r.ok) throw new Error(r.status);
+            this._notas = await r.json();
+            localStorage.setItem('notasCache', JSON.stringify(this._notas));
+        } catch (_) {
+            // Sin red se enseña lo último que se vio
+            try { this._notas = JSON.parse(localStorage.getItem('notasCache') || '[]'); } catch (__) {}
+        }
+        this._renderNotas();
+    },
+
+    _fechaNota(iso) {
+        const d = new Date(iso);
+        return isNaN(d) ? '' : d.toLocaleString('es-ES',
+            { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    },
+
+    _renderNotas() {
+        const cont = document.getElementById('ntLista');
+        if (!cont) return;
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        if (!this._notas.length) {
+            cont.innerHTML = '<div class="nt-vacio">Todavía no has enviado ninguna nota.</div>';
+            return;
+        }
+        const etiqueta = { ok: 'Aceptada', no: 'Denegada', pendiente: 'Pendiente' };
+        cont.innerHTML = this._notas.map(n => {
+            const e = ['ok', 'no'].includes(n.estado) ? n.estado : 'pendiente';
+            return `<div class="nt-card ${e}">
+                <div class="nt-top">
+                    <span class="nt-fecha">${esc(this._fechaNota(n.creado))}</span>
+                    <span class="nt-estado ${e}">${etiqueta[e]}</span>
+                </div>
+                <div class="nt-cuerpo">${esc(n.texto)}</div>
+                ${n.respuesta?.texto ? `<div class="nt-resp">
+                    <div class="nt-resp-quien">${esc(n.respuesta.gestor) || 'Gestión'} · ${
+                        esc(this._fechaNota(n.respuesta.en))}</div>
+                    <div class="nt-resp-txt">${esc(n.respuesta.texto)}</div>
+                </div>` : ''}
+            </div>`;
+        }).join('');
+    },
+
+    async enviarNota() {
+        const campo = document.getElementById('ntTexto');
+        const texto = (campo?.value || '').trim();
+        if (!texto) { this._mostrarToast('Escribe algo primero', 2500); return; }
+        try {
+            const r = await fetch(this.NOTAS_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json',
+                           'X-User-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ texto,
+                    nombre: this.usuarioActual?.name || '',
+                    conductor: this.numConductor || '' })
+            });
+            const data = await r.json();
+            if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return; }
+            campo.value = '';
+            this._notas = [data, ...this._notas];
+            this._renderNotas();
+            this._mostrarToast('📨 Nota enviada a gestión', 3000);
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
+    },
+
     // ── Lugar de trabajo de la jornada ───────────────────────────────────────
     // El lugar se elige aquí, y quien pasa por varios sitios en el día —los de
     // calle— puede apuntar cada uno con su horario. La primera entrada y la
@@ -2241,6 +2318,7 @@ const app = {
         });
         localStorage.setItem('activeTab', String(idx));
         if (idx === 1) this._cargarCuadrante();
+        if (idx === 2) this._cargarNotas();
     },
 
     _tabDragStart(e) {

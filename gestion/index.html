@@ -296,6 +296,31 @@
         .pst-huecos{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:5px 11px 7px;font-size:10px;font-weight:800;color:#e74c3c;text-transform:uppercase;letter-spacing:.4px;}
         .pst-hueco{background:#fdeaea;border-radius:8px;padding:2px 7px;font-size:10.5px;font-weight:700;text-transform:none;letter-spacing:0;}
         .app-content.dark .pst-hueco{background:#3a1c1c;}
+        /* ── NOTAS ── */
+        .nt-lista{display:flex;flex-direction:column;gap:7px;padding-bottom:6px;}
+        .nt-card{background:white;border-radius:12px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);border-left:4px solid #bdc3c7;}
+        .app-content.dark .nt-card{background:#1e2a3a;}
+        .nt-card.ok{border-left-color:#27ae60;}
+        .nt-card.no{border-left-color:#e74c3c;}
+        .nt-top{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
+        .nt-num{font-size:10.5px;font-weight:800;color:#7f8c8d;background:#eef1f6;border-radius:7px;padding:2px 6px;flex-shrink:0;}
+        .app-content.dark .nt-num{background:#16202e;color:#a0a0a0;}
+        .nt-nom{flex:1;min-width:0;font-size:13px;font-weight:700;color:#2c3e50;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .app-content.dark .nt-nom{color:#e0e0e0;}
+        .nt-fecha{font-size:10px;font-weight:700;color:#95a5a6;flex-shrink:0;}
+        .nt-cuerpo{font-size:13.5px;color:#2c3e50;white-space:pre-wrap;word-break:break-word;}
+        .app-content.dark .nt-cuerpo{color:#e0e0e0;}
+        .nt-acciones{display:flex;gap:6px;margin-top:8px;}
+        .nt-btn{flex:1;border:1.5px solid #dfe4ea;background:transparent;border-radius:8px;padding:6px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;color:#7f8c8d;}
+        .app-content.dark .nt-btn{border-color:#2d3561;}
+        .nt-btn.si{color:#27ae60;} .nt-btn.si.on{background:#27ae60;border-color:#27ae60;color:#fff;}
+        .nt-btn.no{color:#e74c3c;} .nt-btn.no.on{background:#e74c3c;border-color:#e74c3c;color:#fff;}
+        .nt-resp{margin-top:8px;padding:8px 10px;background:#eaf2fd;border-radius:9px;}
+        .app-content.dark .nt-resp{background:#14283f;}
+        .nt-resp-quien{font-size:10px;font-weight:800;color:var(--g1);text-transform:uppercase;letter-spacing:.4px;}
+        .nt-resp-txt{font-size:13px;color:#2c3e50;white-space:pre-wrap;word-break:break-word;margin-top:3px;}
+        .app-content.dark .nt-resp-txt{color:#e0e0e0;}
+        .nt-vacio{padding:26px 16px;text-align:center;font-size:12.5px;color:#95a5a6;}
         .be-badge2{font-size:9px;font-weight:800;background:#7f8c8d;color:#fff;padding:2px 6px;border-radius:9px;flex-shrink:0;}
         .cond-filtros{display:flex;gap:6px;overflow-x:auto;padding:2px 0 9px;}
         .cond-filtros button{flex-shrink:0;border:none;border-radius:9px;padding:6px 12px;font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer;background:#eef1f6;color:#7f8c8d;}
@@ -1039,11 +1064,13 @@
 
         <!-- ── TAB: Notas ── -->
         <div class="tab-panel" id="tabPanel2">
-            <div class="tab-empty">
-                <span class="tab-empty-ico">📝</span>
-                <span class="tab-empty-t">Notas</span>
-                <span class="tab-empty-s">Aquí podrás apuntar notas.<br>Sección en desarrollo.</span>
+            <div class="sec-head" style="cursor:default;">
+                <span class="cond-title">📝 Notas de los trabajadores</span>
+                <span class="sec-cnt" id="ntCnt"></span>
+                <button class="cond-refresh" onclick="app._cargarNotasGestor()" title="Actualizar">⟳</button>
             </div>
+            <div class="cond-filtros" id="ntFiltros"></div>
+            <div id="ntLista" class="nt-lista"></div>
         </div>
 
         </div><!-- end appContent -->
@@ -1490,6 +1517,28 @@
         <div class="modal-body" style="padding:0;">
             <div id="puestoModalQuien" class="pm-quien"></div>
             <div id="puestoModalLista"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Responder a una nota -->
+<div class="modal" id="respModal">
+    <div class="modal-card" id="respModalContent">
+        <div class="modal-header">
+            <h3>💬 Responder</h3>
+            <button class="modal-close" onclick="document.getElementById('respModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body">
+            <div id="respQuien" class="pm-quien" style="margin:-16px -16px 12px;"></div>
+            <div class="nt-cuerpo" id="respOriginal" style="margin-bottom:10px;"></div>
+            <div class="edit-field"><label>Tu respuesta</label>
+                <textarea id="respTexto" rows="3" maxlength="500"
+                    style="border:1.5px solid #dfe4ea;border-radius:8px;padding:8px;font-family:inherit;font-size:13.5px;resize:vertical;"></textarea></div>
+            <span class="ops-field-sub" id="respFirma" style="display:block;margin-top:6px;"></span>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('respModal').classList.remove('show')">Cancelar</button>
+            <button class="modal-btn modal-btn-confirm" onclick="app._guardarRespuesta()">Enviar</button>
         </div>
     </div>
 </div>

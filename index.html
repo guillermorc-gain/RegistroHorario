@@ -59,6 +59,27 @@
         .app-header-right{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;min-width:0;flex:1;text-align:right;}
         .app-header-nombre{font-size:11.5px;font-weight:700;opacity:0.97;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
         .app-header-num{font-size:11px;font-weight:800;opacity:0.85;line-height:1.25;letter-spacing:0.3px;}
+        /* ── NOTAS ── */
+        .nt-nueva{display:flex;flex-direction:column;gap:7px;flex-shrink:0;}
+        .nt-texto{border:1.5px solid #dfe4ea;border-radius:10px;padding:10px;font-family:inherit;font-size:13.5px;color:#2c3e50;background:#fff;resize:vertical;}
+        .app-content.dark .nt-texto{background:#1e2a3a;border-color:#2d3561;color:#e0e0e0;}
+        .nt-lista{display:flex;flex-direction:column;gap:7px;padding-bottom:6px;}
+        .nt-card{background:white;border-radius:12px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);border-left:4px solid #bdc3c7;}
+        .app-content.dark .nt-card{background:#1e2a3a;}
+        .nt-card.ok{border-left-color:#27ae60;}
+        .nt-card.no{border-left-color:#e74c3c;}
+        .nt-top{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
+        .nt-fecha{flex:1;min-width:0;font-size:10.5px;font-weight:700;color:#95a5a6;}
+        .nt-estado{font-size:9px;font-weight:800;color:#fff;border-radius:9px;padding:2px 7px;background:#bdc3c7;flex-shrink:0;}
+        .nt-estado.ok{background:#27ae60;} .nt-estado.no{background:#e74c3c;}
+        .nt-cuerpo{font-size:13.5px;color:#2c3e50;white-space:pre-wrap;word-break:break-word;}
+        .app-content.dark .nt-cuerpo{color:#e0e0e0;}
+        .nt-resp{margin-top:8px;padding:8px 10px;background:#eaf2fd;border-radius:9px;}
+        .app-content.dark .nt-resp{background:#14283f;}
+        .nt-resp-quien{font-size:10px;font-weight:800;color:var(--g1);text-transform:uppercase;letter-spacing:.4px;}
+        .nt-resp-txt{font-size:13px;color:#2c3e50;white-space:pre-wrap;word-break:break-word;margin-top:3px;}
+        .app-content.dark .nt-resp-txt{color:#e0e0e0;}
+        .nt-vacio{padding:26px 16px;text-align:center;font-size:12.5px;color:#95a5a6;}
         .lugar-box{border:1.5px solid #dfe4ea;border-radius:10px;padding:9px 10px;margin-bottom:7px;display:flex;flex-direction:column;gap:7px;}
         .app-content.dark .lugar-box{border-color:#2d3561;}
         .lugar-head{display:flex;align-items:center;gap:8px;}
@@ -744,11 +765,12 @@
 
         <!-- ── TAB: Notas ── -->
         <div class="tab-panel" id="tabPanel2">
-            <div class="tab-empty">
-                <span class="tab-empty-ico">📝</span>
-                <span class="tab-empty-t">Notas</span>
-                <span class="tab-empty-s">Aquí podrás apuntar notas.<br>Sección en desarrollo.</span>
+            <div class="nt-nueva">
+                <textarea id="ntTexto" class="nt-texto" rows="2" maxlength="500"
+                          placeholder="Escribe aquí lo que quieras contarle a gestión…"></textarea>
+                <button class="btn-main" onclick="app.enviarNota()">📨 Enviar a gestión</button>
             </div>
+            <div id="ntLista" class="nt-lista"></div>
         </div>
 
         </div><!-- end appContent -->
