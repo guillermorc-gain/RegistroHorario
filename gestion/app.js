@@ -4985,7 +4985,7 @@ const app = {
         const cnt = document.getElementById('puestosCnt');
         if (cnt) {
             cnt.textContent = esFuturo
-                ? `${trabajaron} previstos`
+                ? `${trabajaron} previsto${trabajaron === 1 ? '' : 's'}`
                 : esHoy ? `${trabajaron} hoy · ${ahoraMismo} ahora`
                         : `${trabajaron} ese día`;
         }
@@ -5000,12 +5000,15 @@ const app = {
         const porPuesto = {};
         porLugares.forEach(x => { (porPuesto[x.lugar] = porPuesto[x.lugar] || []).push(x); });
 
-        const filtro = localStorage.getItem('filtroLugares') || 'todos';
+        // 'sinservicio' vivía aquí y se ha ido a la lista de trabajadores, que
+        // es su sitio: quien lo tuviera puesto se encuentra el cuadro entero.
+        let filtro = localStorage.getItem('filtroLugares') || 'todos';
+        if (!['todos', 'trabajando', 'sincubrir'].includes(filtro)) filtro = 'todos';
         const tarjetas = [];
         // Lo que cuenta cada filtro, para poder enseñarlo en su botón igual que
         // en la lista de trabajadores: así se ve de un vistazo que los dos
         // "sin servicio asignado" dicen lo mismo.
-        const cuenta = { todos: 0, trabajando: 0, sincubrir: 0, sinservicio: 0 };
+        const cuenta = { todos: 0, trabajando: 0, sincubrir: 0 };
         const personas = filas => new Set(filas.map(x => x.u.email)).size;
         const diaSemana = new Date(+fecha.slice(0,4), +fecha.slice(4,6) - 1, +fecha.slice(6,8), 12).getDay();
         const alFinal = p => (p === SIN_SERVICIO ? 2 : p === SIN ? 1 : 0);
@@ -5048,9 +5051,8 @@ const app = {
 
             // Las cuentas van aquí, antes de descartar nada por el filtro, para
             // que cada botón diga lo suyo y no solo el que esté puesto.
-            cuenta.todos       += personas(gente);
-            cuenta.trabajando  += personas(gente.filter(trabajando));
-            cuenta.sinservicio += personas(gente.filter(x => this._sinServicio(x.u, fecha)));
+            cuenta.todos      += personas(gente);
+            cuenta.trabajando += personas(gente.filter(trabajando));
             if (!dePegaPuesto(puesto)
                 && (franjas.length ? huecos.length > 0 : dentro + previstos === 0)) cuenta.sincubrir++;
 
@@ -5058,13 +5060,7 @@ const app = {
             // es una propiedad del lugar: el que tiene algún turno sin nadie.
             if (filtro === 'sincubrir'
                 && (franjas.length ? !huecos.length : dentro + previstos > 0)) return;
-            // "Sin servicio asignado" es lo mismo aquí que en la lista de
-            // trabajadores: el que ese día no tiene lugar. Antes esto miraba
-            // quién no había fichado, así que asignarle el lugar no le sacaba
-            // de la lista, que es justo para lo que sirve el filtro.
-            const visibles = filtro === 'trabajando'  ? gente.filter(trabajando)
-                           : filtro === 'sinservicio' ? gente.filter(x => this._sinServicio(x.u, fecha))
-                           : gente;
+            const visibles = filtro === 'trabajando' ? gente.filter(trabajando) : gente;
             if (!visibles.length) return;
 
             const filas = visibles.map(({ u, j, deAyer, enBaja, enVac, sinServicio, plan }) => {
@@ -5100,7 +5096,9 @@ const app = {
                 ? (dentro > 0 ? `${dentro} en turno`
                    : previstos > 0 ? `${previstos} previsto${previstos === 1 ? '' : 's'}` : 'sin cubrir')
                 : (delDia + previstos > 0
-                   ? `${delDia + previstos} ${esFuturo ? 'previstos' : 'ese día'}` : 'sin cubrir');
+                   ? `${delDia + previstos} ${esFuturo
+                        ? `previsto${delDia + previstos === 1 ? '' : 's'}` : 'ese día'}`
+                   : 'sin cubrir');
             const vacio = !dePega && (esHoy ? dentro + previstos === 0 : delDia + previstos === 0);
             const NOMBRE_TURNO = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
             tarjetas.push(`<div class="pst-card">
@@ -5117,9 +5115,8 @@ const app = {
         // Vacío aquí casi siempre es buena noticia, así que se dice lo que
         // significa en vez de "no hay nada".
         const VACIO = {
-            sincubrir:   'Ningún lugar se queda con un turno sin cubrir.',
-            sinservicio: 'Todos tienen lugar asignado.',
-            trabajando:  esHoy ? 'Ahora mismo no hay nadie dentro.' : 'Nadie con jornada ese día.',
+            sincubrir:  'Ningún horario se queda sin cubrir.',
+            trabajando: esHoy ? 'Ahora mismo no hay nadie dentro.' : 'Nadie en jornada ese día.',
         };
         cont.innerHTML = tarjetas.join('') || '<div class="tab-empty" style="padding:22px 16px;">'
             + `<span class="tab-empty-s">${VACIO[filtro] || 'Ningún lugar en este grupo.'}</span></div>`;
@@ -5132,9 +5129,8 @@ const app = {
         const n = id => (cuenta && cuenta[id] !== undefined) ? ` ${cuenta[id]}` : '';
         cont.innerHTML = [
             ['todos', 'Todos'],
-            ['trabajando',  esHoy ? 'Trabajando' : 'Con jornada'],
-            ['sincubrir',   'Lugar sin cubrir'],
-            ['sinservicio', 'Sin servicio asignado'],
+            ['trabajando',  esHoy ? 'Trabajando' : 'En jornada'],
+            ['sincubrir',   'Horarios sin cubrir'],
         ].map(([id, txt]) => `<button class="${sel === id ? 'activo' : ''}"
                 onclick="event.stopPropagation();app.filtrarLugares('${id}')">${
                     sel === id ? '✓ ' : ''}${txt}${n(id)}</button>`).join('');
@@ -5155,15 +5151,29 @@ const app = {
         return 'activo';
     },
 
-    // Sin servicio asignado: le toca trabajar y no tiene lugar ese día
+    // Sin turno asignado: le toca trabajar y le falta el horario o el lugar.
+    // Con lugar pero sin hora tampoco tiene turno: es el que sale con un guión
+    // en el cuadro de lugares.
     _sinServicio(u, fecha) {
         if (this._estadoTrabajador(u, fecha) !== 'activo') return false;
         const { j } = this._jornadaVisible(u, fecha);
-        return !this._lugarDe(u, fecha, j).trim();
+        if (!this._lugarDe(u, fecha, j).trim()) return true;
+        // Lo que ya ha fichado cuenta como servicio hecho
+        if (j?.i) return false;
+        return !this._horasPlan(u, fecha);
+    },
+
+    // Qué le falta, para poder decirlo en la ficha en vez de dejarlo a adivinar
+    _queLeFalta(u, fecha) {
+        const { j } = this._jornadaVisible(u, fecha);
+        const sinLugar = !this._lugarDe(u, fecha, j).trim();
+        const sinHora  = !j?.i && !this._horasPlan(u, fecha);
+        return sinLugar && sinHora ? 'sin lugar ni horario'
+             : sinLugar ? 'sin lugar' : sinHora ? 'sin horario' : '';
     },
 
     FILTROS_COND: [['todos', 'Todos'], ['activo', 'Activos'], ['libre', 'Libres'],
-                   ['sinservicio', 'Sin servicio asignado'], ['be', 'BE'], ['vacaciones', 'Vacaciones']],
+                   ['sinservicio', 'Sin turno asignado'], ['be', 'BE'], ['vacaciones', 'Vacaciones']],
 
     _pasaFiltroCond(u, fecha, filtro) {
         if (filtro === 'todos') return true;
@@ -5265,7 +5275,12 @@ const app = {
                             this._desviaciones(u) ? `<span class="cond-alerta" title="Horarios que no cuadran"
                                 onclick="event.stopPropagation();app.revisarHorarios('${esc(u.email)}')">❗${
                                 this._desviaciones(u)}</span>` : ''}
-                            <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app._editarPuesto('${esc(u.email)}','${esc(fecha)}')">· ${esc(lugarHoy) || 'asignar lugar'}${excepcion ? ' ·' : ''} ✎</span></div>
+                            <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app._editarPuesto('${esc(u.email)}','${esc(fecha)}')">· ${esc(lugarHoy) || 'asignar lugar'}${excepcion ? ' ·' : ''} ✎</span>${
+                            // Con lugar pero sin hora tampoco tiene servicio, y
+                            // sin decirlo no hay manera de saber por qué sale
+                            // en el filtro.
+                            estado === 'activo' && lugarHoy.trim() && this._sinServicio(u, fecha)
+                                ? '<span class="cond-falta">sin horario</span>' : ''}</div>
                     </div>
                     <button class="be-btn vc-btn${enVac ? ' on' : ''}" title="Vacaciones"
                             onclick="event.stopPropagation();app.editarVacaciones('${esc(u.email)}')">VC</button>
