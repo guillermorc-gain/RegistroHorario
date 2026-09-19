@@ -3120,7 +3120,8 @@ const app = {
         }
     },
 
-    DIAS_MEDIA: [1, 2, 3, 4, 5, 6],
+    // La media jornada se reparte de lunes a domingo
+    DIAS_MEDIA: [1, 2, 3, 4, 5, 6, 0],
 
     _toggleDiaFict(d) {
         const i = this._fictDias.indexOf(d);
