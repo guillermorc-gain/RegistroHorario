@@ -1578,8 +1578,8 @@ const app = {
         this._renderSemana();
     },
 
-    // La media jornada se reparte de lunes a sábado; el domingo no se ofrece
-    DIAS_MEDIA: [1, 2, 3, 4, 5, 6],
+    // La media jornada se reparte de lunes a domingo
+    DIAS_MEDIA: [1, 2, 3, 4, 5, 6, 0],
 
     _renderSemana() {
         const nombres = ['D','L','M','X','J','V','S'];
