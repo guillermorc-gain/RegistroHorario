@@ -1210,7 +1210,7 @@
     "conductor": "1250-0",
     "puesto": "Control",
     "avatar": null,
-    "version": "build-63",
+    "version": "build-67",
     "horasMes": 53.5,
     "horasTotales": 57,
     "diasMes": 15,
@@ -1218,9 +1218,16 @@
     "horaFin": "00:00",
     "horarioDe": "hoy",
     "turno": "T",
-    "jornadaHoras": 3.5,
+    "jornadaHoras": 4,
     "horasAnuales": 777,
     "ritmo": "lv",
+    "dias": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
     "jornadas": [
       {
         "f": "20260831",
@@ -1352,7 +1359,7 @@
     ],
     "email": "prueba-1789758756867@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T09:04:30.707Z"
+    "actualizado": "2026-09-19T09:32:58.535Z"
   },
   "prueba-1789759132382@prueba.local": {
     "nombre": "Tomeu Pol",
