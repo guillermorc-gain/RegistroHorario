@@ -1232,16 +1232,16 @@
   },
   "prueba-1789759132382@prueba.local": {
     "nombre": "Tomeu Pol",
-    "conductor": "1200-0",
+    "conductor": "0928-8",
     "puesto": "Son Rossinyol",
     "avatar": null,
-    "version": "build-33",
+    "version": "build-58",
     "horasMes": 14,
     "horasTotales": 14,
     "diasMes": 2,
     "horaInicio": "12:00",
     "horaFin": "19:00",
-    "horarioDe": "hoy",
+    "horarioDe": "anterior",
     "turno": "M",
     "jornadas": [
       {
@@ -1261,14 +1261,7 @@
     ],
     "email": "prueba-1789759132382@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-18T19:19:44.899Z",
-    "vacaciones": [
-      {
-        "desde": "2026-06-15",
-        "hasta": "2026-06-30"
-      }
-    ],
-    "vacacionesAt": 1789806942842
+    "actualizado": "2026-09-19T08:38:02.697Z"
   },
   "prueba-1789759514777@prueba.local": {
     "nombre": "Xisca",
