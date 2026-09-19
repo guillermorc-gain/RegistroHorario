@@ -2903,7 +2903,7 @@ const app = {
                         && document.getElementById('jorSalida').value === f.hasta;
                 return `<button class="jor-turno ${f.id}${on ? ' on' : ''}"
                     onclick="app._turnoAlHorario('${f.id}','${f.desde}','${f.hasta}')">
-                    <b>${f.id}</b> ${esc(NOMBRE[f.id] || f.id)}<br>
+                    ${on ? '✓ ' : ''}<b>${f.id}</b> ${esc(NOMBRE[f.id] || f.id)}<br>
                     <span>${esc(f.desde)}–${esc(f.hasta)}</span></button>`;
               }).join('')
             : `<div class="jor-sinturnos">${this._jorLugar
@@ -2913,15 +2913,17 @@ const app = {
         document.getElementById('jorLugares').innerHTML = this._lugaresTodos().map(p => {
             const sel = this._clavePuesto(p) === this._clavePuesto(this._jorLugar);
             return `<button class="jor-lugar${sel ? ' on' : ''}"
-                onclick="app._lugarDeLaJornada('${q(esc(p))}')">${esc(p)}</button>`;
+                onclick="app._lugarDeLaJornada('${q(esc(p))}')">${sel ? '✓ ' : ''}${esc(p)}</button>`;
         }).join('')
         + `<button class="jor-lugar${this._jorLugar ? '' : ' on'}"
-                onclick="app._lugarDeLaJornada('')">Sin lugar</button>`;
+                onclick="app._lugarDeLaJornada('')">${this._jorLugar ? '' : '✓ '}Sin lugar</button>`;
 
-        document.getElementById('jorTramos').innerHTML = this._tramosJornada().map(t =>
-            `<button class="jor-tramo${this._jorAlcance === t.id ? ' on' : ''}"
-                onclick="app._alcanceDeLaJornada('${t.id}')">${esc(t.titulo)}<br>
-                <span>${esc(t.detalle)}</span></button>`).join('');
+        document.getElementById('jorTramos').innerHTML = this._tramosJornada().map(t => {
+            const on = this._jorAlcance === t.id;
+            return `<button class="jor-tramo${on ? ' on' : ''}"
+                onclick="app._alcanceDeLaJornada('${t.id}')">${on ? '✓ ' : ''}${esc(t.titulo)}<br>
+                <span>${esc(t.detalle)}</span></button>`;
+        }).join('');
 
         this._resumenJornada();
     },
