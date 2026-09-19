@@ -2211,6 +2211,7 @@ const app = {
             try { this._notas = JSON.parse(localStorage.getItem('notasCache') || '[]'); } catch (__) {}
         }
         this._renderNotasGestor();
+        this._avisarSiHayNuevos();
     },
 
     filtrarNotas(modo) {
@@ -2259,9 +2260,11 @@ const app = {
             const ultimo = this._ultimoMensaje(n);
             const e = estado(n);
             const q = esc(n.id).replace(/'/g, "\\'");
+            const nueva = this._sinLeer(n);
             return `<div class="cv-card ${e === 'mias' ? 'gestor' : e === 'pendiente' ? '' : e}${
-                    n.archivada ? ' archivada' : ''}" onclick="app.abrirHilo('${q}')">
+                    n.archivada ? ' archivada' : ''}${nueva ? ' nueva' : ''}" onclick="app.abrirHilo('${q}')">
                 <div class="cv-top">
+                    ${nueva ? '<span class="cv-punto"></span>' : ''}
                     <span class="nt-num">${esc(n.conductor) || '—'}</span>
                     <span class="cv-quien">${e === 'mias' ? '→ ' : ''}${esc(n.nombre) || esc(n.email)}</span>
                     <span class="cv-fecha">${esc(this._horaCorta(ultimo?.en || n.creado))}</span>
@@ -2280,6 +2283,7 @@ const app = {
                 </div>
             </div>`;
         }).join('');
+        this._pintarCampana();
     },
 
 // Un adjunto de imagen se ve; lo demás se descarga
@@ -2443,6 +2447,65 @@ const app = {
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
+    // ── Sin leer ─────────────────────────────────────────────────────────────
+    // De cada conversación se guarda la hora del último mensaje que se ha
+    // visto. Si llega uno más nuevo y no es mío, está sin leer. Va por móvil,
+    // que es donde tiene sentido: lo leído en uno no lo ha leído el otro.
+
+    notifSoundChat: localStorage.getItem('notifSoundChat') || 'default',
+
+    _leidas() {
+        try { return JSON.parse(localStorage.getItem('convLeidas') || '{}'); } catch (_) { return {}; }
+    },
+
+    _sinLeer(n) {
+        const ultimo = this._ultimoMensaje(n);
+        if (!ultimo || this._esMiMensaje(ultimo, n)) return false;
+        return (ultimo.en || '') > (this._leidas()[n.id] || '');
+    },
+
+    _marcarLeida(id) {
+        const n = (this._notas || []).find(x => x.id === id);
+        const ultimo = this._ultimoMensaje(n);
+        if (!ultimo) return;
+        const l = this._leidas();
+        l[id] = ultimo.en || new Date().toISOString();
+        localStorage.setItem('convLeidas', JSON.stringify(l));
+    },
+
+    _totalSinLeer() {
+        return (this._notas || []).filter(n => !n.archivada && this._sinLeer(n)).length;
+    },
+
+    _pintarCampana() {
+        const el = document.getElementById('campanaN');
+        if (!el) return;
+        const n = this._totalSinLeer();
+        el.textContent = n > 99 ? '99+' : String(n);
+        el.classList.toggle('hay', n > 0);
+    },
+
+    irANotas() {
+        this.switchTab(2);
+    },
+
+    guardarSonidoChat(sonido) {
+        this.notifSoundChat = sonido;
+        localStorage.setItem('notifSoundChat', sonido);
+        this._guardarPreferencias();
+        if (sonido !== 'ninguno') this._previewNotifSound(sonido);
+    },
+
+    // Suena una vez cuando aparece algo nuevo, no en cada repintado
+    _avisarSiHayNuevos() {
+        const n = this._totalSinLeer();
+        const antes = this._sinLeerPrevio ?? n;
+        this._sinLeerPrevio = n;
+        if (n > antes && this.notifSoundChat !== 'ninguno') {
+            try { this._previewNotifSound(this.notifSoundChat); } catch (_) {}
+        }
+        this._pintarCampana();
+    },
     // ── Conversaciones ───────────────────────────────────────────────────────
     // Una nota es un hilo: se abre, se lee entero y se contesta dentro, como
     // en cualquier chat. Se puede archivar para quitarla de en medio sin
@@ -2480,11 +2543,13 @@ const app = {
         const n = (this._notas || []).find(x => x.id === id);
         if (!n) return;
         this._hiloAbierto = id;
+        this._marcarLeida(id);
         this._adjuntos = [];
         this._renderAdjuntos();
         document.getElementById('hiloTexto').value = '';
         document.getElementById('hiloQuien').textContent = this._tituloHilo(n);
         this._renderHilo();
+        this._renderNotasGestor();
         document.getElementById('hiloModal').classList.add('show');
         if (this.darkMode) document.getElementById('hiloModalContent').classList.add('dark');
     },
@@ -2553,6 +2618,7 @@ const app = {
             this._adjuntos = [];
             this._renderAdjuntos();
             this._notas = this._notas.map(x => x.id === data.id ? data : x);
+            this._marcarLeida(data.id);
             this._renderHilo();
             this._renderNotasGestor();
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
@@ -6092,6 +6158,9 @@ const app = {
         if (fromEl) fromEl.value = this.gpsScheduleFrom;
         const toEl = document.getElementById('gpsTo');
         if (toEl) toEl.value = this.gpsScheduleTo;
+        const chatSel = document.getElementById('notifSoundChat');
+        if (chatSel) chatSel.value = this.notifSoundChat;
+        this._pintarCampana();
         const soundSel = document.getElementById('notifSoundSelect');
         if (soundSel) soundSel.value = this.notifSound;
         const intervalRow = document.getElementById('gpsIntervalRow');
