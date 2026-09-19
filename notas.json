@@ -1,31 +1,4 @@
 {
-  "20260919183223733-808ri": {
-    "id": "20260919183223733-808ri",
-    "email": "guillermo.rcxx@gmail.com",
-    "creado": "2026-09-19T18:32:23.733Z",
-    "nombre": "Guillermo Ríos Correa",
-    "conductor": "1234-5",
-    "mensajes": [
-      {
-        "de": "trabajador",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Eff",
-        "adjuntos": [],
-        "en": "2026-09-19T18:32:23.733Z"
-      },
-      {
-        "de": "guillermo.rcxx@gmail.com",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Rr",
-        "adjuntos": [],
-        "en": "2026-09-19T18:41:44.754Z"
-      }
-    ],
-    "archivada": false,
-    "de": "trabajador",
-    "tipo": "gestion",
-    "estado": "ok"
-  },
   "20260919184931003-b8eu3": {
     "id": "20260919184931003-b8eu3",
     "email": "guillermo.rc82@gmail.com",
