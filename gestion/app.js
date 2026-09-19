@@ -5304,10 +5304,23 @@ const app = {
         }).join('');
         document.getElementById('ordenNombre')?.classList.toggle('activo', orden === 'nombre');
         document.getElementById('ordenNumero')?.classList.toggle('activo', orden === 'numero');
-        const activos = todos.filter(u => !u.baja).length;
-        const bajas   = todos.length - activos;
+        // La cuenta de la cabecera sale del mismo estado que los filtros de
+        // abajo, para que no digan cosas distintas: antes aquí "activos" era
+        // todo el que no estuviera de baja —los de vacaciones incluidos— y el
+        // filtro llamaba activos solo a los que trabajan ese día.
+        const porEstado = { activo: 0, libre: 0, be: 0, vacaciones: 0 };
+        todos.forEach(u => { porEstado[this._estadoTrabajador(u, fecha)]++; });
         const cnt = document.getElementById('trabajCnt');
-        if (cnt) cnt.textContent = `${activos} activos${bajas ? ` · ${bajas} BE` : ''}`;
+        if (cnt) {
+            // Los libres no van aquí: caben en el filtro de abajo y esta línea
+            // se come el título si se alarga.
+            const plural = (n, una, varias) => `${n} ${n === 1 ? una : varias}`;
+            cnt.textContent = [
+                plural(porEstado.activo, 'activo', 'activos'),
+                porEstado.be         ? `${porEstado.be} BE` : '',
+                porEstado.vacaciones ? `${porEstado.vacaciones} VC` : '',
+            ].filter(Boolean).join(' · ');
+        }
         this._renderPuestos();
         this._renderRegistro();
         this._renderCuadranteTrab();
