@@ -1993,6 +1993,9 @@
     ],
     "email": "prueba-1789812974724@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T10:16:44.884Z"
+    "actualizado": "2026-09-19T10:16:44.884Z",
+    "lugares": {
+      "20260919": "Son Rossinyol"
+    }
   }
 }
