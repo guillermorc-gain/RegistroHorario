@@ -12,18 +12,20 @@
         "texto": "Hrhej",
         "adjuntos": [],
         "en": "2026-09-19T22:29:56.226Z"
+      },
+      {
+        "de": "guillermo.rc82@gmail.com",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Vale",
+        "adjuntos": [],
+        "en": "2026-09-19T22:30:36.702Z"
       }
     ],
     "archivada": false,
     "de": "gestor",
     "tipo": "gestion",
     "gestor": "Guillermo Ríos Correa",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "guillermo.rc82@gmail.com",
-      "nombre": "Guillermo Ríos Correa",
-      "en": "2026-09-19T22:30:34.772Z"
-    }
+    "estado": "pendiente"
   },
   "20260919222956226-dd65e-1": {
     "id": "20260919222956226-dd65e-1",
