@@ -2214,7 +2214,7 @@
     "conductor": "7858-5",
     "puesto": "Calle",
     "avatar": null,
-    "version": "build-78",
+    "version": "build-97",
     "horasMes": 56,
     "horasTotales": 59.5,
     "diasMes": 15,
@@ -2361,7 +2361,7 @@
     ],
     "email": "prueba-1789766856622@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T12:56:45.758Z"
+    "actualizado": "2026-09-19T20:30:40.359Z"
   },
   "prueba-1789812365837@prueba.local": {
     "nombre": "Juan Cantos",
