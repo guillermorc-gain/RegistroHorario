@@ -67,11 +67,14 @@ const clave = n => String(n || '').trim().toLowerCase()
 
 const hora = v => (/^\d{1,2}:\d{2}$/.test(String(v || '')) ? String(v) : '');
 
-// Un turno sin horas no sirve para deducir nada, así que se descarta
+// Un turno sin horas no sirve para deducir nada, así que se descarta. Uno que
+// empieza y acaba a la misma hora tampoco: es lo que deja el reloj del móvil
+// al vaciarle las horas para quitarlo, y luego se tragaba el día entero.
 function limpiarTurnos(turnos) {
   if (!Array.isArray(turnos)) return [];
   return turnos
-    .filter(t => ['M', 'T', 'N'].includes(t?.id) && hora(t.desde) && hora(t.hasta))
+    .filter(t => ['M', 'T', 'N'].includes(t?.id) && hora(t.desde) && hora(t.hasta)
+                 && hora(t.desde) !== hora(t.hasta))
     .slice(0, 3)
     .map(t => ({ id: t.id, desde: hora(t.desde), hasta: hora(t.hasta) }));
 }

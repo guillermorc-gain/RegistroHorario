@@ -10,6 +10,8 @@ const FILE_PATH    = 'notas.json';
 const ADMIN_EMAIL  = 'g.rioscorrea@gmail.com';
 const MAX_TEXTO    = 500;
 const MAX_NOTAS    = 400;   // las más viejas se van cayendo
+// Una nota para toda la plantilla son tantas conversaciones como gente
+const MAX_DESTINOS = 120;
 // Un adjunto va como data URL dentro del JSON, así que hay que acotarlo por
 // las dos puntas: lo que ocupa uno y lo que ocupan todos juntos.
 //
@@ -130,7 +132,11 @@ function acotarAdjuntos(data) {
   return out;
 }
 
-// Se guardan las MAX_NOTAS más nuevas, y nunca se tira una sin contestar.
+// Se guardan las MAX_NOTAS más nuevas. Primero se van las viejas ya vistas o
+// archivadas; las que están sin ver se respetan mientras se pueda. Si aun así
+// no bajan del tope —una nota a toda la plantilla son muchas de golpe— caen
+// las más antiguas de todos modos: pasarse de tamaño es peor, porque entonces
+// no entra ningún mensaje nuevo.
 function recortar(data) {
   const ids = Object.keys(data);
   if (ids.length <= MAX_NOTAS) return data;
@@ -138,20 +144,30 @@ function recortar(data) {
   const sobran = orden.length - MAX_NOTAS;
   const out = { ...data };
   let quitadas = 0;
-  for (const id of orden) {
-    if (quitadas >= sobran) break;
-    if (!out[id].archivada && out[id].tipo !== 'companero'
-        && out[id].estado === 'pendiente') continue;
-    delete out[id];
-    quitadas++;
+  const protegida = id => !out[id].archivada && out[id].tipo !== 'companero'
+    && out[id].estado === 'pendiente';
+  for (const vuelta of [true, false]) {
+    for (const id of orden) {
+      if (quitadas >= sobran) return out;
+      if (!out[id]) continue;
+      if (vuelta && protegida(id)) continue;
+      delete out[id];
+      quitadas++;
+    }
   }
   return out;
 }
+
+// Antes una nota se aceptaba o se denegaba. Ahora solo se da por vista, y da
+// igual quién de los dos la dé: el otro lo ve. Lo que se aceptó en su día se
+// lee como visto; lo denegado vuelve a pendiente, que es lo único que queda.
+const ESTADO = e => (e === 'visto' || e === 'ok') ? 'visto' : 'pendiente';
 
 // Las conversaciones antiguas guardaban un texto y como mucho una respuesta.
 // Se leen como lo que son: los dos primeros mensajes del hilo.
 function normalizar(nota) {
   if (!nota) return nota;
+  if (nota.estado !== ESTADO(nota.estado)) nota = { ...nota, estado: ESTADO(nota.estado) };
   if (Array.isArray(nota.mensajes)) return nota;
   const mensajes = [];
   if (nota.texto || nota.adjuntos?.length) {
@@ -180,28 +196,30 @@ function puedeTocar(nota, quien) {
   return nota.email === quien || nota.deEmail === quien;
 }
 
+// El visto vale para lo que hay dicho hasta ese momento: en cuanto alguien
+// escribe otra vez, la conversación vuelve a estar sin ver.
 function añadirMensaje(nota, { de, autor, cuerpo, adjuntos }) {
   const n = normalizar(nota);
-  return { ...n, mensajes: [...n.mensajes, {
+  const { vistoPor: _v, ...resto } = n;
+  return { ...resto, estado: 'pendiente', mensajes: [...n.mensajes, {
     de, autor: String(autor || '').slice(0, 80),
     texto: cuerpo, adjuntos, en: new Date().toISOString(),
   }] };
 }
 
-// Dar el visto, denegar o archivar. Aceptar o denegar deja además un mensaje
-// en el hilo: así el trabajador se entera por el mismo camino que todo lo
-// demás —sin leer, campana, aviso en la barra— aunque el gestor no escriba
-// nada, y encima queda la fecha en que se resolvió.
-function tocarNota(nota, { estado, archivada, gestor }) {
+// Dar el visto o archivar. El visto es de los dos: lo dé quien lo dé, queda
+// apuntado en la conversación con su nombre y su hora, así que el otro lo ve
+// en su app sin que nadie tenga que escribir nada.
+function tocarNota(nota, { visto, archivada, quien, nombre }) {
   const n = normalizar(nota);
-  if (['pendiente', 'ok', 'no'].includes(estado) && estado !== n.estado) {
-    n.estado = estado;
-    if (estado !== 'pendiente') {
-      n.mensajes = [...n.mensajes, {
-        de: 'gestor', autor: String(gestor || '').slice(0, 80), sistema: true,
-        texto: estado === 'ok' ? '✅ Petición aceptada' : '❌ Petición denegada',
-        adjuntos: [], en: new Date().toISOString(),
-      }];
+  if (visto !== undefined) {
+    if (visto) {
+      n.estado = 'visto';
+      n.vistoPor = { email: quien, nombre: String(nombre || '').slice(0, 80),
+                     en: new Date().toISOString() };
+    } else {
+      n.estado = 'pendiente';
+      delete n.vistoPor;
     }
   }
   if (archivada !== undefined) n.archivada = !!archivada;
@@ -286,7 +304,16 @@ export default async function handler(req, res) {
 
       // El gestor puede abrir la conversación él: la nota se guarda a nombre
       // del trabajador, que es quien la verá en su app, pero firmada por él.
-      const para = String(b.para || '').toLowerCase().trim();
+      // Puede mandar la misma nota a varios —o a toda la plantilla— y entonces
+      // `para` viene como lista: sale una conversación por persona, porque
+      // cada uno contestará lo suyo.
+      const destinos = [...new Set((Array.isArray(b.para) ? b.para : [b.para])
+        .map(d => String(d || '').toLowerCase().trim())
+        .filter(d => d.includes('@')))].slice(0, MAX_DESTINOS);
+      if (Array.isArray(b.para) && !destinos.length) {
+        return res.status(400).json({ error: 'No has elegido a nadie' });
+      }
+      const para = destinos[0] || '';
       // Con destinatario hay dos casos: el gestor escribiendo a un trabajador
       // y un trabajador escribiendo a un compañero. Firmar como gestión exige
       // el token; con la cabecera sola cualquiera podría hacerse pasar por él.
@@ -300,53 +327,64 @@ export default async function handler(req, res) {
       }
       // La hora la pone el servidor: así no depende del reloj del móvil
       const creado = new Date().toISOString();
-      const id = `${creado.replace(/[-:.TZ]/g, '')}-${Math.random().toString(36).slice(2, 7)}`;
-      const nueva = {
-        id, email: para || quien, creado,
-        nombre:    String(b.nombre || '').slice(0, 80),
-        conductor: String(b.conductor || '').slice(0, 12),
-        mensajes: [{
-          de: delGestor ? 'gestor' : (entreCompaneros ? quien : 'trabajador'),
-          autor: delGestor ? String(b.gestor || 'Gestión').slice(0, 80)
-               : String(b.deNombre || b.nombre || '').slice(0, 80),
-          texto: cuerpo, adjuntos, en: creado,
-        }],
-        archivada: false,
-        de: delGestor ? 'gestor' : 'trabajador',
-        // Un mensaje entre compañeros no es una petición a gestión: no lleva
-        // estado que atender y no sale en su lista.
-        tipo: entreCompaneros ? 'companero' : 'gestion',
-        ...(entreCompaneros ? { deEmail: quien,
-              deNombre: String(b.deNombre || '').slice(0, 80),
-              deConductor: String(b.deConductor || '').slice(0, 12) } : {}),
-        ...(delGestor ? { gestor: String(b.gestor || '').slice(0, 80) } : {}),
-        estado: 'pendiente',
-      };
+      // Quién recibe cada copia: los nombres vienen en paralelo a la lista de
+      // correos para que el hilo se titule con el nombre y no con el correo.
+      const comoSeLlama = String(b.nombre || '').slice(0, 80);
+      const quienes = destinos.length ? destinos : [''];
+      const nombres = Array.isArray(b.nombres) ? b.nombres : null;
+      const conductores = Array.isArray(b.conductores) ? b.conductores : null;
+      const nuevas = quienes.map((destino, i) => {
+        const id = `${creado.replace(/[-:.TZ]/g, '')}-${Math.random().toString(36).slice(2, 7)}-${i}`;
+        return {
+          id, email: destino || quien, creado,
+          nombre:    String(nombres ? (nombres[i] || '') : comoSeLlama).slice(0, 80),
+          conductor: String(conductores ? (conductores[i] || '') : (b.conductor || '')).slice(0, 12),
+          mensajes: [{
+            de: delGestor ? 'gestor' : (entreCompaneros ? quien : 'trabajador'),
+            autor: delGestor ? String(b.gestor || 'Gestión').slice(0, 80)
+                 : String(b.deNombre || b.nombre || '').slice(0, 80),
+            texto: cuerpo, adjuntos, en: creado,
+          }],
+          archivada: false,
+          de: delGestor ? 'gestor' : 'trabajador',
+          // Un mensaje entre compañeros no es una petición a gestión: no lleva
+          // estado que atender y no sale en su lista.
+          tipo: entreCompaneros ? 'companero' : 'gestion',
+          ...(entreCompaneros ? { deEmail: quien,
+                deNombre: String(b.deNombre || '').slice(0, 80),
+                deConductor: String(b.deConductor || '').slice(0, 12) } : {}),
+          ...(delGestor ? { gestor: String(b.gestor || '').slice(0, 80) } : {}),
+          estado: 'pendiente',
+        };
+      });
+      // Con un solo destinatario se devuelve la nota suelta, como siempre;
+      // con varios, la lista. Las apps viejas solo mandan uno.
+      const respuesta = Array.isArray(b.para) ? nuevas : nuevas[0];
       if (hayBaseDeDatos()) {
         // Una fila por nota: no hay que recortar nada para que quepa
-        await guardarNota(nueva);
-        return res.status(200).json(nueva);
+        for (const n of nuevas) await guardarNota(n);
+        return res.status(200).json(respuesta);
       }
-      const nuevo = await guardarConReintento(data => acotarAdjuntos(recortar({ ...data, [id]: nueva })),
+      const porId = Object.fromEntries(nuevas.map(n => [n.id, n]));
+      const nuevo = await guardarConReintento(data => acotarAdjuntos(recortar({ ...data, ...porId })),
         entreCompaneros ? `Mensaje de ${quien} para ${para}`
-        : delGestor ? `Nota del gestor para ${para}` : `Nota de ${quien}`);
-      return nuevo ? res.status(200).json(nueva) : res.status(500).json({ error: 'No se pudo guardar' });
+        : delGestor ? `Nota del gestor para ${nuevas.length} trabajador${nuevas.length === 1 ? '' : 'es'}`
+        : `Nota de ${quien}`);
+      return nuevo ? res.status(200).json(respuesta) : res.status(500).json({ error: 'No se pudo guardar' });
     }
 
-    // Contestar y dar el visto o denegar es cosa del gestor
-    // Archivar, borrar y —solo el gestor— dar el visto o denegar. Cada uno
-    // manda en sus conversaciones, así que aquí no vale solo el gestor.
+    // Dar el visto, archivar y borrar. Cada uno manda en sus conversaciones:
+    // el visto lo da cualquiera de los dos y el otro lo ve.
     if (req.method === 'PATCH' || req.method === 'DELETE') {
       const delToken = await emailDelToken(tokenDe(req));
       const quien = delToken || (req.headers['x-admin-email'] || req.headers['x-user-email'] || '')
         .toLowerCase().trim();
-      const { id, estado, archivada, gestor } = req.body || {};
+      const { id, visto, archivada, gestor, nombre } = req.body || {};
       if (!id) return res.status(400).json({ error: 'Falta la nota' });
       if (!quien || !quien.includes('@')) return res.status(400).json({ error: 'Falta el usuario' });
-      // Dar el visto o denegar es de quien atiende la petición
-      if (estado !== undefined && quien !== ADMIN_EMAIL) {
-        return res.status(403).json({ error: 'Eso solo lo hace gestión' });
-      }
+      // El visto lo da cualquiera de los dos: no hace falta comprobar nada
+      // más de lo que ya comprueba puedeTocar.
+      const quita = { visto, archivada, quien, nombre: gestor || nombre };
 
       if (hayBaseDeDatos()) {
         const n = await leerNota(id);
@@ -355,7 +393,7 @@ export default async function handler(req, res) {
           await borrarNota(id);
           return res.status(200).json({ id, borrada: true });
         }
-        const tocada = tocarNota(n, { estado, archivada, gestor });
+        const tocada = tocarNota(n, quita);
         await guardarNota(tocada);
         return res.status(200).json(tocada);
       }
@@ -364,7 +402,7 @@ export default async function handler(req, res) {
         if (!data[id]) return null;
         if (!puedeTocar(data[id], quien)) { prohibido = true; return null; }
         if (req.method === 'DELETE') { const out = { ...data }; delete out[id]; return out; }
-        return acotarAdjuntos({ ...data, [id]: tocarNota(data[id], { estado, archivada, gestor }) });
+        return acotarAdjuntos({ ...data, [id]: tocarNota(data[id], quita) });
       }, req.method === 'DELETE' ? `Quitar conversación ${id}` : `Cambio en ${id}`);
       if (!nuevo) {
         return res.status(prohibido ? 403 : 404)

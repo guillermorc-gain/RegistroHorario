@@ -308,6 +308,13 @@
         .modal-card.dark .dest-buscar{border-color:#2d3561;}
         .dest-buscar input{width:100%;border:1.5px solid #dfe4ea;border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13.5px;color:#2c3e50;background:#fff;}
         .modal-card.dark .dest-buscar input{background:#16202e;border-color:#2d3561;color:#e0e0e0;}
+        .dest-barra{display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid #f4f4f4;}
+        .modal-card.dark .dest-barra{border-color:#2d3561;}
+        .dest-barra button{background:#eef2f7;border:none;border-radius:9px;padding:6px 12px;font-size:12px;font-weight:800;color:#5a6b7d;cursor:pointer;}
+        .modal-card.dark .dest-barra button{background:#2d3561;color:#c8cfe0;}
+        .dest-barra span{margin-left:auto;font-size:12px;font-weight:800;color:#7f8c8d;}
+        .dest-marca{flex:0 0 20px;width:20px;height:20px;border-radius:6px;border:2px solid #cfd8e3;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;font-weight:900;}
+        .dest-fila.on .dest-marca{background:var(--g1);border-color:var(--g1);}
         .dest-fila{display:flex;align-items:center;gap:9px;padding:11px 16px;border-bottom:1px solid #f4f4f4;cursor:pointer;-webkit-tap-highlight-color:transparent;}
         .modal-card.dark .dest-fila{border-color:#2d3561;}
         .dest-fila:active{background:#f4f6f9;}
@@ -359,7 +366,7 @@
         .nt-card.degestor{border-left-color:var(--g1);}
         .nt-estado.degestor{background:var(--g1);}
         .cv-card{background:white;border-radius:12px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);border-left:4px solid #bdc3c7;cursor:pointer;-webkit-tap-highlight-color:transparent;}
-        .cv-card.ok{border-left-color:#27ae60;} .cv-card.no{border-left-color:#e74c3c;}
+        .cv-card.ok,.cv-card.visto{border-left-color:#27ae60;}
         .cv-card.companero{border-left-color:#8e44ad;} .cv-card.gestor{border-left-color:var(--g1);}
         .cv-card.archivada{opacity:.6;}
         .cv-top{display:flex;align-items:center;gap:7px;margin-bottom:4px;}
@@ -444,6 +451,15 @@
         .pm-op:active{background:#f4f6f9;}
         .pm-op.sel{background:#eaf2fd;font-weight:700;color:var(--g1);}
         .modal-card.dark .pm-op.sel{background:#14283f;}
+        .lg-turno{display:flex;align-items:flex-end;gap:8px;}
+        .lg-turno .edit-field{flex:1 1 0;min-width:0;}
+        .lg-turno.off .edit-field{opacity:.4;}
+        .lg-turno-sw{flex:0 0 96px;display:flex;align-items:center;gap:6px;background:#eaf3ea;border:2px solid #27ae60;color:#1e7a45;border-radius:10px;padding:9px 8px;margin-bottom:10px;font-size:12.5px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+        .lg-turno.off .lg-turno-sw{background:#f4f6f9;border-color:#cfd8e3;color:#95a5a6;}
+        .lg-turno-marca{flex:0 0 15px;width:15px;height:15px;border-radius:5px;background:#27ae60;color:#fff;font-size:11px;line-height:16px;text-align:center;font-weight:900;}
+        .lg-turno.off .lg-turno-marca{background:transparent;border:2px solid #cfd8e3;}
+        .modal-card.dark .lg-turno-sw{background:#1e3a2a;}
+        .modal-card.dark .lg-turno.off .lg-turno-sw{background:#232b45;border-color:#2d3561;}
         .pm-turnos{font-size:10.5px;color:#95a5a6;font-weight:400;}
         .pm-check{margin-left:auto;color:var(--g1);font-weight:800;}
         .pm-nuevo{color:var(--g1);font-weight:700;}
@@ -1527,6 +1543,7 @@
             <div class="f-sep">Días que se trabaja</div>
             <div class="lg-dias" id="lgDias"></div>
             <div class="f-sep">Turnos</div>
+            <div class="ops-field-sub" style="padding:0 0 8px;">Marca solo los turnos que tiene este lugar. El taller, por ejemplo, no abre de mañana ni de tarde.</div>
             <div id="lgTurnos"></div>
             <div class="f-sep">Ubicación</div>
             <span class="ops-field-sub" style="display:block;margin-bottom:8px;">Toca el mapa o arrastra el marcador. Si un trabajador registra su jornada dentro del círculo, la app le propone este lugar.</span>
@@ -1662,7 +1679,16 @@
                 <input type="text" id="destBuscar" placeholder="Buscar por nombre o número…"
                        oninput="app._renderDestinatarios()">
             </div>
+            <div class="dest-barra">
+                <button onclick="app._marcarTodosDest(true)">Todos</button>
+                <button onclick="app._marcarTodosDest(false)">Ninguno</button>
+                <span id="destCuantos"></span>
+            </div>
             <div id="destLista" class="baja-lista"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-confirm" id="destSeguir"
+                    onclick="app._escribirALosElegidos()">Escribir</button>
         </div>
     </div>
 </div>

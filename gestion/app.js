@@ -59,7 +59,13 @@ let DIAS_POR_LUGAR = {};
 function aplicarCatalogoLugares(cat) {
     LUGARES_CATALOGO = cat || {};
     Object.entries(LUGARES_CATALOGO).forEach(([k, l]) => {
-        if (Array.isArray(l?.turnos) && l.turnos.length) TURNOS_POR_PUESTO[k] = l.turnos;
+        // Un turno de 00:00 a 00:00 no es un turno: es lo que queda cuando se
+        // le vacían las horas para quitarlo. Se descarta, y si el lugar se
+        // queda sin ninguno se respeta —el taller no tiene mañana ni tarde—
+        // en vez de recaer en la tabla de aquí arriba.
+        if (Array.isArray(l?.turnos)) {
+            TURNOS_POR_PUESTO[k] = l.turnos.filter(f => f && f.desde && f.hasta && f.desde !== f.hasta);
+        }
         if (Array.isArray(l?.dias) && l.dias.length) DIAS_POR_LUGAR[k] = l.dias;
         else delete DIAS_POR_LUGAR[k];
         const nombre = l?.nombre;
@@ -2200,8 +2206,11 @@ const app = {
     },
 
     // ── Notas ───────────────────────────────────────────────────────────────
-    // Lo que escriben los trabajadores: se acepta, se deniega o se contesta.
-    // La respuesta va firmada con el nombre del gestor, que es lo que ven.
+    // Notas en los dos sentidos: gestión escribe a un trabajador —o a varios
+    // de una vez— y el trabajador escribe a gestión, y se contesta dentro del
+    // mismo hilo. Lo que firma gestión va con el nombre del gestor, que es lo
+    // que ve el trabajador. Ya no se acepta ni se deniega nada: se da el visto,
+    // y ese visto lo ven los dos.
 
     NOTAS_URL: 'https://registro-horario-emt.vercel.app/api/notas',
     _notas: [],
@@ -2217,6 +2226,13 @@ const app = {
             try { this._notas = JSON.parse(localStorage.getItem('notasCache') || '[]'); } catch (__) {}
         }
         this._renderNotasGestor();
+        // Con la conversación abierta, lo que llegue se ve ahí mismo: antes
+        // había que cerrarla y volver a entrar para leer la respuesta.
+        if (this._hiloAbierto
+            && document.getElementById('hiloModal')?.classList.contains('show')) {
+            this._marcarLeida(this._hiloAbierto);
+            this._renderHilo();
+        }
         this._avisarSiHayNuevos();
         this._atenderChatPendiente();
         this._iniciarSondeoChat();     // idempotente: reinicia el que hubiera
@@ -2237,33 +2253,39 @@ const app = {
         const cont = document.getElementById('ntLista');
         if (!cont) return;
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-        const estado = n => n.de === 'gestor' ? 'mias'
-            : ['ok', 'no'].includes(n.estado) ? n.estado : 'pendiente';
+        // Vista o sin ver, y aparte las que ha abierto gestión. Un mismo hilo
+        // puede ser "mía" y estar vista, así que el filtro se pregunta por lo
+        // que toca en cada caso en vez de encasillar la conversación en uno.
+        const estado = n => this._estaVista(n) ? 'visto'
+            : n.de === 'gestor' ? 'mias' : 'pendiente';
+        const pasa = (n, id) => id === 'archivadas' ? !!n.archivada
+            : n.archivada ? false
+            : id === 'todas' ? true
+            : id === 'visto' ? this._estaVista(n)
+            : id === 'mias'  ? n.de === 'gestor' && !this._estaVista(n)
+            : !this._estaVista(n) && n.de !== 'gestor';
         const sel = localStorage.getItem('filtroNotas') || 'pendiente';
         const todas = this._notas || [];
         const fil = document.getElementById('ntFiltros');
         if (fil) {
-            fil.innerHTML = [['pendiente', 'Pendientes'], ['ok', 'Aceptadas'], ['no', 'Denegadas'],
-                             ['mias', 'Enviadas'], ['archivadas', 'Archivadas'], ['todas', 'Todas']]
+            fil.innerHTML = [['pendiente', 'Sin ver'], ['mias', 'Enviadas'], ['visto', 'Vistas'],
+                             ['archivadas', 'Archivadas'], ['todas', 'Todas']]
                 .map(([id, txt]) => {
-                    const n = id === 'archivadas' ? todas.filter(x => x.archivada).length
-                        : id === 'todas' ? todas.filter(x => !x.archivada).length
-                        : todas.filter(x => !x.archivada && estado(x) === id).length;
+                    const n = todas.filter(x => pasa(x, id)).length;
                     return `<button class="${sel === id ? 'activo' : ''}"
                         onclick="app.filtrarNotas('${id}')">${sel === id ? '✓ ' : ''}${txt} ${n}</button>`;
                 }).join('');
         }
-        const pend = todas.filter(n => !n.archivada && estado(n) === 'pendiente').length;
+        const pend = todas.filter(n => !n.archivada && !this._estaVista(n)).length;
         const cnt = document.getElementById('ntCnt');
         if (cnt) cnt.textContent = pend ? `${pend} sin ver` : 'al día';
-        const lista = sel === 'archivadas' ? todas.filter(n => n.archivada)
-            : todas.filter(n => !n.archivada && (sel === 'todas' || estado(n) === sel));
+        const lista = todas.filter(n => pasa(n, sel));
         if (!lista.length) {
             cont.innerHTML = `<div class="nt-vacio">${todas.length
                 ? 'Ninguna conversación en este grupo.' : 'Todavía no hay conversaciones.'}</div>`;
             return;
         }
-        const etiqueta = { ok: 'Aceptada', no: 'Denegada', pendiente: 'Pendiente', mias: 'Enviada' };
+        const etiqueta = { visto: 'Vista', pendiente: 'Sin ver', mias: 'Enviada' };
         cont.innerHTML = lista.map(n => {
             const ultimo = this._ultimoMensaje(n);
             const e = estado(n);
@@ -2274,7 +2296,7 @@ const app = {
                 <div class="cv-top">
                     ${nueva ? '<span class="cv-punto"></span>' : ''}
                     <span class="nt-num">${esc(n.conductor) || '—'}</span>
-                    <span class="cv-quien">${e === 'mias' ? '→ ' : ''}${esc(n.nombre) || esc(n.email)}</span>
+                    <span class="cv-quien">${n.de === 'gestor' ? '→ ' : ''}${esc(n.nombre) || esc(n.email)}</span>
                     <span class="cv-fecha">${esc(this._horaCorta(ultimo?.en || n.creado))}</span>
                 </div>
                 <div class="cv-ultimo">${ultimo ? esc(
@@ -2310,38 +2332,87 @@ const app = {
         v.classList.add('show');
     },
 
-    // ── Escribir a un trabajador ─────────────────────────────────────────────
+    // ── Escribir a uno, a varios o a toda la plantilla ───────────────────────
+    // La misma nota puede ir a mucha gente a la vez, pero cada uno recibe la
+    // suya: si contesta, contesta en su conversación y no la ven los demás.
+
+    _elegidos: [],
+
     nuevaNotaGestor() {
         document.getElementById('destBuscar').value = '';
+        this._elegidos = [];
         this._renderDestinatarios();
         document.getElementById('destModal').classList.add('show');
         if (this.darkMode) document.getElementById('destModalContent').classList.add('dark');
     },
 
-    _renderDestinatarios() {
-        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+    // Los que se ven ahora mismo con lo que haya escrito en el buscador
+    _destinatariosVisibles() {
         const q = (document.getElementById('destBuscar')?.value || '').toLowerCase().trim();
-        const lista = Object.values(this._conductores || {})
+        return Object.values(this._conductores || {})
             .filter(u => !q || `${u.conductor || ''} ${u.nombre || ''} ${u.email}`.toLowerCase().includes(q))
             .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
-        const cont = document.getElementById('destLista');
-        cont.innerHTML = lista.length ? lista.map(u => `<div class="dest-fila"
-                onclick="app._escribirA('${esc(u.email).replace(/'/g, "\\'")}')">
-                <span class="nt-num">${esc(u.conductor) || '—'}</span>
-                <span class="nt-nom">${esc(u.nombre) || esc(u.email)}</span>
-            </div>`).join('')
-            : '<div class="baja-vacio">Ningún trabajador con ese nombre o número</div>';
     },
 
-    _escribirA(email) {
-        const u = (this._conductores || {})[email];
-        if (!u) return;
+    _renderDestinatarios() {
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const lista = this._destinatariosVisibles();
+        const cont = document.getElementById('destLista');
+        cont.innerHTML = lista.length ? lista.map(u => {
+            const on = this._elegidos.includes(u.email);
+            return `<div class="dest-fila${on ? ' on' : ''}"
+                onclick="app._alternarDest('${esc(u.email).replace(/'/g, "\\'")}')">
+                <span class="dest-marca">${on ? '✓' : ''}</span>
+                <span class="nt-num">${esc(u.conductor) || '—'}</span>
+                <span class="nt-nom">${esc(u.nombre) || esc(u.email)}</span>
+            </div>`;
+        }).join('')
+            : '<div class="baja-vacio">Ningún trabajador con ese nombre o número</div>';
+        const n = this._elegidos.length;
+        const cuantos = document.getElementById('destCuantos');
+        if (cuantos) cuantos.textContent = n ? `${n} elegido${n === 1 ? '' : 's'}` : '';
+        const seguir = document.getElementById('destSeguir');
+        if (seguir) {
+            seguir.textContent = n > 1 ? `Escribir a ${n}` : 'Escribir';
+            seguir.disabled = n === 0;
+            seguir.style.opacity = n === 0 ? '.5' : '';
+        }
+    },
+
+    _alternarDest(email) {
+        const i = this._elegidos.indexOf(email);
+        if (i === -1) this._elegidos.push(email); else this._elegidos.splice(i, 1);
+        this._renderDestinatarios();
+    },
+
+    // "Todos" son todos los que se están viendo: con el buscador en blanco es
+    // la plantilla entera, y con algo escrito solo los que encajan.
+    _marcarTodosDest(si) {
+        const visibles = this._destinatariosVisibles().map(u => u.email);
+        this._elegidos = si
+            ? [...new Set([...this._elegidos, ...visibles])]
+            : this._elegidos.filter(e => !visibles.includes(e));
+        this._renderDestinatarios();
+    },
+
+    _escribirALosElegidos() {
+        if (!this._elegidos.length) return;
+        this._escribirA(this._elegidos.slice());
+    },
+
+    _escribirA(quienes) {
+        const lista = (Array.isArray(quienes) ? quienes : [quienes])
+            .filter(e => (this._conductores || {})[e]);
+        if (!lista.length) return;
         document.getElementById('destModal').classList.remove('show');
         // Se reutiliza el cuadro de responder: es el mismo diálogo
         this._notaRespondiendo = null;
-        this._notaPara = email;
+        this._notaPara = lista;
+        const u = this._conductores[lista[0]];
         document.getElementById('respTitulo').textContent = '✉️ Escribir a';
-        document.getElementById('respQuien').textContent = this._quienEs(u, email);
+        document.getElementById('respQuien').textContent = lista.length === 1
+            ? this._quienEs(u, lista[0])
+            : `${lista.length} trabajadores · cada uno recibirá su propia nota`;
         document.getElementById('respOriginal').textContent = '';
         document.getElementById('respTexto').value = '';
         document.getElementById('respFirma').textContent = `Firmarás como ${this._nombreGestor()}.`;
@@ -2351,24 +2422,28 @@ const app = {
 
     async _enviarNotaAGestor() {
         const texto = (document.getElementById('respTexto').value || '').trim();
-        if (!texto) { this._mostrarToast('Escribe algo o adjunta un archivo', 3000); return; }
+        if (!texto) { this._mostrarToast('Escribe algo', 3000); return; }
+        const para = Array.isArray(this._notaPara) ? this._notaPara : [this._notaPara];
         document.getElementById('respModal').classList.remove('show');
         try {
             const r = await fetch(this.NOTAS_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json',
                            'X-User-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ texto, para: this._notaPara,
+                // Los nombres van en paralelo a los correos para que cada hilo
+                // se titule con el suyo y no con el correo.
+                body: JSON.stringify({ texto, para,
                     gestor: this._nombreGestor(),
-                    // Para que el hilo se titule con su nombre, no con su correo
-                    nombre: (this._conductores?.[this._notaPara]?.nombre) || '',
-                    conductor: (this._conductores?.[this._notaPara]?.conductor) || '' })
+                    nombres:     para.map(e => this._conductores?.[e]?.nombre || ''),
+                    conductores: para.map(e => this._conductores?.[e]?.conductor || '') })
             });
             const data = await r.json();
             if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return; }
-            this._notas = [data, ...this._notas];
-                this._renderNotasGestor();
-            this._mostrarToast('📨 Nota enviada', 2500);
+            const nuevas = Array.isArray(data) ? data : [data];
+            this._notas = [...nuevas, ...this._notas];
+            this._renderNotasGestor();
+            this._mostrarToast(nuevas.length === 1 ? '📨 Nota enviada'
+                : `📨 Nota enviada a ${nuevas.length} trabajadores`, 2500);
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
@@ -2670,6 +2745,12 @@ const app = {
                 + `<span class="bub-txt">${esc(m.texto)}</span>${adj}`
                 + `<div class="bub-hora">${esc(this._horaCorta(m.en))}</div></div>`;
         }).join('') || '<div class="nt-vacio">Sin mensajes</div>';
+        // Quién le dio el visto y cuándo, para los dos lados por igual
+        const v = n.vistoPor;
+        if (v) {
+            cont.innerHTML += `<div class="bub sistema">👁 Visto por ${esc(v.nombre) || esc(v.email)}`
+                + ` · ${esc(this._horaCorta(v.en))}</div>`;
+        }
         cont.scrollTop = cont.scrollHeight;
         this._renderPieHilo(n);
     },
@@ -2680,20 +2761,25 @@ const app = {
             { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     },
 
+    // El visto ya no es de gestión: lo da cualquiera de los dos y el otro lo
+    // ve en su app. Por eso el botón está igual en las dos, y no hay forma de
+    // denegar nada: una nota se lee, se contesta o se archiva.
+    _estaVista(n) { return n?.estado === 'visto' || !!n?.vistoPor; },
+
     _renderPieHilo(n) {
         const pie = document.getElementById('hiloPie');
         if (!pie) return;
         const esc = t => String(t || '').replace(/'/g, "\\'");
-        const botones = [];
-        if (true && n.tipo !== 'companero') {
-            const e = ['ok', 'no'].includes(n.estado) ? n.estado : 'pendiente';
-            botones.push(`<button class="modal-btn modal-btn-cancel" style="flex:0 0 auto;padding:10px 12px;"
-                onclick="app._estadoNota('${esc(n.id)}','${e === 'ok' ? 'pendiente' : 'ok'}')">${e === 'ok' ? '✅' : '☑️'}</button>`);
-            botones.push(`<button class="modal-btn modal-btn-cancel" style="flex:0 0 auto;padding:10px 12px;"
-                onclick="app._estadoNota('${esc(n.id)}','${e === 'no' ? 'pendiente' : 'no'}')">${e === 'no' ? '❌' : '✖️'}</button>`);
-        }
-        botones.push(`<button class="modal-btn modal-btn-confirm" onclick="app._responderHilo()">Enviar</button>`);
-        pie.innerHTML = botones.join('');
+        const visto = this._estaVista(n);
+        pie.innerHTML = `<button class="modal-btn modal-btn-cancel" style="flex:0 0 auto;padding:10px 12px;"
+                title="${visto ? 'Quitar el visto' : 'Darla por vista'}"
+                onclick="app._marcarVisto('${esc(n.id)}',${!visto})">${visto ? '✅' : '☑️'}</button>`
+            + `<button class="modal-btn modal-btn-confirm" onclick="app._responderHilo()">Enviar</button>`;
+    },
+
+    _marcarVisto(id, visto) {
+        return this._tocarConversacion(id, { visto, nombre: this._nombreGestor() },
+            visto ? '👁 Dada por vista' : 'Ya no está vista');
     },
 
     async _responderHilo() {
@@ -2739,6 +2825,8 @@ const app = {
                                  : this._notas.map(x => x.id === id ? data : x);
             if (borrar && this._hiloAbierto === id) {
                 document.getElementById('hiloModal').classList.remove('show');
+            } else if (this._hiloAbierto === id) {
+                this._renderHilo();
             }
             this._renderNotasGestor();
             this._mostrarToast(mensaje, 2500);
@@ -2753,11 +2841,6 @@ const app = {
     _borrarHilo(id) {
         if (!confirm('¿Borrar esta conversación entera? No se puede deshacer.')) return;
         return this._tocarConversacion(id, {}, '🗑️ Conversación borrada', true);
-    },
-
-    _estadoNota(id, estado) {
-        const txt = { ok: '✅ Aceptada', no: '❌ Denegada', pendiente: 'Vuelve a pendiente' };
-        return this._tocarConversacion(id, { estado, gestor: this._nombreGestor() }, txt[estado]);
     },
 
     _nombreGestor() {
@@ -3481,6 +3564,12 @@ const app = {
         return (TURNOS_POR_PUESTO[this._clavePuesto(puesto)] || []).filter(f => f.id !== 'N');
     },
 
+    // La franja de noche tal y como la tiene puesta ese lugar, si la tiene
+    _nocheDe(puesto) {
+        const n = (TURNOS_POR_PUESTO[this._clavePuesto(puesto)] || []).find(f => f.id === 'N');
+        return (n && this._minutos(n.desde) !== null && this._minutos(n.hasta) !== null) ? n : null;
+    },
+
     // Hora a la que deja de ser de noche en este lugar: nunca más tarde de las 6
     _amanecerDe(puesto) {
         const m = this._franjasDe(puesto).find(f => f.id === 'M');
@@ -3489,26 +3578,38 @@ const app = {
         return Math.min(this.NOCHE_HASTA, Math.max(0, ini - this.MARGEN_TURNO));
     },
 
+    // Una franja puede cruzar la medianoche —la noche siempre lo hace—, así
+    // que se estira hasta el día siguiente antes de comparar.
+    _dentroDeFranja(min, f, margen) {
+        const desde = this._minutos(f?.desde), hasta = this._minutos(f?.hasta);
+        if (desde === null || hasta === null || desde === hasta) return false;
+        let a = desde - margen, b = hasta + margen;
+        if (b <= a) b += 1440;
+        let cur = min;
+        if (cur < a) cur += 1440;
+        return cur >= a && cur < b;
+    },
+
+    // Manda la hora que tenga puesta el lugar: Son Rossinyol y Control entran
+    // de noche a las 20:00, y dándola por hecha a las 21:00 esas entradas
+    // caían en la tarde. El turno de noche se quedaba sin nadie y el cuadro
+    // de lugares marcaba "sin cubrir" con el trabajador dentro.
     _esNoche(min, puesto) {
+        const n = this._nocheDe(puesto);
+        if (n) return this._dentroDeFranja(min, n, 0);
         return min >= this.NOCHE_DESDE || min < this._amanecerDe(puesto);
     },
 
     _turnoDe(puesto, horaInicio) {
         const ini = this._minutos(horaInicio);
         if (ini === null) return '';
+        const todas = TURNOS_POR_PUESTO[this._clavePuesto(puesto)] || [];
+        // Primero la hora clavada, y solo si no encaja en ninguna se admite
+        // la hora de margen: entrar un poco antes o salir un poco después
+        // sigue siendo el mismo turno.
+        for (const f of todas) if (this._dentroDeFranja(ini, f, 0)) return f.id;
+        for (const f of todas) if (this._dentroDeFranja(ini, f, this.MARGEN_TURNO)) return f.id;
         if (this._esNoche(ini, puesto)) return 'N';
-        const franjas = this._franjasDe(puesto);
-        if (!franjas.length) return ini < 13 * 60 ? 'M' : 'T';
-
-        const dentro = (min, f, margen) => {
-            let a = this._minutos(f.desde) - margen, b = this._minutos(f.hasta) + margen;
-            if (b <= a) b += 1440;
-            let cur = min;
-            if (cur < a && b > 1440) cur += 1440;
-            return cur >= a && cur < b;
-        };
-        for (const f of franjas) if (dentro(ini, f, 0)) return f.id;
-        for (const f of franjas) if (dentro(ini, f, this.MARGEN_TURNO)) return f.id;
         return ini < 13 * 60 ? 'M' : 'T';
     },
 
@@ -5072,6 +5173,7 @@ const app = {
         const nombre = l.nombre || (k ? PUESTOS_DEFINIDOS.find(p => this._clavePuesto(p) === k) || k : '');
         document.getElementById('lgNombre').value = nombre;
         this._turnosTmp = (TURNOS_POR_PUESTO[k] || []).map(f => ({ ...f }));
+        this._turnosApagados = {};
         this._diasTmp = (k && DIAS_POR_LUGAR[k]) ? [...DIAS_POR_LUGAR[k]] : [0,1,2,3,4,5,6];
         this._renderDiasLugar();
         this._renderTurnosLugar();
@@ -5207,24 +5309,52 @@ const app = {
         this._renderDiasLugar();
     },
 
+    // Un lugar no tiene por qué tener los tres turnos: el taller solo abre de
+    // noche. Se marcan los que tiene y los que no se quedan apagados, con sus
+    // horas a la vista por si se vuelven a encender.
+    TURNOS_POR_DEFECTO: { M: ['06:00', '14:00'], T: ['14:00', '21:00'], N: ['21:00', '06:00'] },
+
     _renderTurnosLugar() {
         const nombres = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
         document.getElementById('lgTurnos').innerHTML = ['M', 'T', 'N'].map(id => {
-            const f = this._turnosTmp.find(x => x.id === id) || {};
-            return `<div class="edit-row" style="align-items:flex-end;">
-                <div class="edit-field" style="flex:0 0 74px;"><label>&nbsp;</label>
-                    <div style="font-weight:700;font-size:13px;padding:8px 0;">${nombres[id]}</div></div>
+            const f = this._turnosTmp.find(x => x.id === id);
+            const off = !f;
+            const horas = f || (this._turnosApagados || {})[id] || {};
+            return `<div class="lg-turno${off ? ' off' : ''}">
+                <button class="lg-turno-sw" onclick="app._alternarTurnoLugar('${id}')">
+                    <span class="lg-turno-marca">${off ? '' : '✓'}</span>${nombres[id]}</button>
                 <div class="edit-field"><label>Desde</label>
-                    <input type="time" value="${f.desde || ''}" onchange="app._editarTurno('${id}','desde',this.value)"></div>
+                    <input type="time" value="${horas.desde || ''}" ${off ? 'disabled' : ''}
+                           onchange="app._editarTurno('${id}','desde',this.value)"></div>
                 <div class="edit-field"><label>Hasta</label>
-                    <input type="time" value="${f.hasta || ''}" onchange="app._editarTurno('${id}','hasta',this.value)"></div>
+                    <input type="time" value="${horas.hasta || ''}" ${off ? 'disabled' : ''}
+                           onchange="app._editarTurno('${id}','hasta',this.value)"></div>
             </div>`;
         }).join('');
     },
 
+    _alternarTurnoLugar(id) {
+        this._turnosApagados = this._turnosApagados || {};
+        const i = this._turnosTmp.findIndex(x => x.id === id);
+        if (i !== -1) {
+            // Al apagarlo se guardan sus horas: si vuelve, vuelve como estaba
+            this._turnosApagados[id] = { ...this._turnosTmp[i] };
+            this._turnosTmp.splice(i, 1);
+        } else {
+            const previo = this._turnosApagados[id];
+            const [desde, hasta] = this.TURNOS_POR_DEFECTO[id];
+            this._turnosTmp.push(previo && previo.desde && previo.hasta
+                ? { id, desde: previo.desde, hasta: previo.hasta }
+                : { id, desde, hasta });
+            // Que queden en el orden de siempre: mañana, tarde y noche
+            this._turnosTmp.sort((a, b) => 'MTN'.indexOf(a.id) - 'MTN'.indexOf(b.id));
+        }
+        this._renderTurnosLugar();
+    },
+
     _editarTurno(id, campo, valor) {
-        let f = this._turnosTmp.find(x => x.id === id);
-        if (!f) { f = { id, desde: '', hasta: '' }; this._turnosTmp.push(f); }
+        const f = this._turnosTmp.find(x => x.id === id);
+        if (!f) return;               // apagado: no hay nada que escribir
         f[campo] = valor;
     },
 
@@ -5279,7 +5409,7 @@ const app = {
         const lng = this._leerDecimal(document.getElementById('lgLng').value);
         const cuerpo = {
             nombre,
-            turnos: this._turnosTmp.filter(f => f.desde && f.hasta),
+            turnos: this._turnosTmp.filter(f => f.desde && f.hasta && f.desde !== f.hasta),
             dias: this._diasTmp.slice().sort(),
             ubicacion: (lat !== null && lng !== null)
                 ? { lat, lng, radio: this._leerDecimal(document.getElementById('lgRadio').value) || 150 }
