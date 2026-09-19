@@ -1402,7 +1402,8 @@
     ],
     "email": "prueba-1789759132382@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T09:32:44.076Z"
+    "actualizado": "2026-09-19T09:32:44.076Z",
+    "lugares": {}
   },
   "prueba-1789759514777@prueba.local": {
     "nombre": "Xisca",
