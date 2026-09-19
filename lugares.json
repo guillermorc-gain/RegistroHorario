@@ -124,10 +124,11 @@
       {
         "id": "N",
         "desde": "21:00",
-        "hasta": "06:00"
+        "hasta": "00:00"
       }
     ],
     "ubicacion": null,
+    "dias": null,
     "prioridad": 0
   },
   "control de acceso": {
