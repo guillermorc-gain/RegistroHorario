@@ -58,8 +58,10 @@ jobs:
           N=${{ github.run_number }}
           MAJOR=$((N / 100)); MINOR=$((N % 100))
           sed -i "s/versionCode [0-9]*/versionCode $N/" "$GRADLE"
-          sed -i "s/versionName \"[^\"]*\"/versionName \"$MAJOR.$(printf '%02d' $MINOR)\"/" "$GRADLE"
+          VER="$MAJOR.$(printf '%02d' $MINOR)"
+          sed -i "s/versionName \"[^\"]*\"/versionName \"$VER\"/" "$GRADLE"
           grep -E "versionCode|versionName" "$GRADLE"
+          echo "APP_VER=$VER" >> $GITHUB_ENV
 
       - name: Patch AndroidManifest — permissions + intent filter localhost
         run: |
@@ -989,6 +991,9 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
 
+      - name: Renombrar el APK con su versión
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk gestion-emt-${{ env.APP_VER }}.apk
+
       - name: Create GitHub Release
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
@@ -996,5 +1001,5 @@ jobs:
           tag_name: gestion-build-${{ github.run_number }}
           name: "Gestión EMT Movilidad — Build ${{ github.run_number }}"
           body: "APK de Gestión generado automáticamente en build #${{ github.run_number }}."
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          files: gestion-emt-${{ env.APP_VER }}.apk
           fail_on_unmatched_files: true
