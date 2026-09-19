@@ -1,3 +1,5 @@
+import { emailDelToken, tokenDe, exigirAdmin } from './_auth.js';
+
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO         = 'guillermorc-gain/RegistroHorario';
 const BRANCH       = 'main';
@@ -96,7 +98,7 @@ async function guardarConReintento(mutar, mensaje) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-User-Email, X-Admin-Email');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-User-Email, X-Admin-Email, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
@@ -108,7 +110,12 @@ export default async function handler(req, res) {
 
     // Cada conductor publica su propio resumen
     if (req.method === 'POST') {
-      const quien = (req.headers['x-user-email'] || '').toLowerCase().trim();
+      // Cada trabajador escribe su propia fila. El correo sale del token, no de
+      // la cabecera, para que nadie pueda escribir en la fila de otro. Las apps
+      // antiguas todavía no mandan el token: mientras queden, se acepta la
+      // cabecera, pero solo después de haber intentado el token.
+      const delToken = await emailDelToken(tokenDe(req));
+      const quien = delToken || (req.headers['x-user-email'] || '').toLowerCase().trim();
       if (!quien || !quien.includes('@')) return res.status(400).json({ error: 'Falta el usuario' });
       const b = req.body || {};
       if (typeof b.avatar === 'string' && b.avatar.length > MAX_AVATAR) b.avatar = null;
@@ -144,10 +151,7 @@ export default async function handler(req, res) {
 
     // Solo el gestor asigna el puesto de trabajo
     if (req.method === 'PATCH' || req.method === 'DELETE') {
-      const admin = (req.headers['x-admin-email'] || '').toLowerCase();
-      if (admin !== ADMIN_EMAIL.toLowerCase()) {
-        return res.status(403).json({ error: 'Solo el gestor puede hacer esto' });
-      }
+      if (!await exigirAdmin(req, res, ADMIN_EMAIL)) return;
       const { email, puesto, ficticio, baja, bajas, desde, hasta } = req.body || {};
       const clave = (email || '').toLowerCase().trim();
       if (!clave) return res.status(400).json({ error: 'Falta el email' });

@@ -1,6 +1,8 @@
 // Catálogo de lugares de trabajo: nombre, turnos y ubicación. Lo mantiene el
 // gestor y lo leen las dos apps, para que los turnos y las ubicaciones dejen de
 // estar escritos a mano en el código de cada una.
+import { exigirAdmin } from './_auth.js';
+
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO         = 'guillermorc-gain/RegistroHorario';
 const BRANCH       = 'main';
@@ -66,7 +68,7 @@ function limpiarUbicacion(u) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Email');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Email, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
@@ -76,10 +78,7 @@ export default async function handler(req, res) {
       return res.status(200).json(data);
     }
 
-    const admin = (req.headers['x-admin-email'] || '').toLowerCase();
-    if (admin !== ADMIN_EMAIL.toLowerCase()) {
-      return res.status(403).json({ error: 'Solo el gestor puede hacer esto' });
-    }
+    if (!await exigirAdmin(req, res, ADMIN_EMAIL)) return;
 
     const { nombre } = req.body || {};
     const k = clave(nombre);

@@ -1,3 +1,5 @@
+import { exigirAdmin } from './_auth.js';
+
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO         = 'guillermorc-gain/RegistroHorario';
 const BRANCH       = 'main';
@@ -41,7 +43,7 @@ async function setFile(FILE_PATH, emails, sha) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Email');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Email, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (req.method === 'GET') {
@@ -54,10 +56,7 @@ export default async function handler(req, res) {
   }
 
   const cfg = appCfg(req);
-  const adminEmail = (req.headers['x-admin-email'] || '').toLowerCase();
-  if (adminEmail !== cfg.admin.toLowerCase()) {
-    return res.status(403).json({ error: 'Solo el administrador puede modificar la lista' });
-  }
+  if (!await exigirAdmin(req, res, cfg.admin)) return;
 
   const { email } = req.body || {};
   if (!email || !email.includes('@')) return res.status(400).json({ error: 'Email inválido' });
