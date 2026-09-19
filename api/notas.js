@@ -171,10 +171,22 @@ function añadirMensaje(nota, { de, autor, cuerpo, adjuntos }) {
   }] };
 }
 
-// Dar el visto, denegar o archivar
-function tocarNota(nota, { estado, archivada }) {
+// Dar el visto, denegar o archivar. Aceptar o denegar deja además un mensaje
+// en el hilo: así el trabajador se entera por el mismo camino que todo lo
+// demás —sin leer, campana, aviso en la barra— aunque el gestor no escriba
+// nada, y encima queda la fecha en que se resolvió.
+function tocarNota(nota, { estado, archivada, gestor }) {
   const n = normalizar(nota);
-  if (['pendiente', 'ok', 'no'].includes(estado)) n.estado = estado;
+  if (['pendiente', 'ok', 'no'].includes(estado) && estado !== n.estado) {
+    n.estado = estado;
+    if (estado !== 'pendiente') {
+      n.mensajes = [...n.mensajes, {
+        de: 'gestor', autor: String(gestor || '').slice(0, 80), sistema: true,
+        texto: estado === 'ok' ? '✅ Petición aceptada' : '❌ Petición denegada',
+        adjuntos: [], en: new Date().toISOString(),
+      }];
+    }
+  }
   if (archivada !== undefined) n.archivada = !!archivada;
   return n;
 }
@@ -298,7 +310,7 @@ export default async function handler(req, res) {
       const delToken = await emailDelToken(tokenDe(req));
       const quien = delToken || (req.headers['x-admin-email'] || req.headers['x-user-email'] || '')
         .toLowerCase().trim();
-      const { id, estado, archivada } = req.body || {};
+      const { id, estado, archivada, gestor } = req.body || {};
       if (!id) return res.status(400).json({ error: 'Falta la nota' });
       if (!quien || !quien.includes('@')) return res.status(400).json({ error: 'Falta el usuario' });
       // Dar el visto o denegar es de quien atiende la petición
@@ -313,7 +325,7 @@ export default async function handler(req, res) {
           await borrarNota(id);
           return res.status(200).json({ id, borrada: true });
         }
-        const tocada = tocarNota(n, { estado, archivada });
+        const tocada = tocarNota(n, { estado, archivada, gestor });
         await guardarNota(tocada);
         return res.status(200).json(tocada);
       }
@@ -322,7 +334,7 @@ export default async function handler(req, res) {
         if (!data[id]) return null;
         if (!puedeTocar(data[id], quien)) { prohibido = true; return null; }
         if (req.method === 'DELETE') { const out = { ...data }; delete out[id]; return out; }
-        return acotarAdjuntos({ ...data, [id]: tocarNota(data[id], { estado, archivada }) });
+        return acotarAdjuntos({ ...data, [id]: tocarNota(data[id], { estado, archivada, gestor }) });
       }, req.method === 'DELETE' ? `Quitar conversación ${id}` : `Cambio en ${id}`);
       if (!nuevo) {
         return res.status(prohibido ? 403 : 404)
