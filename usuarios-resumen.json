@@ -1472,11 +1472,11 @@
     "actualizado": "2026-09-19T10:02:51.200Z",
     "bajas": [
       {
-        "d": "20260921",
+        "d": "20260918",
         "h": "20260930"
       }
     ],
-    "baja": false
+    "baja": true
   },
   "prueba-1789759539366@prueba.local": {
     "nombre": "Juan",
