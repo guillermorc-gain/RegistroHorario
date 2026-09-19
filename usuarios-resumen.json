@@ -1549,9 +1549,9 @@
   "prueba-1789763845092@prueba.local": {
     "nombre": "Toni Sánchez",
     "conductor": "1086-5",
-    "puesto": "",
+    "puesto": "Control",
     "avatar": null,
-    "version": "build-67",
+    "version": "build-69",
     "horasMes": 14,
     "horasTotales": 14,
     "diasMes": 2,
@@ -1588,14 +1588,7 @@
     ],
     "email": "prueba-1789763845092@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T09:33:47.282Z",
-    "vacaciones": [
-      {
-        "desde": "2026-09-17",
-        "hasta": "2026-09-30"
-      }
-    ],
-    "vacacionesAt": 1789810576186
+    "actualizado": "2026-09-19T10:03:26.775Z"
   },
   "prueba-1789764004986@prueba.local": {
     "nombre": "Pepe",
