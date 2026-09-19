@@ -1275,13 +1275,13 @@
     "nombre": "Guillermo Ríos Correa",
     "conductor": "1234-5",
     "avatar": null,
-    "version": "build-220",
+    "version": "build-227",
     "horasMes": 14,
     "horasTotales": 14,
     "diasMes": 3,
     "turno": "T",
     "puesto": "Son Rossinyol",
-    "actualizado": "2026-09-19T12:27:35.086Z",
+    "actualizado": "2026-09-19T16:56:55.025Z",
     "horaInicio": "18:00",
     "horaFin": "22:00",
     "horarioDe": "anterior",
@@ -1330,7 +1330,9 @@
     "grupo": null,
     "lugares": {
       "20260919": "Son Rossinyol"
-    }
+    },
+    "horarios": {},
+    "revisiones": {}
   },
   "prueba-1789758756867@prueba.local": {
     "nombre": "Toni Rodríguez",
