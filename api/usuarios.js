@@ -37,6 +37,12 @@ function limpiarBajas(bajas) {
 }
 
 // Rangos con fecha ISO, que es como los guarda la app del trabajador
+function limpiarDiasSemana(d) {
+  if (!Array.isArray(d)) return null;
+  const dias = [...new Set(d.map(Number).filter(n => Number.isInteger(n) && n >= 0 && n <= 6))].sort();
+  return dias.length && dias.length < 7 ? dias : null;
+}
+
 function limpiarVacaciones(v) {
   if (!Array.isArray(v)) return [];
   const ok = f => /^\d{4}-\d{2}-\d{2}$/.test(String(f || ''));
@@ -163,6 +169,8 @@ export default async function handler(req, res) {
           horasTotales: Number(b.horasTotales) || 0,
           horasAnuales: Number(b.horasAnuales) || previo.horasAnuales || 777,
           jornadaHoras: Number(b.jornadaHoras) || previo.jornadaHoras || 7,
+          // Días de la semana que trabaja; null si no los ha fijado
+          dias:         b.dias !== undefined ? limpiarDiasSemana(b.dias) : (previo.dias ?? null),
           diasMes:      Number(b.diasMes) || 0,
           turno:        ['M','T','N'].includes(b.turno) ? b.turno : (previo.turno || ''),
           horaInicio:   typeof b.horaInicio === 'string' ? b.horaInicio.slice(0, 5) : previo.horaInicio || '',
