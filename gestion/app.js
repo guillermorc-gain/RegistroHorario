@@ -3223,9 +3223,34 @@ const app = {
         }, { passive: true });
     },
 
+    // Estando en otro día vuelve a hoy; estando ya en hoy abre el calendario,
+    // que es la única forma de saltar lejos sin pulsar la flecha veinte veces.
+    pulsarHoy() {
+        if (this._puestosOffset !== 0) return this.irAHoy();
+        this.abrirCalendario();
+    },
+
     irAHoy() {
         if (this._puestosOffset === 0) return;
         this._puestosOffset = 0;
+        this._renderConductores();
+    },
+
+    abrirCalendario() {
+        const inp = document.getElementById('pstFecha');
+        if (!inp) return;
+        const f = this._fechaOffset(this._puestosOffset);
+        inp.value = `${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6,8)}`;
+        inp.style.pointerEvents = 'auto';
+        try { inp.showPicker(); } catch (_) { inp.focus(); inp.click(); }
+        setTimeout(() => { inp.style.pointerEvents = 'none'; }, 500);
+    },
+
+    irAFecha(iso) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return;
+        const hoy = new Date(); hoy.setHours(12, 0, 0, 0);
+        const d = new Date(+iso.slice(0,4), +iso.slice(5,7) - 1, +iso.slice(8,10), 12);
+        this._puestosOffset = Math.round((d - hoy) / 86400000);
         this._renderConductores();
     },
 
@@ -3338,7 +3363,11 @@ const app = {
         const esFuturo = off > 0;
         const txt = document.getElementById('pstDiaTxt');
         if (txt) txt.textContent = this._etiquetaDia(off);
-        document.getElementById('pstHoy')?.classList.toggle('oculto', off === 0);
+        const btnHoy = document.getElementById('pstHoy');
+        if (btnHoy) {
+            btnHoy.textContent = off === 0 ? '📅' : 'Hoy';
+            btnHoy.title = off === 0 ? 'Elegir día' : 'Volver a hoy';
+        }
 
         const lista    = Object.values(this._conductores || {});
         // Los que no tienen lugar asignado también salen, en su propio grupo:
