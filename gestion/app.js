@@ -4999,6 +4999,14 @@ const app = {
         }
         const porPuesto = {};
         porLugares.forEach(x => { (porPuesto[x.lugar] = porPuesto[x.lugar] || []).push(x); });
+        // Un lugar sin nadie no salía: como el cuadro se monta repartiendo
+        // gente, el que no cubría nadie era justo el que no se veía. Los del
+        // catálogo salen siempre, aunque estén vacíos.
+        Object.entries(LUGARES_CATALOGO || {}).forEach(([k, l]) => {
+            const nombre = (l?.nombre || k).trim();
+            if (!nombre) return;
+            if (!Object.keys(porPuesto).some(p => this._clavePuesto(p) === k)) porPuesto[nombre] = [];
+        });
 
         // 'sinservicio' vivía aquí y se ha ido a la lista de trabajadores, que
         // es su sitio: quien lo tuviera puesto se encuentra el cuadro entero.
@@ -5058,12 +5066,23 @@ const app = {
 
             // El filtro escoge qué trabajadores se ven, salvo "sin cubrir", que
             // es una propiedad del lugar: el que tiene algún turno sin nadie.
+            // Los dos grupos de pega no son lugares: no tienen turnos que cubrir
             if (filtro === 'sincubrir'
-                && (franjas.length ? !huecos.length : dentro + previstos > 0)) return;
-            const visibles = filtro === 'trabajando' ? gente.filter(trabajando) : gente;
-            if (!visibles.length) return;
+                && (dePegaPuesto(puesto)
+                    || (franjas.length ? !huecos.length : dentro + previstos > 0))) return;
+            // En "Horarios sin cubrir" lo que se busca es el hueco, no la
+            // gente: quien ya tiene turno no pinta nada ahí. Se enseña el
+            // lugar con los turnos que nadie cubre y punto.
+            const soloHuecos = filtro === 'sincubrir';
+            const visibles = soloHuecos ? []
+                           : filtro === 'trabajando' ? gente.filter(trabajando)
+                           : gente;
+            // Un lugar de verdad se enseña aunque no haya nadie: que esté
+            // vacío es lo que hay que ver. Los dos grupos de pega, no.
+            if (!soloHuecos && !visibles.length
+                && (filtro !== 'todos' || dePegaPuesto(puesto))) return;
 
-            const filas = visibles.map(({ u, j, deAyer, enBaja, enVac, sinServicio, plan }) => {
+            const filas = soloHuecos ? '' : visibles.map(({ u, j, deAyer, enBaja, enVac, sinServicio, plan }) => {
                 const e = this._estadoJornada(u, j, esHoy, esFuturo, deAyer, enBaja, enVac);
                 const previsto = !j && !enBaja && !enVac && plan;
                 const horario = sinServicio
@@ -5090,7 +5109,13 @@ const app = {
             // Los dos grupos de pega no son lugares: no tiene sentido decir
             // que están sin cubrir.
             const dePega = dePegaPuesto(puesto);
-            const cob = dePega
+            // En la vista de huecos el número que importa es cuántos faltan,
+            // no cuánta gente hay: verde con "1 previsto" al lado de un turno
+            // descubierto se lee como que está resuelto.
+            const cob = soloHuecos
+                ? (huecos.length
+                    ? `${huecos.length} sin cubrir` : 'sin turnos definidos')
+                : dePega
                 ? `${visibles.length} ${visibles.length === 1 ? 'persona' : 'personas'}`
                 : esHoy
                 ? (dentro > 0 ? `${dentro} en turno`
@@ -5099,7 +5124,8 @@ const app = {
                    ? `${delDia + previstos} ${esFuturo
                         ? `previsto${delDia + previstos === 1 ? '' : 's'}` : 'ese día'}`
                    : 'sin cubrir');
-            const vacio = !dePega && (esHoy ? dentro + previstos === 0 : delDia + previstos === 0);
+            const vacio = soloHuecos
+                || (!dePega && (esHoy ? dentro + previstos === 0 : delDia + previstos === 0));
             const NOMBRE_TURNO = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
             tarjetas.push(`<div class="pst-card">
                 <div class="pst-head">
@@ -5109,6 +5135,8 @@ const app = {
                 ${huecos.length ? `<div class="pst-huecos">Sin cubrir: ${huecos.map(f =>
                     `<span class="pst-hueco"><b>${f.id}</b> ${esc(NOMBRE_TURNO[f.id] || f.id)} ${
                         esc(f.desde)}–${esc(f.hasta)}</span>`).join('')}</div>` : ''}
+                ${soloHuecos && !huecos.length
+                    ? '<div class="pst-huecos">Sin turnos definidos y sin nadie ese día.</div>' : ''}
                 ${filas}
             </div>`);
         });
