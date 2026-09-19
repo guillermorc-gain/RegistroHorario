@@ -364,24 +364,38 @@ jobs:
                                   java.net.HttpURLConnection conn = (java.net.HttpURLConnection) apkUrl.openConnection();
                                   conn.setRequestProperty("User-Agent", "HorasEMT/1.0");
                                   conn.setInstanceFollowRedirects(true);
+                                  // Sin estos topes, una conexión que se cae a
+                                  // medias deja el read() esperando para siempre:
+                                  // la barra se queda clavada y no salta ningún
+                                  // error, que es justo lo que se veía.
+                                  conn.setConnectTimeout(20000);
+                                  conn.setReadTimeout(30000);
                                   conn.connect();
                                   int totalSize = conn.getContentLength();
                                   java.io.File apkFile = new java.io.File(ctx.getCacheDir(), "update.apk");
                                   try (java.io.InputStream in = conn.getInputStream();
                                        java.io.FileOutputStream out = new java.io.FileOutputStream(apkFile)) {
-                                      byte[] buf = new byte[8192];
-                                      int read; long downloaded = 0;
+                                      byte[] buf = new byte[65536];
+                                      int read; long downloaded = 0; int ultimoPct = -1;
                                       while ((read = in.read(buf)) != -1) {
                                           out.write(buf, 0, read);
                                           downloaded += read;
                                           if (totalSize > 0) {
                                               final int pct = (int)(downloaded * 100L / totalSize);
-                                              ((android.app.Activity) ctx).runOnUiThread(() -> {
-                                                  try {
-                                                      ((BridgeActivity) ctx).getBridge().getWebView()
-                                                          .evaluateJavascript("app._onUpdateProgress(" + pct + ")", null);
-                                                  } catch (Exception ignored) {}
-                                              });
+                                              // Solo cuando cambia el número. Antes se
+                                              // evaluaba JavaScript en cada trozo: con
+                                              // 7 MB eran casi mil saltos al hilo de la
+                                              // interfaz, que se atascaba y parecía que
+                                              // la descarga no avanzaba.
+                                              if (pct != ultimoPct) {
+                                                  ultimoPct = pct;
+                                                  ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                                      try {
+                                                          ((BridgeActivity) ctx).getBridge().getWebView()
+                                                              .evaluateJavascript("app._onUpdateProgress(" + pct + ")", null);
+                                                      } catch (Exception ignored) {}
+                                                  });
+                                              }
                                           }
                                       }
                                   }
