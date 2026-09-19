@@ -2190,11 +2190,32 @@ const app = {
 
     _esCompleta(u) { return (Number(u?.horasAnuales) || 777) >= this.ANUALES_COMPLETA; },
 
-    // El horario que pone el gestor manda; si no hay, el que se deduce de la
-    // hora a la que ficha.
+    // Horario puesto desde el cuadrante: entrada y salida. Las versiones
+    // anteriores guardaban solo la letra del turno, que se sigue entendiendo.
+    _horasAsignadas(u) {
+        const h = u?.horario;
+        return (h && typeof h === 'object' && h.i && h.f) ? h : null;
+    },
+
+    // El turno (M/T/N) sale de la hora de entrada asignada; si no hay horario
+    // puesto, de la hora a la que ficha de verdad.
     _horarioDe(u, fecha, j) {
-        if (u?.horario) return u.horario;
-        return this._turnoDe(this._lugarDe(u, fecha, j), j?.i) || '';
+        if (typeof u?.horario === 'string' && u.horario) return u.horario;
+        const lugar = this._lugarDe(u, fecha, j);
+        const h = this._horasAsignadas(u);
+        return this._turnoDe(lugar, h ? h.i : j?.i) || '';
+    },
+
+    _duracion(i, f) {
+        const min = v => { const [h, m] = String(v).split(':').map(Number); return h * 60 + m; };
+        let mins = min(f) - min(i);
+        if (mins <= 0) mins += 1440;            // turno que cruza la medianoche
+        return mins;
+    },
+
+    _enHoras(mins) {
+        const h = Math.floor(mins / 60), m = mins % 60;
+        return m ? `${h}h ${m}min` : `${h}h`;
     },
 
     _etiquetaDias(u) {
@@ -2233,6 +2254,7 @@ const app = {
             const { j } = this._jornadaVisible(u, fecha);
             const lugar   = this._lugarDe(u, fecha, j);
             const horario = this._horarioDe(u, fecha, j);
+            const horas   = this._horasAsignadas(u);
             const dias    = this._etiquetaDias(u);
             const completa = this._esCompleta(u);
             const enBaja = this._enBaja(u, fecha) || (!this._bajasDe(u).length && !!u.baja);
@@ -2255,9 +2277,10 @@ const app = {
                 <div class="ct-chips">
                     <button class="ct-chip${lugar ? '' : ' vacio'}"
                             onclick="app._editarPuesto('${q(u.email)}','${fecha}')">📍 ${esc(lugar) || 'sin lugar'}</button>
-                    <button class="ct-chip${horario ? '' : ' vacio'}"
-                            onclick="app._editarHorario('${q(u.email)}')">🕐 ${horario
-                                ? `<span class="ct-t ${horario}">${horario}</span>` : 'sin horario'}</button>
+                    <button class="ct-chip${horas || horario ? '' : ' vacio'}"
+                            onclick="app._editarHorario('${q(u.email)}')">🕐 ${
+                                horario ? `<span class="ct-t ${horario}">${horario}</span>` : ''}${
+                                horas ? ` ${horas.i}–${horas.f}` : horario ? '' : 'sin horario'}</button>
                     <button class="ct-chip${dias ? '' : ' vacio'}"
                             onclick="app._editarDiasTrab('${q(u.email)}')">📅 ${dias || 'todos los días'}</button>
                     ${grupo}
@@ -2329,12 +2352,17 @@ const app = {
         const u = (this._conductores || {})[email];
         if (!u) return;
         this._horarioEditando = email;
+        const h = this._horasAsignadas(u);
+        document.getElementById('hrEntrada').value = h?.i || '';
+        document.getElementById('hrSalida').value  = h?.f || '';
         document.getElementById('horarioQuien').textContent = this._quienEs(u, email);
         this._renderHorarioModal();
+        this._resumenHorario();
         document.getElementById('horarioModal').classList.add('show');
         if (this.darkMode) document.getElementById('horarioModalContent').classList.add('dark');
     },
 
+    // Los turnos de su lugar, para no tener que teclear las horas de siempre
     _renderHorarioModal() {
         const u = (this._conductores || {})[this._horarioEditando] || {};
         const fecha = this._fechaOffset(0);
@@ -2342,25 +2370,54 @@ const app = {
         const franjas = TURNOS_POR_PUESTO[this._clavePuesto(lugar)] || [];
         const nombres = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-        document.getElementById('horarioLista').innerHTML = ['M', 'T', 'N'].map(id => {
-            const f = franjas.find(x => x.id === id);
-            const detalle = f ? `${f.desde}–${f.hasta}`
-                : lugar ? `sin turno de ${nombres[id].toLowerCase()} en ${lugar}` : 'sin lugar asignado';
-            const sel = (u.horario || '') === id;
-            return `<div class="pm-op${sel ? ' sel' : ''}" onclick="app._elegirHorario('${id}')">
-                <div style="flex:1;min-width:0;">${nombres[id]}<br><span class="pm-turnos">${esc(detalle)}</span></div>
-                ${sel ? '<span class="pm-check">✓</span>' : ''}
-            </div>`;
-        }).join('')
-        + (u.horario ? `<div class="pm-op pm-quitar" onclick="app._elegirHorario('')">✕ Quitar el horario fijo</div>` : '')
-        + `<div class="pm-paso pm-nota">Sin horario fijo se usa el que salga de su hora de entrada.</div>`;
+        const atajos = franjas.filter(f => f.desde && f.hasta).map(f =>
+            `<div class="pm-op" onclick="app._ponerTurnoHorario('${f.desde}','${f.hasta}')">
+                <div style="flex:1;min-width:0;">${nombres[f.id] || f.id}<br>
+                    <span class="pm-turnos">${esc(f.desde)}–${esc(f.hasta)} · ${
+                        esc(this._enHoras(this._duracion(f.desde, f.hasta)))}</span></div>
+            </div>`).join('');
+        document.getElementById('horarioLista').innerHTML =
+            (atajos
+                ? `<div class="pm-paso">Turnos de ${esc(lugar)}</div>` + atajos
+                : `<div class="pm-paso">${lugar
+                    ? `${esc(lugar)} no tiene turnos definidos. Pon las horas a mano.`
+                    : 'Sin lugar asignado. Pon las horas a mano.'}</div>`)
+            + (this._horasAsignadas(u) || (typeof u.horario === 'string' && u.horario)
+                ? `<div class="pm-op pm-quitar" onclick="app._quitarHorario()">✕ Quitar el horario fijo</div>` : '')
+            + `<div class="pm-paso pm-nota">Sin horario fijo se usa el que salga de su hora de entrada.</div>`;
     },
 
-    async _elegirHorario(id) {
+    _ponerTurnoHorario(i, f) {
+        document.getElementById('hrEntrada').value = i;
+        document.getElementById('hrSalida').value  = f;
+        this._resumenHorario();
+    },
+
+    _resumenHorario() {
+        const i = document.getElementById('hrEntrada').value;
+        const f = document.getElementById('hrSalida').value;
+        const el = document.getElementById('hrResumen');
+        if (!i || !f) { el.textContent = 'Pon la hora de entrada y la de salida.'; return; }
+        const u = (this._conductores || {})[this._horarioEditando] || {};
+        const lugar = this._lugarDe(u, this._fechaOffset(0), this._jornadaDe(u, this._fechaOffset(0)));
+        const turno = this._turnoDe(lugar, i);
+        const nombres = { M: 'mañana', T: 'tarde', N: 'noche' };
+        el.textContent = `${this._enHoras(this._duracion(i, f))}`
+            + (turno ? ` · turno de ${nombres[turno]}` : '');
+    },
+
+    async _guardarHorario() {
+        const i = document.getElementById('hrEntrada').value;
+        const f = document.getElementById('hrSalida').value;
+        if (!i || !f) { this._mostrarToast('Pon la entrada y la salida', 3000); return; }
+        if (i === f) { this._mostrarToast('La salida no puede ser igual que la entrada', 3000); return; }
         document.getElementById('horarioModal').classList.remove('show');
-        const nombres = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
-        await this._guardarCampoTrab(this._horarioEditando, { horario: id },
-            id ? `🕐 ${nombres[id]}` : 'Horario quitado');
+        await this._guardarCampoTrab(this._horarioEditando, { horario: { i, f } }, `🕐 ${i}–${f}`);
+    },
+
+    async _quitarHorario() {
+        document.getElementById('horarioModal').classList.remove('show');
+        await this._guardarCampoTrab(this._horarioEditando, { horario: '' }, 'Horario quitado');
     },
 
     // ── Grupo de descanso ──
