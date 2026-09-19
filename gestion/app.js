@@ -2218,49 +2218,53 @@ const app = {
         const estado = n => n.de === 'gestor' ? 'mias'
             : ['ok', 'no'].includes(n.estado) ? n.estado : 'pendiente';
         const sel = localStorage.getItem('filtroNotas') || 'pendiente';
+        const todas = this._notas || [];
         const fil = document.getElementById('ntFiltros');
         if (fil) {
-            fil.innerHTML = [['pendiente', 'Pendientes'], ['ok', 'Aceptadas'],
-                             ['no', 'Denegadas'], ['mias', 'Enviadas'], ['todas', 'Todas']]
+            fil.innerHTML = [['pendiente', 'Pendientes'], ['ok', 'Aceptadas'], ['no', 'Denegadas'],
+                             ['mias', 'Enviadas'], ['archivadas', 'Archivadas'], ['todas', 'Todas']]
                 .map(([id, txt]) => {
-                    const n = id === 'todas' ? this._notas.length
-                        : this._notas.filter(x => estado(x) === id).length;
+                    const n = id === 'archivadas' ? todas.filter(x => x.archivada).length
+                        : id === 'todas' ? todas.filter(x => !x.archivada).length
+                        : todas.filter(x => !x.archivada && estado(x) === id).length;
                     return `<button class="${sel === id ? 'activo' : ''}"
                         onclick="app.filtrarNotas('${id}')">${sel === id ? '✓ ' : ''}${txt} ${n}</button>`;
                 }).join('');
         }
-        const pend = this._notas.filter(n => estado(n) === 'pendiente').length;
+        const pend = todas.filter(n => !n.archivada && estado(n) === 'pendiente').length;
         const cnt = document.getElementById('ntCnt');
         if (cnt) cnt.textContent = pend ? `${pend} sin ver` : 'al día';
-        const lista = this._notas.filter(n => sel === 'todas' || estado(n) === sel);
+        const lista = sel === 'archivadas' ? todas.filter(n => n.archivada)
+            : todas.filter(n => !n.archivada && (sel === 'todas' || estado(n) === sel));
         if (!lista.length) {
-            cont.innerHTML = `<div class="nt-vacio">${this._notas.length
-                ? 'Ninguna nota en este grupo.' : 'Todavía no hay notas.'}</div>`;
+            cont.innerHTML = `<div class="nt-vacio">${todas.length
+                ? 'Ninguna conversación en este grupo.' : 'Todavía no hay conversaciones.'}</div>`;
             return;
         }
+        const etiqueta = { ok: 'Aceptada', no: 'Denegada', pendiente: 'Pendiente', mias: 'Enviada' };
         cont.innerHTML = lista.map(n => {
+            const ultimo = this._ultimoMensaje(n);
             const e = estado(n);
-            return `<div class="nt-card ${e}">
-                <div class="nt-top">
+            const q = esc(n.id).replace(/'/g, "\\'");
+            return `<div class="cv-card ${e === 'mias' ? 'gestor' : e === 'pendiente' ? '' : e}${
+                    n.archivada ? ' archivada' : ''}" onclick="app.abrirHilo('${q}')">
+                <div class="cv-top">
                     <span class="nt-num">${esc(n.conductor) || '—'}</span>
-                    <span class="nt-nom">${n.de === 'gestor' ? '→ ' : ''}${esc(n.nombre) || esc(n.email)}</span>
-                    <span class="nt-fecha">${esc(this._fechaNota(n.creado))}</span>
+                    <span class="cv-quien">${e === 'mias' ? '→ ' : ''}${esc(n.nombre) || esc(n.email)}</span>
+                    <span class="cv-fecha">${esc(this._horaCorta(ultimo?.en || n.creado))}</span>
                 </div>
-                <div class="nt-cuerpo">${esc(n.texto)}</div>
-                ${this._pintarAdjuntos(n.adjuntos)}
-                ${(n.respuesta?.texto || n.respuesta?.adjuntos?.length) ? `<div class="nt-resp">
-                    <div class="nt-resp-quien">${esc(n.respuesta.gestor) || 'Gestión'} · ${
-                        esc(this._fechaNota(n.respuesta.en))}</div>
-                    <div class="nt-resp-txt">${esc(n.respuesta.texto)}</div>
-                    ${this._pintarAdjuntos(n.respuesta.adjuntos)}
-                </div>` : ''}
-                ${n.de === 'gestor' ? '' : `<div class="nt-acciones">
-                    <button class="nt-btn si${e === 'ok' ? ' on' : ''}"
-                        onclick="app._estadoNota('${esc(n.id)}','${e === 'ok' ? 'pendiente' : 'ok'}')">✅</button>
-                    <button class="nt-btn no${e === 'no' ? ' on' : ''}"
-                        onclick="app._estadoNota('${esc(n.id)}','${e === 'no' ? 'pendiente' : 'no'}')">❌</button>
-                    <button class="nt-btn" onclick="app._responderNota('${esc(n.id)}')">💬 Responder</button>
-                </div>`}
+                <div class="cv-ultimo">${ultimo ? esc(
+                    (this._esMiMensaje(ultimo, n) ? 'Tú: ' : '') + (ultimo.texto || '📎 Adjunto')) : ''}</div>
+                <div class="cv-pie">
+                    <span class="cv-cnt">${this._mensajesDe(n).length} mensaje${
+                        this._mensajesDe(n).length === 1 ? '' : 's'}</span>
+                    <span class="cv-cnt">${etiqueta[e]}</span>
+                    <span class="cv-acc" onclick="event.stopPropagation()">
+                        <button onclick="app._archivarHilo('${q}',${!n.archivada})">${
+                            n.archivada ? 'Recuperar' : 'Archivar'}</button>
+                        <button class="borrar" onclick="app._borrarHilo('${q}')">Borrar</button>
+                    </span>
+                </div>
             </div>`;
         }).join('');
     },
@@ -2412,6 +2416,9 @@ const app = {
                            'X-User-Email': this.usuarioActual?.email || '' },
                 body: JSON.stringify({ texto, para: this._notaPara,
                     gestor: this._nombreGestor(),
+                    // Para que el hilo se titule con su nombre, no con su correo
+                    nombre: (this._conductores?.[this._notaPara]?.nombre) || '',
+                    conductor: (this._conductores?.[this._notaPara]?.conductor) || '',
                     adjuntos: this._adjuntos.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos })) })
             });
             const data = await r.json();
@@ -2423,60 +2430,164 @@ const app = {
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
-    async _patchNota(cuerpo, mensaje) {
+    // ── Conversaciones ───────────────────────────────────────────────────────
+    // Una nota es un hilo: se abre, se lee entero y se contesta dentro, como
+    // en cualquier chat. Se puede archivar para quitarla de en medio sin
+    // perderla, o borrarla del todo.
+
+    _hiloAbierto: null,
+
+    _mensajesDe(n) { return Array.isArray(n?.mensajes) ? n.mensajes : []; },
+
+    _ultimoMensaje(n) {
+        const m = this._mensajesDe(n);
+        return m.length ? m[m.length - 1] : null;
+    },
+
+    // Alinear a la derecha lo que he escrito yo
+    _esMiMensaje(m, n) {
+        if (true) return m.de === 'gestor';
+        const mio = (this.usuarioActual?.email || '').toLowerCase();
+        if ((m.de || '').toLowerCase() === mio) return true;
+        return m.de === 'trabajador' && n.tipo !== 'companero'
+            && (n.email || '').toLowerCase() === mio;
+    },
+
+    _tituloHilo(n) {
+        if (n.tipo === 'companero') {
+            const mio = (this.usuarioActual?.email || '').toLowerCase();
+            const yoEmpecé = (n.deEmail || '').toLowerCase() === mio;
+            return yoEmpecé ? (n.nombre || n.email) : (n.deNombre || n.deEmail);
+        }
+        if (true) return `${n.conductor ? n.conductor + ' · ' : ''}${n.nombre || n.email}`;
+        return 'Gestión';
+    },
+
+    abrirHilo(id) {
+        const n = (this._notas || []).find(x => x.id === id);
+        if (!n) return;
+        this._hiloAbierto = id;
+        this._adjuntos = [];
+        this._renderAdjuntos();
+        document.getElementById('hiloTexto').value = '';
+        document.getElementById('hiloQuien').textContent = this._tituloHilo(n);
+        this._renderHilo();
+        document.getElementById('hiloModal').classList.add('show');
+        if (this.darkMode) document.getElementById('hiloModalContent').classList.add('dark');
+    },
+
+    _renderHilo() {
+        const n = (this._notas || []).find(x => x.id === this._hiloAbierto);
+        if (!n) return;
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const cont = document.getElementById('hiloMensajes');
+        cont.innerHTML = this._mensajesDe(n).map(m => {
+            const mio = this._esMiMensaje(m, n);
+            const adj = (m.adjuntos || []).map(a => a.tipo?.startsWith('image/')
+                ? `<img src="${esc(a.datos)}" onclick="app._verFoto('${esc(a.datos)}')">`
+                : `<a href="${esc(a.datos)}" download="${esc(a.nombre)}">📎 ${esc(a.nombre)}</a>`).join('');
+            // Sin saltos ni sangría dentro del globo: el texto va con
+            // pre-wrap, así que la propia plantilla se vería como líneas en
+            // blanco.
+            return `<div class="bub ${mio ? 'mio' : 'suyo'}">`
+                + (mio ? '' : `<div class="bub-autor">${esc(m.autor) || (m.de === 'gestor' ? 'Gestión' : '')}</div>`)
+                + `<span class="bub-txt">${esc(m.texto)}</span>${adj}`
+                + `<div class="bub-hora">${esc(this._horaCorta(m.en))}</div></div>`;
+        }).join('') || '<div class="nt-vacio">Sin mensajes</div>';
+        cont.scrollTop = cont.scrollHeight;
+        this._renderPieHilo(n);
+    },
+
+    _horaCorta(iso) {
+        const d = new Date(iso);
+        return isNaN(d) ? '' : d.toLocaleString('es-ES',
+            { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    },
+
+    _renderPieHilo(n) {
+        const pie = document.getElementById('hiloPie');
+        if (!pie) return;
+        const esc = t => String(t || '').replace(/'/g, "\\'");
+        const botones = [];
+        if (true && n.tipo !== 'companero') {
+            const e = ['ok', 'no'].includes(n.estado) ? n.estado : 'pendiente';
+            botones.push(`<button class="modal-btn modal-btn-cancel" style="flex:0 0 auto;padding:10px 12px;"
+                onclick="app._estadoNota('${esc(n.id)}','${e === 'ok' ? 'pendiente' : 'ok'}')">${e === 'ok' ? '✅' : '☑️'}</button>`);
+            botones.push(`<button class="modal-btn modal-btn-cancel" style="flex:0 0 auto;padding:10px 12px;"
+                onclick="app._estadoNota('${esc(n.id)}','${e === 'no' ? 'pendiente' : 'no'}')">${e === 'no' ? '❌' : '✖️'}</button>`);
+        }
+        botones.push(`<button class="modal-btn modal-btn-confirm" onclick="app._responderHilo()">Enviar</button>`);
+        pie.innerHTML = botones.join('');
+    },
+
+    async _responderHilo() {
+        const campo = document.getElementById('hiloTexto');
+        const texto = (campo.value || '').trim();
+        if (!texto && !this._adjuntos.length) { this._mostrarToast('Escribe algo o adjunta un archivo', 2500); return; }
         try {
             const r = await fetch(this.NOTAS_URL, {
-                method: 'PATCH',
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json',
-                           'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify(cuerpo)
+                           'X-User-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ id: this._hiloAbierto, texto,
+                    adjuntos: this._adjuntos.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos })),
+                    ...(true ? { gestor: this._nombreGestor() }
+                        : { nombre: this.usuarioActual?.name || '' }) })
             });
             const data = await r.json();
-            if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return false; }
-            this._notas = this._notas.map(n => n.id === data.id ? data : n);
+            if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return; }
+            campo.value = '';
+            this._adjuntos = [];
+            this._renderAdjuntos();
+            this._notas = this._notas.map(x => x.id === data.id ? data : x);
+            this._renderHilo();
             this._renderNotasGestor();
-            if (mensaje) this._mostrarToast(mensaje, 2500);
-            return true;
-        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); return false; }
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
+    },
+
+    async _tocarConversacion(id, cuerpo, mensaje, borrar) {
+        try {
+            const r = await fetch(this.NOTAS_URL, {
+                method: borrar ? 'DELETE' : 'PATCH',
+                headers: { 'Content-Type': 'application/json',
+                           'X-User-Email': this.usuarioActual?.email || '',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ id, ...cuerpo })
+            });
+            const data = await r.json();
+            if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return; }
+            this._notas = borrar ? this._notas.filter(x => x.id !== id)
+                                 : this._notas.map(x => x.id === id ? data : x);
+            if (borrar && this._hiloAbierto === id) {
+                document.getElementById('hiloModal').classList.remove('show');
+            }
+            this._renderNotasGestor();
+            this._mostrarToast(mensaje, 2500);
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
+    },
+
+    _archivarHilo(id, archivada) {
+        return this._tocarConversacion(id, { archivada },
+            archivada ? '📥 Archivada' : 'Devuelta a la bandeja');
+    },
+
+    _borrarHilo(id) {
+        if (!confirm('¿Borrar esta conversación entera? No se puede deshacer.')) return;
+        return this._tocarConversacion(id, {}, '🗑️ Conversación borrada', true);
     },
 
     _estadoNota(id, estado) {
         const txt = { ok: '✅ Aceptada', no: '❌ Denegada', pendiente: 'Vuelve a pendiente' };
-        return this._patchNota({ id, estado }, txt[estado]);
-    },
-
-    _responderNota(id) {
-        const n = this._notas.find(x => x.id === id);
-        if (!n) return;
-        this._notaRespondiendo = id;
-        this._notaPara = null;
-        this._adjuntos = (n.respuesta?.adjuntos || []).map(a => ({ ...a }));
-        this._renderAdjuntos();
-        document.getElementById('respTitulo').textContent = '💬 Responder';
-        document.getElementById('respQuien').textContent =
-            `${n.conductor ? n.conductor + ' · ' : ''}${n.nombre || n.email}`;
-        document.getElementById('respOriginal').textContent = n.texto;
-        document.getElementById('respTexto').value = n.respuesta?.texto || '';
-        document.getElementById('respFirma').textContent =
-            `Firmarás como ${this._nombreGestor()}.`;
-        document.getElementById('respModal').classList.add('show');
-        if (this.darkMode) document.getElementById('respModalContent').classList.add('dark');
+        return this._tocarConversacion(id, { estado }, txt[estado]);
     },
 
     _nombreGestor() {
         return this.usuarioActual?.name || this.usuarioActual?.email || 'Gestión';
     },
 
-    async _guardarRespuesta() {
-        if (this._notaPara) return this._enviarNotaAGestor();
-        const texto = (document.getElementById('respTexto').value || '').trim();
-        document.getElementById('respModal').classList.remove('show');
-        const adjuntos = this._adjuntos.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos }));
-        await this._patchNota({ id: this._notaRespondiendo, respuesta: texto,
-            gestor: this._nombreGestor(), adjuntos },
-            (texto || adjuntos.length) ? '💬 Respuesta enviada' : 'Respuesta quitada');
-        this._adjuntos = [];
-    },
+    // Este cuadro ya solo abre conversaciones nuevas; contestar se hace
+    // dentro del hilo, como en cualquier chat.
+    _guardarRespuesta() { return this._enviarNotaAGestor(); },
 
     // ── Trabajadores del cuadrante ───────────────────────────────────────────
     // La misma gente que la pestaña de trabajadores, pero en una fila por

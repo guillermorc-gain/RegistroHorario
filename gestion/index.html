@@ -359,6 +359,37 @@
         .foto-visor img{max-width:100%;max-height:100%;border-radius:8px;}
         .nt-card.degestor{border-left-color:var(--g1);}
         .nt-estado.degestor{background:var(--g1);}
+        .cv-card{background:white;border-radius:12px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);border-left:4px solid #bdc3c7;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+        .cv-card.ok{border-left-color:#27ae60;} .cv-card.no{border-left-color:#e74c3c;}
+        .cv-card.companero{border-left-color:#8e44ad;} .cv-card.gestor{border-left-color:var(--g1);}
+        .cv-card.archivada{opacity:.6;}
+        .cv-top{display:flex;align-items:center;gap:7px;margin-bottom:4px;}
+        .cv-quien{flex:1;min-width:0;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .cv-fecha{font-size:10px;font-weight:700;color:#95a5a6;flex-shrink:0;}
+        .cv-ultimo{font-size:12.5px;color:#7f8c8d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .cv-pie{display:flex;align-items:center;gap:6px;margin-top:7px;}
+        .cv-cnt{font-size:9.5px;font-weight:800;background:#eef1f6;color:#7f8c8d;border-radius:9px;padding:2px 7px;}
+        .cv-acc{margin-left:auto;display:flex;gap:5px;}
+        .cv-acc button{border:1.5px solid #dfe4ea;background:transparent;border-radius:7px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;color:#7f8c8d;}
+        .cv-acc button.borrar{color:#e74c3c;}
+        .hilo{display:flex;flex-direction:column;gap:8px;padding:12px 14px;max-height:48vh;overflow-y:auto;}
+        .bub{max-width:82%;flex-shrink:0;padding:8px 11px;border-radius:13px;font-size:13.5px;line-height:1.35;word-break:break-word;}
+        .bub-txt{white-space:pre-wrap;}
+        .bub.mio{align-self:flex-end;background:var(--g1);color:#fff;border-bottom-right-radius:4px;}
+        .bub.suyo{align-self:flex-start;background:#eef1f6;color:#2c3e50;border-bottom-left-radius:4px;}
+        .bub-autor{font-size:10px;font-weight:800;opacity:.75;margin-bottom:2px;}
+        .bub-hora{font-size:9.5px;opacity:.65;margin-top:3px;text-align:right;}
+        .bub img{max-width:100%;border-radius:8px;margin-top:5px;cursor:pointer;display:block;}
+        .bub a{display:inline-flex;align-items:center;gap:5px;margin-top:5px;font-size:11.5px;font-weight:700;color:inherit;text-decoration:underline;}
+        .responder{display:flex;flex-direction:column;gap:7px;padding:10px 14px;border-top:1px solid #efefef;}
+        .responder textarea{border:1.5px solid #dfe4ea;border-radius:10px;padding:9px;font-family:inherit;font-size:13.5px;resize:vertical;color:#2c3e50;background:#fff;}
+        .app-content.dark .cv-card,.modal-card.dark .cv-card{background:#1e2a3a;}
+        .app-content.dark .cv-quien,.modal-card.dark .cv-quien{color:#e0e0e0;}
+        .app-content.dark .cv-cnt{background:#16202e;color:#a0a0a0;}
+        .app-content.dark .cv-acc button,.modal-card.dark .cv-acc button{border-color:#2d3561;}
+        .modal-card.dark .bub.suyo{background:#16202e;color:#e0e0e0;}
+        .modal-card.dark .responder{border-color:#2d3561;}
+        .modal-card.dark .responder textarea{background:#16202e;border-color:#2d3561;color:#e0e0e0;}
         .nt-vacio{padding:26px 16px;text-align:center;font-size:12.5px;color:#95a5a6;}
         .be-badge2{font-size:9px;font-weight:800;background:#7f8c8d;color:#fff;padding:2px 6px;border-radius:9px;flex-shrink:0;}
         .cond-filtros{display:flex;gap:6px;overflow-x:auto;padding:2px 0 9px;}
@@ -1577,6 +1608,28 @@
             <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('revModal').classList.remove('show')">Cancelar</button>
             <button class="modal-btn modal-btn-confirm" onclick="app._guardarRevisiones()">Guardar</button>
         </div>
+    </div>
+</div>
+
+<!-- Conversación -->
+<div class="modal" id="hiloModal">
+    <div class="modal-card" id="hiloModalContent">
+        <div class="modal-header">
+            <h3 id="hiloQuien">Conversación</h3>
+            <button class="modal-close" onclick="document.getElementById('hiloModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div id="hiloMensajes" class="hilo"></div>
+            <div class="responder">
+                <textarea id="hiloTexto" rows="2" maxlength="500" placeholder="Escribe tu respuesta…"></textarea>
+                <div class="adj-barra">
+                    <button class="adj-btn" onclick="app._elegirAdjunto('foto')">📷 Foto</button>
+                    <button class="adj-btn" onclick="app._elegirAdjunto('archivo')">📎 Archivo</button>
+                </div>
+                <div id="adjLista" class="adj-lista"></div>
+            </div>
+        </div>
+        <div class="modal-footer" id="hiloPie"></div>
     </div>
 </div>
 
