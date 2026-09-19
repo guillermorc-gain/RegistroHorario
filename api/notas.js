@@ -18,9 +18,9 @@ const MAX_NOTAS    = 400;   // las más viejas se van cayendo
 // dejaban de entrar mensajes —se guardaban en la app y desaparecían al
 // recargar— sin que nada lo dijera. Con base de datos eso no pasa y caben
 // adjuntos de verdad.
-const MAX_ADJUNTOS = 3;
 const EN_BASE = () => hayBaseDeDatos();
-const MAX_ADJUNTO = () => (EN_BASE() ? 600 : 380) * 1024;
+// Solo cuenta para las fotos que se mandaron cuando se podía: mientras no
+// quepan, las conversaciones viejas las van soltando.
 const TOTAL_ADJUNTOS = () => EN_BASE() ? 12 * 1024 * 1024 : 700 * 1024;
 
 const ghHeaders = () => ({
@@ -87,18 +87,10 @@ async function guardarConReintento(mutar, mensaje) {
 
 const texto = t => String(t ?? '').trim().slice(0, MAX_TEXTO);
 
-function limpiarAdjuntos(a) {
-  if (!Array.isArray(a)) return [];
-  return a
-    .filter(x => typeof x?.datos === 'string' && /^data:[\w.+-]+\/[\w.+-]+;base64,/.test(x.datos))
-    .filter(x => x.datos.length <= MAX_ADJUNTO())
-    .slice(0, MAX_ADJUNTOS)
-    .map(x => ({
-      nombre: String(x.nombre || 'adjunto').slice(0, 80),
-      tipo:   String(x.tipo || '').slice(0, 60),
-      datos:  x.datos,
-    }));
-}
+// Ya no se aceptan adjuntos nuevos: solo texto. Lo que se mandó cuando sí se
+// podía se sigue leyendo y enseñando, hasta que el recorte por tamaño se lo
+// lleve; de ahí que sigan estando lo de medirlos y soltarlos.
+
 
 const pesaAdjuntos = n => (n.mensajes || [])
   .flatMap(m => m.adjuntos || [])
@@ -260,8 +252,8 @@ export default async function handler(req, res) {
       if (!quien || !quien.includes('@')) return res.status(400).json({ error: 'Falta el usuario' });
       const b = req.body || {};
       const cuerpo = texto(b.texto);
-      const adjuntos = limpiarAdjuntos(b.adjuntos);
-      if (!cuerpo && !adjuntos.length) return res.status(400).json({ error: 'La nota está vacía' });
+      const adjuntos = [];
+      if (!cuerpo) return res.status(400).json({ error: 'La nota está vacía' });
 
       // Con id se contesta dentro de la conversación, que es lo que hace un
       // chat: el mensaje se añade al hilo en vez de abrir uno nuevo. Pueden

@@ -2305,90 +2305,6 @@ const app = {
         v.classList.add('show');
     },
 
-    // ── Adjuntos ─────────────────────────────────────────────────────────────
-    // Las fotos se reducen antes de mandarlas: a 1600px de lado largo se ven
-    // bien tanto en el móvil como en un ordenador, y la calidad va bajando
-    // hasta que entren en el tope. Un archivo que no sea imagen no se puede
-    // encoger, así que se rechaza si no cabe.
-
-    // Lo que acepta el servidor guardando en el repo. Con base de datos
-    // cabe más, pero mejor una sola medida que no falle en ningún caso.
-    MAX_ADJUNTO: 380 * 1024,
-    LADO_FOTO: 1600,
-    _adjuntos: [],
-
-    _elegirAdjunto(cual) {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = cual === 'foto' ? 'image/*' : '*/*';
-        if (cual === 'foto') input.multiple = true;
-        input.onchange = async (e) => {
-            for (const file of [...e.target.files]) {
-                if (this._adjuntos.length >= 3) { this._mostrarToast('Máximo 3 adjuntos', 3000); break; }
-                try { this._adjuntos.push(await this._prepararAdjunto(file)); }
-                catch (err) { this._mostrarToast('❌ ' + err.message, 4500); }
-            }
-            this._renderAdjuntos();
-        };
-        input.click();
-    },
-
-    _prepararAdjunto(file) {
-        return new Promise((resolve, reject) => {
-            const lector = new FileReader();
-            lector.onerror = () => reject(new Error('No se ha podido leer el archivo'));
-            lector.onload = (ev) => {
-                const datos = ev.target.result;
-                if (!file.type.startsWith('image/')) {
-                    if (datos.length > this.MAX_ADJUNTO) {
-                        reject(new Error(`${file.name} pesa demasiado (máx. ${
-                            Math.round(this.MAX_ADJUNTO / 1024 * 0.75)} KB)`));
-                        return;
-                    }
-                    resolve({ nombre: file.name, tipo: file.type || 'application/octet-stream', datos });
-                    return;
-                }
-                const img = new Image();
-                img.onerror = () => reject(new Error('No se ha podido abrir la imagen'));
-                img.onload = () => {
-                    const escala = Math.min(1, this.LADO_FOTO / Math.max(img.width, img.height));
-                    const w = Math.round(img.width * escala), h = Math.round(img.height * escala);
-                    const lienzo = document.createElement('canvas');
-                    lienzo.width = w; lienzo.height = h;
-                    lienzo.getContext('2d').drawImage(img, 0, 0, w, h);
-                    let calidad = 0.88;
-                    let salida = lienzo.toDataURL('image/jpeg', calidad);
-                    while (salida.length > this.MAX_ADJUNTO && calidad > 0.4) {
-                        calidad -= 0.07;
-                        salida = lienzo.toDataURL('image/jpeg', calidad);
-                    }
-                    if (salida.length > this.MAX_ADJUNTO) { reject(new Error('La foto sigue siendo enorme')); return; }
-                    resolve({ nombre: file.name.replace(/\.[^.]+$/, '') + '.jpg',
-                              tipo: 'image/jpeg', datos: salida,
-                              info: `${w}×${h} · ${Math.round(salida.length / 1024 * 0.75)} KB` });
-                };
-                img.src = datos;
-            };
-            lector.readAsDataURL(file);
-        });
-    },
-
-    // Hay una lista de adjuntos en el cuadro de escribir y otra dentro del
-    // hilo. Se pintan las dos: buscar por id devolvía siempre la primera, así
-    // que al adjuntar desde el hilo la miniatura se dibujaba en la de detrás y
-    // parecía que no se había seleccionado nada.
-    _renderAdjuntos() {
-        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-        const html = this._adjuntos.map((a, k) => `<div class="adj-chip">
-            ${a.tipo.startsWith('image/') ? `<img src="${a.datos}">` : '📎'}
-            <span>${esc(a.nombre)}${a.info ? ` · ${esc(a.info)}` : ''}</span>
-            <button onclick="app._quitarAdjunto(${k})">×</button>
-        </div>`).join('');
-        document.querySelectorAll('.adj-lista').forEach(c => { c.innerHTML = html; });
-    },
-
-    _quitarAdjunto(k) { this._adjuntos.splice(k, 1); this._renderAdjuntos(); },
-
     // ── Escribir a un trabajador ─────────────────────────────────────────────
     nuevaNotaGestor() {
         document.getElementById('destBuscar').value = '';
@@ -2419,20 +2335,18 @@ const app = {
         // Se reutiliza el cuadro de responder: es el mismo diálogo
         this._notaRespondiendo = null;
         this._notaPara = email;
-        this._adjuntos = [];
         document.getElementById('respTitulo').textContent = '✉️ Escribir a';
         document.getElementById('respQuien').textContent = this._quienEs(u, email);
         document.getElementById('respOriginal').textContent = '';
         document.getElementById('respTexto').value = '';
         document.getElementById('respFirma').textContent = `Firmarás como ${this._nombreGestor()}.`;
-        this._renderAdjuntos();
         document.getElementById('respModal').classList.add('show');
         if (this.darkMode) document.getElementById('respModalContent').classList.add('dark');
     },
 
     async _enviarNotaAGestor() {
         const texto = (document.getElementById('respTexto').value || '').trim();
-        if (!texto && !this._adjuntos.length) { this._mostrarToast('Escribe algo o adjunta un archivo', 3000); return; }
+        if (!texto) { this._mostrarToast('Escribe algo o adjunta un archivo', 3000); return; }
         document.getElementById('respModal').classList.remove('show');
         try {
             const r = await fetch(this.NOTAS_URL, {
@@ -2443,14 +2357,12 @@ const app = {
                     gestor: this._nombreGestor(),
                     // Para que el hilo se titule con su nombre, no con su correo
                     nombre: (this._conductores?.[this._notaPara]?.nombre) || '',
-                    conductor: (this._conductores?.[this._notaPara]?.conductor) || '',
-                    adjuntos: this._adjuntos.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos })) })
+                    conductor: (this._conductores?.[this._notaPara]?.conductor) || '' })
             });
             const data = await r.json();
             if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return; }
             this._notas = [data, ...this._notas];
-            this._adjuntos = [];
-            this._renderNotasGestor();
+                this._renderNotasGestor();
             this._mostrarToast('📨 Nota enviada', 2500);
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
@@ -2706,8 +2618,6 @@ const app = {
         if (!n) return;
         this._hiloAbierto = id;
         this._marcarLeida(id);
-        this._adjuntos = [];
-        this._renderAdjuntos();
         document.getElementById('hiloTexto').value = '';
         document.getElementById('hiloQuien').textContent = this._tituloHilo(n);
         this._renderHilo();
@@ -2770,14 +2680,13 @@ const app = {
     async _responderHilo() {
         const campo = document.getElementById('hiloTexto');
         const texto = (campo.value || '').trim();
-        if (!texto && !this._adjuntos.length) { this._mostrarToast('Escribe algo o adjunta un archivo', 2500); return; }
+        if (!texto) { this._mostrarToast('Escribe algo o adjunta un archivo', 2500); return; }
         try {
             const r = await fetch(this.NOTAS_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json',
                            'X-User-Email': this.usuarioActual?.email || '' },
                 body: JSON.stringify({ id: this._hiloAbierto, texto,
-                    adjuntos: this._adjuntos.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos })),
                     ...(true ? { gestor: this._nombreGestor() }
                         : { nombre: this.usuarioActual?.name || '' }) })
             });
@@ -2789,9 +2698,7 @@ const app = {
                 return;
             }
             campo.value = '';
-            this._adjuntos = [];
-            this._renderAdjuntos();
-            this._notas = this._notas.map(x => x.id === data.id ? data : x);
+                    this._notas = this._notas.map(x => x.id === data.id ? data : x);
             this._marcarLeida(data.id);
             this._renderHilo();
             this._renderNotasGestor();
