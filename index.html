@@ -59,6 +59,19 @@
         .app-header-right{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;min-width:0;flex:1;text-align:right;}
         .app-header-nombre{font-size:11.5px;font-weight:700;opacity:0.97;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
         .app-header-num{font-size:11px;font-weight:800;opacity:0.85;line-height:1.25;letter-spacing:0.3px;}
+        .be-compact{display:flex;align-items:center;gap:5px;padding:7px 9px;border:1.5px solid #dfe4ea;border-radius:9px;cursor:pointer;font-size:13px;font-weight:700;color:#7f8c8d;background:transparent;}
+        .app-content.dark .be-compact{border-color:#2d3561;}
+        .be-compact.active{background:#7f8c8d;border-color:#7f8c8d;color:#fff;}
+        .cuadros-btn{order:99;margin-left:auto;flex-shrink:0;border:1.5px dashed #dfe4ea;background:transparent;color:#95a5a6;border-radius:9px;padding:7px 10px;font-size:13px;cursor:pointer;font-family:inherit;}
+        .app-content.dark .cuadros-btn{border-color:#2d3561;}
+        .cu-fila{display:flex;align-items:center;gap:9px;padding:11px 16px;border-bottom:1px solid #f2f2f2;}
+        .modal-card.dark .cu-fila{border-color:#2d3561;}
+        .cu-nom{flex:1;min-width:0;font-size:13.5px;font-weight:700;color:#2c3e50;}
+        .modal-card.dark .cu-nom{color:#e0e0e0;}
+        .cu-fila.off .cu-nom{color:#95a5a6;font-weight:600;}
+        .cu-mov{border:1.5px solid #dfe4ea;background:transparent;color:#7f8c8d;border-radius:7px;width:28px;height:28px;font-size:13px;cursor:pointer;font-family:inherit;flex-shrink:0;}
+        .modal-card.dark .cu-mov{border-color:#2d3561;}
+        .cu-mov:disabled{opacity:.3;}
         .cab-lugar{cursor:pointer;-webkit-tap-highlight-color:transparent;}
         /* Verde cuando hay alguien más en el mismo sitio */
         .cab-lugar.juntos{color:#7bf1b8;opacity:1;}
@@ -230,6 +243,7 @@
         .hm-stripe-vacaciones{border-left:4px solid #16a085!important;padding-left:10px!important;}
         .hm-nota-txt{font-size:10.5px;color:#b9770e;font-weight:600;margin-top:2px;word-break:break-word;}
         .modal-card.dark .hm-nota-txt{color:#f0b429;}
+        .be-badge{display:inline-block;background:#7f8c8d;color:white;font-size:9px;font-weight:800;padding:2px 6px;border-radius:10px;letter-spacing:0.5px;vertical-align:middle;}
         .vacaciones-badge{display:inline-block;background:#16a085;color:white;font-size:9px;font-weight:800;padding:2px 6px;border-radius:10px;letter-spacing:0.5px;vertical-align:middle;}
         .noche-extra{display:none;margin-bottom:7px;padding:8px 9px;background:#fff8e1;border-radius:8px;border:1px solid #ffc107;}
         .noche-extra.visible{display:block;}
@@ -554,7 +568,7 @@
                     <div class="stat-sub">horas este mes</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">🎉 Festivos</div>
+                    <div class="stat-label" id="statFestivosLabel">🎉 Festivos</div>
                     <div class="stat-value" id="statFestivos">0</div>
                     <div class="stat-sub" id="statFestivosSub">horas del año</div>
                 </div>
@@ -612,28 +626,33 @@
                         <input type="number" id="horasInput" min="0" step="0.5" placeholder="8">
                     </div>
                 </div>
-                <div class="toggle-row">
-                    <div class="noche-compact" onclick="app.clickNocheCompact()" title="Nocturno">
+                <div class="toggle-row" id="toggleRow">
+                    <div class="noche-compact" id="cuadroNoche" data-cuadro="noche" onclick="app.clickNocheCompact()" title="Nocturno">
                         <span>🌙</span>
                         <input type="checkbox" id="nocheToggle" onclick="event.stopPropagation();app.toggleNoche()">
                     </div>
-                    <div class="pr-compact" id="prCompact" onclick="app.clickPrCompact()" title="Permiso Retribuido">
+                    <div class="pr-compact" id="prCompact" data-cuadro="pr" onclick="app.clickPrCompact()" title="Permiso Retribuido">
                         <span>PR</span>
                         <span class="pr-restantes" id="prRestantes">2</span>
                         <input type="checkbox" id="prToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#3498db;cursor:pointer;">
                     </div>
-                    <div class="festivo-compact" id="festivoCompact" onclick="app.clickFestivo()" title="Festivo">
+                    <div class="festivo-compact" id="festivoCompact" data-cuadro="festivo" onclick="app.clickFestivo()" title="Festivo">
                         <span>🎉</span>
                         <input type="checkbox" id="festivoToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#e67e22;cursor:pointer;">
                     </div>
-                    <div class="extra-compact" id="extraCompact" onclick="app.clickExtra()" title="Horas extras">
+                    <div class="extra-compact" id="extraCompact" data-cuadro="extra" onclick="app.clickExtra()" title="Horas extras">
                         <span>⏱️</span>
                         <input type="checkbox" id="extraToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#8e44ad;cursor:pointer;">
                     </div>
-                    <div class="vacaciones-compact" id="vacacionesCompact" onclick="app.clickVacaciones()" title="Vacaciones (registra 0 horas)">
+                    <div class="vacaciones-compact" id="vacacionesCompact" data-cuadro="vac" onclick="app.clickVacaciones()" title="Vacaciones (registra 0 horas)">
                         <span>🏖️</span>
                         <input type="checkbox" id="vacacionesToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#16a085;cursor:pointer;">
                     </div>
+                    <div class="be-compact" id="beCompact" data-cuadro="be" onclick="app.clickBe()" title="Baja (registra 0 horas)">
+                        <span>🩺</span>
+                        <input type="checkbox" id="beToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#7f8c8d;cursor:pointer;">
+                    </div>
+                    <button class="cuadros-btn" onclick="app.mostrarCuadros()" title="Elegir los cuadros">⚙</button>
                 </div>
                 <div class="extra-panel" id="extraPanel">
                     <div class="extra-panel-t">¿Dónde van estas horas?</div>
@@ -1176,6 +1195,24 @@
                 <div style="flex:1;">1700 h</div><span class="jm-check" data-an="1700">✓</span>
             </div>
             <div class="jm-op jm-otra" onclick="app.elegirAnualesOtra()">Otra cantidad…</div>
+        </div>
+    </div>
+</div>
+
+<!-- Elegir y ordenar los cuadros del registro -->
+<div class="modal" id="cuadrosModal">
+    <div class="modal-card" id="cuadrosModalContent">
+        <div class="modal-header">
+            <h3>⚙ Cuadros del registro</h3>
+            <button class="modal-close" onclick="document.getElementById('cuadrosModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div class="pm-paso">Marca los que quieras ver y colócalos en el orden que prefieras.</div>
+            <div id="cuadrosLista"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" onclick="app._cuadrosPorDefecto()">Por defecto</button>
+            <button class="modal-btn modal-btn-confirm" onclick="document.getElementById('cuadrosModal').classList.remove('show')">Listo</button>
         </div>
     </div>
 </div>

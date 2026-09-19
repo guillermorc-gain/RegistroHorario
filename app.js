@@ -717,6 +717,7 @@ const app = {
     },
 
     setupUI() {
+        this._aplicarCuadros();
         this.establecerFechaHoy();
         this.actualizarFecha();
         if (this.precioExtraDefault > 0) {
@@ -907,9 +908,10 @@ const app = {
         const fecha = document.getElementById('fechaInput').value;
         const esFestivo      = this.festivoActivo;
         const esVacaciones   = this.vacacionesActivo;
-        // A holiday or a vacation day may be registered with no hours worked;
-        // anything else needs hours.
-        if (!fecha || (!esFestivo && !esVacaciones && (isNaN(parseFloat(horasRaw)) || horas <= 0))) {
+        const esBaja         = this.bajaActiva;
+        // A holiday, a vacation day or a sick day may be registered with no
+        // hours worked; anything else needs hours.
+        if (!fecha || (!esFestivo && !esVacaciones && !esBaja && (isNaN(parseFloat(horasRaw)) || horas <= 0))) {
             alert('❌ Introduce fecha y horas válidas'); return;
         }
         if (horas < 0) { alert('❌ Las horas no pueden ser negativas'); return; }
@@ -944,7 +946,8 @@ const app = {
                 ...(esFestivo ? { festivo: true } : {}),
                 ...(this.puestoTrabajo ? { puesto: this.puestoTrabajo } : {}),
                 ...(esExtra ? { extraManual: true, extraDestino } : {}),
-                ...(esVacaciones ? { vacaciones: true } : {})
+                ...(esVacaciones ? { vacaciones: true } : {}),
+                ...(esBaja ? { be: true } : {})
             };
             if (esPR && this._prUsados(datos.historial) > this.PR_ANUALES) {
                 delete datos.historial[registroId];
@@ -1432,6 +1435,23 @@ const app = {
         this.festivoActivo = !this.festivoActivo;
         document.getElementById('festivoCompact').classList.toggle('active', this.festivoActivo);
         document.getElementById('festivoToggle').checked = this.festivoActivo;
+        // Jornada completa: venir un festivo o un libre son sus horas de
+        // jornada, pero solo como propuesta. Si escribe otras, mandan las suyas.
+        const campo = document.getElementById('horasInput');
+        if (this.festivoActivo && this._esJornadaCompleta() && campo
+            && !(parseFloat(campo.value) > 0)) {
+            campo.value = this.jornadaHoras;
+        }
+    },
+
+    // El título del cuadro solo habla de días libres a quien puede trabajarlos
+    _actualizarTituloFestivos() {
+        const el = document.getElementById('statFestivosLabel');
+        if (el) el.textContent = this._esJornadaCompleta()
+            ? '🎉 Festivos/días libres' : '🎉 Festivos';
+        const caja = document.getElementById('festivoCompact');
+        if (caja) caja.title = this._esJornadaCompleta()
+            ? 'Festivo o día libre trabajado' : 'Festivo';
     },
 
     // ── Vacaciones ───────────────────────────────────────────────────────────
@@ -1529,6 +1549,108 @@ const app = {
                 <button class="vac-del" onclick="app.borrarVacaciones(${i})">×</button>
             </div>`;
         }).join('');
+    },
+
+    // ── Cuadros del registro ─────────────────────────────────────────────────
+    // Cada uno se puede quitar y se pueden colocar en el orden que se quiera.
+    // El orden se aplica con CSS, así que los cuadros siguen en su sitio en el
+    // HTML y sus manejadores no cambian.
+
+    CUADROS: [
+        { id: 'noche',   el: 'cuadroNoche',       nom: '🌙 Nocturnas' },
+        { id: 'pr',      el: 'prCompact',         nom: 'PR · permiso retribuido' },
+        { id: 'festivo', el: 'festivoCompact',    nom: '🎉 Festivos' },
+        { id: 'extra',   el: 'extraCompact',      nom: '⏱️ Horas extras' },
+        { id: 'vac',     el: 'vacacionesCompact', nom: '🏖️ Vacaciones' },
+        { id: 'be',      el: 'beCompact',         nom: '🩺 BE · baja' },
+    ],
+
+    _configCuadros() {
+        let c = null;
+        try { c = JSON.parse(localStorage.getItem('cuadrosRegistro') || 'null'); } catch (_) {}
+        const todos = this.CUADROS.map(x => x.id);
+        // Lo guardado manda, pero un cuadro nuevo no debe quedarse fuera por
+        // haber configurado esto antes de que existiera.
+        const orden = [...(c?.orden || []).filter(id => todos.includes(id))];
+        todos.forEach(id => { if (!orden.includes(id)) orden.push(id); });
+        return { orden, ocultos: (c?.ocultos || []).filter(id => todos.includes(id)) };
+    },
+
+    _guardarCuadros(c) {
+        localStorage.setItem('cuadrosRegistro', JSON.stringify(c));
+        this._aplicarCuadros();
+        this._renderCuadros();
+    },
+
+    _aplicarCuadros() {
+        const { orden, ocultos } = this._configCuadros();
+        orden.forEach((id, i) => {
+            const def = this.CUADROS.find(x => x.id === id);
+            const el = document.getElementById(def?.el) || document.querySelector(`[data-cuadro="${id}"]`);
+            if (!el) return;
+            el.style.order = i;
+            el.hidden = ocultos.includes(id);
+        });
+    },
+
+    mostrarCuadros() {
+        this._renderCuadros();
+        document.getElementById('cuadrosModal').classList.add('show');
+        if (this.darkMode) document.getElementById('cuadrosModalContent').classList.add('dark');
+    },
+
+    _renderCuadros() {
+        const { orden, ocultos } = this._configCuadros();
+        document.getElementById('cuadrosLista').innerHTML = orden.map((id, i) => {
+            const def = this.CUADROS.find(x => x.id === id);
+            const off = ocultos.includes(id);
+            return `<div class="cu-fila${off ? ' off' : ''}">
+                <input type="checkbox" ${off ? '' : 'checked'} onchange="app._verCuadro('${id}',this.checked)">
+                <span class="cu-nom">${def.nom}</span>
+                <button class="cu-mov" onclick="app._moverCuadro('${id}',-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
+                <button class="cu-mov" onclick="app._moverCuadro('${id}',1)" ${i === orden.length - 1 ? 'disabled' : ''}>▼</button>
+            </div>`;
+        }).join('');
+    },
+
+    _verCuadro(id, visible) {
+        const c = this._configCuadros();
+        c.ocultos = visible ? c.ocultos.filter(x => x !== id) : [...new Set([...c.ocultos, id])];
+        this._guardarCuadros(c);
+    },
+
+    _moverCuadro(id, paso) {
+        const c = this._configCuadros();
+        const i = c.orden.indexOf(id), j = i + paso;
+        if (i < 0 || j < 0 || j >= c.orden.length) return;
+        [c.orden[i], c.orden[j]] = [c.orden[j], c.orden[i]];
+        this._guardarCuadros(c);
+    },
+
+    _cuadrosPorDefecto() {
+        localStorage.removeItem('cuadrosRegistro');
+        this._aplicarCuadros();
+        this._renderCuadros();
+    },
+
+    // ── Baja (BE) ────────────────────────────────────────────────────────────
+    // Un día de baja se apunta sin horas, y cuenta como jornada hecha contra el
+    // objetivo anual: media jornada 3,5h y jornada completa las suyas.
+    HORAS_BAJA: 3.5,
+    bajaActiva: false,
+
+    _horasBaja() {
+        return this._esJornadaCompleta() ? (this.jornadaHoras || 7) : this.HORAS_BAJA;
+    },
+
+    clickBe() {
+        this.bajaActiva = !this.bajaActiva;
+        document.getElementById('beCompact').classList.toggle('active', this.bajaActiva);
+        document.getElementById('beToggle').checked = this.bajaActiva;
+        if (this.bajaActiva) {
+            document.getElementById('horasInput').value = '0';
+            this._mostrarToast(`🩺 Día de baja: cuentan ${String(this._horasBaja()).replace('.', ',')}h`, 3000);
+        }
     },
 
     clickVacaciones() {
@@ -1805,6 +1927,8 @@ const app = {
     // sábado le suma 3,5h encima de la semana entera = 21h.
     _horasEfectivas(fecha, reg) {
         const h = parseFloat(reg.horas) || 0;
+        // Un día de baja sin horas cuenta como jornada hecha contra el objetivo
+        if (reg.be && h === 0) return this._horasBaja();
         if (reg.festivo && h === 0) return this.jornadaHoras;
         return h;
     },
@@ -1816,10 +1940,13 @@ const app = {
     // Single source of truth for all hour totals, derived from the history
     _calcTotales(historial) {
         let anual = 0, extrasManual = 0, festivo = 0, diasFestivos = 0, diasExtra = 0;
+        const completa = this._esJornadaCompleta();
         Object.entries(historial || {}).forEach(([id, r]) => {
             const h = parseFloat(r.horas) || 0;
             // Venir a trabajar un festivo o un libre se cobra como día extra
-            if (h > 0 && (r.festivo || r.extraDestino === 'extras')) diasExtra++;
+            // El día extra solo lo cobra la jornada completa: la media jornada
+            // no trabaja festivos ni libres, se le descuentan y ya está.
+            if (h > 0 && completa && (r.festivo || r.extraDestino === 'extras')) diasExtra++;
             if (r.extraDestino === 'extras') { extrasManual += h; return; }
             const efectivas = this._horasEfectivas(this._fechaDeId(id), r);
             if (r.festivo) { festivo += efectivas; diasFestivos++; }
@@ -2123,6 +2250,9 @@ const app = {
         document.getElementById('extraCompact')?.classList.remove('active');
         const et = document.getElementById('extraToggle'); if (et) et.checked = false;
         document.getElementById('extraPanel')?.classList.remove('visible');
+        this.bajaActiva = false;
+        document.getElementById('beCompact')?.classList.remove('active');
+        const bt = document.getElementById('beToggle'); if (bt) bt.checked = false;
         // Horas del horario recuperado, sin activar nada nocturno
         document.getElementById('horasInput').value = (lastInicio && lastFin)
             ? this._horasEntre(lastInicio, lastFin) : '';
@@ -2216,6 +2346,8 @@ const app = {
             const prBadge     = reg.pr      ? `<span class="pr-badge">PR</span>` : '';
             const festivoBadge= reg.festivo ? `<span class="festivo-badge">🎉 Festivo</span>` : '';
             const vacBadge    = reg.vacaciones ? `<span class="vacaciones-badge">🏖️ Vacaciones</span>` : '';
+            const beBadge     = reg.be ? `<span class="be-badge">🩺 BE ${
+                String(this._horasBaja()).replace('.', ',')}h</span>` : '';
             const extraBadge  = reg.extraManual
                 ? `<span class="extra-badge">⏱️ ${reg.extraDestino === 'extras' ? 'Extra' : 'Anual'}</span>` : '';
             li.innerHTML = `
@@ -2225,7 +2357,7 @@ const app = {
                         ${horario}
                         <span style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;padding:3px 9px;border-radius:20px;font-weight:700;font-size:10px;">${reg.horas}h</span>
                         ${lugarStr}
-                        ${prBadge}${festivoBadge}${extraBadge}${vacBadge}
+                        ${prBadge}${festivoBadge}${extraBadge}${vacBadge}${beBadge}
                     </div>
                     ${nocheStr}
                     ${reg.nota ? `<div class="hm-nota-txt">📝 ${reg.nota.replace(/</g,'&lt;')}</div>` : ''}
@@ -2641,6 +2773,7 @@ const app = {
                     ...(r.extraManual ? { x: r.extraDestino === 'extras' ? 1 : 2 } : {}),
                     ...(r.festivo ? { fe: 1 } : {}),
                     ...(r.vacaciones ? { v: 1 } : {}),
+                    ...(r.be ? { b: 1 } : {}),
                     ...(r.pr ? { p: 1 } : {}),
                 }));
             const payload = {
@@ -2853,6 +2986,7 @@ const app = {
         // como el que hace 7h tres días—, y el grupo de libres, de la jornada
         // completa. Nunca se enseñan los dos.
         const completa = this._esJornadaCompleta();
+        this._actualizarTituloFestivos();
         const btnDias = document.getElementById('btnDiasJornada');
         if (btnDias) btnDias.hidden = completa;
         const txtDias = document.getElementById('diasJornadaDisplay');
