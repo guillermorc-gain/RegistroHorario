@@ -80,6 +80,10 @@ const app = {
     extraActivo: false,
     vacacionesActivo: false,
     jornadaHoras: parseFloat(localStorage.getItem('jornadaHoras')) || 7.5,
+    // Días de la semana que se trabaja. Vacío = todos, que es como se comportaba
+    // antes de existir este ajuste.
+    diasSemana: (() => { try { const d = JSON.parse(localStorage.getItem('diasSemana') || 'null');
+        return Array.isArray(d) ? d : null; } catch (_) { return null; } })(),
     numConductor: localStorage.getItem('numConductor') || '',
     puestoTrabajo: localStorage.getItem('puestoTrabajo') || '',
     backupFreq: localStorage.getItem('backupFreq') || 'cerrar',
@@ -688,6 +692,7 @@ const app = {
                     email: this.usuarioActual.email,
                     horasAnuales: this.horasAnualesCustom,
                 jornadaHoras: this.jornadaHoras,
+                dias:         this.diasSemana,
                 vacaciones:   this._getVacaciones(),
                 vacacionesAt: this._vacacionesAt(),
                     totales: tot,
@@ -1534,6 +1539,7 @@ const app = {
     mostrarCambiarJornada() {
         // Lo que cambia las reglas es si es media jornada o completa, así que se
         // elige entre las dos en vez de escribir un número a ojo.
+        this._volverJornada();
         document.querySelectorAll('#jornadaModal .jm-op').forEach(op => {
             const c = op.querySelector('.jm-check');
             op.classList.toggle('sel', !!c && parseFloat(c.dataset.jor) === this.jornadaHoras);
@@ -1550,13 +1556,65 @@ const app = {
         this.elegirJornada(n);
     },
 
-    async elegirJornada(n) {
+    // La media jornada no se hace todos los días, así que al elegirla se
+    // pregunta cuáles y cuántas horas en vez de darlo por supuesto.
+    _esMedia(n) { return n < this.JORNADA_COMPLETA; },
+
+    _volverJornada() {
+        document.getElementById('jornadaDias').hidden = true;
+        document.getElementById('jornadaPie').hidden = true;
+        document.querySelector('#jornadaModal .modal-body').hidden = false;
+    },
+
+    _pasoDiasJornada(n) {
+        this._jornadaTmp = n;
+        this._diasTmp = Array.isArray(this.diasSemana) ? [...this.diasSemana] : [1,2,3,4,5];
+        document.querySelector('#jornadaModal .modal-body').hidden = true;
+        document.getElementById('jornadaDias').hidden = false;
+        document.getElementById('jornadaPie').hidden = false;
+        document.getElementById('jmHoras').value = String(n).replace('.', ',');
+        this._renderSemana();
+    },
+
+    _renderSemana() {
+        const nombres = ['D','L','M','X','J','V','S'];
+        document.getElementById('jmSemana').innerHTML = [1,2,3,4,5,6,0]
+            .map(d => `<button class="${this._diasTmp.includes(d) ? 'on' : ''}"
+                onclick="app._toggleDiaSemana(${d})">${nombres[d]}</button>`).join('');
+        const h = this._leerDecimal(document.getElementById('jmHoras').value) || 0;
+        const n = this._diasTmp.length;
+        document.getElementById('jmResumen').textContent = n
+            ? `${n} día${n === 1 ? '' : 's'} a la semana · ${(n * h).toFixed(1).replace('.', ',')}h semanales`
+            : 'Marca al menos un día';
+    },
+
+    _toggleDiaSemana(d) {
+        const i = this._diasTmp.indexOf(d);
+        if (i === -1) this._diasTmp.push(d); else this._diasTmp.splice(i, 1);
+        this._renderSemana();
+    },
+
+    async _guardarDiasJornada() {
+        const h = this._leerDecimal(document.getElementById('jmHoras').value);
+        if (h === null || h <= 0) { alert('❌ Introduce un número de horas válido.'); return; }
+        if (!this._diasTmp.length) { this._mostrarToast('Marca al menos un día', 3000); return; }
+        this.diasSemana = this._diasTmp.slice().sort();
+        localStorage.setItem('diasSemana', JSON.stringify(this.diasSemana));
+        this._volverJornada();
+        await this.elegirJornada(h, true);
+    },
+
+    async elegirJornada(n, saltarPaso) {
+        if (this._esMedia(n) && !saltarPaso) return this._pasoDiasJornada(n);
         document.getElementById('jornadaModal').classList.remove('show');
-        if (n === this.jornadaHoras) return;
+        if (n === this.jornadaHoras && saltarPaso !== true) return;
         this.jornadaHoras = n;
         localStorage.setItem('jornadaHoras', String(n));
+        // La jornada completa no lleva días fijos: se trabaja lo que toque
+        if (!this._esMedia(n)) { this.diasSemana = null; localStorage.removeItem('diasSemana'); }
         this._actualizarJornadaDisplay();
         await this._guardarPreferencias(true);
+        localStorage.removeItem('resumenHuella');    // que se publique el cambio
         this.cargarDatos();
         this._mostrarToast(`✅ Jornada: ${n}h`, 2500);
     },
@@ -2482,7 +2540,7 @@ const app = {
             // hasta el día siguiente. Sin cambios no se escribe nada.
             const huella = JSON.stringify([payload.version, payload.horasMes, payload.horasTotales,
                                            payload.diasMes, payload.turno, payload.conductor, payload.horasAnuales,
-                                           payload.jornadaHoras, JSON.stringify(payload.vacaciones),
+                                           payload.jornadaHoras, JSON.stringify(payload.dias), JSON.stringify(payload.vacaciones),
                                            payload.nombre, payload.horaInicio, payload.horaFin,
                                            payload.horarioDe, jornadas.length,
                                            jornadas.length ? jornadas[jornadas.length - 1].f : '',
@@ -2629,6 +2687,8 @@ const app = {
     // jornada: hay un grupo que hace 7h tres días a la semana y va por las
     // mismas reglas que la media jornada. Lo que los separa son las anuales.
     ANUALES_COMPLETA: 1700,
+    // A partir de aquí es jornada completa; por debajo, media
+    JORNADA_COMPLETA: 7,
 
     _esJornadaCompleta() {
         return this.horasAnualesCustom >= this.ANUALES_COMPLETA;

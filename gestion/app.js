@@ -3209,6 +3209,8 @@ const app = {
             jornadaHoras: this._fictTipo === 'media' ? 3.5 : 7,
             horasAnuales: this._fictTipo === 'media' ? 777 : 1700,
             ritmo: this._fictTipo === 'media' ? 'lv' : this._fictRitmo,
+            // El ritmo de seis y dos rueda por la semana, así que no tiene días fijos
+            dias: (this._fictTipo === 'media' || this._fictRitmo === 'lv') ? [1,2,3,4,5] : null,
             jornadas,
         };
         try {
@@ -3482,10 +3484,13 @@ const app = {
                      // Unas vacaciones valen igual apuntadas como tramo por el
                      // gestor que como jornada suelta por el trabajador.
                      enVac:  this._enVacaciones(u, fecha) || !!v.j?.v,
+                     // Sin jornada y sin ese día en su semana, ese día no es
+                     // suyo: ni cubre el lugar ni tiene sentido listarlo.
+                     fueraDeSemana: !v.j && !this._trabajaEseDia(u, fecha),
                      lugar: this._lugarDe(u, fecha, v.j).trim() || SIN };
         // Quien está de vacaciones o de baja no ocupa lugar ese día, así que no
         // sale en el cuadro. Sigue en la lista de trabajadores, con su botón.
-        }).filter(x => !x.enVac && !x.enBaja);
+        }).filter(x => !x.enVac && !x.enBaja && !x.fueraDeSemana);
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
 
         // Contadores de la cabecera: quién ha trabajado ese día y quién está
@@ -4075,6 +4080,14 @@ const app = {
     _vacacionesDe(u) { return Array.isArray(u?.vacaciones) ? u.vacaciones : []; },
 
     // El día llega como YYYYMMDD y los rangos van en ISO
+    // Días de la semana que le tocan. Sin lista, se entiende que cualquiera.
+    _trabajaEseDia(u, fecha) {
+        const dias = Array.isArray(u?.dias) && u.dias.length ? u.dias : null;
+        if (!dias) return true;
+        const d = new Date(+fecha.slice(0,4), +fecha.slice(4,6) - 1, +fecha.slice(6,8), 12).getDay();
+        return dias.includes(d);
+    },
+
     _enVacaciones(u, fecha) {
         const iso = `${fecha.slice(0,4)}-${fecha.slice(4,6)}-${fecha.slice(6,8)}`;
         return this._vacacionesDe(u).some(v => v.desde <= iso && v.hasta >= iso);
