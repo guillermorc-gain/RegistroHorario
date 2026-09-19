@@ -2214,12 +2214,13 @@ const app = {
         const cont = document.getElementById('ntLista');
         if (!cont) return;
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-        const estado = n => ['ok', 'no'].includes(n.estado) ? n.estado : 'pendiente';
+        const estado = n => n.de === 'gestor' ? 'mias'
+            : ['ok', 'no'].includes(n.estado) ? n.estado : 'pendiente';
         const sel = localStorage.getItem('filtroNotas') || 'pendiente';
         const fil = document.getElementById('ntFiltros');
         if (fil) {
             fil.innerHTML = [['pendiente', 'Pendientes'], ['ok', 'Aceptadas'],
-                             ['no', 'Denegadas'], ['todas', 'Todas']]
+                             ['no', 'Denegadas'], ['mias', 'Enviadas'], ['todas', 'Todas']]
                 .map(([id, txt]) => {
                     const n = id === 'todas' ? this._notas.length
                         : this._notas.filter(x => estado(x) === id).length;
@@ -2241,24 +2242,184 @@ const app = {
             return `<div class="nt-card ${e}">
                 <div class="nt-top">
                     <span class="nt-num">${esc(n.conductor) || '—'}</span>
-                    <span class="nt-nom">${esc(n.nombre) || esc(n.email)}</span>
+                    <span class="nt-nom">${n.de === 'gestor' ? '→ ' : ''}${esc(n.nombre) || esc(n.email)}</span>
                     <span class="nt-fecha">${esc(this._fechaNota(n.creado))}</span>
                 </div>
                 <div class="nt-cuerpo">${esc(n.texto)}</div>
-                ${n.respuesta?.texto ? `<div class="nt-resp">
+                ${this._pintarAdjuntos(n.adjuntos)}
+                ${(n.respuesta?.texto || n.respuesta?.adjuntos?.length) ? `<div class="nt-resp">
                     <div class="nt-resp-quien">${esc(n.respuesta.gestor) || 'Gestión'} · ${
                         esc(this._fechaNota(n.respuesta.en))}</div>
                     <div class="nt-resp-txt">${esc(n.respuesta.texto)}</div>
+                    ${this._pintarAdjuntos(n.respuesta.adjuntos)}
                 </div>` : ''}
-                <div class="nt-acciones">
+                ${n.de === 'gestor' ? '' : `<div class="nt-acciones">
                     <button class="nt-btn si${e === 'ok' ? ' on' : ''}"
                         onclick="app._estadoNota('${esc(n.id)}','${e === 'ok' ? 'pendiente' : 'ok'}')">✅</button>
                     <button class="nt-btn no${e === 'no' ? ' on' : ''}"
                         onclick="app._estadoNota('${esc(n.id)}','${e === 'no' ? 'pendiente' : 'no'}')">❌</button>
                     <button class="nt-btn" onclick="app._responderNota('${esc(n.id)}')">💬 Responder</button>
-                </div>
+                </div>`}
             </div>`;
         }).join('');
+    },
+
+// Un adjunto de imagen se ve; lo demás se descarga
+    _pintarAdjuntos(lista) {
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        if (!Array.isArray(lista) || !lista.length) return '';
+        return `<div class="nt-adj">` + lista.map(a => a.tipo?.startsWith('image/')
+            ? `<img src="${esc(a.datos)}" alt="${esc(a.nombre)}" onclick="app._verFoto('${esc(a.datos)}')">`
+            : `<a href="${esc(a.datos)}" download="${esc(a.nombre)}">📎 ${esc(a.nombre)}</a>`).join('') + `</div>`;
+    },
+
+    _verFoto(datos) {
+        const v = document.getElementById('fotoVisor');
+        if (!v) { window.open(datos, '_blank'); return; }
+        document.getElementById('fotoVisorImg').src = datos;
+        v.classList.add('show');
+    },
+
+    // ── Adjuntos ─────────────────────────────────────────────────────────────
+    // Las fotos se reducen antes de mandarlas: a 1600px de lado largo se ven
+    // bien tanto en el móvil como en un ordenador, y la calidad va bajando
+    // hasta que entren en el tope. Un archivo que no sea imagen no se puede
+    // encoger, así que se rechaza si no cabe.
+
+    MAX_ADJUNTO: 600 * 1024,        // data URL, igual que en el servidor
+    LADO_FOTO: 1600,
+    _adjuntos: [],
+
+    _elegirAdjunto(cual) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = cual === 'foto' ? 'image/*' : '*/*';
+        if (cual === 'foto') input.multiple = true;
+        input.onchange = async (e) => {
+            for (const file of [...e.target.files]) {
+                if (this._adjuntos.length >= 3) { this._mostrarToast('Máximo 3 adjuntos', 3000); break; }
+                try { this._adjuntos.push(await this._prepararAdjunto(file)); }
+                catch (err) { this._mostrarToast('❌ ' + err.message, 4500); }
+            }
+            this._renderAdjuntos();
+        };
+        input.click();
+    },
+
+    _prepararAdjunto(file) {
+        return new Promise((resolve, reject) => {
+            const lector = new FileReader();
+            lector.onerror = () => reject(new Error('No se ha podido leer el archivo'));
+            lector.onload = (ev) => {
+                const datos = ev.target.result;
+                if (!file.type.startsWith('image/')) {
+                    if (datos.length > this.MAX_ADJUNTO) {
+                        reject(new Error(`${file.name} pesa demasiado (máx. ${
+                            Math.round(this.MAX_ADJUNTO / 1024 * 0.75)} KB)`));
+                        return;
+                    }
+                    resolve({ nombre: file.name, tipo: file.type || 'application/octet-stream', datos });
+                    return;
+                }
+                const img = new Image();
+                img.onerror = () => reject(new Error('No se ha podido abrir la imagen'));
+                img.onload = () => {
+                    const escala = Math.min(1, this.LADO_FOTO / Math.max(img.width, img.height));
+                    const w = Math.round(img.width * escala), h = Math.round(img.height * escala);
+                    const lienzo = document.createElement('canvas');
+                    lienzo.width = w; lienzo.height = h;
+                    lienzo.getContext('2d').drawImage(img, 0, 0, w, h);
+                    let calidad = 0.88;
+                    let salida = lienzo.toDataURL('image/jpeg', calidad);
+                    while (salida.length > this.MAX_ADJUNTO && calidad > 0.4) {
+                        calidad -= 0.07;
+                        salida = lienzo.toDataURL('image/jpeg', calidad);
+                    }
+                    if (salida.length > this.MAX_ADJUNTO) { reject(new Error('La foto sigue siendo enorme')); return; }
+                    resolve({ nombre: file.name.replace(/\.[^.]+$/, '') + '.jpg',
+                              tipo: 'image/jpeg', datos: salida,
+                              info: `${w}×${h} · ${Math.round(salida.length / 1024 * 0.75)} KB` });
+                };
+                img.src = datos;
+            };
+            lector.readAsDataURL(file);
+        });
+    },
+
+    _renderAdjuntos() {
+        const cont = document.getElementById('adjLista');
+        if (!cont) return;
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        cont.innerHTML = this._adjuntos.map((a, k) => `<div class="adj-chip">
+            ${a.tipo.startsWith('image/') ? `<img src="${a.datos}">` : '📎'}
+            <span>${esc(a.nombre)}${a.info ? ` · ${esc(a.info)}` : ''}</span>
+            <button onclick="app._quitarAdjunto(${k})">×</button>
+        </div>`).join('');
+    },
+
+    _quitarAdjunto(k) { this._adjuntos.splice(k, 1); this._renderAdjuntos(); },
+
+    // ── Escribir a un trabajador ─────────────────────────────────────────────
+    nuevaNotaGestor() {
+        document.getElementById('destBuscar').value = '';
+        this._renderDestinatarios();
+        document.getElementById('destModal').classList.add('show');
+        if (this.darkMode) document.getElementById('destModalContent').classList.add('dark');
+    },
+
+    _renderDestinatarios() {
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const q = (document.getElementById('destBuscar')?.value || '').toLowerCase().trim();
+        const lista = Object.values(this._conductores || {})
+            .filter(u => !q || `${u.conductor || ''} ${u.nombre || ''} ${u.email}`.toLowerCase().includes(q))
+            .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+        const cont = document.getElementById('destLista');
+        cont.innerHTML = lista.length ? lista.map(u => `<div class="dest-fila"
+                onclick="app._escribirA('${esc(u.email).replace(/'/g, "\\'")}')">
+                <span class="nt-num">${esc(u.conductor) || '—'}</span>
+                <span class="nt-nom">${esc(u.nombre) || esc(u.email)}</span>
+            </div>`).join('')
+            : '<div class="baja-vacio">Ningún trabajador con ese nombre o número</div>';
+    },
+
+    _escribirA(email) {
+        const u = (this._conductores || {})[email];
+        if (!u) return;
+        document.getElementById('destModal').classList.remove('show');
+        // Se reutiliza el cuadro de responder: es el mismo diálogo
+        this._notaRespondiendo = null;
+        this._notaPara = email;
+        this._adjuntos = [];
+        document.getElementById('respTitulo').textContent = '✉️ Escribir a';
+        document.getElementById('respQuien').textContent = this._quienEs(u, email);
+        document.getElementById('respOriginal').textContent = '';
+        document.getElementById('respTexto').value = '';
+        document.getElementById('respFirma').textContent = `Firmarás como ${this._nombreGestor()}.`;
+        this._renderAdjuntos();
+        document.getElementById('respModal').classList.add('show');
+        if (this.darkMode) document.getElementById('respModalContent').classList.add('dark');
+    },
+
+    async _enviarNotaAGestor() {
+        const texto = (document.getElementById('respTexto').value || '').trim();
+        if (!texto && !this._adjuntos.length) { this._mostrarToast('Escribe algo o adjunta un archivo', 3000); return; }
+        document.getElementById('respModal').classList.remove('show');
+        try {
+            const r = await fetch(this.NOTAS_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json',
+                           'X-User-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ texto, para: this._notaPara,
+                    gestor: this._nombreGestor(),
+                    adjuntos: this._adjuntos.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos })) })
+            });
+            const data = await r.json();
+            if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return; }
+            this._notas = [data, ...this._notas];
+            this._adjuntos = [];
+            this._renderNotasGestor();
+            this._mostrarToast('📨 Nota enviada', 2500);
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
     async _patchNota(cuerpo, mensaje) {
@@ -2287,6 +2448,10 @@ const app = {
         const n = this._notas.find(x => x.id === id);
         if (!n) return;
         this._notaRespondiendo = id;
+        this._notaPara = null;
+        this._adjuntos = (n.respuesta?.adjuntos || []).map(a => ({ ...a }));
+        this._renderAdjuntos();
+        document.getElementById('respTitulo').textContent = '💬 Responder';
         document.getElementById('respQuien').textContent =
             `${n.conductor ? n.conductor + ' · ' : ''}${n.nombre || n.email}`;
         document.getElementById('respOriginal').textContent = n.texto;
@@ -2302,10 +2467,14 @@ const app = {
     },
 
     async _guardarRespuesta() {
+        if (this._notaPara) return this._enviarNotaAGestor();
         const texto = (document.getElementById('respTexto').value || '').trim();
         document.getElementById('respModal').classList.remove('show');
+        const adjuntos = this._adjuntos.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos }));
         await this._patchNota({ id: this._notaRespondiendo, respuesta: texto,
-            gestor: this._nombreGestor() }, texto ? '💬 Respuesta enviada' : 'Respuesta quitada');
+            gestor: this._nombreGestor(), adjuntos },
+            (texto || adjuntos.length) ? '💬 Respuesta enviada' : 'Respuesta quitada');
+        this._adjuntos = [];
     },
 
     // ── Trabajadores del cuadrante ───────────────────────────────────────────

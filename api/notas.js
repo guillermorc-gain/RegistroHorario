@@ -9,6 +9,11 @@ const FILE_PATH    = 'notas.json';
 const ADMIN_EMAIL  = 'g.rioscorrea@gmail.com';
 const MAX_TEXTO    = 500;
 const MAX_NOTAS    = 400;   // las más viejas se van cayendo
+// Un adjunto va como data URL dentro del JSON, así que hay que acotarlo por
+// las dos puntas: lo que ocupa uno y lo que ocupan todos juntos.
+const MAX_ADJUNTO  = 600 * 1024;
+const MAX_ADJUNTOS = 3;
+const TOTAL_ADJUNTOS = 12 * 1024 * 1024;
 
 const ghHeaders = () => ({
   'User-Agent': 'horasemt-app',
@@ -57,6 +62,40 @@ async function guardarConReintento(mutar, mensaje) {
 
 const texto = t => String(t ?? '').trim().slice(0, MAX_TEXTO);
 
+function limpiarAdjuntos(a) {
+  if (!Array.isArray(a)) return [];
+  return a
+    .filter(x => typeof x?.datos === 'string' && /^data:[\w.+-]+\/[\w.+-]+;base64,/.test(x.datos))
+    .filter(x => x.datos.length <= MAX_ADJUNTO)
+    .slice(0, MAX_ADJUNTOS)
+    .map(x => ({
+      nombre: String(x.nombre || 'adjunto').slice(0, 80),
+      tipo:   String(x.tipo || '').slice(0, 60),
+      datos:  x.datos,
+    }));
+}
+
+const pesaAdjuntos = n => [...(n.adjuntos || []), ...(n.respuesta?.adjuntos || [])]
+  .reduce((s, a) => s + (a.datos?.length || 0), 0);
+
+// Si el fichero se va de tamaño, las notas viejas pierden los adjuntos pero
+// conservan el texto: es lo que de verdad hace falta guardar.
+function acotarAdjuntos(data) {
+  const ids = Object.keys(data);
+  let total = ids.reduce((s, id) => s + pesaAdjuntos(data[id]), 0);
+  if (total <= TOTAL_ADJUNTOS) return data;
+  const out = { ...data };
+  for (const id of ids.sort((a, b) => (data[a].creado || '').localeCompare(data[b].creado || ''))) {
+    if (total <= TOTAL_ADJUNTOS) break;
+    const peso = pesaAdjuntos(out[id]);
+    if (!peso) continue;
+    out[id] = { ...out[id], adjuntos: [], adjuntosPurgados: true,
+                respuesta: out[id].respuesta ? { ...out[id].respuesta, adjuntos: [] } : null };
+    total -= peso;
+  }
+  return out;
+}
+
 // Se guardan las MAX_NOTAS más nuevas, y nunca se tira una sin contestar.
 function recortar(data) {
   const ids = Object.keys(data);
@@ -100,20 +139,32 @@ export default async function handler(req, res) {
       if (!quien || !quien.includes('@')) return res.status(400).json({ error: 'Falta el usuario' });
       const b = req.body || {};
       const cuerpo = texto(b.texto);
-      if (!cuerpo) return res.status(400).json({ error: 'La nota está vacía' });
+      const adjuntos = limpiarAdjuntos(b.adjuntos);
+      if (!cuerpo && !adjuntos.length) return res.status(400).json({ error: 'La nota está vacía' });
+      // El gestor puede abrir la conversación él: la nota se guarda a nombre
+      // del trabajador, que es quien la verá en su app, pero firmada por él.
+      const para = String(b.para || '').toLowerCase().trim();
+      const delGestor = !!para;
+      // Aquí no vale la cabecera: escribir en nombre de gestión exige el token
+      if (delGestor && delToken !== ADMIN_EMAIL) {
+        return res.status(403).json({ error: 'Solo el gestor escribe a un trabajador' });
+      }
       // La hora la pone el servidor: así no depende del reloj del móvil
       const creado = new Date().toISOString();
       const id = `${creado.replace(/[-:.TZ]/g, '')}-${Math.random().toString(36).slice(2, 7)}`;
       const nueva = {
-        id, email: quien, creado,
+        id, email: delGestor ? para : quien, creado,
         nombre:    String(b.nombre || '').slice(0, 80),
         conductor: String(b.conductor || '').slice(0, 12),
         texto: cuerpo,
+        adjuntos,
+        de: delGestor ? 'gestor' : 'trabajador',
+        ...(delGestor ? { gestor: String(b.gestor || '').slice(0, 80) } : {}),
         estado: 'pendiente',
         respuesta: null,
       };
-      const nuevo = await guardarConReintento(data => recortar({ ...data, [id]: nueva }),
-        `Nota de ${quien}`);
+      const nuevo = await guardarConReintento(data => acotarAdjuntos(recortar({ ...data, [id]: nueva })),
+        delGestor ? `Nota del gestor para ${para}` : `Nota de ${quien}`);
       return nuevo ? res.status(200).json(nueva) : res.status(500).json({ error: 'No se pudo guardar' });
     }
 
@@ -129,12 +180,14 @@ export default async function handler(req, res) {
         if (['pendiente', 'ok', 'no'].includes(estado)) n.estado = estado;
         if (respuesta !== undefined) {
           const cuerpo = texto(respuesta);
+          const adj = limpiarAdjuntos(req.body?.adjuntos);
           // El trabajador tiene que ver quién le contesta
-          n.respuesta = cuerpo
-            ? { texto: cuerpo, gestor: String(gestor || '').slice(0, 80), en: new Date().toISOString() }
+          n.respuesta = (cuerpo || adj.length)
+            ? { texto: cuerpo, adjuntos: adj,
+                gestor: String(gestor || '').slice(0, 80), en: new Date().toISOString() }
             : null;
         }
-        return { ...data, [id]: n };
+        return acotarAdjuntos({ ...data, [id]: n });
       }, req.method === 'DELETE' ? `Quitar nota ${id}` : `Respuesta a ${id}`);
       if (!nuevo) return res.status(404).json({ error: 'No se pudo actualizar la nota' });
       return res.status(200).json(nuevo[id] || { id, borrada: true });

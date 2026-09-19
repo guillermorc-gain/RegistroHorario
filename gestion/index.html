@@ -296,6 +296,26 @@
         .pst-huecos{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:5px 11px 7px;font-size:10px;font-weight:800;color:#e74c3c;text-transform:uppercase;letter-spacing:.4px;}
         .pst-hueco{background:#fdeaea;border-radius:8px;padding:2px 7px;font-size:10.5px;font-weight:700;text-transform:none;letter-spacing:0;}
         .app-content.dark .pst-hueco{background:#3a1c1c;}
+        .dest-buscar{padding:10px 16px;border-bottom:1px solid #efefef;}
+        .modal-card.dark .dest-buscar{border-color:#2d3561;}
+        .dest-buscar input{width:100%;border:1.5px solid #dfe4ea;border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13.5px;color:#2c3e50;background:#fff;}
+        .modal-card.dark .dest-buscar input{background:#16202e;border-color:#2d3561;color:#e0e0e0;}
+        .dest-fila{display:flex;align-items:center;gap:9px;padding:11px 16px;border-bottom:1px solid #f4f4f4;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+        .modal-card.dark .dest-fila{border-color:#2d3561;}
+        .dest-fila:active{background:#f4f6f9;}
+        .adj-barra{display:flex;gap:6px;margin-top:10px;}
+        .adj-btn{flex:1;border:1.5px dashed #dfe4ea;background:transparent;color:#7f8c8d;border-radius:8px;padding:8px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;}
+        .modal-card.dark .adj-btn{border-color:#2d3561;}
+        .adj-lista{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+        .adj-chip{display:flex;align-items:center;gap:6px;background:#eef1f6;border-radius:8px;padding:4px 6px;font-size:11px;font-weight:700;color:#2c3e50;max-width:100%;}
+        .modal-card.dark .adj-chip{background:#16202e;color:#e0e0e0;}
+        .adj-chip img{width:34px;height:34px;object-fit:cover;border-radius:5px;flex-shrink:0;}
+        .adj-chip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .adj-chip button{border:none;background:transparent;color:#e74c3c;font-size:15px;cursor:pointer;flex-shrink:0;}
+        .nt-adj{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;}
+        .nt-adj img{max-width:120px;max-height:120px;border-radius:8px;cursor:pointer;object-fit:cover;}
+        .nt-adj a{display:inline-flex;align-items:center;gap:5px;background:#eef1f6;border-radius:8px;padding:6px 9px;font-size:11.5px;font-weight:700;color:var(--g1);text-decoration:none;}
+        .app-content.dark .nt-adj a{background:#16202e;}
         .cond-alerta{display:inline-flex;align-items:center;gap:1px;background:#e67e22;color:#fff;font-size:9.5px;font-weight:800;border-radius:9px;padding:1px 6px;margin-left:5px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
         .rev-fila{display:flex;align-items:center;gap:9px;padding:10px 16px;border-bottom:1px solid #f4f4f4;}
         .modal-card.dark .rev-fila{border-color:#2d3561;}
@@ -334,6 +354,11 @@
         .nt-resp-quien{font-size:10px;font-weight:800;color:var(--g1);text-transform:uppercase;letter-spacing:.4px;}
         .nt-resp-txt{font-size:13px;color:#2c3e50;white-space:pre-wrap;word-break:break-word;margin-top:3px;}
         .app-content.dark .nt-resp-txt{color:#e0e0e0;}
+        .foto-visor{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:3000;display:none;align-items:center;justify-content:center;padding:14px;overflow:auto;}
+        .foto-visor.show{display:flex;}
+        .foto-visor img{max-width:100%;max-height:100%;border-radius:8px;}
+        .nt-card.degestor{border-left-color:var(--g1);}
+        .nt-estado.degestor{background:var(--g1);}
         .nt-vacio{padding:26px 16px;text-align:center;font-size:12.5px;color:#95a5a6;}
         .be-badge2{font-size:9px;font-weight:800;background:#7f8c8d;color:#fff;padding:2px 6px;border-radius:9px;flex-shrink:0;}
         .cond-filtros{display:flex;gap:6px;overflow-x:auto;padding:2px 0 9px;}
@@ -1081,6 +1106,7 @@
             <div class="sec-head" style="cursor:default;">
                 <span class="cond-title">📝 Notas de los trabajadores</span>
                 <span class="sec-cnt" id="ntCnt"></span>
+                <button class="cond-refresh" onclick="app.nuevaNotaGestor()" title="Escribir a un trabajador">＋</button>
                 <button class="cond-refresh" onclick="app._cargarNotasGestor()" title="Actualizar">⟳</button>
             </div>
             <div class="cond-filtros" id="ntFiltros"></div>
@@ -1554,11 +1580,33 @@
     </div>
 </div>
 
+<!-- Ver una foto adjunta -->
+<div class="foto-visor" id="fotoVisor" onclick="this.classList.remove('show')">
+    <img id="fotoVisorImg" onclick="event.stopPropagation()">
+</div>
+
+<!-- Elegir a quién escribir -->
+<div class="modal" id="destModal">
+    <div class="modal-card" id="destModalContent">
+        <div class="modal-header">
+            <h3>✉️ ¿A quién escribes?</h3>
+            <button class="modal-close" onclick="document.getElementById('destModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div class="dest-buscar">
+                <input type="text" id="destBuscar" placeholder="Buscar por nombre o número…"
+                       oninput="app._renderDestinatarios()">
+            </div>
+            <div id="destLista" class="baja-lista"></div>
+        </div>
+    </div>
+</div>
+
 <!-- Responder a una nota -->
 <div class="modal" id="respModal">
     <div class="modal-card" id="respModalContent">
         <div class="modal-header">
-            <h3>💬 Responder</h3>
+            <h3 id="respTitulo">💬 Responder</h3>
             <button class="modal-close" onclick="document.getElementById('respModal').classList.remove('show')">×</button>
         </div>
         <div class="modal-body">
@@ -1567,6 +1615,11 @@
             <div class="edit-field"><label>Tu respuesta</label>
                 <textarea id="respTexto" rows="3" maxlength="500"
                     style="border:1.5px solid #dfe4ea;border-radius:8px;padding:8px;font-family:inherit;font-size:13.5px;resize:vertical;"></textarea></div>
+            <div class="adj-barra">
+                <button class="adj-btn" onclick="app._elegirAdjunto('foto')">📷 Foto</button>
+                <button class="adj-btn" onclick="app._elegirAdjunto('archivo')">📎 Archivo</button>
+            </div>
+            <div id="adjLista" class="adj-lista"></div>
             <span class="ops-field-sub" id="respFirma" style="display:block;margin-top:6px;"></span>
         </div>
         <div class="modal-footer">
