@@ -18,7 +18,11 @@
         "hasta": "06:00"
       }
     ],
-    "ubicacion": null,
+    "ubicacion": {
+      "lat": 39.600801,
+      "lng": 2.655677,
+      "radio": 100
+    },
     "prioridad": 0
   },
   "control": {
