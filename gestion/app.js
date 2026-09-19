@@ -124,6 +124,7 @@ const app = {
     _updateApkUrl: null,
 
     async init() {
+        this._instalarFirmaApi();
         // The update check must run even if any earlier step throws, otherwise a
         // single bug anywhere above strands the user on an old build forever.
         setTimeout(() => { try { this._checkForUpdates(); } catch(_) {} }, 1500);
@@ -299,9 +300,11 @@ const app = {
                 if (app.accessToken && Date.now() >= app.tokenExpiry) {
                     try { await app._silentReauth(); } catch (_) {}
                 }
-                if (app.accessToken) {
-                    op.headers = { ...(op.headers || {}), Authorization: `Bearer ${app.accessToken}` };
-                }
+                // Las cabeceras pueden venir como objeto o como Headers, y
+                // esparcir un Headers da {} y se perdería el Content-Type.
+                const h = new Headers(op.headers || {});
+                if (app.accessToken) h.set('Authorization', `Bearer ${app.accessToken}`);
+                op.headers = h;
             }
             return app._fetchOriginal(recurso, op);
         };

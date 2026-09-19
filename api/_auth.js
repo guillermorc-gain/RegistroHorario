@@ -21,39 +21,61 @@ export function tokenDe(req) {
   return m ? m[1] : '';
 }
 
-// Devuelve el correo que Google asocia al token, o '' si no vale.
-export async function emailDelToken(token) {
-  if (!token || token.length > 4096) return '';
+// Comprueba el token con Google. Devuelve {email} si vale, o {motivo} con el
+// porqué. Se distingue el token rechazado de no haber podido preguntar: lo
+// primero es culpa de quien llama, lo segundo no, y no debe dejar fuera al
+// gestor por un corte entre Vercel y Google.
+export async function revisarToken(token) {
+  if (!token) return { motivo: 'sin_token' };
+  if (token.length > 4096) return { motivo: 'token_raro' };
   limpiar();
   const guardado = cache.get(token);
-  if (guardado) return guardado.email;
+  if (guardado) return { email: guardado.email };
+  let r;
   try {
-    const r = await fetch(
-      'https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(token));
-    if (!r.ok) return '';
-    const info = await r.json();
-    // El aud tiene que ser nuestro cliente: si no, valdría un token que otra
-    // aplicación cualquiera hubiera conseguido para el mismo usuario.
-    if (info.aud !== GOOGLE_CLIENT_ID) return '';
-    if (info.email_verified === 'false' || info.email_verified === false) return '';
-    const email = String(info.email || '').toLowerCase().trim();
-    if (!email.includes('@')) return '';
-    cache.set(token, { email, hasta: Date.now() + TTL });
-    return email;
+    r = await fetch('https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(token));
   } catch (_) {
-    return '';
+    return { motivo: 'google_no_responde' };
   }
+  if (r.status >= 500) return { motivo: 'google_no_responde' };
+  if (!r.ok) return { motivo: 'token_caducado' };
+  let info;
+  try { info = await r.json(); } catch (_) { return { motivo: 'google_no_responde' }; }
+  // El aud tiene que ser nuestro cliente: si no, valdría un token que otra
+  // aplicación cualquiera hubiera conseguido para el mismo usuario.
+  if (info.aud !== GOOGLE_CLIENT_ID) return { motivo: 'otra_aplicacion' };
+  if (info.email_verified === 'false' || info.email_verified === false) return { motivo: 'correo_sin_verificar' };
+  const email = String(info.email || '').toLowerCase().trim();
+  if (!email.includes('@')) return { motivo: 'token_sin_correo' };
+  cache.set(token, { email, hasta: Date.now() + TTL });
+  return { email };
 }
 
-// Para las acciones del gestor. Responde 401/403 y devuelve '' si no pasa.
+// Devuelve el correo que Google asocia al token, o '' si no vale.
+export async function emailDelToken(token) {
+  return (await revisarToken(token)).email || '';
+}
+
+const MENSAJES = {
+  sin_token: ['La app no ha enviado la sesión. Actualiza la app de gestión.', 401],
+  token_raro: ['Sesión no válida. Vuelve a entrar en la app.', 401],
+  token_caducado: ['Tu sesión de Google ha caducado. Cierra y vuelve a entrar en la app.', 401],
+  otra_aplicacion: ['Esa sesión no es de esta aplicación.', 401],
+  correo_sin_verificar: ['Tu cuenta de Google no tiene el correo verificado.', 401],
+  token_sin_correo: ['La sesión no incluye el correo. Vuelve a entrar en la app.', 401],
+  google_no_responde: ['No se ha podido comprobar la sesión con Google. Inténtalo en un minuto.', 503],
+};
+
+// Para las acciones del gestor. Responde el error y devuelve '' si no pasa.
 export async function exigirAdmin(req, res, adminEmail) {
-  const email = await emailDelToken(tokenDe(req));
+  const { email, motivo } = await revisarToken(tokenDe(req));
   if (!email) {
-    res.status(401).json({ error: 'Sesión no válida. Vuelve a entrar en la app.' });
+    const [texto, codigo] = MENSAJES[motivo] || MENSAJES.token_raro;
+    res.status(codigo).json({ error: texto, motivo });
     return '';
   }
   if (email !== String(adminEmail).toLowerCase()) {
-    res.status(403).json({ error: 'Solo el gestor puede hacer esto' });
+    res.status(403).json({ error: `Esta cuenta (${email}) no es la del gestor`, motivo: 'no_es_gestor' });
     return '';
   }
   return email;
