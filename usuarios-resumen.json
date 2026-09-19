@@ -1892,5 +1892,35 @@
     "email": "prueba-1789766856622@prueba.local",
     "ficticio": true,
     "actualizado": "2026-09-19T09:38:18.336Z"
+  },
+  "prueba-1789812365837@prueba.local": {
+    "nombre": "Juan Cantos",
+    "conductor": "8952-6",
+    "puesto": "",
+    "avatar": null,
+    "version": "build-69",
+    "horasMes": 7,
+    "horasTotales": 7,
+    "diasMes": 1,
+    "horaInicio": "06:00",
+    "horaFin": "13:00",
+    "horarioDe": "hoy",
+    "turno": "M",
+    "jornadaHoras": 7,
+    "horasAnuales": 1700,
+    "ritmo": "6y2",
+    "dias": null,
+    "jornadas": [
+      {
+        "f": "20260919",
+        "i": "06:00",
+        "o": "13:00",
+        "h": 7,
+        "n": 0
+      }
+    ],
+    "email": "prueba-1789812365837@prueba.local",
+    "ficticio": true,
+    "actualizado": "2026-09-19T10:06:38.811Z"
   }
 }
