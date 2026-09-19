@@ -65,18 +65,18 @@
     "turnos": [
       {
         "id": "M",
-        "desde": "06:00",
-        "hasta": "14:00"
+        "desde": "00:00",
+        "hasta": "00:00"
       },
       {
         "id": "T",
-        "desde": "14:00",
-        "hasta": "21:00"
+        "desde": "00:00",
+        "hasta": "00:00"
       },
       {
         "id": "N",
-        "desde": "21:00",
-        "hasta": "06:00"
+        "desde": "20:00",
+        "hasta": "03:00"
       }
     ],
     "ubicacion": {
@@ -84,6 +84,7 @@
       "lng": 2.713381,
       "radio": 80
     },
+    "dias": null,
     "prioridad": 0
   },
   "anselmo clave": {
