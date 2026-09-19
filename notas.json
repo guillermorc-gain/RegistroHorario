@@ -66,7 +66,12 @@
     "de": "trabajador",
     "tipo": "gestion",
     "estado": "pendiente",
-    "respuesta": null
+    "respuesta": {
+      "texto": "Que 12345",
+      "adjuntos": [],
+      "gestor": "Guillermo Ríos Correa",
+      "en": "2026-09-19T17:00:23.475Z"
+    }
   },
   "20260919165722012-z2avl": {
     "id": "20260919165722012-z2avl",
