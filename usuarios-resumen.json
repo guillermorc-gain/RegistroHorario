@@ -1265,10 +1265,10 @@
     "vacaciones": [
       {
         "desde": "2026-06-15",
-        "hasta": "2026-09-30"
+        "hasta": "2026-06-30"
       }
     ],
-    "vacacionesAt": 1789806931920
+    "vacacionesAt": 1789806942842
   },
   "prueba-1789759514777@prueba.local": {
     "nombre": "Xisca",
