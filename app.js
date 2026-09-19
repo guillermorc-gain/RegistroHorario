@@ -376,6 +376,7 @@ const app = {
             this.mostrarApp();
             this.actualizarBotonesPerfil();
             this._actualizarCabeceraUsuario();
+            this._cargarAsignacion();
             setTimeout(() => this._autoRellenarFormulario(), 50);
             this._scheduleTokenRefresh();
             this.cargarDatos();
@@ -584,6 +585,9 @@ const app = {
                 this.switchTab(2);
             }
             if (this.usuarioActual) this._cargarNotas();
+            // Y lo que te toca hoy: el gestor puede haberlo cambiado mientras
+            // la app estaba de fondo, o sencillamente haber cambiado el día.
+            if (this.usuarioActual) this._cargarAsignacion();
             // If RegistrarReceiver updated Drive while in background, refresh the data
             const flag = window.AndroidBridge?.getPref?.('pendingRefresh');
             if (flag === '1' && this.usuarioActual) {
@@ -3073,14 +3077,67 @@ const app = {
         if (el) el.textContent = [this.numConductor || 'Sin asignar', this.puestoTrabajo].filter(Boolean).join(' · ');
     },
 
+    // ── Lo que te toca hoy ───────────────────────────────────────────────────
+    // Debajo del número de conductor sale a qué hora entras y dónde. El lugar
+    // va por fecha: si un día te mandan a otro sitio, ese día sale ese y al
+    // siguiente vuelve solo al del mes, sin que nadie tenga que deshacerlo.
+
+    _asignacion: (() => {
+        try { return JSON.parse(localStorage.getItem('asignacionHoy') || 'null'); } catch (_) { return null; }
+    })(),
+
+    _hoyClave() {
+        const d = new Date();
+        return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+    },
+
+    // Vale la de hoy; la de ayer no dice nada de hoy
+    _asignacionDeHoy() {
+        const a = this._asignacion;
+        return (a && a.fecha === this._hoyClave()) ? a : null;
+    },
+
+    // Dónde trabajas hoy: manda lo que te haya puesto gestión para esta fecha,
+    // y si no hay nada, tu lugar de siempre.
+    _lugarDeHoy() {
+        return this._asignacionDeHoy()?.lugar || this.puestoTrabajo || '';
+    },
+
+    async _cargarAsignacion() {
+        const email = this.usuarioActual?.email;
+        if (!email) return;
+        try {
+            const r = await fetch(`${this.USUARIOS_URL}?mio=${encodeURIComponent(email)}`,
+                { cache: 'no-store' });
+            if (!r.ok) return;
+            const a = await r.json();
+            if (!a || !a.fecha) return;
+            this._asignacion = a;
+            localStorage.setItem('asignacionHoy', JSON.stringify(a));
+            this._actualizarCabeceraUsuario();
+        } catch (_) { /* sin red se queda lo último que se supo */ }
+    },
+
     _actualizarCabeceraUsuario() {
         const nom = document.getElementById('cabeceraNombre');
         if (nom) nom.textContent = this.usuarioActual?.name || '';
+        const num = document.getElementById('cabeceraNum');
+        if (num) num.textContent = this.numConductor || '';
+
+        const a = this._asignacionDeHoy();
+        const lugar = this._lugarDeHoy();
+        const hor = document.getElementById('cabeceraHorario');
         const lug = document.getElementById('cabeceraLugar');
-        const res = document.getElementById('cabeceraResto');
-        if (lug) lug.textContent = this.puestoTrabajo || '';
-        if (res) res.textContent = (this.puestoTrabajo && this.numConductor ? ' · ' : '')
-            + (this.numConductor || '');
+        // De baja, de vacaciones o libre no hay horario que enseñar
+        const mudo = a && (a.baja || a.vacaciones || a.libre);
+        const horas = !mudo && a?.horario?.i && a?.horario?.f
+            ? `${a.horario.i}–${a.horario.f}` : '';
+        if (hor) hor.textContent = horas ? `🕒 ${horas}` : '';
+        if (lug) {
+            lug.textContent = lugar ? (horas ? ` · ${lugar}` : lugar) : '';
+            lug.classList.toggle('fuera', !!a?.excepcion);
+            lug.title = a?.excepcion ? 'Hoy te toca en otro sitio' : '';
+        }
         this._pintarCompaneros();
     },
 
@@ -3091,7 +3148,7 @@ const app = {
     COMPANEROS_TTL: 10 * 60 * 1000,
 
     _claveCompaneros() {
-        return `${this._clavePuesto(this.puestoTrabajo)}|${new Date().toISOString().slice(0, 10)}`;
+        return `${this._clavePuesto(this._lugarDeHoy())}|${new Date().toISOString().slice(0, 10)}`;
     },
 
     _companerosEnCache() {
@@ -3103,10 +3160,10 @@ const app = {
     },
 
     async _cargarCompaneros(forzar) {
-        if (!this.puestoTrabajo) return null;
+        if (!this._lugarDeHoy()) return null;
         const cache = this._companerosEnCache();
         if (cache && !forzar) return cache;
-        const resp = await fetch(`${this.USUARIOS_URL}?lugar=${encodeURIComponent(this.puestoTrabajo)}`,
+        const resp = await fetch(`${this.USUARIOS_URL}?lugar=${encodeURIComponent(this._lugarDeHoy())}`,
             { cache: 'no-store' });
         if (!resp.ok) throw new Error(resp.status);
         const data = await resp.json();
@@ -3120,19 +3177,22 @@ const app = {
         const lug = document.getElementById('cabeceraLugar');
         if (!lug) return;
         const c = this._companerosEnCache();
-        lug.classList.toggle('juntos', !!c && c.gente.length > 1);
-        if (!c && this.puestoTrabajo) {
+        // El naranja de "hoy vas a otro sitio" manda sobre el verde
+        lug.classList.toggle('juntos', !!c && c.gente.length > 1
+            && !lug.classList.contains('fuera'));
+        if (!c && this._lugarDeHoy()) {
             this._cargarCompaneros().then(() => this._pintarCompaneros()).catch(() => {});
         }
     },
 
     async verCompaneros() {
-        if (!this.puestoTrabajo) {
+        const donde = this._lugarDeHoy();
+        if (!donde) {
             this._mostrarToast('Todavía no tienes lugar de trabajo', 3000);
             return;
         }
         const esc = t => String(t || '').replace(/[<>&"]/g, x => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[x]));
-        document.getElementById('compTitulo').textContent = `👥 Hoy en ${this.puestoTrabajo}`;
+        document.getElementById('compTitulo').textContent = `👥 Hoy en ${donde}`;
         document.getElementById('compLista').innerHTML = '<div class="comp-vacio">Cargando…</div>';
         document.getElementById('compModal').classList.add('show');
         if (this.darkMode) document.getElementById('compModalContent').classList.add('dark');

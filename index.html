@@ -219,9 +219,15 @@
         .cu-mov{border:1.5px solid #dfe4ea;background:transparent;color:#7f8c8d;border-radius:7px;width:28px;height:28px;font-size:13px;cursor:pointer;font-family:inherit;flex-shrink:0;}
         .modal-card.dark .cu-mov{border-color:#2d3561;}
         .cu-mov:disabled{opacity:.3;}
+        /* Debajo del número: lo que le toca hoy, a qué hora y dónde */
+        .app-header-hoy{font-size:11px;font-weight:700;opacity:0.9;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+        .app-header-hoy:empty{display:none;}
+        .cab-hora{opacity:0.95;}
         .cab-lugar{cursor:pointer;-webkit-tap-highlight-color:transparent;}
         /* Verde cuando hay alguien más en el mismo sitio */
         .cab-lugar.juntos{color:#7bf1b8;opacity:1;}
+        /* Naranja el día que le toca en otro sitio distinto al del mes */
+        .cab-lugar.fuera{color:#ffd68a;opacity:1;}
         .comp-fila{display:flex;align-items:center;gap:9px;padding:11px 16px;border-bottom:1px solid #f2f2f2;}
         .modal-card.dark .comp-fila{border-color:#2d3561;}
         .comp-fila.yo{background:#eaf2fd;}
@@ -678,9 +684,10 @@
                 </div>
                 <div class="app-header-right">
                     <span class="app-header-nombre" id="cabeceraNombre"></span>
-                    <span class="app-header-num" id="cabeceraNum"><span
-                        id="cabeceraLugar" class="cab-lugar" onclick="app.verCompaneros()"></span><span
-                        id="cabeceraResto"></span></span>
+                    <span class="app-header-num" id="cabeceraNum"></span>
+                    <span class="app-header-hoy" id="cabeceraHoy"><span
+                        id="cabeceraHorario" class="cab-hora"></span><span
+                        id="cabeceraLugar" class="cab-lugar" onclick="app.verCompaneros()"></span></span>
                 </div>
                 <button class="campana" id="campanaBtn" onclick="app.irANotas()" title="Mensajes sin leer">🔔<span class="campana-n" id="campanaN"></span></button>
                 <button class="profile-btn" id="profileBtn" onclick="app.mostrarOpciones()"></button>
