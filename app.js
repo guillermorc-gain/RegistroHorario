@@ -258,6 +258,37 @@ const app = {
         } catch (_) {}
     },
 
+    // Todas las escrituras a nuestra API van firmadas con el token de Google, y
+    // el servidor saca de ahí quién eres en vez de creerse una cabecera. Se
+    // engancha en fetch, en un único sitio, para que no se pueda olvidar en
+    // ninguna llamada nueva.
+    API_BASE: 'https://registro-horario-emt.vercel.app/api/',
+
+    _instalarFirmaApi() {
+        if (this._fetchOriginal) return;
+        this._fetchOriginal = window.fetch.bind(window);
+        const app = this;
+        window.fetch = async function (recurso, opciones) {
+            const url = typeof recurso === 'string' ? recurso : recurso?.url || '';
+            // El intercambio de tokens no lleva token, por razones obvias
+            if (!url.startsWith(app.API_BASE) || url.startsWith(app.API_BASE + 'auth/')) {
+                return app._fetchOriginal(recurso, opciones);
+            }
+            const op = { ...(opciones || {}) };
+            const metodo = (op.method || 'GET').toUpperCase();
+            if (metodo !== 'GET' && metodo !== 'OPTIONS') {
+                // Si está caducado se renueva antes: enviarlo vencido sería un 401
+                if (app.accessToken && Date.now() >= app.tokenExpiry) {
+                    try { await app._silentReauth(); } catch (_) {}
+                }
+                if (app.accessToken) {
+                    op.headers = { ...(op.headers || {}), Authorization: `Bearer ${app.accessToken}` };
+                }
+            }
+            return app._fetchOriginal(recurso, op);
+        };
+    },
+
     async _ensureToken() {
         return !!(this.accessToken && Date.now() < this.tokenExpiry);
     },
@@ -286,6 +317,7 @@ const app = {
     },
 
     async _loadUserAndStart() {
+        this._instalarFirmaApi();
         try {
             const ok = await this._ensureToken();
             if (!ok) { this._silentReauth(); return; }
@@ -3393,6 +3425,25 @@ const app = {
         return { ok: true, lista };
     },
 
+    // Qué build pueden instalar los trabajadores. Devuelve {ok:false} cuando no
+    // se ha podido leer: en ese caso no se ofrece nada, porque antes un fallo de
+    // red dejaba `publicada` a null y la app pasaba a ofrecer la más reciente,
+    // saltándose el reparto escalonado justo cuando no había señal.
+    async _buildPublicado() {
+        try {
+            const r = await fetch(VERSION_URL, { cache: 'no-store' });
+            if (r.ok) {
+                const build = (await r.json())?.build ?? null;
+                localStorage.setItem('buildPublicado', JSON.stringify(build));
+                return { ok: true, build };
+            }
+        } catch (_) { /* se intenta con lo último que se leyó */ }
+        const guardado = localStorage.getItem('buildPublicado');
+        if (guardado === null) return { ok: false };
+        try { return { ok: true, build: JSON.parse(guardado) }; }
+        catch (_) { return { ok: false }; }
+    },
+
     async _checkForUpdates(showFeedback = false) {
         if (!window.Capacitor?.isNativePlatform?.()) return;
         if (typeof APP_VERSION === 'undefined' || APP_VERSION === '0') return;
@@ -3414,10 +3465,13 @@ const app = {
             const soyGestor = (this.usuarioActual?.email || '').toLowerCase() === SUPER_USER_EMAIL.toLowerCase();
             let publicada = null;
             if (!soyGestor) {
-                try {
-                    const rv = await fetch(VERSION_URL, { cache: 'no-store' });
-                    if (rv.ok) publicada = (await rv.json())?.build ?? null;
-                } catch (_) {}
+                const pub = await this._buildPublicado();
+                if (!pub.ok) {
+                    if (showFeedback) this._mostrarToast(
+                        '⏳ No se ha podido comprobar qué versión toca instalar. Prueba más tarde.', 4500);
+                    return;
+                }
+                publicada = pub.build;
             }
             let release = null, latestNum = 0, latestTag = '';
             (Array.isArray(lista) ? lista : []).forEach(r => {
