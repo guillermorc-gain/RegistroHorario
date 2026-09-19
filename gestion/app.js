@@ -2352,17 +2352,90 @@ const app = {
     // asignada. Se deja un margen porque nadie entra al minuto exacto.
     MARGEN_HORARIO: 15,
 
-    _desviaciones(u, mes) {
-        const h = this._horasAsignadas(u, mes);
-        if (!h) return 0;
-        const min = v => { const [a, b] = String(v).split(':').map(Number); return a * 60 + b; };
-        const objetivo = min(h.i);
-        return (u.jornadas || []).filter(j => {
-            if (!j?.i || this._mesDe(j.f) !== mes) return false;
-            let d = Math.abs(min(j.i) - objetivo);
-            if (d > 720) d = 1440 - d;               // 23:50 y 00:10 están a 20 min
-            return d > this.MARGEN_HORARIO;
-        }).length;
+    _minDif(a, b) {
+        const min = v => { const [h, m] = String(v).split(':').map(Number); return h * 60 + m; };
+        let d = Math.abs(min(a) - min(b));
+        if (d > 720) d = 1440 - d;                   // 23:50 y 00:10 están a 20 min
+        return d;
+    },
+
+    // Días en que lo asignado y lo que fichó no cuadran. Los ya confirmados
+    // desaparecen; los marcados con el ojo siguen, que es lo que significan.
+    _desajustes(u, mes) {
+        const revis = u?.revisiones || {};
+        return (u?.jornadas || []).filter(j => {
+            if (!j?.i) return false;
+            if (mes && this._mesDe(j.f) !== mes) return false;
+            if (revis[j.f] === 'ok') return false;
+            const h = this._horasAsignadas(u, this._mesDe(j.f));
+            if (!h) return false;
+            return this._minDif(j.i, h.i) > this.MARGEN_HORARIO
+                || (j.o && h.f && this._minDif(j.o, h.f) > this.MARGEN_HORARIO);
+        }).map(j => ({
+            f: j.f,
+            plan: this._horasAsignadas(u, this._mesDe(j.f)),
+            real: { i: j.i, o: j.o || '' },
+            estado: revis[j.f] === 'ojo' ? 'ojo' : 'pendiente',
+        })).sort((a, b) => b.f.localeCompare(a.f));
+    },
+
+    _desviaciones(u, mes) { return this._desajustes(u, mes).length; },
+
+    // ── Revisar los horarios que no cuadran ──
+    revisarHorarios(email) {
+        const u = (this._conductores || {})[email];
+        if (!u) return;
+        this._revEditando = email;
+        this._revTmp = { ...(u.revisiones || {}) };
+        document.getElementById('revQuien').textContent = this._quienEs(u, email);
+        this._renderRevisiones();
+        document.getElementById('revModal').classList.add('show');
+        if (this.darkMode) document.getElementById('revModalContent').classList.add('dark');
+    },
+
+    _renderRevisiones() {
+        const u = (this._conductores || {})[this._revEditando] || {};
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        // Con lo que se lleva marcado en el momento, no con lo guardado
+        const lista = this._desajustes({ ...u, revisiones: this._revTmp });
+        const cont = document.getElementById('revLista');
+        cont.innerHTML = lista.length ? lista.map(d => {
+            const dia = `${d.f.slice(6,8)}/${d.f.slice(4,6)}/${d.f.slice(0,4)}`;
+            const ojo = this._revTmp[d.f] === 'ojo';
+            return `<div class="rev-fila">
+                <div class="rev-dia">${esc(dia)}</div>
+                <div class="rev-cols">
+                    <div class="rev-col"><span class="rev-lbl">Gestión</span>
+                        <span class="rev-h plan">${esc(d.plan.i)}–${esc(d.plan.f)}</span></div>
+                    <div class="rev-col"><span class="rev-lbl">Registrado</span>
+                        <span class="rev-h real">${esc(d.real.i)}${d.real.o ? '–' + esc(d.real.o) : ''}</span></div>
+                </div>
+                <div class="rev-btns">
+                    <button class="rev-btn ok" onclick="app._marcarRevision('${d.f}','ok')"
+                        title="Está correcto">✔</button>
+                    <button class="rev-btn ojo${ojo ? ' on' : ''}" onclick="app._marcarRevision('${d.f}','ojo')"
+                        title="Visto, pero sin resolver">👁</button>
+                </div>
+            </div>`;
+        }).join('') : '<div class="baja-vacio">Todo cuadra: no queda ningún día por revisar.</div>';
+        const n = lista.length;
+        document.getElementById('revResumen').textContent = n
+            ? `${n} día${n === 1 ? '' : 's'} sin cuadrar. ✔ lo da por bueno y lo quita; 👁 lo deja marcado.`
+            : 'Al guardar desaparecerá la exclamación.';
+    },
+
+    _marcarRevision(fecha, estado) {
+        // Volver a pulsar el ojo lo deja como estaba
+        if (estado === 'ojo' && this._revTmp[fecha] === 'ojo') delete this._revTmp[fecha];
+        else this._revTmp[fecha] = estado;
+        this._renderRevisiones();
+    },
+
+    async _guardarRevisiones() {
+        document.getElementById('revModal').classList.remove('show');
+        const n = Object.values(this._revTmp).filter(v => v === 'ok').length;
+        await this._guardarCampoTrab(this._revEditando, { revisiones: this._revTmp },
+            n ? `✔ ${n} día${n === 1 ? '' : 's'} dado${n === 1 ? '' : 's'} por bueno${n === 1 ? '' : 's'}` : 'Revisión guardada');
     },
 
     _duracion(i, f) {
@@ -4383,7 +4456,10 @@ const app = {
                         <div class="cond-nombre">${esc(u.nombre) || esc(u.email)}
                             ${turno ? `<span class="cond-turno ${turno}">${turno}</span>` : ''}
                             ${u.ficticio ? '<span class="pr-badge2">PRUEBA</span>' : ''}</div>
-                        <div class="cond-num">${esc(u.conductor) || 'sin nº'}
+                        <div class="cond-num">${esc(u.conductor) || 'sin nº'}${
+                            this._desviaciones(u) ? `<span class="cond-alerta" title="Horarios que no cuadran"
+                                onclick="event.stopPropagation();app.revisarHorarios('${esc(u.email)}')">❗${
+                                this._desviaciones(u)}</span>` : ''}
                             <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app._editarPuesto('${esc(u.email)}','${esc(fecha)}')">· ${esc(lugarHoy) || 'asignar lugar'}${excepcion ? ' ·' : ''} ✎</span></div>
                     </div>
                     <button class="be-btn vc-btn${enVac ? ' on' : ''}" title="Vacaciones"

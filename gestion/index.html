@@ -296,6 +296,20 @@
         .pst-huecos{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:5px 11px 7px;font-size:10px;font-weight:800;color:#e74c3c;text-transform:uppercase;letter-spacing:.4px;}
         .pst-hueco{background:#fdeaea;border-radius:8px;padding:2px 7px;font-size:10.5px;font-weight:700;text-transform:none;letter-spacing:0;}
         .app-content.dark .pst-hueco{background:#3a1c1c;}
+        .cond-alerta{display:inline-flex;align-items:center;gap:1px;background:#e67e22;color:#fff;font-size:9.5px;font-weight:800;border-radius:9px;padding:1px 6px;margin-left:5px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+        .rev-fila{display:flex;align-items:center;gap:9px;padding:10px 16px;border-bottom:1px solid #f4f4f4;}
+        .modal-card.dark .rev-fila{border-color:#2d3561;}
+        .rev-dia{flex-shrink:0;font-size:11px;font-weight:800;color:#7f8c8d;width:62px;}
+        .rev-cols{flex:1;min-width:0;display:flex;gap:10px;}
+        .rev-col{display:flex;flex-direction:column;gap:2px;min-width:0;}
+        .rev-lbl{font-size:8.5px;font-weight:800;color:#95a5a6;text-transform:uppercase;letter-spacing:.4px;}
+        .rev-h{font-size:12.5px;font-weight:700;white-space:nowrap;}
+        .rev-h.plan{color:var(--g1);} .rev-h.real{color:#e67e22;}
+        .rev-btns{display:flex;gap:5px;flex-shrink:0;}
+        .rev-btn{border:1.5px solid #dfe4ea;background:transparent;border-radius:8px;width:32px;height:30px;font-size:13px;cursor:pointer;font-family:inherit;}
+        .modal-card.dark .rev-btn{border-color:#2d3561;}
+        .rev-btn.ok{color:#27ae60;} .rev-btn.ojo{color:#7f8c8d;}
+        .rev-btn.ojo.on{background:#7f8c8d;border-color:#7f8c8d;color:#fff;}
         /* ── NOTAS ── */
         .nt-lista{display:flex;flex-direction:column;gap:7px;padding-bottom:6px;}
         .nt-card{background:white;border-radius:12px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);border-left:4px solid #bdc3c7;}
@@ -1517,6 +1531,25 @@
         <div class="modal-body" style="padding:0;">
             <div id="puestoModalQuien" class="pm-quien"></div>
             <div id="puestoModalLista"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Horarios que no cuadran -->
+<div class="modal" id="revModal">
+    <div class="modal-card" id="revModalContent">
+        <div class="modal-header">
+            <h3>❗ Horarios que no cuadran</h3>
+            <button class="modal-close" onclick="document.getElementById('revModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div id="revQuien" class="pm-quien"></div>
+            <div id="revLista" class="baja-lista"></div>
+            <div id="revResumen" class="baja-resumen"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('revModal').classList.remove('show')">Cancelar</button>
+            <button class="modal-btn modal-btn-confirm" onclick="app._guardarRevisiones()">Guardar</button>
         </div>
     </div>
 </div>

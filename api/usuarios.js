@@ -87,6 +87,18 @@ function ponerHorarioDelMes(previos, mes, horario) {
   return recorte;
 }
 
+// Días ya revisados cuando el horario asignado y el registrado no cuadran:
+// 'ok' es resuelto y 'ojo' es visto pero sin resolver.
+const MAX_REVISIONES = 400;
+function limpiarRevisiones(r) {
+  if (!r || typeof r !== 'object') return {};
+  const out = {};
+  Object.keys(r).sort().slice(-MAX_REVISIONES).forEach(f => {
+    if (/^\d{8}$/.test(f) && ['ok', 'ojo'].includes(r[f])) out[f] = r[f];
+  });
+  return out;
+}
+
 // Grupo de descanso (1–10) de los de jornada completa. 0 / vacío = sin grupo.
 function limpiarGrupo(g) {
   const n = parseInt(g, 10);
@@ -282,6 +294,7 @@ export default async function handler(req, res) {
           // eligen desde el cuadrante y el trabajador no envía.
           horario:      previo.horario || '',
           horarios:     previo.horarios || {},
+          revisiones:   previo.revisiones || {},
           grupo:        previo.grupo ?? null,
           actualizado:  new Date().toISOString(),
         };
@@ -295,7 +308,7 @@ export default async function handler(req, res) {
     if (req.method === 'PATCH' || req.method === 'DELETE') {
       if (!await exigirAdmin(req, res, ADMIN_EMAIL)) return;
       const { email, puesto, ficticio, baja, bajas, vacaciones, nota, fecha,
-              desde, hasta, dias, grupo, horario, mes } = req.body || {};
+              desde, hasta, dias, grupo, horario, mes, revisiones } = req.body || {};
       const clave = (email || '').toLowerCase().trim();
       if (!clave) return res.status(400).json({ error: 'Falta el email' });
       // Los usuarios de prueba solo pueden vivir bajo este dominio, para que no
@@ -341,6 +354,9 @@ export default async function handler(req, res) {
           data[clave].diasAt = Date.now();
         }
         else if (data[clave] && grupo !== undefined) data[clave].grupo = limpiarGrupo(grupo);
+        else if (data[clave] && revisiones !== undefined) {
+          data[clave].revisiones = limpiarRevisiones(revisiones);
+        }
         else if (data[clave] && horario !== undefined) {
           // Con mes va al horario de ese mes; sin mes, al de siempre.
           if (/^\d{6}$/.test(String(mes || ''))) {
@@ -376,6 +392,7 @@ export default async function handler(req, res) {
          : bajas !== undefined ? `Bajas de ${clave}`
          : dias !== undefined ? `Días de ${clave}`
          : grupo !== undefined ? `Grupo de descanso de ${clave}`
+         : revisiones !== undefined ? `Horarios revisados de ${clave}`
          : horario !== undefined ? `Horario de ${clave}`
          : desde && hasta ? `Lugar de ${clave} del ${desde} al ${hasta}`
          : `Lugar de ${clave}`);
