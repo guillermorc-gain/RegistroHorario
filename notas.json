@@ -122,6 +122,13 @@
         "texto": "Nfkk",
         "adjuntos": [],
         "en": "2026-09-19T18:37:32.924Z"
+      },
+      {
+        "de": "guillermo.rcxx@gmail.com",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Ggr",
+        "adjuntos": [],
+        "en": "2026-09-19T18:41:25.481Z"
       }
     ],
     "archivada": false,
@@ -130,27 +137,6 @@
     "deEmail": "guillermo.rc82@gmail.com",
     "deNombre": "Guillermo Ríos Correa",
     "deConductor": "1418-3",
-    "estado": "pendiente"
-  },
-  "20260919183925357-8fiz3": {
-    "id": "20260919183925357-8fiz3",
-    "email": "guillermo.rc82@gmail.com",
-    "creado": "2026-09-19T18:39:25.357Z",
-    "nombre": "Guillermo Ríos Correa",
-    "conductor": "1418-3",
-    "mensajes": [
-      {
-        "de": "gestor",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Nn",
-        "adjuntos": [],
-        "en": "2026-09-19T18:39:25.357Z"
-      }
-    ],
-    "archivada": false,
-    "de": "gestor",
-    "tipo": "gestion",
-    "gestor": "Guillermo Ríos Correa",
     "estado": "pendiente"
   }
 }
