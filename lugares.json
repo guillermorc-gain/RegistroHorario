@@ -15,7 +15,7 @@
       {
         "id": "N",
         "desde": "21:00",
-        "hasta": "06:00"
+        "hasta": "03:00"
       }
     ],
     "ubicacion": {
@@ -23,6 +23,7 @@
       "lng": 2.655677,
       "radio": 100
     },
+    "dias": null,
     "prioridad": 0
   },
   "control": {
