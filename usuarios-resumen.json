@@ -2402,9 +2402,15 @@
     "ficticio": true,
     "actualizado": "2026-09-19T09:51:11.961Z",
     "lugares": {
-      "20260919": "Son Rossinyol"
+      "20260919": "Son Rossinyol",
+      "20260920": "Calle"
     },
-    "horariosDia": {}
+    "horariosDia": {
+      "20260920": {
+        "i": "07:00",
+        "f": "13:00"
+      }
+    }
   },
   "prueba-1789766856622@prueba.local": {
     "nombre": "Juan Valera",
