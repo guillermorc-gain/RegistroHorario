@@ -2729,7 +2729,15 @@
     "email": "prueba-1789812365837@prueba.local",
     "ficticio": true,
     "actualizado": "2026-09-19T10:07:02.371Z",
-    "horariosDia": {}
+    "horariosDia": {
+      "20260918": {
+        "i": "14:00",
+        "f": "21:00"
+      }
+    },
+    "lugares": {
+      "20260918": "Calle"
+    }
   },
   "prueba-1789812576607@prueba.local": {
     "nombre": "Enrique",
