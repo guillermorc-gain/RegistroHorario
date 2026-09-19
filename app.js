@@ -37,7 +37,13 @@ let LUGARES_CATALOGO = {};
 function aplicarCatalogoLugares(cat) {
     LUGARES_CATALOGO = cat || {};
     Object.entries(LUGARES_CATALOGO).forEach(([k, l]) => {
-        if (Array.isArray(l?.turnos) && l.turnos.length) TURNOS_POR_PUESTO[k] = l.turnos;
+        // Un turno de 00:00 a 00:00 no es un turno: es lo que queda cuando se
+        // le vacían las horas para quitarlo. Se descarta, y si el lugar se
+        // queda sin ninguno se respeta —el taller no tiene mañana ni tarde—
+        // en vez de recaer en la tabla de aquí arriba.
+        if (Array.isArray(l?.turnos)) {
+            TURNOS_POR_PUESTO[k] = l.turnos.filter(f => f && f.desde && f.hasta && f.desde !== f.hasta);
+        }
         const nombre = l?.nombre;
         if (nombre && !PUESTOS_DEFINIDOS.some(p => p.toLowerCase().normalize('NFD')
                 .replace(/[\u0300-\u036f]/g, '') === k)) {
@@ -2137,6 +2143,13 @@ const app = {
             try { this._notas = JSON.parse(localStorage.getItem('notasCache') || '[]'); } catch (__) {}
         }
         this._renderNotas();
+        // Con la conversación abierta, lo que llegue se ve ahí mismo: antes
+        // había que cerrarla y volver a entrar para leer la respuesta.
+        if (this._hiloAbierto
+            && document.getElementById('hiloModal')?.classList.contains('show')) {
+            this._marcarLeida(this._hiloAbierto);
+            this._renderHilo();
+        }
         this._avisarSiHayNuevos();
         this._atenderChatPendiente();
         this._iniciarSondeoChat();     // idempotente: reinicia el que hubiera
@@ -2169,11 +2182,11 @@ const app = {
                 : 'Todavía no hay conversaciones.'}</div>`;
             return;
         }
-        const etiqueta = { ok: 'Aceptada', no: 'Denegada', pendiente: 'Pendiente' };
+        const etiqueta = { visto: 'Vista', pendiente: 'Sin ver' };
         cont.innerHTML = lista.map(n => {
             const ultimo = this._ultimoMensaje(n);
             const clase = n.tipo === 'companero' ? 'companero'
-                : ['ok', 'no'].includes(n.estado) ? n.estado : '';
+                : this._estaVista(n) ? 'visto' : '';
             const q = esc(n.id).replace(/'/g, "\\'");
             const nueva = this._sinLeer(n);
             return `<div class="cv-card ${clase}${n.archivada ? ' archivada' : ''}${nueva ? ' nueva' : ''}"
@@ -2188,8 +2201,7 @@ const app = {
                 <div class="cv-pie">
                     <span class="cv-cnt">${this._mensajesDe(n).length} mensaje${
                         this._mensajesDe(n).length === 1 ? '' : 's'}</span>
-                    ${n.tipo === 'companero' ? '' : `<span class="cv-cnt">${etiqueta[
-                        ['ok','no'].includes(n.estado) ? n.estado : 'pendiente']}</span>`}
+                    <span class="cv-cnt">${etiqueta[this._estaVista(n) ? 'visto' : 'pendiente']}</span>
                     <span class="cv-acc" onclick="event.stopPropagation()">
                         <button onclick="app._archivarHilo('${q}',${!n.archivada})">${
                             n.archivada ? 'Recuperar' : 'Archivar'}</button>
@@ -2575,6 +2587,12 @@ const app = {
                 + `<span class="bub-txt">${esc(m.texto)}</span>${adj}`
                 + `<div class="bub-hora">${esc(this._horaCorta(m.en))}</div></div>`;
         }).join('') || '<div class="nt-vacio">Sin mensajes</div>';
+        // Quién le dio el visto y cuándo, para los dos lados por igual
+        const v = n.vistoPor;
+        if (v) {
+            cont.innerHTML += `<div class="bub sistema">👁 Visto por ${esc(v.nombre) || esc(v.email)}`
+                + ` · ${esc(this._horaCorta(v.en))}</div>`;
+        }
         cont.scrollTop = cont.scrollHeight;
         this._renderPieHilo(n);
     },
@@ -2585,20 +2603,25 @@ const app = {
             { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     },
 
+    // El visto ya no es de gestión: lo da cualquiera de los dos y el otro lo
+    // ve en su app. Por eso el botón está igual en las dos, y no hay forma de
+    // denegar nada: una nota se lee, se contesta o se archiva.
+    _estaVista(n) { return n?.estado === 'visto' || !!n?.vistoPor; },
+
     _renderPieHilo(n) {
         const pie = document.getElementById('hiloPie');
         if (!pie) return;
         const esc = t => String(t || '').replace(/'/g, "\\'");
-        const botones = [];
-        if (false && n.tipo !== 'companero') {
-            const e = ['ok', 'no'].includes(n.estado) ? n.estado : 'pendiente';
-            botones.push(`<button class="modal-btn modal-btn-cancel" style="flex:0 0 auto;padding:10px 12px;"
-                onclick="app._estadoNota('${esc(n.id)}','${e === 'ok' ? 'pendiente' : 'ok'}')">${e === 'ok' ? '✅' : '☑️'}</button>`);
-            botones.push(`<button class="modal-btn modal-btn-cancel" style="flex:0 0 auto;padding:10px 12px;"
-                onclick="app._estadoNota('${esc(n.id)}','${e === 'no' ? 'pendiente' : 'no'}')">${e === 'no' ? '❌' : '✖️'}</button>`);
-        }
-        botones.push(`<button class="modal-btn modal-btn-confirm" onclick="app._responderHilo()">Enviar</button>`);
-        pie.innerHTML = botones.join('');
+        const visto = this._estaVista(n);
+        pie.innerHTML = `<button class="modal-btn modal-btn-cancel" style="flex:0 0 auto;padding:10px 12px;"
+                title="${visto ? 'Quitar el visto' : 'Darla por vista'}"
+                onclick="app._marcarVisto('${esc(n.id)}',${!visto})">${visto ? '✅' : '☑️'}</button>`
+            + `<button class="modal-btn modal-btn-confirm" onclick="app._responderHilo()">Enviar</button>`;
+    },
+
+    _marcarVisto(id, visto) {
+        return this._tocarConversacion(id, { visto, nombre: this.usuarioActual?.name || '' },
+            visto ? '👁 Dada por vista' : 'Ya no está vista');
     },
 
     async _responderHilo() {
@@ -2644,6 +2667,8 @@ const app = {
                                  : this._notas.map(x => x.id === id ? data : x);
             if (borrar && this._hiloAbierto === id) {
                 document.getElementById('hiloModal').classList.remove('show');
+            } else if (this._hiloAbierto === id) {
+                this._renderHilo();
             }
             this._renderNotas();
             this._mostrarToast(mensaje, 2500);
@@ -3854,6 +3879,12 @@ const app = {
         return (TURNOS_POR_PUESTO[this._clavePuesto(puesto)] || []).filter(f => f.id !== 'N');
     },
 
+    // La franja de noche tal y como la tiene puesta ese lugar, si la tiene
+    _nocheDe(puesto) {
+        const n = (TURNOS_POR_PUESTO[this._clavePuesto(puesto)] || []).find(f => f.id === 'N');
+        return (n && this._minutos(n.desde) !== null && this._minutos(n.hasta) !== null) ? n : null;
+    },
+
     // Hora a la que deja de ser de noche en este lugar: nunca más tarde de las 6
     _amanecerDe(puesto) {
         const m = this._franjasDe(puesto).find(f => f.id === 'M');
@@ -3862,26 +3893,38 @@ const app = {
         return Math.min(this.NOCHE_HASTA, Math.max(0, ini - this.MARGEN_TURNO));
     },
 
+    // Una franja puede cruzar la medianoche —la noche siempre lo hace—, así
+    // que se estira hasta el día siguiente antes de comparar.
+    _dentroDeFranja(min, f, margen) {
+        const desde = this._minutos(f?.desde), hasta = this._minutos(f?.hasta);
+        if (desde === null || hasta === null || desde === hasta) return false;
+        let a = desde - margen, b = hasta + margen;
+        if (b <= a) b += 1440;
+        let cur = min;
+        if (cur < a) cur += 1440;
+        return cur >= a && cur < b;
+    },
+
+    // Manda la hora que tenga puesta el lugar: Son Rossinyol y Control entran
+    // de noche a las 20:00, y dándola por hecha a las 21:00 esas entradas
+    // caían en la tarde. El turno de noche se quedaba sin nadie y el cuadro
+    // de lugares marcaba "sin cubrir" con el trabajador dentro.
     _esNoche(min, puesto) {
+        const n = this._nocheDe(puesto);
+        if (n) return this._dentroDeFranja(min, n, 0);
         return min >= this.NOCHE_DESDE || min < this._amanecerDe(puesto);
     },
 
     _turnoDe(puesto, horaInicio) {
         const ini = this._minutos(horaInicio);
         if (ini === null) return '';
+        const todas = TURNOS_POR_PUESTO[this._clavePuesto(puesto)] || [];
+        // Primero la hora clavada, y solo si no encaja en ninguna se admite
+        // la hora de margen: entrar un poco antes o salir un poco después
+        // sigue siendo el mismo turno.
+        for (const f of todas) if (this._dentroDeFranja(ini, f, 0)) return f.id;
+        for (const f of todas) if (this._dentroDeFranja(ini, f, this.MARGEN_TURNO)) return f.id;
         if (this._esNoche(ini, puesto)) return 'N';
-        const franjas = this._franjasDe(puesto);
-        if (!franjas.length) return ini < 13 * 60 ? 'M' : 'T';
-
-        const dentro = (min, f, margen) => {
-            let a = this._minutos(f.desde) - margen, b = this._minutos(f.hasta) + margen;
-            if (b <= a) b += 1440;
-            let cur = min;
-            if (cur < a && b > 1440) cur += 1440;
-            return cur >= a && cur < b;
-        };
-        for (const f of franjas) if (dentro(ini, f, 0)) return f.id;
-        for (const f of franjas) if (dentro(ini, f, this.MARGEN_TURNO)) return f.id;
         return ini < 13 * 60 ? 'M' : 'T';
     },
 
