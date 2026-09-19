@@ -1,1 +1,44 @@
-{}
+{
+  "20260919222956226-a022n-0": {
+    "id": "20260919222956226-a022n-0",
+    "email": "guillermo.rc82@gmail.com",
+    "creado": "2026-09-19T22:29:56.226Z",
+    "nombre": "Guillermo Ríos Correa",
+    "conductor": "1418-3",
+    "mensajes": [
+      {
+        "de": "gestor",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Hrhej",
+        "adjuntos": [],
+        "en": "2026-09-19T22:29:56.226Z"
+      }
+    ],
+    "archivada": false,
+    "de": "gestor",
+    "tipo": "gestion",
+    "gestor": "Guillermo Ríos Correa",
+    "estado": "pendiente"
+  },
+  "20260919222956226-dd65e-1": {
+    "id": "20260919222956226-dd65e-1",
+    "email": "guillermo.rcxx@gmail.com",
+    "creado": "2026-09-19T22:29:56.226Z",
+    "nombre": "Guillermo Ríos Correa",
+    "conductor": "1234-5",
+    "mensajes": [
+      {
+        "de": "gestor",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Hrhej",
+        "adjuntos": [],
+        "en": "2026-09-19T22:29:56.226Z"
+      }
+    ],
+    "archivada": false,
+    "de": "gestor",
+    "tipo": "gestion",
+    "gestor": "Guillermo Ríos Correa",
+    "estado": "pendiente"
+  }
+}
