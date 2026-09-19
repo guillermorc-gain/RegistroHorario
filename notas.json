@@ -48,5 +48,26 @@
     "deNombre": "Guillermo Ríos Correa",
     "deConductor": "1418-3",
     "estado": "pendiente"
+  },
+  "20260919184931003-b8eu3": {
+    "id": "20260919184931003-b8eu3",
+    "email": "guillermo.rc82@gmail.com",
+    "creado": "2026-09-19T18:49:31.003Z",
+    "nombre": "Guillermo Ríos Correa",
+    "conductor": "1418-3",
+    "mensajes": [
+      {
+        "de": "gestor",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Bb",
+        "adjuntos": [],
+        "en": "2026-09-19T18:49:31.003Z"
+      }
+    ],
+    "archivada": false,
+    "de": "gestor",
+    "tipo": "gestion",
+    "gestor": "Guillermo Ríos Correa",
+    "estado": "pendiente"
   }
 }
