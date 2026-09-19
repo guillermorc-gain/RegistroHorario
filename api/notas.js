@@ -1,4 +1,4 @@
-import { emailDelToken, tokenDe, exigirAdmin } from './_auth.js';
+import { emailDelToken, tokenDe } from './_auth.js';
 import { hayBaseDeDatos, leerNotas, leerNota, guardarNota, borrarNota } from './_almacen.js';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
@@ -91,7 +91,8 @@ function limpiarAdjuntos(a) {
     }));
 }
 
-const pesaAdjuntos = n => [...(n.adjuntos || []), ...(n.respuesta?.adjuntos || [])]
+const pesaAdjuntos = n => (n.mensajes || [])
+  .flatMap(m => m.adjuntos || [])
   .reduce((s, a) => s + (a.datos?.length || 0), 0);
 
 // Si el fichero se va de tamaño, las notas viejas pierden los adjuntos pero
@@ -105,8 +106,8 @@ function acotarAdjuntos(data) {
     if (total <= TOTAL_ADJUNTOS) break;
     const peso = pesaAdjuntos(out[id]);
     if (!peso) continue;
-    out[id] = { ...out[id], adjuntos: [], adjuntosPurgados: true,
-                respuesta: out[id].respuesta ? { ...out[id].respuesta, adjuntos: [] } : null };
+    out[id] = { ...out[id], adjuntosPurgados: true,
+                mensajes: (out[id].mensajes || []).map(m => ({ ...m, adjuntos: [] })) };
     total -= peso;
   }
   return out;
@@ -122,27 +123,59 @@ function recortar(data) {
   let quitadas = 0;
   for (const id of orden) {
     if (quitadas >= sobran) break;
-    if (out[id].tipo !== 'companero' && out[id].estado === 'pendiente') continue;
+    if (!out[id].archivada && out[id].tipo !== 'companero'
+        && out[id].estado === 'pendiente') continue;
     delete out[id];
     quitadas++;
   }
   return out;
 }
 
-// Dar el visto, denegar o contestar. Está aquí fuera para que valga igual
-// guardando en la base de datos o en el fichero: una sola verdad.
-function tocarNota(nota, { estado, respuesta, gestor, adjuntos }) {
-  const n = { ...nota };
-  if (['pendiente', 'ok', 'no'].includes(estado)) n.estado = estado;
-  if (respuesta !== undefined) {
-    const cuerpo = texto(respuesta);
-    const adj = limpiarAdjuntos(adjuntos);
-    // El trabajador tiene que ver quién le contesta
-    n.respuesta = (cuerpo || adj.length)
-      ? { texto: cuerpo, adjuntos: adj,
-          gestor: String(gestor || '').slice(0, 80), en: new Date().toISOString() }
-      : null;
+// Las conversaciones antiguas guardaban un texto y como mucho una respuesta.
+// Se leen como lo que son: los dos primeros mensajes del hilo.
+function normalizar(nota) {
+  if (!nota) return nota;
+  if (Array.isArray(nota.mensajes)) return nota;
+  const mensajes = [];
+  if (nota.texto || nota.adjuntos?.length) {
+    mensajes.push({
+      de: nota.de === 'gestor' ? 'gestor' : 'trabajador',
+      autor: nota.de === 'gestor' ? (nota.gestor || 'Gestión') : (nota.deNombre || nota.nombre || ''),
+      texto: nota.texto || '', adjuntos: nota.adjuntos || [], en: nota.creado,
+    });
   }
+  if (nota.respuesta?.texto || nota.respuesta?.adjuntos?.length) {
+    mensajes.push({
+      de: 'gestor', autor: nota.respuesta.gestor || 'Gestión',
+      texto: nota.respuesta.texto || '', adjuntos: nota.respuesta.adjuntos || [],
+      en: nota.respuesta.en || nota.creado,
+    });
+  }
+  const { texto: _t, adjuntos: _a, respuesta: _r, ...resto } = nota;
+  return { ...resto, mensajes };
+}
+
+// Quién puede escribir y tocar una conversación: los dos que hablan, y el
+// gestor en las que van dirigidas a él.
+function puedeTocar(nota, quien) {
+  if (!nota) return false;
+  if (quien === ADMIN_EMAIL) return nota.tipo !== 'companero' || nota.email === quien;
+  return nota.email === quien || nota.deEmail === quien;
+}
+
+function añadirMensaje(nota, { de, autor, cuerpo, adjuntos }) {
+  const n = normalizar(nota);
+  return { ...n, mensajes: [...n.mensajes, {
+    de, autor: String(autor || '').slice(0, 80),
+    texto: cuerpo, adjuntos, en: new Date().toISOString(),
+  }] };
+}
+
+// Dar el visto, denegar o archivar
+function tocarNota(nota, { estado, archivada }) {
+  const n = normalizar(nota);
+  if (['pendiente', 'ok', 'no'].includes(estado)) n.estado = estado;
+  if (archivada !== undefined) n.archivada = !!archivada;
   return n;
 }
 
@@ -159,13 +192,16 @@ export default async function handler(req, res) {
       const quien = String(req.query?.email || '').toLowerCase().trim();
       // Con base de datos el filtro y el orden los hace Postgres, que para eso
       // tiene los índices; si no, se filtra aquí como siempre.
-      if (hayBaseDeDatos()) return res.status(200).json(await leerNotas(quien));
+      if (hayBaseDeDatos()) {
+        return res.status(200).json((await leerNotas(quien)).map(normalizar));
+      }
       const { data } = await getFile();
       // Las mías son las que me llegan y las que he mandado a un compañero
       const notas = Object.values(data)
         .filter(n => !quien || (n.email || '').toLowerCase() === quien
                             || (n.deEmail || '').toLowerCase() === quien)
-        .sort((a, b) => (b.creado || '').localeCompare(a.creado || ''));
+        .sort((a, b) => (b.creado || '').localeCompare(a.creado || ''))
+        .map(normalizar);
       return res.status(200).json(notas);
     }
 
@@ -179,6 +215,33 @@ export default async function handler(req, res) {
       const cuerpo = texto(b.texto);
       const adjuntos = limpiarAdjuntos(b.adjuntos);
       if (!cuerpo && !adjuntos.length) return res.status(400).json({ error: 'La nota está vacía' });
+
+      // Con id se contesta dentro de la conversación, que es lo que hace un
+      // chat: el mensaje se añade al hilo en vez de abrir uno nuevo. Pueden
+      // hacerlo los dos que hablan, no solo quien empezó.
+      const hilo = String(b.id || '').trim();
+      if (hilo) {
+        const previa = hayBaseDeDatos() ? await leerNota(hilo) : (await getFile()).data[hilo];
+        if (!previa) return res.status(404).json({ error: 'Esa conversación ya no está' });
+        if (!puedeTocar(previa, quien)) {
+          return res.status(403).json({ error: 'Esa conversación no es tuya' });
+        }
+        const soyGestor = quien === ADMIN_EMAIL && previa.tipo !== 'companero';
+        const conMensaje = añadirMensaje(previa, {
+          de: soyGestor ? 'gestor' : quien,
+          autor: soyGestor ? (b.gestor || 'Gestión') : (b.nombre || b.deNombre || ''),
+          cuerpo, adjuntos,
+        });
+        if (hayBaseDeDatos()) {
+          await guardarNota(conMensaje);
+          return res.status(200).json(conMensaje);
+        }
+        const guardado = await guardarConReintento(
+          data => acotarAdjuntos({ ...data, [hilo]: conMensaje }), `Mensaje en ${hilo}`);
+        return guardado ? res.status(200).json(conMensaje)
+                        : res.status(500).json({ error: 'No se pudo guardar' });
+      }
+
       // El gestor puede abrir la conversación él: la nota se guarda a nombre
       // del trabajador, que es quien la verá en su app, pero firmada por él.
       const para = String(b.para || '').toLowerCase().trim();
@@ -200,8 +263,13 @@ export default async function handler(req, res) {
         id, email: para || quien, creado,
         nombre:    String(b.nombre || '').slice(0, 80),
         conductor: String(b.conductor || '').slice(0, 12),
-        texto: cuerpo,
-        adjuntos,
+        mensajes: [{
+          de: delGestor ? 'gestor' : (entreCompaneros ? quien : 'trabajador'),
+          autor: delGestor ? String(b.gestor || 'Gestión').slice(0, 80)
+               : String(b.deNombre || b.nombre || '').slice(0, 80),
+          texto: cuerpo, adjuntos, en: creado,
+        }],
+        archivada: false,
         de: delGestor ? 'gestor' : 'trabajador',
         // Un mensaje entre compañeros no es una petición a gestión: no lleva
         // estado que atender y no sale en su lista.
@@ -211,7 +279,6 @@ export default async function handler(req, res) {
               deConductor: String(b.deConductor || '').slice(0, 12) } : {}),
         ...(delGestor ? { gestor: String(b.gestor || '').slice(0, 80) } : {}),
         estado: 'pendiente',
-        respuesta: null,
       };
       if (hayBaseDeDatos()) {
         // Una fila por nota: no hay que recortar nada para que quepa
@@ -225,27 +292,42 @@ export default async function handler(req, res) {
     }
 
     // Contestar y dar el visto o denegar es cosa del gestor
+    // Archivar, borrar y —solo el gestor— dar el visto o denegar. Cada uno
+    // manda en sus conversaciones, así que aquí no vale solo el gestor.
     if (req.method === 'PATCH' || req.method === 'DELETE') {
-      if (!await exigirAdmin(req, res, ADMIN_EMAIL)) return;
-      const { id, estado, respuesta, gestor } = req.body || {};
+      const delToken = await emailDelToken(tokenDe(req));
+      const quien = delToken || (req.headers['x-admin-email'] || req.headers['x-user-email'] || '')
+        .toLowerCase().trim();
+      const { id, estado, archivada } = req.body || {};
       if (!id) return res.status(400).json({ error: 'Falta la nota' });
+      if (!quien || !quien.includes('@')) return res.status(400).json({ error: 'Falta el usuario' });
+      // Dar el visto o denegar es de quien atiende la petición
+      if (estado !== undefined && quien !== ADMIN_EMAIL) {
+        return res.status(403).json({ error: 'Eso solo lo hace gestión' });
+      }
+
       if (hayBaseDeDatos()) {
         const n = await leerNota(id);
-        if (!n) return res.status(404).json({ error: 'No se pudo actualizar la nota' });
+        if (!puedeTocar(n, quien)) return res.status(404).json({ error: 'Esa conversación no es tuya' });
         if (req.method === 'DELETE') {
           await borrarNota(id);
           return res.status(200).json({ id, borrada: true });
         }
-        await guardarNota(tocarNota(n, { estado, respuesta, gestor, adjuntos: req.body?.adjuntos }));
-        return res.status(200).json(await leerNota(id));
+        const tocada = tocarNota(n, { estado, archivada });
+        await guardarNota(tocada);
+        return res.status(200).json(tocada);
       }
+      let prohibido = false;
       const nuevo = await guardarConReintento(data => {
         if (!data[id]) return null;
+        if (!puedeTocar(data[id], quien)) { prohibido = true; return null; }
         if (req.method === 'DELETE') { const out = { ...data }; delete out[id]; return out; }
-        const n = tocarNota(data[id], { estado, respuesta, gestor, adjuntos: req.body?.adjuntos });
-        return acotarAdjuntos({ ...data, [id]: n });
-      }, req.method === 'DELETE' ? `Quitar nota ${id}` : `Respuesta a ${id}`);
-      if (!nuevo) return res.status(404).json({ error: 'No se pudo actualizar la nota' });
+        return acotarAdjuntos({ ...data, [id]: tocarNota(data[id], { estado, archivada }) });
+      }, req.method === 'DELETE' ? `Quitar conversación ${id}` : `Cambio en ${id}`);
+      if (!nuevo) {
+        return res.status(prohibido ? 403 : 404)
+          .json({ error: prohibido ? 'Esa conversación no es tuya' : 'No se pudo actualizar' });
+      }
       return res.status(200).json(nuevo[id] || { id, borrada: true });
     }
 
