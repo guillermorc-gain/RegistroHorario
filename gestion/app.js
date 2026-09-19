@@ -3469,6 +3469,10 @@ const app = {
             const trabajando = x => esHoy
                 ? this._estadoJornada(x.u, x.j, true, false, x.deAyer, x.enBaja, x.enVac).clase === 'verde'
                 : !!(x.j && !x.j.v && !x.j.p && !x.enBaja && !x.enVac);
+            // "Sin servicio" son los que ese día no tienen jornada, no los que
+            // ahora mismo no están dentro: el que entró a las 6 y ya salió sí
+            // ha trabajado hoy y no pinta nada en esa lista.
+            const conJornada = x => !!(x.j && !x.j.v && !x.j.p);
             const dentro = gente.filter(trabajando).length;
             const delDia = gente.filter(({ j, deAyer, enBaja, enVac }) =>
                 !enBaja && !enVac && j && !j.v && !j.p && !deAyer).length;
@@ -3477,7 +3481,7 @@ const app = {
             // es una propiedad del lugar: los que ahora no tienen a nadie dentro.
             if (filtro === 'sincubrir' && dentro > 0) return;
             const visibles = filtro === 'trabajando'  ? gente.filter(trabajando)
-                           : filtro === 'sinservicio' ? gente.filter(x => !trabajando(x))
+                           : filtro === 'sinservicio' ? gente.filter(x => !conJornada(x))
                            : gente;
             if (!visibles.length) return;
 
