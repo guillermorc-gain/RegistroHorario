@@ -1323,7 +1323,7 @@
     "diasMes": 16,
     "horaInicio": "20:00",
     "horaFin": "00:00",
-    "horarioDe": "anterior",
+    "horarioDe": "hoy",
     "turno": "T",
     "jornadaHoras": 4,
     "horasAnuales": 777,
@@ -1464,7 +1464,7 @@
         "n": 0
       },
       {
-        "f": "20260920",
+        "f": "20260919",
         "i": "20:00",
         "o": "00:00",
         "h": 4,
@@ -1474,7 +1474,7 @@
     ],
     "email": "prueba-1789758756867@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T14:00:56.950Z"
+    "actualizado": "2026-09-19T14:01:24.046Z"
   },
   "prueba-1789759132382@prueba.local": {
     "nombre": "Tomeu Pol",
