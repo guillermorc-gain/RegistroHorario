@@ -50,5 +50,31 @@
       "radio": 100
     },
     "prioridad": 0
+  },
+  "taller": {
+    "nombre": "Taller",
+    "turnos": [
+      {
+        "id": "M",
+        "desde": "06:00",
+        "hasta": "14:00"
+      },
+      {
+        "id": "T",
+        "desde": "14:00",
+        "hasta": "21:00"
+      },
+      {
+        "id": "N",
+        "desde": "21:00",
+        "hasta": "06:00"
+      }
+    ],
+    "ubicacion": {
+      "lat": 39.56034,
+      "lng": 2.713381,
+      "radio": 80
+    },
+    "prioridad": 0
   }
 }
