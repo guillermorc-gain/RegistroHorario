@@ -3641,8 +3641,118 @@ const app = {
         document.getElementById('lgLng').value   = u.lng ?? '';
         document.getElementById('lgRadio').value = u.radio ?? '';
         document.getElementById('lgPrio').value  = l.prioridad ?? '';
+        document.getElementById('lgBuscar').value = '';
         document.getElementById('lugarModal').classList.add('show');
         if (this.darkMode) document.getElementById('lugarModalContent').classList.add('dark');
+        this._abrirMapa();
+    },
+
+    // ── Mapa para elegir la ubicación ───────────────────────────────────────
+    // OpenStreetMap con Leaflet: no hace falta clave de API. El marcador es un
+    // divIcon y no una imagen, para no depender de los iconos del CDN.
+    PALMA: { lat: 39.5696, lng: 2.6502 },
+
+    _coordsCampos() {
+        const lat = this._leerDecimal(document.getElementById('lgLat').value);
+        const lng = this._leerDecimal(document.getElementById('lgLng').value);
+        return (lat !== null && lng !== null) ? { lat, lng } : null;
+    },
+
+    _radioCampo() {
+        return Math.min(2000, Math.max(30, this._leerDecimal(document.getElementById('lgRadio').value) || 150));
+    },
+
+    _ponerCoords(lat, lng) {
+        document.getElementById('lgLat').value = lat.toFixed(6);
+        document.getElementById('lgLng').value = lng.toFixed(6);
+    },
+
+    _abrirMapa() {
+        const cont = document.getElementById('lgMapa');
+        if (!cont) return;
+        if (typeof L === 'undefined') {           // el CDN no ha cargado
+            cont.hidden = true;
+            document.getElementById('lgSinMapa').hidden = false;
+            return;
+        }
+        cont.hidden = false;
+        document.getElementById('lgSinMapa').hidden = true;
+        const punto = this._coordsCampos() || this.PALMA;
+
+        if (!this._mapa) {
+            this._mapa = L.map(cont, { zoomControl: true, attributionControl: true });
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19, attribution: '© OpenStreetMap',
+            }).addTo(this._mapa);
+            this._mapa.on('click', e => this._moverMarcador(e.latlng.lat, e.latlng.lng));
+        }
+        this._mapa.setView([punto.lat, punto.lng], this._coordsCampos() ? 17 : 12);
+        this._moverMarcador(punto.lat, punto.lng, !this._coordsCampos());
+        // El mapa nace dentro de un modal oculto y calcula mal su tamaño
+        setTimeout(() => this._mapa.invalidateSize(), 120);
+    },
+
+    // `soloPintar` deja los campos en blanco: se ve el centro por defecto, pero
+    // el lugar sigue sin ubicación mientras no se toque el mapa.
+    _moverMarcador(lat, lng, soloPintar) {
+        if (!this._mapa) return;
+        if (!soloPintar) this._ponerCoords(lat, lng);
+        const icono = L.divIcon({ className: '', html: '<div class="lg-pin">📍</div>',
+                                  iconSize: [26, 26], iconAnchor: [13, 24] });
+        if (!this._marcador) {
+            this._marcador = L.marker([lat, lng], { draggable: true, icon: icono }).addTo(this._mapa);
+            this._marcador.on('drag',    e => this._ponerCoords(e.latlng.lat, e.latlng.lng));
+            this._marcador.on('dragend', e => this._moverMarcador(e.target.getLatLng().lat, e.target.getLatLng().lng));
+        } else {
+            this._marcador.setLatLng([lat, lng]);
+        }
+        this._pintarRadio();
+    },
+
+    _pintarRadio() {
+        if (!this._mapa || !this._marcador) return;
+        const c = this._marcador.getLatLng();
+        if (!this._circulo) {
+            this._circulo = L.circle(c, { radius: this._radioCampo(), color: '#1565C0',
+                                          fillColor: '#1565C0', fillOpacity: 0.15, weight: 2 }).addTo(this._mapa);
+        } else {
+            this._circulo.setLatLng(c).setRadius(this._radioCampo());
+        }
+    },
+
+    _centrarDesdeCampos() {
+        const c = this._coordsCampos();
+        if (!c || !this._mapa) return;
+        this._mapa.setView([c.lat, c.lng], Math.max(this._mapa.getZoom(), 16));
+        this._moverMarcador(c.lat, c.lng);
+    },
+
+    _quitarUbicacion() {
+        document.getElementById('lgLat').value = '';
+        document.getElementById('lgLng').value = '';
+        if (this._marcador) { this._mapa.removeLayer(this._marcador); this._marcador = null; }
+        if (this._circulo)  { this._mapa.removeLayer(this._circulo);  this._circulo = null; }
+        this._mostrarToast('Este lugar se queda sin ubicación', 2500);
+    },
+
+    // Nominatim es el buscador de OpenStreetMap. Se acota a Mallorca para que
+    // "Son Rossinyol" no devuelva un sitio del otro lado del mundo.
+    async _buscarEnMapa() {
+        const q = document.getElementById('lgBuscar').value.trim();
+        if (!q) return;
+        try {
+            const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=es'
+                + '&viewbox=2.25,40.10,3.50,39.20&bounded=0&q=' + encodeURIComponent(q + ', Mallorca');
+            const r = await fetch(url, { headers: { Accept: 'application/json' } });
+            if (!r.ok) throw new Error(r.status);
+            const res = await r.json();
+            if (!res.length) { this._mostrarToast('No se ha encontrado esa dirección', 3000); return; }
+            const lat = parseFloat(res[0].lat), lng = parseFloat(res[0].lon);
+            this._mapa?.setView([lat, lng], 17);
+            this._moverMarcador(lat, lng);
+        } catch (e) {
+            this._mostrarToast('No se ha podido buscar: ' + e.message, 3500);
+        }
     },
 
     _renderTurnosLugar() {
@@ -3670,9 +3780,12 @@ const app = {
         const Geo = window.Capacitor?.Plugins?.Geolocation || navigator.geolocation;
         if (!Geo) { this._mostrarToast('Sin acceso a la ubicación', 3000); return; }
         const poner = c => {
-            document.getElementById('lgLat').value = (c.coords?.latitude ?? c.latitude).toFixed(6);
-            document.getElementById('lgLng').value = (c.coords?.longitude ?? c.longitude).toFixed(6);
+            const lat = c.coords?.latitude ?? c.latitude;
+            const lng = c.coords?.longitude ?? c.longitude;
             if (!document.getElementById('lgRadio').value) document.getElementById('lgRadio').value = 150;
+            this._ponerCoords(lat, lng);
+            this._mapa?.setView([lat, lng], 17);
+            this._moverMarcador(lat, lng);
             this._mostrarToast('📍 Ubicación tomada', 2500);
         };
         if (Geo.getCurrentPosition.length === 0) Geo.getCurrentPosition().then(poner).catch(() => this._mostrarToast('No se pudo obtener la ubicación', 3000));

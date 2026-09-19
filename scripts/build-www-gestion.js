@@ -16,4 +16,8 @@ fs.mkdirSync(www, { recursive: true });
 const iconsDir = path.join(src, 'icons');
 if (fs.existsSync(iconsDir)) fs.cpSync(iconsDir, path.join(www, 'icons'), { recursive: true });
 
+// Leaflet, para el mapa de los lugares de trabajo
+const vendorDir = path.join(src, 'vendor');
+if (fs.existsSync(vendorDir)) fs.cpSync(vendorDir, path.join(www, 'vendor'), { recursive: true });
+
 console.log('✅ www-gestion/ built');
