@@ -5308,7 +5308,9 @@ const app = {
                             // sin decirlo no hay manera de saber por qué sale
                             // en el filtro.
                             estado === 'activo' && lugarHoy.trim() && this._sinServicio(u, fecha)
-                                ? '<span class="cond-falta">sin horario</span>' : ''}</div>
+                                ? `<span class="cond-falta" title="Ponerle horario"
+                                        onclick="event.stopPropagation();app.ponerJornada('${esc(u.email)}','${esc(fecha)}','${esc(lugarHoy)}')">sin horario ✎</span>`
+                                : ''}</div>
                     </div>
                     <button class="be-btn vc-btn${enVac ? ' on' : ''}" title="Vacaciones"
                             onclick="event.stopPropagation();app.editarVacaciones('${esc(u.email)}')">VC</button>
