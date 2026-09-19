@@ -1409,14 +1409,24 @@
     "conductor": "8955-6",
     "puesto": "",
     "avatar": null,
-    "version": "build-34",
+    "version": "build-67",
     "horasMes": 7,
     "horasTotales": 7,
     "diasMes": 1,
     "horaInicio": "07:00",
     "horaFin": "14:00",
-    "horarioDe": "hoy",
+    "horarioDe": "anterior",
     "turno": "M",
+    "jornadaHoras": 7,
+    "horasAnuales": 1700,
+    "ritmo": "lv",
+    "dias": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
     "jornadas": [
       {
         "f": "20260918",
@@ -1428,8 +1438,7 @@
     ],
     "email": "prueba-1789759514777@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-18T19:25:36.867Z",
-    "baja": true
+    "actualizado": "2026-09-19T09:34:14.972Z"
   },
   "prueba-1789759539366@prueba.local": {
     "nombre": "Juan",
