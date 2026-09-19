@@ -82,13 +82,6 @@
         "texto": "No veo el visto",
         "adjuntos": [],
         "en": "2026-09-19T18:24:42.612Z"
-      },
-      {
-        "de": "guillermo.rc82@gmail.com",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Nk",
-        "adjuntos": [],
-        "en": "2026-09-19T18:37:19.008Z"
       }
     ],
     "archivada": false,
@@ -114,6 +107,29 @@
     "archivada": false,
     "de": "trabajador",
     "tipo": "gestion",
+    "estado": "pendiente"
+  },
+  "20260919183732924-qh2ml": {
+    "id": "20260919183732924-qh2ml",
+    "email": "guillermo.rcxx@gmail.com",
+    "creado": "2026-09-19T18:37:32.924Z",
+    "nombre": "Guillermo Ríos Correa",
+    "conductor": "1234-5",
+    "mensajes": [
+      {
+        "de": "guillermo.rc82@gmail.com",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Nfkk",
+        "adjuntos": [],
+        "en": "2026-09-19T18:37:32.924Z"
+      }
+    ],
+    "archivada": false,
+    "de": "trabajador",
+    "tipo": "companero",
+    "deEmail": "guillermo.rc82@gmail.com",
+    "deNombre": "Guillermo Ríos Correa",
+    "deConductor": "1418-3",
     "estado": "pendiente"
   }
 }
