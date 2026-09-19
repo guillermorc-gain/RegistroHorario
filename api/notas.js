@@ -21,19 +21,34 @@ const ghHeaders = () => ({
   ...(GITHUB_TOKEN ? { Authorization: `Bearer ${GITHUB_TOKEN}` } : {}),
 });
 
+// GitHub no manda el contenido en esta llamada cuando el fichero pasa de 1 MB:
+// responde 200 con content vacío. Sin mirarlo, el fichero entero se leía como
+// "no hay nada" y la siguiente escritura se llevaba por delante a todos. Así
+// que por encima de ese tamaño se pide el contenido en bruto, y cualquier
+// lectura que falle revienta en vez de devolver un vacío que parece legítimo.
+async function leerContenido(meta) {
+  if (meta.content) return Buffer.from(meta.content, 'base64').toString('utf8');
+  if (!meta.size) return '';
+  const r = await fetch(meta.download_url || meta.url, {
+    headers: { ...ghHeaders(), Accept: 'application/vnd.github.raw' },
+    cache: 'no-store',
+  });
+  if (!r.ok) throw new Error('No se pudo leer el fichero completo: ' + r.status);
+  return r.text();
+}
+
 async function getFile() {
   const r = await fetch(
     `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}?ref=${BRANCH}&t=${Date.now()}`,
     { headers: { ...ghHeaders(), 'Cache-Control': 'no-cache' }, cache: 'no-store' }
   );
-  if (!r.ok) return { data: {}, sha: null };
+  if (r.status === 404) return { data: {}, sha: null };   // aún no existe
+  if (!r.ok) throw new Error('GitHub ' + r.status + ' al leer ' + FILE_PATH);
   const meta = await r.json();
-  try {
-    const parsed = JSON.parse(Buffer.from(meta.content, 'base64').toString('utf8'));
-    return { data: parsed && typeof parsed === 'object' ? parsed : {}, sha: meta.sha };
-  } catch (_) {
-    return { data: {}, sha: meta.sha };
-  }
+  const texto = await leerContenido(meta);
+  if (!texto.trim()) return { data: {}, sha: meta.sha };
+  const parsed = JSON.parse(texto);
+  return { data: parsed && typeof parsed === 'object' ? parsed : {}, sha: meta.sha };
 }
 
 async function setFile(data, sha, mensaje) {
