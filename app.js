@@ -2672,19 +2672,25 @@ const app = {
         });
     },
 
-    guardarPrecioExtra() {
+    async guardarPrecioExtra() {
         const precio = this._leerDecimal(document.getElementById('precioExtraGlobal').value) || 0;
         this.precioExtraDefault = precio;
         localStorage.setItem('precioExtra', String(precio));
-        this._guardarPreferencias();
+        // Esperar al guardado: cargarDatos relee Drive, y si aún tenía el valor
+        // viejo lo volvía a aplicar encima del que se acababa de escribir.
+        await this._guardarPreferencias(true);
         this.cargarDatos();
     },
 
-    guardarPrecioFestivo() {
+    async guardarPrecioFestivo() {
         const precio = this._leerDecimal(document.getElementById('precioFestivoGlobal').value) || 0;
         this.precioFestivoDefault = precio;
         localStorage.setItem('precioFestivo', String(precio));
-        this._guardarPreferencias();
+        // Sin flush, salir de Ajustes antes de los 2 s del guardado diferido
+        // dejaba el precio solo en el móvil, y al reabrir Drive lo pisaba.
+        // Esperar al guardado: cargarDatos relee Drive, y si aún tenía el valor
+        // viejo lo volvía a aplicar encima del que se acababa de escribir.
+        await this._guardarPreferencias(true);
         this.cargarDatos();
     },
 
@@ -2706,11 +2712,11 @@ const app = {
         if (inp && this.precioFestivoDefault > 0) inp.value = this.precioFestivoDefault;
     },
 
-    guardarPrecioNoche() {
+    async guardarPrecioNoche() {
         const precio = this._leerDecimal(document.getElementById('precioNocheGlobal').value) || 0;
         this.precioNocheDefault = precio;
         localStorage.setItem('precioNoche', precio);
-        this._guardarPreferencias();
+        await this._guardarPreferencias(true);
     },
 
     mostrarCambiarAnuales() {
@@ -3166,6 +3172,8 @@ const app = {
         if (prefs.precioFestivoDefault !== undefined && prefs.precioFestivoDefault !== null) {
             this.precioFestivoDefault = prefs.precioFestivoDefault;
             localStorage.setItem('precioFestivo', String(prefs.precioFestivoDefault));
+            const el = document.getElementById('precioFestivoGlobal');
+            if (el) el.value = prefs.precioFestivoDefault;
         }
         if (prefs.precioExtraDefault !== undefined && prefs.precioExtraDefault !== null) {
             this.precioExtraDefault = prefs.precioExtraDefault;
