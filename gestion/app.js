@@ -3073,6 +3073,8 @@ const app = {
         this._fictJornadas = (u?.jornadas || []).map(j => ({ ...j }));
         this._fictTipo  = (u?.jornadaHoras || 7) >= 7 ? 'completa' : 'media';
         this._fictRitmo = u?.ritmo === 'lv' || u?.ritmo === '6y2' ? u.ritmo : '6y2';
+        this._fictDias = Array.isArray(u?.dias) && u.dias.length
+            ? u.dias.filter(d => this.DIAS_MEDIA.includes(d)) : [1, 2, 3, 4, 5];
         this._renderTipoFict();
         const hoy = new Date();
         const mes1 = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
@@ -3091,18 +3093,34 @@ const app = {
                 onclick="app._ponerTipoFict('${id}')">${txt}</button>`).join('');
         const ritmo = document.getElementById('fRitmo');
         const sub = document.getElementById('fRitmoSub');
-        // La media jornada es siempre de lunes a viernes; solo la completa elige
-        ritmo.style.display = this._fictTipo === 'completa' ? 'flex' : 'none';
-        ritmo.innerHTML = this._fictTipo === 'completa'
-            ? [['6y2','6 días y 2 libres'],['lv','Lunes a viernes']]
+        ritmo.style.display = 'flex';
+        if (this._fictTipo === 'completa') {
+            ritmo.innerHTML = [['6y2','6 días y 2 libres'],['lv','Lunes a viernes']]
                 .map(([id, txt]) => `<button class="${this._fictRitmo === id ? 'on' : ''}"
-                    onclick="app._ponerRitmoFict('${id}')">${txt}</button>`).join('')
-            : '';
-        sub.textContent = this._fictTipo === 'media'
-            ? 'De lunes a viernes. Los fines de semana solo si los apunta él desde su app.'
-            : this._fictRitmo === '6y2'
+                    onclick="app._ponerRitmoFict('${id}')">${txt}</button>`).join('');
+            sub.textContent = this._fictRitmo === '6y2'
                 ? 'Seis días seguidos y dos de descanso, rodando por la semana.'
                 : 'De lunes a viernes, con el fin de semana libre.';
+        } else {
+            // La media jornada reparte sus días entre lunes y sábado
+            const nombres = ['D','L','M','X','J','V','S'];
+            ritmo.innerHTML = this.DIAS_MEDIA
+                .map(d => `<button class="${this._fictDias.includes(d) ? 'on' : ''}"
+                    onclick="app._toggleDiaFict(${d})">${nombres[d]}</button>`).join('');
+            const n = this._fictDias.length;
+            sub.textContent = n
+                ? `${n} día${n === 1 ? '' : 's'} a la semana · ${(n * 3.5).toFixed(1).replace('.', ',')}h semanales`
+                : 'Marca al menos un día';
+        }
+    },
+
+    DIAS_MEDIA: [1, 2, 3, 4, 5, 6],
+
+    _toggleDiaFict(d) {
+        const i = this._fictDias.indexOf(d);
+        if (i === -1) this._fictDias.push(d); else this._fictDias.splice(i, 1);
+        this._fictDias.sort();
+        this._renderTipoFict();
     },
 
     _ponerTipoFict(t)  { this._fictTipo = t;  this._renderTipoFict(); },
@@ -3130,7 +3148,8 @@ const app = {
             dentro.add(k);
             const finde = d.getDay() === 0 || d.getDay() === 6;
             let trabaja;
-            if (media || this._fictRitmo === 'lv') trabaja = !finde;
+            if (media) trabaja = this._fictDias.includes(d.getDay());
+            else if (this._fictRitmo === 'lv') trabaja = !finde;
             else { trabaja = (ciclo % 8) < 6; ciclo++; }   // seis y dos, rodando
             if (trabaja) nuevas.push({ f: k, i: ini, o: fin, h: horas, n: 0, pu: puesto });
         }
@@ -3229,7 +3248,8 @@ const app = {
             horasAnuales: this._fictTipo === 'media' ? 777 : 1700,
             ritmo: this._fictTipo === 'media' ? 'lv' : this._fictRitmo,
             // El ritmo de seis y dos rueda por la semana, así que no tiene días fijos
-            dias: (this._fictTipo === 'media' || this._fictRitmo === 'lv') ? [1,2,3,4,5] : null,
+            dias: this._fictTipo === 'media' ? this._fictDias.slice().sort()
+                : this._fictRitmo === 'lv' ? [1,2,3,4,5] : null,
             jornadas,
         };
         try {

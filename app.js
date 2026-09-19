@@ -1568,7 +1568,9 @@ const app = {
 
     _pasoDiasJornada(n) {
         this._jornadaTmp = n;
-        this._diasTmp = Array.isArray(this.diasSemana) ? [...this.diasSemana] : [1,2,3,4,5];
+        this._diasTmp = Array.isArray(this.diasSemana)
+            ? this.diasSemana.filter(d => this.DIAS_MEDIA.includes(d))
+            : [1, 2, 3, 4, 5];
         document.querySelector('#jornadaModal .modal-body').hidden = true;
         document.getElementById('jornadaDias').hidden = false;
         document.getElementById('jornadaPie').hidden = false;
@@ -1576,9 +1578,12 @@ const app = {
         this._renderSemana();
     },
 
+    // La media jornada se reparte de lunes a sábado; el domingo no se ofrece
+    DIAS_MEDIA: [1, 2, 3, 4, 5, 6],
+
     _renderSemana() {
         const nombres = ['D','L','M','X','J','V','S'];
-        document.getElementById('jmSemana').innerHTML = [1,2,3,4,5,6,0]
+        document.getElementById('jmSemana').innerHTML = this.DIAS_MEDIA
             .map(d => `<button class="${this._diasTmp.includes(d) ? 'on' : ''}"
                 onclick="app._toggleDiaSemana(${d})">${nombres[d]}</button>`).join('');
         const h = this._leerDecimal(document.getElementById('jmHoras').value) || 0;
