@@ -3395,9 +3395,14 @@ const app = {
         const jor  = u.jornadaHoras || 7;
         // Los días de baja no los pudo trabajar, así que se le quitan del
         // objetivo en vez de dejárselos como horas pendientes.
+        const objetivoAnual = u.horasAnuales || 777;
+        // La baja descuenta media jornada por día no trabajado a quien va por
+        // las 777h, aunque esos días haga 7h seguidas. La jornada completa
+        // descuenta lo suyo.
+        const horasDeBaja = objetivoAnual >= this.ANUALES_COMPLETA ? jor : this.HORAS_BAJA;
         const diasBaja = this._diasBaja(u, hasta);
-        const horasBaja = Math.round(diasBaja * jor * 10) / 10;
-        const tope = Math.max(0, (u.horasAnuales || 777) - horasBaja);
+        const horasBaja = Math.round(diasBaja * horasDeBaja * 10) / 10;
+        const tope = Math.max(0, objetivoAnual - horasBaja);
         const mes  = hasta.slice(0, 6);
         let anual = 0, extras = 0, delMes = 0, dias = 0, festTrabajados = 0;
         (u.jornadas || []).forEach(j => {
@@ -4107,6 +4112,9 @@ const app = {
     // Una baja es un tramo con fecha, no un interruptor: hace falta saber qué
     // días estuvo fuera para descontarle las horas que no pudo hacer.
 
+    ANUALES_COMPLETA: 1700,
+    HORAS_BAJA: 3.5,
+
     _bajasDe(u) { return Array.isArray(u?.bajas) ? u.bajas : []; },
 
     _enBaja(u, fecha) {
@@ -4117,14 +4125,20 @@ const app = {
     // trabajado. Se corta en hoy: los días futuros aún no ha dejado de hacerlos.
     _diasBaja(u, hasta) {
         const anio = hasta.slice(0, 4);
+        const conDias = Array.isArray(u?.dias) && u.dias.length > 0;
         const dias = new Set();
         this._bajasDe(u).forEach(b => {
             const fin = (!b.h || b.h > hasta) ? hasta : b.h;
             const d = new Date(+b.d.slice(0,4), +b.d.slice(4,6) - 1, +b.d.slice(6,8), 12);
             const f = new Date(+fin.slice(0,4), +fin.slice(4,6) - 1, +fin.slice(6,8), 12);
             for (let i = 0; d <= f && i < 400; d.setDate(d.getDate() + 1), i++) {
-                if (d.getDay() === 0 || d.getDay() === 6) continue;
                 const k = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+                // Solo cuentan los días que le tocaban: si libra ese día, no
+                // ha dejado de hacer ninguna hora por estar de baja. De quien
+                // no ha declarado sus días no se sabe el patrón, así que se
+                // sigue contando de lunes a viernes como hasta ahora.
+                if (conDias) { if (!this._trabajaEseDia(u, k)) continue; }
+                else if (d.getDay() === 0 || d.getDay() === 6) continue;
                 if (k.slice(0, 4) === anio) dias.add(k);
             }
         });
@@ -4251,10 +4265,11 @@ const app = {
             </div>`).join('')
             || '<div class="baja-vacio">Sin bajas registradas</div>';
         const u = (this._conductores || {})[this._bajaEditando] || {};
-        const jor = u.jornadaHoras || 7;
+        const anual = u.horasAnuales || 777;
+        const h = anual >= this.ANUALES_COMPLETA ? (u.jornadaHoras || 7) : this.HORAS_BAJA;
         const dias = this._diasBajaTmp();
         document.getElementById('bajaResumen').textContent = dias
-            ? `${dias} día${dias === 1 ? '' : 's'} laborables · −${(dias * jor).toFixed(1)}h de su objetivo`
+            ? `${dias} día${dias === 1 ? '' : 's'} suyos · −${(dias * h).toFixed(1).replace('.', ',')}h de su objetivo`
             : 'Deja "Hasta" en blanco si sigue de baja';
     },
 
