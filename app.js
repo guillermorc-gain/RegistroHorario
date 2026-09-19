@@ -2727,7 +2727,7 @@ const app = {
     _lugaresConocidos() {
         const cat = Object.values(LUGARES_CATALOGO || {}).map(l => l?.nombre).filter(Boolean);
         const todos = [...cat];
-        [this.puestoTrabajo, ...this._tramos.map(t => t.p)].forEach(p => {
+        [this.puestoTrabajo, this._lugarDeHoy(), ...this._tramos.map(t => t.p)].forEach(p => {
             if (p && !todos.some(x => this._clavePuesto(x) === this._clavePuesto(p))) todos.push(p);
         });
         return todos;
@@ -2739,18 +2739,40 @@ const app = {
             `<option${this._clavePuesto(p) === this._clavePuesto(actual) ? ' selected' : ''}>${esc(p)}</option>`).join('');
     },
 
+    // El lugar que viene puesto al ir a registrar: el que te hayan asignado
+    // para hoy. En cuanto lo cambias tú —o te sitúa el GPS en otro sitio— manda
+    // lo tuyo, pero solo por hoy: mañana vuelve a proponerte lo asignado.
+    _lugarPropuesto() {
+        if (localStorage.getItem('lugarElegidoEl') === this._hoyClave()) return this.puestoTrabajo;
+        return this._lugarDeHoy();
+    },
+
     _renderLugarJornada() {
         const sel = document.getElementById('lugarJornada');
-        if (sel) sel.innerHTML = this._opcionesLugar(this.puestoTrabajo);
+        const propuesto = this._lugarPropuesto();
+        if (sel) sel.innerHTML = this._opcionesLugar(propuesto);
+        // Lo que se ve es lo que se registra: si se propone el asignado, ese
+        // es el que tiene que viajar con la jornada.
+        if (this._clavePuesto(propuesto) !== this._clavePuesto(this.puestoTrabajo)) {
+            this.puestoTrabajo = propuesto;
+            localStorage.setItem('puestoTrabajo', propuesto);
+            this._actualizarConductorDisplay();
+        }
         this._renderTramos();
     },
 
     _cambiarLugarJornada(v) {
         this.puestoTrabajo = v || '';
         localStorage.setItem('puestoTrabajo', this.puestoTrabajo);
+        this._marcarLugarElegidoHoy();
         this._actualizarCabeceraUsuario();
         this._actualizarConductorDisplay();
         this._renderTramos();
+    },
+
+    // Hoy mando yo sobre lo asignado; mañana se vuelve a proponer lo asignado
+    _marcarLugarElegidoHoy() {
+        localStorage.setItem('lugarElegidoEl', this._hoyClave());
     },
 
     _nuevoTramo() {
@@ -3097,10 +3119,14 @@ const app = {
         return (a && a.fecha === this._hoyClave()) ? a : null;
     },
 
-    // Dónde trabajas hoy: manda lo que te haya puesto gestión para esta fecha,
-    // y si no hay nada, tu lugar de siempre.
+    // Dónde trabajas hoy. Si el servidor ya ha dicho lo de hoy, vale eso y solo
+    // eso: ahí dentro ya está resuelto el orden —lo puesto para esa fecha por
+    // encima del lugar de siempre—, así que tomar por detrás el valor que haya
+    // quedado en el móvil solo serviría para arrastrar el sitio de otro día.
+    // Sin respuesta todavía, se tira de lo último que se supo.
     _lugarDeHoy() {
-        return this._asignacionDeHoy()?.lugar || this.puestoTrabajo || '';
+        const a = this._asignacionDeHoy();
+        return a ? (a.lugar || '') : (this.puestoTrabajo || '');
     },
 
     async _cargarAsignacion() {
@@ -3115,6 +3141,12 @@ const app = {
             this._asignacion = a;
             localStorage.setItem('asignacionHoy', JSON.stringify(a));
             this._actualizarCabeceraUsuario();
+            // Si lo que propone el formulario ha cambiado, se repinta; si no,
+            // se deja en paz por si está a medio rellenar.
+            const sel = document.getElementById('lugarJornada');
+            if (sel && this._clavePuesto(sel.value) !== this._clavePuesto(this._lugarPropuesto())) {
+                this._renderLugarJornada();
+            }
         } catch (_) { /* sin red se queda lo último que se supo */ }
     },
 
@@ -4057,6 +4089,7 @@ const app = {
         // otro sitio, cuenta ese. Se avisa, no se pregunta.
         this.puestoTrabajo = cerca.nombre;
         localStorage.setItem('puestoTrabajo', this.puestoTrabajo);
+        this._marcarLugarElegidoHoy();
         this._actualizarCabeceraUsuario();
         this._actualizarConductorDisplay();
         this._renderLugarJornada();

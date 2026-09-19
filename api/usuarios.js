@@ -289,6 +289,7 @@ function loQueLeToca(u, f) {
   return {
     fecha: f,
     lugar: delDia || u.puesto || '',
+    habitual: u.puesto || '',
     // Para que la app pueda decir que ese día va a otro sitio
     excepcion: !!delDia && clavePuesto(delDia) !== clavePuesto(u.puesto || ''),
     horario: planDelDia(u, f),
