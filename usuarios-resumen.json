@@ -10,7 +10,7 @@
     "diasMes": 17,
     "turno": "M",
     "puesto": "Control",
-    "actualizado": "2026-09-19T18:59:25.707Z",
+    "actualizado": "2026-09-19T19:45:23.824Z",
     "horaInicio": "09:00",
     "horaFin": "12:30",
     "horarioDe": "hoy",
@@ -1266,7 +1266,7 @@
       4,
       5
     ],
-    "diasAt": 1789822275643,
+    "diasAt": 1789847119245,
     "horario": "",
     "grupo": null,
     "horarios": {},
