@@ -1438,7 +1438,14 @@
     ],
     "email": "prueba-1789759514777@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T09:52:31.013Z"
+    "actualizado": "2026-09-19T09:52:31.013Z",
+    "bajas": [
+      {
+        "d": "20260917",
+        "h": "20260930"
+      }
+    ],
+    "baja": true
   },
   "prueba-1789759539366@prueba.local": {
     "nombre": "Juan",
