@@ -1145,7 +1145,14 @@
       "20260628": "Son Rossinyol",
       "20260629": "Son Rossinyol",
       "20260630": "Son Rossinyol"
-    }
+    },
+    "vacaciones": [
+      {
+        "desde": "2026-06-01",
+        "hasta": "2026-09-14"
+      }
+    ],
+    "vacacionesAt": 1789806863906
   },
   "guillermo.rcxx@gmail.com": {
     "email": "guillermo.rcxx@gmail.com",
