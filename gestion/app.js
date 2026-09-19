@@ -3009,7 +3009,7 @@ const app = {
                     </div>`).join('');
                 return `<div class="rg rg-sub2${cs ? ' cerrado' : ''}">
                     <div class="rg-h" onclick="app._plegar('s:${esc(mes)}:${esc(k).replace(/'/g, "\\'")}', true)">
-                        <span class="rg-chev">${cs ? '▸' : '▾'}</span>
+                        <span class="rg-chev">▾</span>
                         <span class="rg-t">${esc(titulo)}</span>
                         <span class="rg-sub">${tot}h</span>
                         <span class="rg-n">${grupo.length}</span>
@@ -3020,7 +3020,7 @@ const app = {
 
             return `<div class="rg${cerradoMes ? ' cerrado' : ''}">
                 <div class="rg-h" onclick="app._plegar('m:${esc(mes)}', false)">
-                    <span class="rg-chev">${cerradoMes ? '▸' : '▾'}</span>
+                    <span class="rg-chev">▾</span>
                     <span class="rg-t">${nomMes(delMes[0].f)}</span>
                     <span class="rg-sub">${totMes}h</span>
                     <span class="rg-n">${delMes.length}</span>

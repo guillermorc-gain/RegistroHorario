@@ -393,7 +393,9 @@
         .rg-h{display:flex;align-items:center;gap:7px;padding:9px 12px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
         .rg-h:active{background:#f4f6f9;}
         .app-content.dark .rg-h:active{background:#16202e;}
-        .rg-chev{font-size:13px;width:28px;height:28px;margin-left:-4px;color:#7f8c8d;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+        .rg-chev{color:#7f8c8d;font-size:15px;flex-shrink:0;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:9px;background:#f1f4f8;transition:transform .2s;}
+        .app-content.dark .rg-chev{background:#16202e;color:#a0a0a0;}
+        .rg.cerrado > .rg-h .rg-chev{transform:rotate(-90deg);}
         .rg-t{flex:1;font-size:12.5px;font-weight:800;color:#2c3e50;text-transform:capitalize;}
         .app-content.dark .rg-t{color:#e0e0e0;}
         .rg-sub{font-size:10.5px;font-weight:700;color:var(--g1);}
