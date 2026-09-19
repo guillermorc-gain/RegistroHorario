@@ -3999,6 +3999,23 @@ const app = {
         // Quien está de vacaciones o de baja no ocupa lugar ese día, así que no
         // sale en el cuadro. Sigue en la lista de trabajadores, con su botón.
         }).filter(x => !x.enVac && !x.enBaja && !x.fueraDeSemana);
+
+        // Quien ha pasado por varios lugares sale en cada uno con sus horas, y
+        // las horas del día que no haya repartido caen en "Sin servicio".
+        const SIN_SERVICIO = 'Sin servicio';
+        const porLugares = conPuesto.flatMap(x => {
+            const tr = (Array.isArray(x.j?.tr) ? x.j.tr : [])
+                .filter(t => t && t.p && t.i && t.o);
+            if (!tr.length) return [x];
+            const filas = tr.map(t => ({ ...x, tramo: true,
+                j: { ...x.j, i: t.i, o: t.o, h: this._horasEntre(t.i, t.o) },
+                lugar: String(t.p).trim() || SIN }));
+            const puestas = tr.reduce((n, t) => n + this._horasEntre(t.i, t.o), 0);
+            const falta = Math.round(((x.j.h || 0) - puestas) * 10) / 10;
+            if (falta > 0.1) filas.push({ ...x, tramo: true, sinServicio: falta,
+                j: { ...x.j, i: '', o: '', h: falta }, lugar: SIN_SERVICIO });
+            return filas;
+        });
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
 
         // Contadores de la cabecera: quién ha trabajado ese día y quién está
@@ -4025,13 +4042,14 @@ const app = {
             return;
         }
         const porPuesto = {};
-        conPuesto.forEach(x => { (porPuesto[x.lugar] = porPuesto[x.lugar] || []).push(x); });
+        porLugares.forEach(x => { (porPuesto[x.lugar] = porPuesto[x.lugar] || []).push(x); });
 
         const filtro = localStorage.getItem('filtroLugares') || 'todos';
         const tarjetas = [];
         const diaSemana = new Date(+fecha.slice(0,4), +fecha.slice(4,6) - 1, +fecha.slice(6,8), 12).getDay();
+        const alFinal = p => (p === SIN_SERVICIO ? 2 : p === SIN ? 1 : 0);
         Object.keys(porPuesto).sort((a, b) =>
-            a === SIN ? 1 : b === SIN ? -1 : a.localeCompare(b, 'es')).forEach(puesto => {
+            (alFinal(a) - alFinal(b)) || a.localeCompare(b, 'es')).forEach(puesto => {
             // Los días que ese lugar no abre no se enseña, salvo que alguien
             // haya registrado jornada: un dato real no debe desaparecer.
             const dias = DIAS_POR_LUGAR[this._clavePuesto(puesto)];
@@ -4074,9 +4092,11 @@ const app = {
                            : gente;
             if (!visibles.length) return;
 
-            const filas = visibles.map(({ u, j, deAyer, enBaja, enVac }) => {
+            const filas = visibles.map(({ u, j, deAyer, enBaja, enVac, sinServicio }) => {
                 const e = this._estadoJornada(u, j, esHoy, esFuturo, deAyer, enBaja, enVac);
-                const horario = (j?.i && j?.o && !enVac)
+                const horario = sinServicio
+                    ? `${String(sinServicio).replace('.', ',')}h sin lugar`
+                    : (j?.i && j?.o && !enVac)
                     ? (deAyer ? `→${esc(j.o)}` : `${esc(j.i)}–${esc(j.o)}`)
                     : (enBaja ? 'BE' : enVac ? '🏖️ VC' : '—');
                 const t = this._turnoDe(puesto, j?.i) || '';
@@ -4089,10 +4109,15 @@ const app = {
                 </div>`;
             }).join('');
             // Hoy interesa quién está dentro; en otro día, cuántos lo cubrieron.
-            const cob = esHoy
+            // Los dos grupos de pega no son lugares: no tiene sentido decir
+            // que están sin cubrir.
+            const dePega = puesto === SIN || puesto === SIN_SERVICIO;
+            const cob = dePega
+                ? `${visibles.length} ${visibles.length === 1 ? 'persona' : 'personas'}`
+                : esHoy
                 ? (dentro > 0 ? `${dentro} en turno` : 'sin cubrir')
                 : (delDia > 0 ? `${delDia} ${esFuturo ? 'previstos' : 'ese día'}` : 'sin cubrir');
-            const vacio = esHoy ? dentro === 0 : delDia === 0;
+            const vacio = !dePega && (esHoy ? dentro === 0 : delDia === 0);
             const NOMBRE_TURNO = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
             tarjetas.push(`<div class="pst-card">
                 <div class="pst-head">
