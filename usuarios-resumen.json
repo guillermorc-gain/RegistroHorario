@@ -1313,7 +1313,12 @@
     "lugares": {
       "20260919": "Son Rossinyol"
     },
-    "horarios": {},
+    "horarios": {
+      "202609": {
+        "i": "05:30",
+        "f": "13:00"
+      }
+    },
     "revisiones": {}
   },
   "prueba-1789758756867@prueba.local": {
