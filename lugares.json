@@ -64,16 +64,6 @@
     "nombre": "Taller",
     "turnos": [
       {
-        "id": "M",
-        "desde": "00:00",
-        "hasta": "00:00"
-      },
-      {
-        "id": "T",
-        "desde": "00:00",
-        "hasta": "00:00"
-      },
-      {
         "id": "N",
         "desde": "20:00",
         "hasta": "03:00"
@@ -84,7 +74,13 @@
       "lng": 2.713381,
       "radio": 80
     },
-    "dias": null,
+    "dias": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
     "prioridad": 0
   },
   "anselmo clave": {
