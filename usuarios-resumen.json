@@ -1896,7 +1896,7 @@
   "prueba-1789812365837@prueba.local": {
     "nombre": "Juan Cantos",
     "conductor": "8952-6",
-    "puesto": "",
+    "puesto": "Calle",
     "avatar": null,
     "version": "build-69",
     "horasMes": 7,
@@ -1921,6 +1921,6 @@
     ],
     "email": "prueba-1789812365837@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T10:06:38.811Z"
+    "actualizado": "2026-09-19T10:07:02.371Z"
   }
 }
