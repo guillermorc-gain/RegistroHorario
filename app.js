@@ -2254,15 +2254,18 @@ const app = {
         });
     },
 
+    // Hay una lista de adjuntos en el cuadro de escribir y otra dentro del
+    // hilo. Se pintan las dos: buscar por id devolvía siempre la primera, así
+    // que al adjuntar desde el hilo la miniatura se dibujaba en la de detrás y
+    // parecía que no se había seleccionado nada.
     _renderAdjuntos() {
-        const cont = document.getElementById('adjLista');
-        if (!cont) return;
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-        cont.innerHTML = this._adjuntos.map((a, k) => `<div class="adj-chip">
+        const html = this._adjuntos.map((a, k) => `<div class="adj-chip">
             ${a.tipo.startsWith('image/') ? `<img src="${a.datos}">` : '📎'}
             <span>${esc(a.nombre)}${a.info ? ` · ${esc(a.info)}` : ''}</span>
             <button onclick="app._quitarAdjunto(${k})">×</button>
         </div>`).join('');
+        document.querySelectorAll('.adj-lista').forEach(c => { c.innerHTML = html; });
     },
 
     _quitarAdjunto(k) { this._adjuntos.splice(k, 1); this._renderAdjuntos(); },
