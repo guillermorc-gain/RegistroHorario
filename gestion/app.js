@@ -3414,7 +3414,9 @@ const app = {
             const v = this._jornadaVisible(u, fecha);
             return { u, j: v.j, deAyer: v.deAyer,
                      enBaja: this._enBaja(u, fecha) || (!this._bajasDe(u).length && !!u.baja),
-                     enVac:  this._enVacaciones(u, fecha),
+                     // Unas vacaciones valen igual apuntadas como tramo por el
+                     // gestor que como jornada suelta por el trabajador.
+                     enVac:  this._enVacaciones(u, fecha) || !!v.j?.v,
                      lugar: this._lugarDe(u, fecha, v.j).trim() || SIN };
         // Quien está de vacaciones o de baja no ocupa lugar ese día, así que no
         // sale en el cuadro. Sigue en la lista de trabajadores, con su botón.
