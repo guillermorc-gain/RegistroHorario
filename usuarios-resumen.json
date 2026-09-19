@@ -1319,7 +1319,11 @@
         "f": "13:00"
       }
     },
-    "revisiones": {}
+    "revisiones": {
+      "20260915": "plan",
+      "20260917": "plan",
+      "20260918": "plan"
+    }
   },
   "prueba-1789758756867@prueba.local": {
     "nombre": "Toni Rodríguez",
