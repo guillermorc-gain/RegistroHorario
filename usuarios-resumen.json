@@ -1429,14 +1429,24 @@
     "conductor": "9785-6",
     "puesto": "Taller",
     "avatar": null,
-    "version": "build-34",
+    "version": "build-66",
     "horasMes": 7,
     "horasTotales": 7,
     "diasMes": 1,
     "horaInicio": "20:00",
     "horaFin": "03:00",
-    "horarioDe": "hoy",
+    "horarioDe": "anterior",
     "turno": "T",
+    "jornadaHoras": 3.5,
+    "horasAnuales": 777,
+    "ritmo": "lv",
+    "dias": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
     "jornadas": [
       {
         "f": "20260918",
@@ -1448,7 +1458,7 @@
     ],
     "email": "prueba-1789759539366@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-18T19:26:14.412Z"
+    "actualizado": "2026-09-19T09:29:01.765Z"
   },
   "prueba-1789760248885@prueba.local": {
     "nombre": "Timi",
