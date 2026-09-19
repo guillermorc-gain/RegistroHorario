@@ -1203,10 +1203,10 @@
     "diasMes": 3,
     "turno": "T",
     "puesto": "Son Rossinyol",
-    "actualizado": "2026-09-18T20:12:09.801Z",
+    "actualizado": "2026-09-19T10:45:51.272Z",
     "horaInicio": "18:00",
     "horaFin": "22:00",
-    "horarioDe": "hoy",
+    "horarioDe": "anterior",
     "jornadas": [
       {
         "f": "20260915",
@@ -1233,7 +1233,10 @@
         "pu": "Son Rossinyol"
       }
     ],
-    "horasAnuales": 777
+    "horasAnuales": 777,
+    "jornadaHoras": 7,
+    "vacaciones": [],
+    "vacacionesAt": 0
   },
   "prueba-1789758756867@prueba.local": {
     "nombre": "Toni Rodríguez",
