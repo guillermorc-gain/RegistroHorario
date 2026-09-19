@@ -23,7 +23,7 @@
     "adjuntos": [],
     "de": "trabajador",
     "tipo": "gestion",
-    "estado": "pendiente",
+    "estado": "ok",
     "respuesta": {
       "texto": "Ee",
       "adjuntos": [
