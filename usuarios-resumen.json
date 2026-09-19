@@ -1736,7 +1736,13 @@
         "h": "20260930"
       }
     ],
-    "baja": true
+    "baja": true,
+    "horarios": {
+      "202609": {
+        "i": "07:00",
+        "f": "14:00"
+      }
+    }
   },
   "prueba-1789759539366@prueba.local": {
     "nombre": "Juan",
