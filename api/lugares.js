@@ -5,7 +5,9 @@ import { exigirAdmin } from './_auth.js';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO         = 'guillermorc-gain/RegistroHorario';
-const BRANCH       = 'main';
+// Los datos viven fuera de main: cada escritura de las apps era un commit
+// que cancelaba el despliegue del código que fuera por medio.
+const BRANCH       = 'datos';
 const FILE_PATH    = 'lugares.json';
 const ADMIN_EMAIL  = 'g.rioscorrea@gmail.com';
 const MAX_LUGARES  = 60;

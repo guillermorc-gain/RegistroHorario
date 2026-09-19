@@ -2,7 +2,9 @@ import { exigirAdmin } from './_auth.js';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO         = 'guillermorc-gain/RegistroHorario';
-const BRANCH       = 'main';
+// Los datos viven fuera de main: cada escritura de las apps era un commit
+// que cancelaba el despliegue del código que fuera por medio.
+const BRANCH       = 'datos';
 
 // Each app keeps its own list and its own administrator: granting access to one
 // must not grant access to the other.
