@@ -7,7 +7,7 @@ const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.goo
 const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file profile email';
 const AUTH_SCOPE       = 'profile email';
 // Turnos de cada puesto. La hora de entrada registrada decide en cuál cae.
-const PUESTOS_DEFINIDOS = ['Son Rossinyol', 'Control', 'Calle', 'Taller'];
+let PUESTOS_DEFINIDOS = ['Son Rossinyol', 'Control', 'Calle', 'Taller', 'Anselmo Clavé'];
 
 const TURNOS_POR_PUESTO = {
     'son rossinyol': [
@@ -31,8 +31,24 @@ const TURNOS_POR_PUESTO = {
     ],
 };
 
+// El catálogo que mantiene el gestor manda sobre la tabla de aquí abajo: así
+// se pueden cambiar turnos y añadir lugares sin publicar una versión nueva.
+let LUGARES_CATALOGO = {};
+function aplicarCatalogoLugares(cat) {
+    LUGARES_CATALOGO = cat || {};
+    Object.entries(LUGARES_CATALOGO).forEach(([k, l]) => {
+        if (Array.isArray(l?.turnos) && l.turnos.length) TURNOS_POR_PUESTO[k] = l.turnos;
+        const nombre = l?.nombre;
+        if (nombre && !PUESTOS_DEFINIDOS.some(p => p.toLowerCase().normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '') === k)) {
+            PUESTOS_DEFINIDOS.push(nombre);
+        }
+    });
+}
+
 const SUPER_USER_EMAIL = 'guillermo.rc82@gmail.com';
 const ALLOWLIST_APP    = 'movilidad';
+const LUGARES_URL      = 'https://registro-horario-emt.vercel.app/api/lugares';
 const VERSION_URL      = 'https://registro-horario-emt.vercel.app/api/version';
 const ANDROID_PACKAGE  = 'com.guillermorc.horasemt';
 const RELEASE_PREFIX   = 'build-';
@@ -56,6 +72,7 @@ const app = {
     horasAnualesCustom: parseFloat(localStorage.getItem('horasAnuales')) || HORAS_ANUALES,
     precioNocheDefault: parseFloat(localStorage.getItem('precioNoche')) || 0,
     precioExtraDefault: parseFloat(localStorage.getItem('precioExtra')) || 0,
+    precioFestivoDefault: parseFloat(localStorage.getItem('precioFestivo')) || 0,
     modalCallback: null,
     editingId: null,
     prActivo: false,
@@ -129,6 +146,7 @@ const app = {
 
         if (code) {
             const pkgDestino = this._paqueteDestino(searchParams);
+            if (this._rebotarAGestion(pkgDestino, searchParams)) return;
             history.replaceState(null, '', window.location.pathname);
             // PKCE: exchange code for tokens via Vercel endpoint
             if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
@@ -348,6 +366,18 @@ const app = {
     // The return page is served by the shared Vercel deployment, which runs apk2's
     // code, so without this every login would come back to apk2. Google echoes
     // `state` verbatim, so it tells us which app to reopen.
+    // El verificador PKCE está en localStorage, que se comparte entre / y
+    // /gestion/ por ser el mismo origen, así que el intercambio del código
+    // funciona igual desde allí.
+    _rebotarAGestion(pkgDestino, searchParams) {
+        if (pkgDestino !== 'com.guillermorc.gestionemt') return false;
+        if (window.Capacitor?.isNativePlatform?.()) return false;
+        if (/Android/i.test(navigator.userAgent)) return false;   // ahí se vuelve por intent
+        if (window.location.pathname.startsWith('/gestion')) return false;
+        window.location.replace('/gestion/?' + searchParams.toString());
+        return true;
+    },
+
     _paqueteDestino(searchParams) {
         const permitidos = ['com.guillermorc.horasemt','com.guillermorc.gestionemt'];
         const s = searchParams?.get('state');
@@ -622,6 +652,7 @@ const app = {
                     nombre: this.usuarioActual.name || null,
                     email: this.usuarioActual.email,
                     horasAnuales: this.horasAnualesCustom,
+                jornadaHoras: this.jornadaHoras,
                     totales: tot,
                     historial: Object.entries(historial)
                         .sort((a, b) => a[1].timestamp - b[1].timestamp)
@@ -815,6 +846,7 @@ const app = {
             this._updateGpsState();
             this._exportarMesesPendientes();
             this._publicarResumen();
+            this._cargarLugares();
             this._pedirPermisosIniciales();
             if (this._pendingNotifAction === 'registro-rapido') {
                 this._pendingNotifAction = null;
@@ -868,6 +900,7 @@ const app = {
                 ...(esNoche && horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
                 ...(esPR ? { pr: true } : {}),
                 ...(esFestivo ? { festivo: true } : {}),
+                ...(this.puestoTrabajo ? { puesto: this.puestoTrabajo } : {}),
                 ...(esExtra ? { extraManual: true, extraDestino } : {}),
                 ...(esVacaciones ? { vacaciones: true } : {})
             };
@@ -900,6 +933,7 @@ const app = {
             this.actualizarUI(datos);
             this.cancelarEdicion();
             this._publicarResumen();
+            this._comprobarLugarPorUbicacion();
         } catch(e) {
             alert('❌ Error al guardar: ' + e.message);
         }
@@ -1455,11 +1489,28 @@ const app = {
         return document.querySelector('input[name="extraDestino"]:checked')?.value || 'anual';
     },
 
-    async mostrarCambiarJornada() {
-        const v = prompt('¿Cuántas horas tiene tu jornada?\n\nPuedes usar decimales: 3,5 o 3.5\nSe usará para contar los festivos que no trabajas.', this.jornadaHoras);
+    mostrarCambiarJornada() {
+        // Lo que cambia las reglas es si es media jornada o completa, así que se
+        // elige entre las dos en vez de escribir un número a ojo.
+        document.querySelectorAll('#jornadaModal .jm-op').forEach(op => {
+            const c = op.querySelector('.jm-check');
+            op.classList.toggle('sel', !!c && parseFloat(c.dataset.jor) === this.jornadaHoras);
+        });
+        document.getElementById('jornadaModal').classList.add('show');
+        if (this.darkMode) document.getElementById('jornadaModalContent').classList.add('dark');
+    },
+
+    elegirJornadaOtra() {
+        const v = prompt('¿Cuántas horas tiene tu jornada?\n\nPuedes usar decimales: 3,5 o 3.5', this.jornadaHoras);
         if (v === null) return;
         const n = this._leerDecimal(v);
         if (n === null || n <= 0) { alert('❌ Introduce un número de horas válido.\nEjemplo: 3,5 o 7'); return; }
+        this.elegirJornada(n);
+    },
+
+    async elegirJornada(n) {
+        document.getElementById('jornadaModal').classList.remove('show');
+        if (n === this.jornadaHoras) return;
         this.jornadaHoras = n;
         localStorage.setItem('jornadaHoras', String(n));
         this._actualizarJornadaDisplay();
@@ -1471,18 +1522,28 @@ const app = {
     _actualizarJornadaDisplay() {
         const el = document.getElementById('jornadaHorasDisplay');
         if (el) el.textContent = this.jornadaHoras + 'h';
+        this._actualizarCampoFestivo();
+    },
+
+    // El último dígito es el de control y va tras el guión. El cuerpo puede ser
+    // de 3 o de 4 dígitos: 209-1 y 1418-3 son los dos válidos. Devuelve null si
+    // no encaja, '' si se ha dejado en blanco.
+    _normalizarConductor(v) {
+        const digitos = String(v ?? '').replace(/\D/g, '');
+        if (!String(v ?? '').trim()) return '';
+        if (digitos.length !== 4 && digitos.length !== 5) return null;
+        return digitos.slice(0, -1) + '-' + digitos.slice(-1);
     },
 
     mostrarCambiarConductor() {
-        const v = prompt('Número de trabajador (5 dígitos).\n\nPuedes escribirlo con o sin guión: 14183 o 1418-3', this.numConductor || '');
+        const v = prompt('Número de trabajador.\n\nPuedes escribirlo con o sin guión: 14183 o 1418-3, 2091 o 209-1',
+            this.numConductor || '');
         if (v === null) return;
-        // Accept it typed either way and always store it as 1418-3
-        const digitos = v.replace(/\D/g, '');
-        if (v.trim() && digitos.length !== 5) {
-            alert('❌ Formato incorrecto. Deben ser 5 dígitos.\nEjemplo: 14183 o 1418-3');
+        const val = this._normalizarConductor(v);
+        if (val === null) {
+            alert('❌ Formato incorrecto. Deben ser 4 o 5 dígitos.\nEjemplo: 209-1 o 1418-3');
             return;
         }
-        const val = digitos ? digitos.slice(0, 4) + '-' + digitos.slice(4) : '';
         this.numConductor = val;
         localStorage.setItem('numConductor', val);
         this._actualizarConductorDisplay();
@@ -1512,18 +1573,32 @@ const app = {
 
     _fechaDeId(id) { return String(id).slice(0, 8); },
 
+    // Horas que cuentan para las anuales. Un festivo trabajado cuenta sus horas
+    // como cualquier otro día; uno sin trabajar cuenta como jornada entera.
+    //
+    // De ahí sale, sin hacer nada especial, lo que marca la ley para la media
+    // jornada: trabaja de lunes a viernes, y un festivo en miércoles le deja la
+    // semana en 14h trabajadas + 3,5h del festivo = 17,5h, mientras que uno en
+    // sábado le suma 3,5h encima de la semana entera = 21h.
+    _horasEfectivas(fecha, reg) {
+        const h = parseFloat(reg.horas) || 0;
+        if (reg.festivo && h === 0) return this.jornadaHoras;
+        return h;
+    },
+
     _hayRegistroEnFecha(fechaKey) {
         return Object.keys(this._historialFull || {}).some(id => this._fechaDeId(id) === fechaKey);
     },
 
     // Single source of truth for all hour totals, derived from the history
     _calcTotales(historial) {
-        let anual = 0, extrasManual = 0, festivo = 0, diasFestivos = 0;
-        Object.values(historial || {}).forEach(r => {
+        let anual = 0, extrasManual = 0, festivo = 0, diasFestivos = 0, diasExtra = 0;
+        Object.entries(historial || {}).forEach(([id, r]) => {
             const h = parseFloat(r.horas) || 0;
+            // Venir a trabajar un festivo o un libre se cobra como día extra
+            if (h > 0 && (r.festivo || r.extraDestino === 'extras')) diasExtra++;
             if (r.extraDestino === 'extras') { extrasManual += h; return; }
-            // A holiday you did not work still counts as a full standard shift
-            const efectivas = (r.festivo && h === 0) ? this.jornadaHoras : h;
+            const efectivas = this._horasEfectivas(this._fechaDeId(id), r);
             if (r.festivo) { festivo += efectivas; diasFestivos++; }
             anual += efectivas;
         });
@@ -1538,6 +1613,8 @@ const app = {
             topeExtras: topeExt,
             festivo:   r1(festivo),
             diasFestivos,
+            diasExtra,
+            importeDiasExtra: r1(diasExtra * this.precioFestivoDefault),
             restantes: r1(Math.max(0, tope - anual))
         };
     },
@@ -1909,6 +1986,10 @@ const app = {
                 ? `<div style="font-size:10px;color:#856404;font-weight:600;">🌙 ${reg.horasNocturnas}h noct. · +${(reg.extraNoche||0).toFixed(2)}€</div>` : '';
             const horario = (reg.horaInicio && reg.horaFin)
                 ? `<span style="color:#95a5a6;font-size:10px;font-style:italic;">${reg.horaInicio}–${reg.horaFin}</span>` : '';
+            // Las jornadas viejas no lo llevan guardado: se usa el lugar actual
+            const lugar = reg.puesto || this.puestoTrabajo;
+            const lugarStr = lugar
+                ? `<span style="color:var(--g1);font-size:10px;font-weight:700;">${lugar}</span>` : '';
             const prBadge     = reg.pr      ? `<span class="pr-badge">PR</span>` : '';
             const festivoBadge= reg.festivo ? `<span class="festivo-badge">🎉 Festivo</span>` : '';
             const vacBadge    = reg.vacaciones ? `<span class="vacaciones-badge">🏖️ Vacaciones</span>` : '';
@@ -1920,6 +2001,7 @@ const app = {
                         <span style="color:#7f8c8d;font-weight:700;font-size:12px;">${reg.fecha}</span>
                         ${horario}
                         <span style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;padding:3px 9px;border-radius:20px;font-weight:700;font-size:10px;">${reg.horas}h</span>
+                        ${lugarStr}
                         ${prBadge}${festivoBadge}${extraBadge}${vacBadge}
                     </div>
                     ${nocheStr}
@@ -1997,9 +2079,10 @@ const app = {
         const meses = {};
         // Chronological pass: hours past the annual cap are overtime, and this is
         // the only way to attribute them to the month they actually happened in.
-        const orden = Object.values(historial || {})
-            .filter(r => r.timestamp)
-            .sort((a, b) => a.timestamp - b.timestamp);
+        const orden = Object.entries(historial || {})
+            .filter(([, r]) => r.timestamp)
+            .sort((a, b) => a[1].timestamp - b[1].timestamp)
+            .map(([id, r]) => ({ ...r, _fecha: this._fechaDeId(id) }));
         const tope = this.horasAnualesCustom;
         let acumulado = 0;
         orden.forEach(reg => {
@@ -2011,7 +2094,7 @@ const app = {
             if (reg.extraDestino === 'extras') {
                 extrasReg = h;                       // marked as overtime by hand
             } else {
-                const efectivas = (reg.festivo && h === 0) ? this.jornadaHoras : h;
+                const efectivas = this._horasEfectivas(reg._fecha, reg);
                 const cabe = Math.max(0, tope - acumulado);
                 extrasReg = Math.max(0, efectivas - cabe);
                 acumulado += efectivas;
@@ -2050,7 +2133,12 @@ const app = {
         const elE = document.getElementById('statExtras');
         const elES= document.getElementById('statExtrasSub');
         if (elF)  elF.textContent  = t.festivo.toFixed(1);
-        if (elFS) elFS.textContent = t.diasFestivos === 1 ? '1 día festivo' : `${t.diasFestivos} días festivos`;
+        if (elFS) {
+            const dias = t.diasFestivos === 1 ? '1 día festivo' : `${t.diasFestivos} días festivos`;
+            elFS.textContent = t.importeDiasExtra > 0
+                ? `${dias} · ${t.diasExtra} día${t.diasExtra === 1 ? '' : 's'} extra: ${t.importeDiasExtra.toFixed(2)}€`
+                : dias;
+        }
         if (elE)  elE.textContent  = t.extras.toFixed(1);
         if (elES) {
             const importe = this.precioExtraDefault > 0
@@ -2177,19 +2265,48 @@ const app = {
 
     // Turno según el puesto y la hora de entrada registrada. Si el puesto no
     // está en la tabla, se cae al criterio antiguo (mañana antes de las 13h).
+    // La noche es 21:00–06:00 en cualquier lugar. Mañana y tarde admiten una
+    // hora de margen: entrar una hora antes sigue siendo mañana y salir una
+    // hora más tarde sigue siendo tarde. En los lugares que entran de
+    // madrugada (Son Rossinyol a las 3:45) la noche termina donde empieza su
+    // mañana con el margen, o de lo contrario se las tragaría enteras.
+    NOCHE_DESDE: 21 * 60,
+    NOCHE_HASTA: 6 * 60,
+    MARGEN_TURNO: 60,
+
+    _franjasDe(puesto) {
+        return (TURNOS_POR_PUESTO[this._clavePuesto(puesto)] || []).filter(f => f.id !== 'N');
+    },
+
+    // Hora a la que deja de ser de noche en este lugar: nunca más tarde de las 6
+    _amanecerDe(puesto) {
+        const m = this._franjasDe(puesto).find(f => f.id === 'M');
+        const ini = m ? this._minutos(m.desde) : null;
+        if (ini === null) return this.NOCHE_HASTA;
+        return Math.min(this.NOCHE_HASTA, Math.max(0, ini - this.MARGEN_TURNO));
+    },
+
+    _esNoche(min, puesto) {
+        return min >= this.NOCHE_DESDE || min < this._amanecerDe(puesto);
+    },
+
     _turnoDe(puesto, horaInicio) {
         const ini = this._minutos(horaInicio);
         if (ini === null) return '';
-        const franjas = TURNOS_POR_PUESTO[this._clavePuesto(puesto)];
-        if (!franjas) return ini < 13 * 60 ? 'M' : 'T';
-        for (const f of franjas) {
-            let a = this._minutos(f.desde), b = this._minutos(f.hasta);
-            if (b <= a) b += 1440;                   // franja que cruza medianoche
-            let cur = ini;
+        if (this._esNoche(ini, puesto)) return 'N';
+        const franjas = this._franjasDe(puesto);
+        if (!franjas.length) return ini < 13 * 60 ? 'M' : 'T';
+
+        const dentro = (min, f, margen) => {
+            let a = this._minutos(f.desde) - margen, b = this._minutos(f.hasta) + margen;
+            if (b <= a) b += 1440;
+            let cur = min;
             if (cur < a && b > 1440) cur += 1440;
-            if (cur >= a && cur < b) return f.id;
-        }
-        return '';
+            return cur >= a && cur < b;
+        };
+        for (const f of franjas) if (dentro(ini, f, 0)) return f.id;
+        for (const f of franjas) if (dentro(ini, f, this.MARGEN_TURNO)) return f.id;
+        return ini < 13 * 60 ? 'M' : 'T';
     },
 
     _turnoHabitual(delMes) {
@@ -2197,6 +2314,73 @@ const app = {
         const conHora = delMes.filter(r => r.horaInicio).sort((a, b) => b.timestamp - a.timestamp);
         if (!conHora.length) return '';
         return this._turnoDe(this.puestoTrabajo, conHora[0].horaInicio);
+    },
+
+    async _cargarLugares() {
+        try {
+            const r = await fetch(LUGARES_URL, { cache: 'no-store' });
+            if (!r.ok) throw new Error(r.status);
+            const data = await r.json();
+            if (data && typeof data === 'object') {
+                aplicarCatalogoLugares(data);
+                localStorage.setItem('lugaresCatalogo', JSON.stringify(data));
+            }
+        } catch (_) {
+            // Sin red se tira de lo último que se vio, que es mejor que nada
+            try { aplicarCatalogoLugares(JSON.parse(localStorage.getItem('lugaresCatalogo') || '{}')); } catch (_) {}
+        }
+    },
+
+    // Lugar del catálogo cuya ubicación cae más cerca, dentro de su radio. Si
+    // hay varios en el mismo sitio (control y taller comparten nave) gana el de
+    // prioridad más alta, que es donde suele estar la gente.
+    _lugarPorUbicacion(lat, lng) {
+        let mejor = null;
+        Object.values(LUGARES_CATALOGO || {}).forEach(l => {
+            const u = l?.ubicacion;
+            if (!u) return;
+            const d = this.calcularDistancia(lat, lng, u.lat, u.lng);
+            if (d > u.radio) return;
+            if (!mejor || (l.prioridad || 0) > mejor.prioridad
+                || ((l.prioridad || 0) === mejor.prioridad && d < mejor.d)) {
+                mejor = { nombre: l.nombre, prioridad: l.prioridad || 0, d };
+            }
+        });
+        return mejor;
+    },
+
+    _posicionActual() {
+        return new Promise(resolve => {
+            const Geo = window.Capacitor?.Plugins?.Geolocation || navigator.geolocation;
+            if (!Geo) return resolve(null);
+            let hecho = false;
+            const ok = c => { if (!hecho) { hecho = true; resolve({ lat: c.coords?.latitude ?? c.latitude, lng: c.coords?.longitude ?? c.longitude }); } };
+            const fallo = () => { if (!hecho) { hecho = true; resolve(null); } };
+            try {
+                if (Geo.getCurrentPosition.length === 0) Geo.getCurrentPosition().then(ok).catch(fallo);
+                else Geo.getCurrentPosition(ok, fallo, { enableHighAccuracy: true, timeout: 8000 });
+            } catch (_) { fallo(); }
+            setTimeout(fallo, 9000);
+        });
+    },
+
+    // Al registrar, si estás en un lugar conocido y no es el que tienes puesto,
+    // se te pregunta. Confirmarlo lo cambia también en gestión.
+    async _comprobarLugarPorUbicacion() {
+        if (!Object.keys(LUGARES_CATALOGO || {}).length) return;
+        const pos = await this._posicionActual();
+        if (!pos) return;
+        const cerca = this._lugarPorUbicacion(pos.lat, pos.lng);
+        if (!cerca) return;
+        if (this._clavePuesto(cerca.nombre) === this._clavePuesto(this.puestoTrabajo)) return;
+        if (!confirm(`Parece que estás en ${cerca.nombre}.\n\n¿Lo pongo como tu lugar de trabajo?`)) return;
+        this.puestoTrabajo = cerca.nombre;
+        localStorage.setItem('puestoTrabajo', this.puestoTrabajo);
+        this._actualizarCabeceraUsuario();
+        this._actualizarConductorDisplay();
+        localStorage.removeItem('resumenHuella');     // forzar que se vuelva a publicar
+        this._publicarResumen();
+        this._mostrarToast(`📍 Lugar: ${cerca.nombre}`, 3000);
     },
 
     async _publicarResumen() {
@@ -2230,7 +2414,7 @@ const app = {
                     i: r.horaInicio || '',
                     o: r.horaFin || '',
                     n: r.horasNocturnas || 0,
-                    pu: this.puestoTrabajo || '',
+                    pu: r.puesto || this.puestoTrabajo || '',
                     ...(r.extraManual ? { x: r.extraDestino === 'extras' ? 1 : 2 } : {}),
                     ...(r.festivo ? { fe: 1 } : {}),
                     ...(r.vacaciones ? { v: 1 } : {}),
@@ -2256,6 +2440,7 @@ const app = {
             // hasta el día siguiente. Sin cambios no se escribe nada.
             const huella = JSON.stringify([payload.version, payload.horasMes, payload.horasTotales,
                                            payload.diasMes, payload.turno, payload.conductor, payload.horasAnuales,
+                                           payload.jornadaHoras,
                                            payload.nombre, payload.horaInicio, payload.horaFin,
                                            payload.horarioDe, jornadas.length,
                                            jornadas.length ? jornadas[jornadas.length - 1].f : '',
@@ -2383,6 +2568,30 @@ const app = {
         this.cargarDatos();
     },
 
+    guardarPrecioFestivo() {
+        const precio = this._leerDecimal(document.getElementById('precioFestivoGlobal').value) || 0;
+        this.precioFestivoDefault = precio;
+        localStorage.setItem('precioFestivo', String(precio));
+        this._guardarPreferencias();
+        this.cargarDatos();
+    },
+
+    // Quién trabaja festivos y libres no se puede deducir de las horas de la
+    // jornada: hay un grupo que hace 7h tres días a la semana y va por las
+    // mismas reglas que la media jornada. Lo que los separa son las anuales.
+    ANUALES_COMPLETA: 1700,
+
+    _esJornadaCompleta() {
+        return this.horasAnualesCustom >= this.ANUALES_COMPLETA;
+    },
+
+    _actualizarCampoFestivo() {
+        const campo = document.getElementById('campoPrecioFestivo');
+        if (campo) campo.hidden = !this._esJornadaCompleta();
+        const inp = document.getElementById('precioFestivoGlobal');
+        if (inp && this.precioFestivoDefault > 0) inp.value = this.precioFestivoDefault;
+    },
+
     guardarPrecioNoche() {
         const precio = this._leerDecimal(document.getElementById('precioNocheGlobal').value) || 0;
         this.precioNocheDefault = precio;
@@ -2390,14 +2599,31 @@ const app = {
         this._guardarPreferencias();
     },
 
-    async mostrarCambiarHoras() {
+    mostrarCambiarAnuales() {
+        document.querySelectorAll('#anualesModal .jm-op').forEach(op => {
+            const c = op.querySelector('.jm-check');
+            op.classList.toggle('sel', !!c && parseFloat(c.dataset.an) === this.horasAnualesCustom);
+        });
+        document.getElementById('anualesModal').classList.add('show');
+        if (this.darkMode) document.getElementById('anualesModalContent').classList.add('dark');
+    },
+
+    elegirAnualesOtra() {
         const v = prompt('¿Cuántas horas quieres trabajar al año?', this.horasAnualesCustom);
         if (v === null) return;
         const n = this._leerDecimal(v);
         if (n === null || n <= 0) { alert('❌ Introduce un número de horas válido.'); return; }
+        this.elegirAnuales(n);
+    },
+
+    async elegirAnuales(n) {
+        document.getElementById('anualesModal').classList.remove('show');
+        if (n === this.horasAnualesCustom) return;
         this.horasAnualesCustom = n;
         localStorage.setItem('horasAnuales', String(n));
-        document.getElementById('horasAnualesDisplay').textContent = n + 'h';
+        const el = document.getElementById('horasAnualesDisplay');
+        if (el) el.textContent = n + 'h';
+        this._actualizarCampoFestivo();      // el precio del día extra depende de esto
         await this._guardarPreferencias(true);
         this.cargarDatos();
         this._mostrarToast(`✅ Horas anuales: ${n}h`, 2500);
@@ -2781,6 +3007,7 @@ const app = {
             gpsScheduleTo: this.gpsScheduleTo,
             precioNocheDefault: this.precioNocheDefault,
             precioExtraDefault: this.precioExtraDefault,
+            precioFestivoDefault: this.precioFestivoDefault,
             horasAnualesCustom: this.horasAnualesCustom,
             jornadaHoras: this.jornadaHoras,
             numConductor: this.numConductor,
@@ -2821,6 +3048,10 @@ const app = {
             localStorage.setItem('precioNoche', String(prefs.precioNocheDefault));
             const el = document.getElementById('precioNocheGlobal');
             if (el) el.value = prefs.precioNocheDefault;
+        }
+        if (prefs.precioFestivoDefault !== undefined && prefs.precioFestivoDefault !== null) {
+            this.precioFestivoDefault = prefs.precioFestivoDefault;
+            localStorage.setItem('precioFestivo', String(prefs.precioFestivoDefault));
         }
         if (prefs.precioExtraDefault !== undefined && prefs.precioExtraDefault !== null) {
             this.precioExtraDefault = prefs.precioExtraDefault;

@@ -288,6 +288,25 @@
         .orden-btn.activo{background:white;color:var(--g1);box-shadow:0 1px 2px rgba(0,0,0,.08);}
         .app-content.dark .orden-btn.activo{background:#1e2a3a;}
         .cond-refresh{flex-shrink:0;width:30px;height:30px;background:linear-gradient(135deg,var(--g1),var(--g2));border:none;border-radius:8px;color:#fff;font-size:16px;cursor:pointer;}
+        .cond-filtros{display:flex;gap:6px;overflow-x:auto;padding:2px 0 9px;}
+        .cond-filtros button{flex-shrink:0;border:none;border-radius:9px;padding:6px 12px;font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer;background:#eef1f6;color:#7f8c8d;}
+        .app-content.dark .cond-filtros button{background:#16202e;color:#a0a0a0;}
+        .cond-filtros button.activo{background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;}
+        .sec.cerrada .solo-abierta{display:none;}
+        .lug-filtro-btn{flex-shrink:0;width:30px;height:30px;border:none;border-radius:8px;background:#eef1f6;color:var(--g1);font-size:14px;cursor:pointer;font-family:inherit;}
+        .app-content.dark .lug-filtro-btn{background:#16202e;}
+        .baja-lista{max-height:38vh;overflow-y:auto;}
+        .baja-fila{display:flex;align-items:flex-end;gap:8px;padding:9px 16px;border-bottom:1px solid #f4f4f4;}
+        .modal-card.dark .baja-fila{border-color:#2d3561;}
+        .baja-fila label{flex:1;display:flex;flex-direction:column;gap:3px;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#95a5a6;}
+        .baja-fila input{border:1.5px solid #dfe4ea;border-radius:8px;padding:7px 8px;font-family:inherit;font-size:13px;color:#2c3e50;background:#fff;}
+        .modal-card.dark .baja-fila input{background:#16202e;border-color:#2d3561;color:#e0e0e0;}
+        .baja-x{flex-shrink:0;width:32px;height:32px;border:none;border-radius:8px;background:#fdecea;color:#c0392b;font-size:17px;cursor:pointer;}
+        .baja-vacio,.baja-resumen{padding:12px 16px;font-size:12px;color:#95a5a6;}
+        .baja-resumen{font-weight:800;color:var(--g1);border-top:1px solid #f2f2f2;}
+        .modal-card.dark .baja-resumen{border-color:#2d3561;}
+        .cond-baja{margin-top:7px;padding:6px 9px;border-radius:8px;background:#f4f6f9;font-size:10.5px;font-weight:700;color:#7f8c8d;}
+        .app-content.dark .cond-baja{background:#16202e;color:#a0a0a0;}
         .cond-list{flex:none;display:flex;flex-direction:column;gap:8px;}
         .cond-card{background:white;border-radius:12px;padding:11px 13px;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
         .app-content.dark .cond-card{background:#1e2a3a;}
@@ -295,7 +314,8 @@
         .cond-avatar{width:42px;height:42px;border-radius:50%;flex-shrink:0;background:var(--g1);color:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;object-fit:cover;}
         .cond-id{flex:1;min-width:0;}
         .cond-top{cursor:pointer;-webkit-tap-highlight-color:transparent;}
-        .cond-chev{color:#95a5a6;font-size:13px;flex-shrink:0;transition:transform .2s;}
+        .cond-chev{color:#7f8c8d;font-size:15px;flex-shrink:0;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:9px;background:#f1f4f8;transition:transform .2s;}
+        .app-content.dark .cond-chev{background:#16202e;color:#a0a0a0;}
         .cond-card.plegada .cond-chev{transform:rotate(-90deg);}
         .cond-card.plegada .cond-cuerpo{display:none;}
         .puesto-click{text-decoration:underline;text-decoration-style:dotted;cursor:pointer;}
@@ -365,7 +385,7 @@
         .rg-h{display:flex;align-items:center;gap:7px;padding:9px 12px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
         .rg-h:active{background:#f4f6f9;}
         .app-content.dark .rg-h:active{background:#16202e;}
-        .rg-chev{font-size:10px;width:10px;color:#95a5a6;flex-shrink:0;}
+        .rg-chev{font-size:13px;width:28px;height:28px;margin-left:-4px;color:#7f8c8d;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
         .rg-t{flex:1;font-size:12.5px;font-weight:800;color:#2c3e50;text-transform:capitalize;}
         .app-content.dark .rg-t{color:#e0e0e0;}
         .rg-sub{font-size:10.5px;font-weight:700;color:var(--g1);}
@@ -408,7 +428,9 @@
         .pr-ed{background:#3498db;color:#fff;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;}
         .pr-del{background:#e74c3c;color:#fff;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;}
         /* Barra de día: el bloque entero acepta swipe horizontal */
-        .pst-dia{display:flex;align-items:center;gap:6px;margin-bottom:8px;}
+        .pst-dia{display:flex;align-items:center;gap:6px;margin-bottom:10px;}
+        .pst-hoy{flex-shrink:0;border:none;border-radius:8px;padding:6px 12px;font-family:inherit;font-size:11.5px;font-weight:800;cursor:pointer;background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;}
+        .pst-hoy.oculto{visibility:hidden;}
         .pst-dia-txt{flex:1;text-align:center;font-size:11.5px;font-weight:800;color:#2c3e50;text-transform:capitalize;}
         .app-content.dark .pst-dia-txt{color:#e0e0e0;}
         .pst-nav{width:28px;height:28px;flex-shrink:0;border:none;border-radius:8px;background:#e8eaf0;color:#2c3e50;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit;line-height:1;}
@@ -659,18 +681,24 @@
         <!-- ── TAB: Trabajadores ── -->
         <div class="tab-panel active" id="tabPanel0">
             <!-- Lugares primero: es lo que se mira de un vistazo -->
+            <!-- El día manda sobre las dos secciones: se cambia con las flechas
+                 o arrastrando en horizontal por cualquier punto de la pestaña. -->
+            <div class="pst-dia">
+                <button class="pst-nav" onclick="app.cambiarDiaPuestos(-1)">‹</button>
+                <span class="pst-dia-txt" id="pstDiaTxt">Hoy</span>
+                <button class="pst-hoy" id="pstHoy" onclick="app.irAHoy()">Hoy</button>
+                <button class="pst-nav" onclick="app.cambiarDiaPuestos(1)">›</button>
+            </div>
+
             <div class="sec" id="secPuestos">
                 <div class="sec-head" onclick="app.toggleSeccion('secPuestos')">
                     <span class="cond-title">🧩 Lugares de trabajo</span>
                     <span class="sec-cnt" id="puestosCnt"></span>
+                    <button class="lug-filtro-btn solo-abierta" onclick="event.stopPropagation();app.toggleFiltroLugares()" title="Filtrar">⚟</button>
                     <button class="mensual-toggle sec-chev">▼</button>
                 </div>
                 <div class="sec-body" id="puestosBody">
-                    <div class="pst-dia">
-                        <button class="pst-nav" onclick="app.cambiarDiaPuestos(-1)">‹</button>
-                        <span class="pst-dia-txt" id="pstDiaTxt">Hoy</span>
-                        <button class="pst-nav" id="pstNavNext" onclick="app.cambiarDiaPuestos(1)">›</button>
-                    </div>
+                    <div class="cond-filtros" id="lugFiltros" hidden></div>
                     <div id="puestosList"></div>
                 </div>
             </div>
@@ -679,14 +707,17 @@
                 <div class="sec-head" onclick="app.toggleSeccion('secTrabajadores')">
                     <span class="cond-title">👥 Trabajadores</span>
                     <span class="sec-cnt" id="trabajCnt"></span>
-                    <div class="cond-orden" onclick="event.stopPropagation()">
+                    <div class="cond-orden solo-abierta" onclick="event.stopPropagation()">
                         <button id="ordenNombre" class="orden-btn activo" onclick="app.ordenarTrabajadores('nombre')">Nombre</button>
                         <button id="ordenNumero" class="orden-btn" onclick="app.ordenarTrabajadores('numero')">Nº</button>
                     </div>
-                    <button class="cond-refresh" onclick="event.stopPropagation();app._cargarConductores()" title="Actualizar">⟳</button>
+                    <button class="cond-refresh solo-abierta" onclick="event.stopPropagation();app._cargarConductores()" title="Actualizar">⟳</button>
                     <button class="mensual-toggle sec-chev">▼</button>
                 </div>
-                <div class="sec-body"><div id="condList" class="cond-list"></div></div>
+                <div class="sec-body">
+                    <div class="cond-filtros" id="condFiltros"></div>
+                    <div id="condList" class="cond-list"></div>
+                </div>
             </div>
 
             <!-- Formulario heredado: oculto en gestión, pero presente para que
@@ -1013,12 +1044,28 @@
                 </div>
             </div>
 
+            <!-- Lugares de trabajo: turnos y ubicación -->
+            <div class="ops-section" id="sectionLugares">
+                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._renderLugares()">🧩 Lugares de trabajo <span class="ops-chevron">›</span></button>
+                <div class="ops-body">
+                    <div class="ops-field">
+                        <span class="ops-field-sub">Los turnos de mañana, tarde y noche de cada lugar, y su ubicación. Las dos apps los leen de aquí: al guardarlos, los trabajadores los ven sin actualizar la app.</span>
+                    </div>
+                    <div id="lugaresList"></div>
+                    <button class="ops-btn" onclick="app._nuevoLugar()">➕ Añadir lugar de trabajo <span class="ops-arrow">›</span></button>
+                </div>
+            </div>
+
             <!-- Usuarios de prueba -->
             <div class="ops-section" id="sectionPrueba">
                 <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._renderPrueba()">🧪 Usuarios de prueba <span class="ops-chevron">›</span></button>
                 <div class="ops-body">
                     <div class="ops-field">
                         <span class="ops-field-sub">Trabajadores inventados para probar las pantallas. Se ven igual que los reales pero llevan la marca PRUEBA, y puedes borrarlos cuando quieras.</span>
+                    </div>
+                    <div class="cond-orden" style="margin-bottom:8px;">
+                        <button id="ordenPruebaNombre" class="orden-btn activo" onclick="app.ordenarPrueba('nombre')">Nombre</button>
+                        <button id="ordenPruebaNumero" class="orden-btn" onclick="app.ordenarPrueba('numero')">Nº</button>
                     </div>
                     <div id="pruebaList"></div>
                     <button class="ops-btn" onclick="app._nuevoFicticio()">➕ Añadir usuario de prueba <span class="ops-arrow">›</span></button>
@@ -1226,6 +1273,57 @@
     </div>
 </div>
 
+
+<!-- Editor de un lugar de trabajo -->
+<div class="modal" id="lugarModal">
+    <div class="modal-card" id="lugarModalContent">
+        <div class="modal-header">
+            <h3>🧩 Lugar de trabajo</h3>
+            <button class="modal-close" onclick="document.getElementById('lugarModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="edit-field"><label>Nombre</label><input type="text" id="lgNombre" placeholder="Son Rossinyol"></div>
+            <div class="f-sep">Turnos</div>
+            <div id="lgTurnos"></div>
+            <div class="f-sep">Ubicación</div>
+            <span class="ops-field-sub" style="display:block;margin-bottom:8px;">Si un trabajador registra su jornada dentro del radio, la app le propone este lugar.</span>
+            <div class="edit-row">
+                <div class="edit-field"><label>Latitud</label><input type="text" inputmode="decimal" id="lgLat" placeholder="39.5696"></div>
+                <div class="edit-field"><label>Longitud</label><input type="text" inputmode="decimal" id="lgLng" placeholder="2.6502"></div>
+            </div>
+            <div class="edit-row">
+                <div class="edit-field"><label>Radio (m)</label><input type="text" inputmode="numeric" id="lgRadio" placeholder="150"></div>
+                <div class="edit-field"><label>Prioridad</label><input type="text" inputmode="numeric" id="lgPrio" placeholder="0"></div>
+            </div>
+            <span class="ops-field-sub" style="display:block;">Con dos lugares en la misma ubicación se propone el de prioridad más alta.</span>
+            <button class="ops-btn" style="border-radius:8px;margin-top:10px;" onclick="app._ubicacionActualLugar()">📍 Usar mi ubicación actual</button>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" onclick="app._borrarLugar()">Borrar</button>
+            <button class="modal-btn modal-btn-confirm" onclick="app._guardarLugar()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Fechas de baja -->
+<div class="modal" id="bajaModal">
+    <div class="modal-card" id="bajaModalContent">
+        <div class="modal-header">
+            <h3>🩺 Baja (BE)</h3>
+            <button class="modal-close" onclick="document.getElementById('bajaModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div id="bajaQuien" class="pm-quien"></div>
+            <div id="bajaLista" class="baja-lista"></div>
+            <div id="bajaResumen" class="baja-resumen"></div>
+            <div class="pm-op pm-nuevo" onclick="app._nuevaBaja()">➕ Añadir tramo de baja</div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('bajaModal').classList.remove('show')">Cancelar</button>
+            <button class="modal-btn modal-btn-confirm" onclick="app._guardarBajas()">Guardar</button>
+        </div>
+    </div>
+</div>
 
 <!-- Elegir lugar de trabajo -->
 <div class="modal" id="puestoModal">

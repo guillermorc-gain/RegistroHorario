@@ -1,3 +1,24 @@
+// En la web las dos apps se sirven desde el mismo dominio, y localStorage va
+// por origen, no por ruta: sin esto gestión y la app de los trabajadores se
+// pisarían la sesión, el historial y los ajustes. En el móvil cada APK tiene su
+// propio almacenamiento, así que no hace falta y se deja tal cual.
+(function aislarAlmacenamiento() {
+    try {
+        if (window.Capacitor?.isNativePlatform?.()) return;
+        const real = window.localStorage;
+        const P = 'gestion:';
+        const shim = {
+            getItem:    k => real.getItem(P + k),
+            setItem:    (k, v) => real.setItem(P + k, v),
+            removeItem: k => real.removeItem(P + k),
+            clear:      () => Object.keys(real).filter(k => k.startsWith(P)).forEach(k => real.removeItem(k)),
+            key:        i => Object.keys(real).filter(k => k.startsWith(P))[i]?.slice(P.length) ?? null,
+            get length() { return Object.keys(real).filter(k => k.startsWith(P)).length; },
+        };
+        Object.defineProperty(window, 'localStorage', { value: shim, configurable: true });
+    } catch (_) { /* si el navegador no deja, se sigue con el de siempre */ }
+})();
+
 (function(){var t=localStorage.getItem('tema');if(t&&t!=='azul')document.body.classList.add('theme-'+t);})();
 'use strict';
 
@@ -7,7 +28,7 @@ const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.goo
 const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file profile email';
 const AUTH_SCOPE       = 'profile email';
 // Turnos de cada puesto. La hora de entrada registrada decide en cuál cae.
-const PUESTOS_DEFINIDOS = ['Son Rossinyol', 'Control', 'Calle', 'Taller'];
+let PUESTOS_DEFINIDOS = ['Son Rossinyol', 'Control', 'Calle', 'Taller', 'Anselmo Clavé'];
 
 const TURNOS_POR_PUESTO = {
     'son rossinyol': [
@@ -31,8 +52,24 @@ const TURNOS_POR_PUESTO = {
     ],
 };
 
+// El catálogo que mantiene el gestor manda sobre la tabla de aquí abajo: así
+// se pueden cambiar turnos y añadir lugares sin publicar una versión nueva.
+let LUGARES_CATALOGO = {};
+function aplicarCatalogoLugares(cat) {
+    LUGARES_CATALOGO = cat || {};
+    Object.entries(LUGARES_CATALOGO).forEach(([k, l]) => {
+        if (Array.isArray(l?.turnos) && l.turnos.length) TURNOS_POR_PUESTO[k] = l.turnos;
+        const nombre = l?.nombre;
+        if (nombre && !PUESTOS_DEFINIDOS.some(p => p.toLowerCase().normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '') === k)) {
+            PUESTOS_DEFINIDOS.push(nombre);
+        }
+    });
+}
+
 const SUPER_USER_EMAIL = 'g.rioscorrea@gmail.com';
 const ALLOWLIST_APP    = 'gestion';
+const LUGARES_URL      = 'https://registro-horario-emt.vercel.app/api/lugares';
 const VERSION_URL      = 'https://registro-horario-emt.vercel.app/api/version';
 const ANDROID_PACKAGE  = 'com.guillermorc.gestionemt';
 const RELEASE_PREFIX   = 'gestion-build-';
@@ -810,6 +847,7 @@ const app = {
             this.verificarUbicacion();
             this._updateGpsState();
             this._cargarConductores();
+            this._cargarLugares();
             this._pedirPermisosIniciales();
             if (this._pendingNotifAction === 'registro-rapido') {
                 this._pendingNotifAction = null;
@@ -1459,16 +1497,25 @@ const app = {
         if (el) el.textContent = this.jornadaHoras + 'h';
     },
 
+    // El último dígito es el de control y va tras el guión. El cuerpo puede ser
+    // de 3 o de 4 dígitos: 209-1 y 1418-3 son los dos válidos. Devuelve null si
+    // no encaja, '' si se ha dejado en blanco.
+    _normalizarConductor(v) {
+        const digitos = String(v ?? '').replace(/\D/g, '');
+        if (!String(v ?? '').trim()) return '';
+        if (digitos.length !== 4 && digitos.length !== 5) return null;
+        return digitos.slice(0, -1) + '-' + digitos.slice(-1);
+    },
+
     mostrarCambiarConductor() {
-        const v = prompt('Número de trabajador (5 dígitos).\n\nPuedes escribirlo con o sin guión: 14183 o 1418-3', this.numConductor || '');
+        const v = prompt('Número de trabajador.\n\nPuedes escribirlo con o sin guión: 14183 o 1418-3, 2091 o 209-1',
+            this.numConductor || '');
         if (v === null) return;
-        // Accept it typed either way and always store it as 1418-3
-        const digitos = v.replace(/\D/g, '');
-        if (v.trim() && digitos.length !== 5) {
-            alert('❌ Formato incorrecto. Deben ser 5 dígitos.\nEjemplo: 14183 o 1418-3');
+        const val = this._normalizarConductor(v);
+        if (val === null) {
+            alert('❌ Formato incorrecto. Deben ser 4 o 5 dígitos.\nEjemplo: 209-1 o 1418-3');
             return;
         }
-        const val = digitos ? digitos.slice(0, 4) + '-' + digitos.slice(4) : '';
         this.numConductor = val;
         localStorage.setItem('numConductor', val);
         this._actualizarConductorDisplay();
@@ -2302,19 +2349,48 @@ const app = {
 
     // Turno según el puesto y la hora de entrada registrada. Si el puesto no
     // está en la tabla, se cae al criterio antiguo (mañana antes de las 13h).
+    // La noche es 21:00–06:00 en cualquier lugar. Mañana y tarde admiten una
+    // hora de margen: entrar una hora antes sigue siendo mañana y salir una
+    // hora más tarde sigue siendo tarde. En los lugares que entran de
+    // madrugada (Son Rossinyol a las 3:45) la noche termina donde empieza su
+    // mañana con el margen, o de lo contrario se las tragaría enteras.
+    NOCHE_DESDE: 21 * 60,
+    NOCHE_HASTA: 6 * 60,
+    MARGEN_TURNO: 60,
+
+    _franjasDe(puesto) {
+        return (TURNOS_POR_PUESTO[this._clavePuesto(puesto)] || []).filter(f => f.id !== 'N');
+    },
+
+    // Hora a la que deja de ser de noche en este lugar: nunca más tarde de las 6
+    _amanecerDe(puesto) {
+        const m = this._franjasDe(puesto).find(f => f.id === 'M');
+        const ini = m ? this._minutos(m.desde) : null;
+        if (ini === null) return this.NOCHE_HASTA;
+        return Math.min(this.NOCHE_HASTA, Math.max(0, ini - this.MARGEN_TURNO));
+    },
+
+    _esNoche(min, puesto) {
+        return min >= this.NOCHE_DESDE || min < this._amanecerDe(puesto);
+    },
+
     _turnoDe(puesto, horaInicio) {
         const ini = this._minutos(horaInicio);
         if (ini === null) return '';
-        const franjas = TURNOS_POR_PUESTO[this._clavePuesto(puesto)];
-        if (!franjas) return ini < 13 * 60 ? 'M' : 'T';
-        for (const f of franjas) {
-            let a = this._minutos(f.desde), b = this._minutos(f.hasta);
-            if (b <= a) b += 1440;                   // franja que cruza medianoche
-            let cur = ini;
+        if (this._esNoche(ini, puesto)) return 'N';
+        const franjas = this._franjasDe(puesto);
+        if (!franjas.length) return ini < 13 * 60 ? 'M' : 'T';
+
+        const dentro = (min, f, margen) => {
+            let a = this._minutos(f.desde) - margen, b = this._minutos(f.hasta) + margen;
+            if (b <= a) b += 1440;
+            let cur = min;
             if (cur < a && b > 1440) cur += 1440;
-            if (cur >= a && cur < b) return f.id;
-        }
-        return '';
+            return cur >= a && cur < b;
+        };
+        for (const f of franjas) if (dentro(ini, f, 0)) return f.id;
+        for (const f of franjas) if (dentro(ini, f, this.MARGEN_TURNO)) return f.id;
+        return ini < 13 * 60 ? 'M' : 'T';
     },
 
     // ── Registro diario de todos los trabajadores ────────────────────────────
@@ -2577,6 +2653,153 @@ const app = {
         setTimeout(() => URL.revokeObjectURL(url), 2000);
     },
 
+    // ── Excel de verdad (.xlsx) ─────────────────────────────────────────────
+    // Antes se guardaba una tabla HTML con extensión .xls. Excel de escritorio
+    // la tragaba, pero Office en Android la rechaza con "este archivo no es
+    // compatible". Un .xlsx es un ZIP con unos cuantos XML dentro, así que se
+    // arma a mano: sin comprimir (método 0) basta y evita meter una librería.
+
+    _crc32(bytes) {
+        let tabla = this._crcTabla;
+        if (!tabla) {
+            tabla = this._crcTabla = new Int32Array(256);
+            for (let n = 0; n < 256; n++) {
+                let c = n;
+                for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+                tabla[n] = c;
+            }
+        }
+        let crc = -1;
+        for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ tabla[(crc ^ bytes[i]) & 0xFF];
+        return (crc ^ -1) >>> 0;
+    },
+
+    _zip(ficheros) {
+        const enc = new TextEncoder();
+        const partes = [], central = [];
+        let offset = 0;
+        const u16 = n => [n & 0xFF, (n >>> 8) & 0xFF];
+        const u32 = n => [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF];
+
+        ficheros.forEach(({ nombre, texto }) => {
+            const datos = enc.encode(texto);
+            const nom   = enc.encode(nombre);
+            const crc   = this._crc32(datos);
+            // Bit 11 = nombres en UTF-8; fecha y hora fijas, no aportan nada aquí
+            const comun = [...u16(20), ...u16(0x800), ...u16(0), ...u16(0), ...u16(0x2100),
+                           ...u32(crc), ...u32(datos.length), ...u32(datos.length),
+                           ...u16(nom.length)];
+            partes.push(new Uint8Array([...u32(0x04034b50), ...comun, ...u16(0)]), nom, datos);
+            // extra, comentario, disco, atributos internos, atributos externos, offset
+            central.push(new Uint8Array([...u32(0x02014b50), ...u16(20), ...comun,
+                ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset)]), nom);
+            offset += 30 + nom.length + datos.length;
+        });
+
+        const tamCentral = central.reduce((n, p) => n + p.length, 0);
+        const fin = new Uint8Array([...u32(0x06054b50), ...u16(0), ...u16(0),
+            ...u16(ficheros.length), ...u16(ficheros.length),
+            ...u32(tamCentral), ...u32(offset), ...u16(0)]);
+
+        const todo = [...partes, ...central, fin];
+        const total = todo.reduce((n, p) => n + p.length, 0);
+        const salida = new Uint8Array(total);
+        let i = 0;
+        todo.forEach(p => { salida.set(p, i); i += p.length; });
+        return salida;
+    },
+
+    _colExcel(n) {                       // 0 -> A, 25 -> Z, 26 -> AA
+        let s = '';
+        for (n += 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + (n - 1) % 26) + s;
+        return s;
+    },
+
+    _xlsxRegistro() {
+        const esc = v => String(v ?? '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+        const cabeceras = this.CABECERAS_EXPORT;
+        const filas = this._filasExport().map(f => this._valoresFila(f));
+
+        const celda = (v, col, fila, estilo) => {
+            const ref = `${this._colExcel(col)}${fila}`;
+            const st  = estilo ? ` s="${estilo}"` : '';
+            if (typeof v === 'number' && isFinite(v)) return `<c r="${ref}"${st}><v>${v}</v></c>`;
+            const t = esc(v);
+            if (t === '') return '';
+            return `<c r="${ref}"${st} t="inlineStr"><is><t xml:space="preserve">${t}</t></is></c>`;
+        };
+
+        const filasXml = [
+            `<row r="1">${cabeceras.map((h, i) => celda(h, i, 1, 1)).join('')}</row>`,
+            ...filas.map((vals, n) => `<row r="${n + 2}">${vals.map((v, i) => celda(v, i, n + 2, 0)).join('')}</row>`),
+        ].join('');
+
+        const ancho = cabeceras.map((h, i) =>
+            `<col min="${i + 1}" max="${i + 1}" width="${Math.min(34, Math.max(9, h.length + 4))}" customWidth="1"/>`).join('');
+
+        const X = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+        const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+        const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+        const DOC = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+        return this._zip([
+            { nombre: '[Content_Types].xml', texto: X
+            + `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`
+            + `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`
+            + `<Default Extension="xml" ContentType="application/xml"/>`
+            + `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>`
+            + `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`
+            + `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>`
+            + `</Types>` },
+            { nombre: '_rels/.rels', texto: X
+            + `<Relationships xmlns="${REL}">`
+            + `<Relationship Id="rId1" Type="${DOC}/officeDocument" Target="xl/workbook.xml"/>`
+            + `</Relationships>` },
+            { nombre: 'xl/workbook.xml', texto: X
+            + `<workbook xmlns="${NS}" xmlns:r="${DOC}">`
+            + `<sheets><sheet name="Registro" sheetId="1" r:id="rId1"/></sheets></workbook>` },
+            { nombre: 'xl/_rels/workbook.xml.rels', texto: X
+            + `<Relationships xmlns="${REL}">`
+            + `<Relationship Id="rId1" Type="${DOC}/worksheet" Target="worksheets/sheet1.xml"/>`
+            + `<Relationship Id="rId2" Type="${DOC}/styles" Target="styles.xml"/>`
+            + `</Relationships>` },
+            { nombre: 'xl/styles.xml', texto: X
+            + `<styleSheet xmlns="${NS}">`
+            + `<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font>`
+            + `<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font></fonts>`
+            + `<fills count="3"><fill><patternFill patternType="none"/></fill>`
+            + `<fill><patternFill patternType="gray125"/></fill>`
+            + `<fill><patternFill patternType="solid"><fgColor rgb="FF1565C0"/><bgColor indexed="64"/></patternFill></fill></fills>`
+            + `<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>`
+            + `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>`
+            + `<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>`
+            + `<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs>`
+            + `</styleSheet>` },
+            { nombre: 'xl/worksheets/sheet1.xml', texto: X
+            + `<worksheet xmlns="${NS}">`
+            + `<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`
+            + `<cols>${ancho}</cols><sheetData>${filasXml}</sheetData></worksheet>` },
+        ]);
+    },
+
+    _descargarBinario(bytes, nombre, tipo) {
+        if (window.AndroidBridge?.saveFileBase64) {
+            let bin = '';
+            for (let i = 0; i < bytes.length; i += 8192) {
+                bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+            }
+            window.AndroidBridge.saveFileBase64(btoa(bin), nombre);
+            return true;
+        }
+        if (window.AndroidBridge?.saveFile) return false;   // versión antigua sin el puente
+        const url = URL.createObjectURL(new Blob([bytes], { type: tipo }));
+        const a = document.createElement('a');
+        a.href = url; a.download = nombre; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        return true;
+    },
+
     // Separador ; y coma decimal: es lo que espera Excel en español.
     // El BOM hace que reconozca los acentos.
     _csvRegistro() {
@@ -2598,21 +2821,13 @@ const app = {
         this._mostrarToast(`📊 ${filas.length} jornadas en CSV`, 4000);
     },
 
-    // Excel abre una tabla HTML guardada como .xls, y así van con formato
     exportarXLS() {
         if (!this._hayColumnas()) return;
         document.getElementById('expModal').classList.remove('show');
         const filas = this._filasExport();
-        const esc = t => String(t ?? '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
-        const th = this.CABECERAS_EXPORT.map(h => `<th>${esc(h)}</th>`).join('');
-        const tr = filas.map(f => `<tr>${this._valoresFila(f)
-            .map(v => `<td>${esc(v)}</td>`).join('')}</tr>`).join('');
-        const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head>
-<meta charset="utf-8">
-<style>th{background:#1565C0;color:#fff;font-weight:bold;border:1px solid #888;}
-td{border:1px solid #ccc;}</style></head>
-<body><table>${`<tr>${th}</tr>`}${tr}</table></body></html>`;
-        this._descargar('﻿' + html, this._nombreExport('xls'), 'application/vnd.ms-excel');
+        const ok = this._descargarBinario(this._xlsxRegistro(), this._nombreExport('xlsx'),
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        if (!ok) { this._mostrarToast('Actualiza la app para exportar a Excel; de momento usa CSV', 4500); return; }
         this._mostrarToast(`📗 ${filas.length} jornadas en Excel`, 4000);
     },
 
@@ -2785,7 +3000,13 @@ td{border:1px solid #ccc;}</style></head>
     _renderPrueba() {
         const cont = document.getElementById('pruebaList');
         if (!cont) return;
-        const fict = Object.values(this._conductores || {}).filter(u => u.ficticio);
+        const orden = localStorage.getItem('ordenPrueba') || 'nombre';
+        const fict = Object.values(this._conductores || {}).filter(u => u.ficticio)
+            .sort((a, b) => orden === 'numero'
+                ? (a.conductor || '\uffff').localeCompare(b.conductor || '\uffff', 'es', { numeric: true })
+                : (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+        document.getElementById('ordenPruebaNombre')?.classList.toggle('activo', orden === 'nombre');
+        document.getElementById('ordenPruebaNumero')?.classList.toggle('activo', orden === 'numero');
         if (!fict.length) {
             cont.innerHTML = '<div class="ops-field-sub" style="padding:8px 14px;">Ninguno todavía</div>';
             return;
@@ -2940,13 +3161,14 @@ td{border:1px solid #ccc;}</style></head>
 
     cambiarDiaPuestos(paso) {
         this._puestosOffset += paso;
-        this._renderPuestos();
+        this._renderConductores();      // el día manda sobre las dos secciones
     },
 
-    // Swipe horizontal dentro de Puestos: cambia de día en vez de pestaña. El
-    // touchstart corta la propagación para que el swipe de pestañas no salte.
+    // Swipe horizontal en toda la pestaña: cambia de día, no de pestaña. El
+    // touchstart corta la propagación para que el swipe de pestañas no salte;
+    // para cambiar de pestaña está la barra de abajo.
     _initSwipePuestos() {
-        const cont = document.getElementById('puestosBody');
+        const cont = document.getElementById('tabPanel0');
         if (!cont || cont._swipeDia) return;
         cont._swipeDia = true;
         let x0 = 0, y0 = 0, activo = false;
@@ -2966,10 +3188,50 @@ td{border:1px solid #ccc;}</style></head>
         }, { passive: true });
     },
 
+    irAHoy() {
+        if (this._puestosOffset === 0) return;
+        this._puestosOffset = 0;
+        this._renderConductores();
+    },
+
     // El lugar de un día puede no ser el habitual: manda la excepción que haya
     // puesto el gestor, luego lo que publicó la app y por último el habitual.
     _lugarDe(u, fecha, j) {
         return (u.lugares && u.lugares[fecha]) || j?.pu || u.puesto || '';
+    },
+
+    // Totales tal y como estaban al acabar ese día. Se replican las reglas de
+    // la app del trabajador: las jornadas marcadas como extra no suman al
+    // cómputo anual, y un festivo sin horas cuenta como una jornada entera.
+    _totalesDe(u, hasta) {
+        const jor  = u.jornadaHoras || 7;
+        // Los días de baja no los pudo trabajar, así que se le quitan del
+        // objetivo en vez de dejárselos como horas pendientes.
+        const diasBaja = this._diasBaja(u, hasta);
+        const horasBaja = Math.round(diasBaja * jor * 10) / 10;
+        const tope = Math.max(0, (u.horasAnuales || 777) - horasBaja);
+        const mes  = hasta.slice(0, 6);
+        let anual = 0, extras = 0, delMes = 0, dias = 0, festTrabajados = 0;
+        (u.jornadas || []).forEach(j => {
+            if (!j || j.f > hasta) return;
+            const h = j.h || 0;
+            if (j.f.slice(0, 6) === mes) { delMes += h; dias++; }
+            if (j.x === 1) { extras += h; return; }
+            if (j.fe && h > 0) festTrabajados++;
+            anual += this._horasEfectivas(j, jor);
+        });
+        const exceso = Math.max(0, anual - tope);
+        const r1 = n => Math.round(n * 10) / 10;
+        return { mes: r1(delMes), dias, extras: r1(extras + exceso), festTrabajados,
+                 diasBaja, horasBaja, objetivo: r1(tope),
+                 realizadas: r1(anual), restantes: r1(Math.max(0, tope - anual)) };
+    },
+
+    // Misma regla que en la app del trabajador: un festivo sin trabajar cuenta
+    // como jornada entera, y uno trabajado cuenta sus horas.
+    _horasEfectivas(j, jornada) {
+        const h = j.h || 0;
+        return (j.fe && h === 0) ? jornada : h;
     },
 
     // Jornada de un trabajador en una fecha concreta (la última si hay varias)
@@ -2978,16 +3240,51 @@ td{border:1px solid #ccc;}</style></head>
         return dia.length ? dia[dia.length - 1] : null;
     },
 
-    _estadoJornada(u, j, esHoy, esFuturo) {
-        if (u.baja) return { clase: 'baja', texto: 'de baja (BE)' };
+    _diaAntes(fecha) {
+        const d = new Date(+fecha.slice(0,4), +fecha.slice(4,6) - 1, +fecha.slice(6,8), 12);
+        d.setDate(d.getDate() - 1);
+        return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+    },
+
+    // Un turno de noche que entra a las 20:00 y sale a las 3:00 sigue en marcha
+    // después de medianoche, pero su jornada está guardada en el día anterior.
+    // Sin esto, a las 00:30 el trabajador desaparecía del cuadro de ese día.
+    _jornadaDeAyer(u, fecha) {
+        const j = this._jornadaDe(u, this._diaAntes(fecha));
+        if (!j) return null;
+        const ini = this._minutos(j.i), fin = this._minutos(j.o);
+        if (ini === null || fin === null || fin > ini) return null;   // no cruza medianoche
+        return j;
+    },
+
+    // Lo que hay que pintar ese día: su jornada, o la de la víspera si todavía
+    // no ha salido. `deAyer` marca el segundo caso para poder señalarlo.
+    _jornadaVisible(u, fecha) {
+        const j = this._jornadaDe(u, fecha);
+        if (j) return { j, deAyer: false };
+        const ayer = this._jornadaDeAyer(u, fecha);
+        return ayer ? { j: ayer, deAyer: true } : { j: null, deAyer: false };
+    },
+
+    _estadoJornada(u, j, esHoy, esFuturo, deAyer, enBaja) {
+        if (enBaja) return { clase: 'baja', texto: 'de baja (BE)' };
         if (!j)      return { clase: 'gris', texto: esFuturo ? 'sin previsión' : 'sin registro' };
         if (j.v)     return { clase: 'gris', texto: 'vacaciones' };
         if (j.p)     return { clase: 'gris', texto: 'permiso retribuido' };
         if (esFuturo) return { clase: 'gris', texto: 'previsto' };
-        if (!esHoy)   return { clase: 'rojo', texto: 'jornada cerrada' };
         const ini = this._minutos(j.i), fin = this._minutos(j.o);
-        if (ini === null || fin === null) return { clase: 'gris', texto: 'sin horario' };
+        if (ini === null || fin === null) {
+            return esHoy ? { clase: 'gris', texto: 'sin horario' }
+                         : { clase: 'rojo', texto: 'jornada cerrada' };
+        }
         const ahora = new Date().getHours() * 60 + new Date().getMinutes();
+        // Si viene de la víspera, ese día solo se ve el tramo de 00:00 a la salida
+        if (deAyer) {
+            if (!esHoy)        return { clase: 'rojo',  texto: 'jornada cerrada' };
+            if (ahora < fin)   return { clase: 'verde', texto: `trabajando desde ayer, sale a las ${j.o}` };
+            return { clase: 'rojo', texto: 'ha terminado' };
+        }
+        if (!esHoy) return { clase: 'rojo', texto: 'jornada cerrada' };
         let finReal = fin; if (finReal <= ini) finReal += 1440;   // turno que cruza medianoche
         let cur = ahora; if (cur < ini && finReal > 1440) cur += 1440;
         if (cur < ini)     return { clase: 'gris',  texto: 'aún no ha entrado' };
@@ -3006,22 +3303,27 @@ td{border:1px solid #ccc;}</style></head>
         const esFuturo = off > 0;
         const txt = document.getElementById('pstDiaTxt');
         if (txt) txt.textContent = this._etiquetaDia(off);
+        document.getElementById('pstHoy')?.classList.toggle('oculto', off === 0);
 
         const lista    = Object.values(this._conductores || {});
-        const conPuesto = lista
-            .map(u => ({ u, lugar: this._lugarDe(u, fecha, this._jornadaDe(u, fecha)) }))
-            .filter(x => x.lugar.trim());
+        // Los que no tienen lugar asignado también salen, en su propio grupo:
+        // si no, un trabajador nuevo se quedaba invisible hasta asignárselo.
+        const SIN = 'Sin asignar';
+        const conPuesto = lista.map(u => {
+            const v = this._jornadaVisible(u, fecha);
+            return { u, j: v.j, deAyer: v.deAyer,
+                     enBaja: this._enBaja(u, fecha) || (!this._bajasDe(u).length && !!u.baja),
+                     lugar: this._lugarDe(u, fecha, v.j).trim() || SIN };
+        });
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
 
         // Contadores de la cabecera: quién ha trabajado ese día y quién está
         // dentro ahora mismo (esto último solo tiene sentido en el día de hoy).
         let trabajaron = 0, ahoraMismo = 0;
-        lista.forEach(u => {
-            if (u.baja) return;
-            const j = this._jornadaDe(u, fecha);
-            if (!j || j.v || j.p) return;
-            trabajaron++;
-            if (esHoy && this._estadoJornada(u, j, true, false).clase === 'verde') ahoraMismo++;
+        conPuesto.forEach(({ u, j, deAyer, enBaja }) => {
+            if (enBaja || !j || j.v || j.p) return;
+            if (!deAyer) trabajaron++;          // la de ayer ya se contó en su día
+            if (esHoy && this._estadoJornada(u, j, true, false, deAyer, false).clase === 'verde') ahoraMismo++;
         });
         const cnt = document.getElementById('puestosCnt');
         if (cnt) {
@@ -3033,30 +3335,37 @@ td{border:1px solid #ccc;}</style></head>
 
         if (!conPuesto.length) {
             cont.innerHTML = '<div class="tab-empty" style="padding:22px 16px;">'
-                + '<span class="tab-empty-s">Asigna un lugar tocando el nombre de un trabajador<br>'
-                + 'y aquí verás si queda cubierto.</span></div>';
+                + '<span class="tab-empty-s">Aquí verás a cada trabajador en su lugar<br>'
+                + 'en cuanto abran su app.</span></div>';
+            this._renderFiltroLugares(localStorage.getItem('filtroLugares') || 'todos');
             return;
         }
         const porPuesto = {};
-        conPuesto.forEach(({ u, lugar }) => { (porPuesto[lugar] = porPuesto[lugar] || []).push(u); });
+        conPuesto.forEach(x => { (porPuesto[x.lugar] = porPuesto[x.lugar] || []).push(x); });
 
-        cont.innerHTML = Object.keys(porPuesto).sort().map(puesto => {
+        const filtro = localStorage.getItem('filtroLugares') || 'todos';
+        const tarjetas = [];
+        Object.keys(porPuesto).sort((a, b) =>
+            a === SIN ? 1 : b === SIN ? -1 : a.localeCompare(b, 'es')).forEach(puesto => {
             // Ordenar por hora de entrada: así se ve de un vistazo si el relevo encaja
-            const gente = porPuesto[puesto].map(u => ({ u, j: this._jornadaDe(u, fecha) }))
-                .sort((a, b) => {
-                    const ma = this._minutos(a.j?.i), mb = this._minutos(b.j?.i);
-                    if (ma === null) return 1;
-                    if (mb === null) return -1;
-                    return ma - mb;
-                });
-            const dentro = gente.filter(({ u, j }) =>
-                this._estadoJornada(u, j, esHoy, esFuturo).clase === 'verde').length;
-            const delDia = gente.filter(({ u, j }) => !u.baja && j && !j.v && !j.p).length;
-            const filas = gente.map(({ u, j }) => {
-                const e = this._estadoJornada(u, j, esHoy, esFuturo);
-                const horario = (j?.i && j?.o) ? `${esc(j.i)}–${esc(j.o)}` : (u.baja ? 'BE' : '—');
+            const gente = porPuesto[puesto].slice().sort((a, b) => {
+                // El que viene de la víspera va primero: lleva dentro desde ayer
+                if (a.deAyer !== b.deAyer) return a.deAyer ? -1 : 1;
+                const ma = this._minutos(a.j?.i), mb = this._minutos(b.j?.i);
+                if (ma === null) return 1;
+                if (mb === null) return -1;
+                return ma - mb;
+            });
+            const dentro = gente.filter(({ u, j, deAyer, enBaja }) =>
+                this._estadoJornada(u, j, esHoy, esFuturo, deAyer, enBaja).clase === 'verde').length;
+            const delDia = gente.filter(({ j, deAyer, enBaja }) => !enBaja && j && !j.v && !j.p && !deAyer).length;
+            const filas = gente.map(({ u, j, deAyer, enBaja }) => {
+                const e = this._estadoJornada(u, j, esHoy, esFuturo, deAyer, enBaja);
+                const horario = (j?.i && j?.o)
+                    ? (deAyer ? `→${esc(j.o)}` : `${esc(j.i)}–${esc(j.o)}`)
+                    : (enBaja ? 'BE' : '—');
                 const t = this._turnoDe(puesto, j?.i) || '';
-                return `<div class="pst-fila${u.baja ? ' baja' : ''}">
+                return `<div class="pst-fila${enBaja ? ' baja' : ''}">
                     <span class="pst-dot ${e.clase}" title="${esc(e.texto)}"></span>
                     <span class="pst-quien"><b>${esc(u.conductor) || '—'}</b> ${esc(u.nombre)}</span>
                     ${t ? `<span class="cond-turno ${t}">${t}</span>` : ''}
@@ -3068,47 +3377,110 @@ td{border:1px solid #ccc;}</style></head>
                 ? (dentro > 0 ? `${dentro} en turno` : 'sin cubrir')
                 : (delDia > 0 ? `${delDia} ${esFuturo ? 'previstos' : 'ese día'}` : 'sin cubrir');
             const vacio = esHoy ? dentro === 0 : delDia === 0;
-            return `<div class="pst-card">
+            // "sin servicio" es que ese día no fue de nadie; "sin cubrir",
+            // que hay gente asignada pero ninguna dentro ahora mismo.
+            const estado = delDia === 0 ? 'sinservicio' : dentro > 0 ? 'trabajando' : 'sincubrir';
+            if (filtro !== 'todos' && filtro !== estado) return;
+            tarjetas.push(`<div class="pst-card">
                 <div class="pst-head">
                     <span class="pst-nombre">${esc(puesto)}</span>
                     <span class="pst-cob${vacio ? ' vacio' : ''}">${cob}</span>
                 </div>
                 ${filas}
-            </div>`;
-        }).join('');
+            </div>`);
+        });
+        cont.innerHTML = tarjetas.join('') || '<div class="tab-empty" style="padding:22px 16px;">'
+            + '<span class="tab-empty-s">Ningún lugar en este grupo.</span></div>';
+        this._renderFiltroLugares(filtro);
+    },
+
+    _renderFiltroLugares(sel) {
+        const cont = document.getElementById('lugFiltros');
+        if (!cont) return;
+        cont.innerHTML = [['todos','Todos'],['trabajando','Trabajando'],
+                          ['sincubrir','Sin cubrir'],['sinservicio','Sin servicio']]
+            .map(([id, txt]) => `<button class="${sel === id ? 'activo' : ''}"
+                onclick="event.stopPropagation();app.filtrarLugares('${id}')">${txt}</button>`).join('');
+    },
+
+    toggleFiltroLugares() {
+        const c = document.getElementById('lugFiltros');
+        if (c) c.hidden = !c.hidden;
+    },
+
+    filtrarLugares(modo) {
+        localStorage.setItem('filtroLugares', modo);
+        this._renderPuestos();
+    },
+
+    // Estado de un trabajador ese día, para el filtro de la lista
+    _estadoTrabajador(u, fecha) {
+        if (this._enBaja(u, fecha) || (!this._bajasDe(u).length && u.baja)) return 'be';
+        const { j } = this._jornadaVisible(u, fecha);
+        if (j?.v) return 'vacaciones';
+        return 'activo';
+    },
+
+    _renderFiltrosCond(lista, fecha) {
+        const cont = document.getElementById('condFiltros');
+        if (!cont) return;
+        const sel = localStorage.getItem('filtroTrabajadores') || 'todos';
+        const n = { todos: lista.length, activo: 0, be: 0, vacaciones: 0 };
+        lista.forEach(u => { n[this._estadoTrabajador(u, fecha)]++; });
+        cont.innerHTML = [['todos','Todos'],['activo','Activos'],['be','BE'],['vacaciones','Vacaciones']]
+            .map(([id, txt]) => `<button class="${sel === id ? 'activo' : ''}"
+                onclick="app.filtrarTrabajadores('${id}')">${txt} ${n[id]}</button>`).join('');
+    },
+
+    filtrarTrabajadores(modo) {
+        localStorage.setItem('filtroTrabajadores', modo);
+        this._renderConductores();
     },
 
     _renderConductores() {
         const cont = document.getElementById('condList');
+        const fecha = this._fechaOffset(this._puestosOffset);
+        const esHoy = this._puestosOffset === 0;
         const orden = localStorage.getItem('ordenTrabajadores') || 'nombre';
-        const lista = Object.values(this._conductores || {}).sort((a, b) =>
+        const todos = Object.values(this._conductores || {});
+        const filtro = localStorage.getItem('filtroTrabajadores') || 'todos';
+        this._renderFiltrosCond(todos, fecha);
+        const lista = todos
+            .filter(u => filtro === 'todos' || this._estadoTrabajador(u, fecha) === filtro)
+            .sort((a, b) =>
             orden === 'numero'
                 // Sin número al final, y comparación numérica para que 209 no
                 // quede antes que 1418
                 ? ((a.conductor || '\uffff').localeCompare(b.conductor || '\uffff', 'es', { numeric: true }))
                 : (a.nombre || '').localeCompare(b.nombre || '', 'es'));
         if (!lista.length) {
-            cont.innerHTML = '<div class="tab-empty"><span class="tab-empty-ico">👥</span>'
-                + '<span class="tab-empty-t">Sin trabajadores</span>'
-                + '<span class="tab-empty-s">Aparecerán en cuanto abran su app.</span></div>';
+            cont.innerHTML = todos.length
+                ? '<div class="tab-empty"><span class="tab-empty-ico">🔍</span>'
+                  + '<span class="tab-empty-t">Ninguno en este grupo</span>'
+                  + '<span class="tab-empty-s">Prueba con otro filtro o con otro día.</span></div>'
+                : '<div class="tab-empty"><span class="tab-empty-ico">👥</span>'
+                  + '<span class="tab-empty-t">Sin trabajadores</span>'
+                  + '<span class="tab-empty-s">Aparecerán en cuanto abran su app.</span></div>';
+            this._renderPuestos();
+            this._renderRegistro();
             return;
         }
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
         cont.innerHTML = lista.map(u => {
             const ini = (u.nombre || u.email || '?').trim()[0]?.toUpperCase() || '?';
-            // La tarjeta muestra dónde está hoy, que puede no ser su sitio habitual
-            const hoy       = this._fechaOffset(0);
-            const lugarHoy  = this._lugarDe(u, hoy, this._jornadaDe(u, hoy));
-            const excepcion = !!(u.lugares && u.lugares[hoy]) && this._clavePuesto(lugarHoy) !== this._clavePuesto(u.puesto);
-            const turno = this._turnoDe(lugarHoy, u.horaInicio) || u.turno;
+            // La tarjeta muestra los datos del día elegido, no siempre los de hoy
+            const { j, deAyer } = this._jornadaVisible(u, fecha);
+            const lugarHoy  = this._lugarDe(u, fecha, j);
+            const excepcion = !!(u.lugares && u.lugares[fecha]) && this._clavePuesto(lugarHoy) !== this._clavePuesto(u.puesto);
+            const turno = this._turnoDe(lugarHoy, j?.i) || (esHoy ? u.turno : '');
+            const t = this._totalesDe(u, fecha);
             const av = u.avatar
                 ? `<img class="cond-avatar" src="${esc(u.avatar)}">`
                 : `<div class="cond-avatar">${esc(ini)}</div>`;
             const ver = u.version ? this._buildNumToVersion(parseInt(String(u.version).replace('build-',''),10) || 0) : '—';
-            const anual = u.horasAnuales || 777;
-            const restan = Math.max(0, Math.round((anual - (u.horasTotales || 0)) * 10) / 10);
             const cerrada = this._estaPlegado('t:' + u.email, true);
-            return `<div class="cond-card${cerrada ? ' plegada' : ''}${u.baja ? ' baja' : ''}">
+            const enBaja = this._enBaja(u, fecha) || (!this._bajasDe(u).length && !!u.baja);
+            return `<div class="cond-card${cerrada ? ' plegada' : ''}${enBaja ? ' baja' : ''}">
                 <div class="cond-top" onclick="app._plegarTrabajador('${esc(u.email)}')">
                     ${av}
                     <div class="cond-id">
@@ -3116,19 +3488,20 @@ td{border:1px solid #ccc;}</style></head>
                             ${turno ? `<span class="cond-turno ${turno}">${turno}</span>` : ''}
                             ${u.ficticio ? '<span class="pr-badge2">PRUEBA</span>' : ''}</div>
                         <div class="cond-num">${esc(u.conductor) || 'sin nº'}
-                            <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app._editarPuesto('${esc(u.email)}')">· ${esc(lugarHoy) || 'asignar lugar'}${excepcion ? ' (hoy)' : ''} ✎</span></div>
+                            <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app._editarPuesto('${esc(u.email)}','${esc(fecha)}')">· ${esc(lugarHoy) || 'asignar lugar'}${excepcion ? ' ·' : ''} ✎</span></div>
                     </div>
-                    <button class="be-btn${u.baja ? ' on' : ''}" title="${u.baja ? 'Dar de alta' : 'Marcar baja'}"
-                            onclick="event.stopPropagation();app.toggleBaja('${esc(u.email)}')">BE</button>
+                    <button class="be-btn${enBaja ? ' on' : ''}" title="Fechas de baja"
+                            onclick="event.stopPropagation();app.editarBajas('${esc(u.email)}')">BE</button>
                     <span class="cond-chev">▾</span>
                 </div>
                 <div class="cond-cuerpo">
                     <div class="cond-stats">
-                        <div class="cond-stat"><div class="cond-stat-v">${(u.horasMes ?? 0).toFixed(1)}</div><div class="cond-stat-l">h este mes</div></div>
-                        <div class="cond-stat"><div class="cond-stat-v">${u.diasMes ?? 0}</div><div class="cond-stat-l">días</div></div>
-                        <div class="cond-stat"><div class="cond-stat-v">${(u.horasTotales ?? 0).toFixed(1)}</div><div class="cond-stat-l">h totales</div></div>
-                        <div class="cond-stat"><div class="cond-stat-v">${restan.toFixed(1)}</div><div class="cond-stat-l">restantes</div></div>
+                        <div class="cond-stat"><div class="cond-stat-v">${t.mes.toFixed(1)}</div><div class="cond-stat-l">este mes</div></div>
+                        <div class="cond-stat"><div class="cond-stat-v">${t.extras.toFixed(1)}</div><div class="cond-stat-l">horas extras</div></div>
+                        <div class="cond-stat"><div class="cond-stat-v">${t.realizadas.toFixed(1)}</div><div class="cond-stat-l">realizadas</div></div>
+                        <div class="cond-stat"><div class="cond-stat-v">${t.restantes.toFixed(1)}</div><div class="cond-stat-l">restantes</div></div>
                     </div>
+                    ${t.diasBaja ? `<div class="cond-baja">BE: ${t.diasBaja} día${t.diasBaja === 1 ? '' : 's'} · objetivo ${t.objetivo}h en vez de ${u.horasAnuales || 777}h</div>` : ''}
                     <div class="cond-ver">${ver} · actualizado ${u.actualizado
                         ? new Date(u.actualizado).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
                         : 'nunca'}</div>
@@ -3137,8 +3510,8 @@ td{border:1px solid #ccc;}</style></head>
         }).join('');
         document.getElementById('ordenNombre')?.classList.toggle('activo', orden === 'nombre');
         document.getElementById('ordenNumero')?.classList.toggle('activo', orden === 'numero');
-        const activos = lista.filter(u => !u.baja).length;
-        const bajas   = lista.length - activos;
+        const activos = todos.filter(u => !u.baja).length;
+        const bajas   = todos.length - activos;
         const cnt = document.getElementById('trabajCnt');
         if (cnt) cnt.textContent = `${activos} activos${bajas ? ` · ${bajas} BE` : ''}`;
         this._renderPuestos();
@@ -3175,40 +3548,239 @@ td{border:1px solid #ccc;}</style></head>
         this._renderConductores();
     },
 
-    // BE = baja del trabajador. Se guarda en el resumen compartido: lo pone el
-    // gestor y la publicación del trabajador no lo pisa.
-    async toggleBaja(email) {
+    // ── Catálogo de lugares ─────────────────────────────────────────────────
+    // Los turnos y las ubicaciones se guardan en el servidor, no en el código,
+    // para poder cambiarlos sin publicar una versión nueva de las apps.
+
+    async _cargarLugares() {
+        try {
+            const r = await fetch(LUGARES_URL, { cache: 'no-store' });
+            if (!r.ok) return;
+            const data = await r.json();
+            if (data && typeof data === 'object') {
+                this._lugares = data;
+                aplicarCatalogoLugares(data);
+                this._renderConductores();
+            }
+        } catch (_) { /* silencioso: se sigue con la tabla de siempre */ }
+    },
+
+    _renderLugares() {
+        const cont = document.getElementById('lugaresList');
+        if (!cont) return;
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const claves = [...new Set([
+            ...Object.keys(this._lugares || {}),
+            ...PUESTOS_DEFINIDOS.map(p => this._clavePuesto(p)),
+        ])].sort();
+        cont.innerHTML = claves.map(k => {
+            const l = (this._lugares || {})[k];
+            const nombre = l?.nombre || PUESTOS_DEFINIDOS.find(p => this._clavePuesto(p) === k) || k;
+            const franjas = (TURNOS_POR_PUESTO[k] || []).map(f => `${f.id} ${f.desde}–${f.hasta}`).join(' · ')
+                || 'sin turnos definidos';
+            const ubi = l?.ubicacion ? `📍 ${l.ubicacion.radio}m` : '';
+            return `<div class="ver-item" onclick="app._editarLugar('${esc(k)}')" style="cursor:pointer;">
+                <div class="ver-n">${esc(nombre)}<br><span class="pm-turnos">${esc(franjas)}</span></div>
+                <span class="ver-fecha">${ubi}</span><span class="ops-arrow">›</span>
+            </div>`;
+        }).join('');
+    },
+
+    _nuevoLugar() { this._editarLugar(null); },
+
+    _editarLugar(k) {
+        this._lugarEditando = k;
+        const l = k ? ((this._lugares || {})[k] || {}) : {};
+        const nombre = l.nombre || (k ? PUESTOS_DEFINIDOS.find(p => this._clavePuesto(p) === k) || k : '');
+        document.getElementById('lgNombre').value = nombre;
+        this._turnosTmp = (TURNOS_POR_PUESTO[k] || []).map(f => ({ ...f }));
+        this._renderTurnosLugar();
+        const u = l.ubicacion || {};
+        document.getElementById('lgLat').value   = u.lat ?? '';
+        document.getElementById('lgLng').value   = u.lng ?? '';
+        document.getElementById('lgRadio').value = u.radio ?? '';
+        document.getElementById('lgPrio').value  = l.prioridad ?? '';
+        document.getElementById('lugarModal').classList.add('show');
+        if (this.darkMode) document.getElementById('lugarModalContent').classList.add('dark');
+    },
+
+    _renderTurnosLugar() {
+        const nombres = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
+        document.getElementById('lgTurnos').innerHTML = ['M', 'T', 'N'].map(id => {
+            const f = this._turnosTmp.find(x => x.id === id) || {};
+            return `<div class="edit-row" style="align-items:flex-end;">
+                <div class="edit-field" style="flex:0 0 74px;"><label>&nbsp;</label>
+                    <div style="font-weight:700;font-size:13px;padding:8px 0;">${nombres[id]}</div></div>
+                <div class="edit-field"><label>Desde</label>
+                    <input type="time" value="${f.desde || ''}" onchange="app._editarTurno('${id}','desde',this.value)"></div>
+                <div class="edit-field"><label>Hasta</label>
+                    <input type="time" value="${f.hasta || ''}" onchange="app._editarTurno('${id}','hasta',this.value)"></div>
+            </div>`;
+        }).join('');
+    },
+
+    _editarTurno(id, campo, valor) {
+        let f = this._turnosTmp.find(x => x.id === id);
+        if (!f) { f = { id, desde: '', hasta: '' }; this._turnosTmp.push(f); }
+        f[campo] = valor;
+    },
+
+    _ubicacionActualLugar() {
+        const Geo = window.Capacitor?.Plugins?.Geolocation || navigator.geolocation;
+        if (!Geo) { this._mostrarToast('Sin acceso a la ubicación', 3000); return; }
+        const poner = c => {
+            document.getElementById('lgLat').value = (c.coords?.latitude ?? c.latitude).toFixed(6);
+            document.getElementById('lgLng').value = (c.coords?.longitude ?? c.longitude).toFixed(6);
+            if (!document.getElementById('lgRadio').value) document.getElementById('lgRadio').value = 150;
+            this._mostrarToast('📍 Ubicación tomada', 2500);
+        };
+        if (Geo.getCurrentPosition.length === 0) Geo.getCurrentPosition().then(poner).catch(() => this._mostrarToast('No se pudo obtener la ubicación', 3000));
+        else Geo.getCurrentPosition(poner, () => this._mostrarToast('No se pudo obtener la ubicación', 3000), { enableHighAccuracy: true });
+    },
+
+    async _enviarLugar(cuerpo, metodo) {
+        try {
+            const resp = await fetch(LUGARES_URL, {
+                method: metodo,
+                headers: { 'Content-Type': 'application/json',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify(cuerpo)
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return false; }
+            this._lugares = data;
+            aplicarCatalogoLugares(data);
+            document.getElementById('lugarModal').classList.remove('show');
+            this._renderLugares();
+            this._renderConductores();
+            return true;
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); return false; }
+    },
+
+    async _guardarLugar() {
+        const nombre = document.getElementById('lgNombre').value.trim();
+        if (!nombre) { this._mostrarToast('Ponle un nombre al lugar', 3000); return; }
+        const lat = this._leerDecimal(document.getElementById('lgLat').value);
+        const lng = this._leerDecimal(document.getElementById('lgLng').value);
+        const cuerpo = {
+            nombre,
+            turnos: this._turnosTmp.filter(f => f.desde && f.hasta),
+            ubicacion: (lat !== null && lng !== null)
+                ? { lat, lng, radio: this._leerDecimal(document.getElementById('lgRadio').value) || 150 }
+                : null,
+            prioridad: this._leerDecimal(document.getElementById('lgPrio').value) || 0,
+        };
+        if (await this._enviarLugar(cuerpo, 'PUT')) this._mostrarToast(`✅ ${nombre} guardado`, 2500);
+    },
+
+    async _borrarLugar() {
+        const k = this._lugarEditando;
+        if (!k) { document.getElementById('lugarModal').classList.remove('show'); return; }
+        if (!confirm('¿Borrar este lugar del catálogo?')) return;
+        if (await this._enviarLugar({ nombre: k }, 'DELETE')) this._mostrarToast('Lugar borrado', 2500);
+    },
+
+    ordenarPrueba(modo) {
+        localStorage.setItem('ordenPrueba', modo);
+        this._renderPrueba();
+    },
+
+    // ── Bajas (BE) ──────────────────────────────────────────────────────────
+    // Una baja es un tramo con fecha, no un interruptor: hace falta saber qué
+    // días estuvo fuera para descontarle las horas que no pudo hacer.
+
+    _bajasDe(u) { return Array.isArray(u?.bajas) ? u.bajas : []; },
+
+    _enBaja(u, fecha) {
+        return this._bajasDe(u).some(b => b.d <= fecha && (!b.h || b.h >= fecha));
+    },
+
+    // Días de baja de lunes a viernes dentro del año, que son los que habría
+    // trabajado. Se corta en hoy: los días futuros aún no ha dejado de hacerlos.
+    _diasBaja(u, hasta) {
+        const anio = hasta.slice(0, 4);
+        const dias = new Set();
+        this._bajasDe(u).forEach(b => {
+            const fin = (!b.h || b.h > hasta) ? hasta : b.h;
+            const d = new Date(+b.d.slice(0,4), +b.d.slice(4,6) - 1, +b.d.slice(6,8), 12);
+            const f = new Date(+fin.slice(0,4), +fin.slice(4,6) - 1, +fin.slice(6,8), 12);
+            for (let i = 0; d <= f && i < 400; d.setDate(d.getDate() + 1), i++) {
+                if (d.getDay() === 0 || d.getDay() === 6) continue;
+                const k = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+                if (k.slice(0, 4) === anio) dias.add(k);
+            }
+        });
+        return dias.size;
+    },
+
+    editarBajas(email) {
         const u = (this._conductores || {})[email];
         if (!u) return;
-        const baja = !u.baja;
-        u.baja = baja;                    // pintar ya: la red puede tardar
-        this._renderConductores();
+        this._bajaEditando = email;
+        this._bajasTmp = this._bajasDe(u).map(b => ({ ...b }));
+        document.getElementById('bajaQuien').textContent =
+            `${u.conductor ? u.conductor + ' · ' : ''}${u.nombre || email}`;
+        this._renderBajas();
+        document.getElementById('bajaModal').classList.add('show');
+        if (this.darkMode) document.getElementById('bajaModalContent').classList.add('dark');
+    },
+
+    _renderBajas() {
+        const cont = document.getElementById('bajaLista');
+        const iso = v => v ? `${v.slice(0,4)}-${v.slice(4,6)}-${v.slice(6,8)}` : '';
+        cont.innerHTML = this._bajasTmp.map((b, i) => `<div class="baja-fila">
+                <label>Desde<input type="date" value="${iso(b.d)}"
+                    onchange="app._editarBaja(${i},'d',this.value)"></label>
+                <label>Hasta<input type="date" value="${iso(b.h)}"
+                    onchange="app._editarBaja(${i},'h',this.value)"></label>
+                <button class="baja-x" onclick="app._quitarBaja(${i})">×</button>
+            </div>`).join('')
+            || '<div class="baja-vacio">Sin bajas registradas</div>';
+        const u = (this._conductores || {})[this._bajaEditando] || {};
+        const jor = u.jornadaHoras || 7;
+        const dias = this._diasBajaTmp();
+        document.getElementById('bajaResumen').textContent = dias
+            ? `${dias} día${dias === 1 ? '' : 's'} laborables · −${(dias * jor).toFixed(1)}h de su objetivo`
+            : 'Deja "Hasta" en blanco si sigue de baja';
+    },
+
+    _diasBajaTmp() {
+        const u = (this._conductores || {})[this._bajaEditando] || {};
+        return this._diasBaja({ ...u, bajas: this._bajasTmp }, this._fechaOffset(0));
+    },
+
+    _editarBaja(i, campo, valor) {
+        if (!this._bajasTmp[i]) return;
+        this._bajasTmp[i][campo] = String(valor || '').replace(/-/g, '');
+        this._renderBajas();
+    },
+
+    _quitarBaja(i) { this._bajasTmp.splice(i, 1); this._renderBajas(); },
+
+    _nuevaBaja() {
+        this._bajasTmp.push({ d: this._fechaOffset(0), h: '' });
+        this._renderBajas();
+    },
+
+    async _guardarBajas() {
+        const email = this._bajaEditando;
+        const bajas = this._bajasTmp.filter(b => /^\d{8}$/.test(b.d) && (!b.h || b.h >= b.d));
+        document.getElementById('bajaModal').classList.remove('show');
         try {
             const resp = await fetch(this.USUARIOS_URL, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json',
                            'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ email, baja })
+                body: JSON.stringify({ email, bajas })
             });
             const data = await resp.json();
-            if (!resp.ok) {
-                u.baja = !baja;
-                this._renderConductores();
-                this._mostrarToast('❌ ' + (data.error || resp.status), 4000);
-                return;
-            }
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
             this._conductores = data;
             this._renderConductores();
-            this._mostrarToast(baja ? `🟡 ${u.nombre || email} de baja` : `✅ ${u.nombre || email} de alta`, 2500);
-        } catch (e) {
-            u.baja = !baja;
-            this._renderConductores();
-            this._mostrarToast('❌ Error: ' + e.message, 4000);
-        }
+            this._mostrarToast(bajas.length ? `✅ ${bajas.length} tramo${bajas.length === 1 ? '' : 's'} de baja` : 'Sin bajas', 2500);
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
-    // Abre el selector de lugar. `fecha` (YYYYMMDD) es el día de referencia
-    // para los alcances; sin ella se usa hoy.
     _editarPuesto(email, fecha) {
         const u = (this._conductores || {})[email];
         if (!u) return;
