@@ -1901,7 +1901,13 @@
     ],
     "email": "prueba-1789760248885@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T20:32:44.113Z"
+    "actualizado": "2026-09-19T20:32:44.113Z",
+    "horarios": {
+      "202609": {
+        "i": "06:00",
+        "f": "13:00"
+      }
+    }
   },
   "prueba-1789760390735@prueba.local": {
     "nombre": "Miguel Moyà",
