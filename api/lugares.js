@@ -26,7 +26,9 @@ const ghHeaders = () => ({
 async function leerContenido(meta) {
   if (meta.content) return Buffer.from(meta.content, 'base64').toString('utf8');
   if (!meta.size) return '';
-  const r = await fetch(meta.download_url || meta.url, {
+  // Por la URL de la API, no por download_url: la de la API respeta el token
+  // siempre, y la otra es una firma temporal que puede haber caducado.
+  const r = await fetch(meta.url || meta.download_url, {
     headers: { ...ghHeaders(), Accept: 'application/vnd.github.raw' },
     cache: 'no-store',
   });
