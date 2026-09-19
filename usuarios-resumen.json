@@ -2654,7 +2654,8 @@
     "lugares": {
       "20260919": "Son Rossinyol"
     },
-    "horario": ""
+    "horario": "",
+    "horariosDia": {}
   },
   "prueba-1789814286874@prueba.local": {
     "nombre": "Manolo Rodríguez",
