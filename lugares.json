@@ -79,7 +79,13 @@
   },
   "anselmo clave": {
     "nombre": "Anselmo Clavé",
-    "turnos": [],
+    "turnos": [
+      {
+        "id": "M",
+        "desde": "07:00",
+        "hasta": "14:00"
+      }
+    ],
     "ubicacion": {
       "lat": 39.573326,
       "lng": 2.655056,
