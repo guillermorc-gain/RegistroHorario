@@ -3477,16 +3477,20 @@ const app = {
             }
             const lista = res.lista;
             const re = new RegExp('^' + RELEASE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
-            // Nadie se salta el reparto, ni siquiera el administrador: una
-            // versión se ofrece cuando el gestor la publica y no antes. Para
-            // probar una sin publicar se instala su APK a mano.
-            const pub = await this._buildPublicado();
-            if (!pub.ok) {
-                if (showFeedback) this._mostrarToast(
-                    '⏳ No se ha podido comprobar qué versión toca instalar. Prueba más tarde.', 4500);
-                return;
+            // El administrador recibe la última aunque no esté publicada, para
+            // poder probarla antes de repartirla; al resto solo se les ofrece
+            // la que el gestor haya publicado.
+            const soyGestor = (this.usuarioActual?.email || '').toLowerCase() === SUPER_USER_EMAIL.toLowerCase();
+            let publicada = null;
+            if (!soyGestor) {
+                const pub = await this._buildPublicado();
+                if (!pub.ok) {
+                    if (showFeedback) this._mostrarToast(
+                        '⏳ No se ha podido comprobar qué versión toca instalar. Prueba más tarde.', 4500);
+                    return;
+                }
+                publicada = pub.build;
             }
-            const publicada = pub.build;
             let release = null, latestNum = 0, latestTag = '';
             (Array.isArray(lista) ? lista : []).forEach(r => {
                 const m = re.exec(r.tag_name || '');
