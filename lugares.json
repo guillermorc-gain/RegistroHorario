@@ -129,5 +129,38 @@
     ],
     "ubicacion": null,
     "prioridad": 0
+  },
+  "control de acceso": {
+    "nombre": "Control de acceso",
+    "turnos": [
+      {
+        "id": "M",
+        "desde": "07:00",
+        "hasta": "14:00"
+      },
+      {
+        "id": "T",
+        "desde": "14:00",
+        "hasta": "21:00"
+      },
+      {
+        "id": "N",
+        "desde": "21:00",
+        "hasta": "07:00"
+      }
+    ],
+    "ubicacion": {
+      "lat": 39.560866,
+      "lng": 2.711378,
+      "radio": 30
+    },
+    "dias": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "prioridad": 0
   }
 }
