@@ -688,6 +688,8 @@ const app = {
                     email: this.usuarioActual.email,
                     horasAnuales: this.horasAnualesCustom,
                 jornadaHoras: this.jornadaHoras,
+                vacaciones:   this._getVacaciones(),
+                vacacionesAt: this._vacacionesAt(),
                     totales: tot,
                     historial: Object.entries(historial)
                         .sort((a, b) => a[1].timestamp - b[1].timestamp)
@@ -1431,10 +1433,15 @@ const app = {
 
     _getVacaciones() { return JSON.parse(localStorage.getItem('vacaciones') || '[]'); },
 
-    _saveVacaciones(v) {
+    _saveVacaciones(v, deGestion) {
         localStorage.setItem('vacaciones', JSON.stringify(v));
+        // La marca de tiempo decide quién manda cuando el trabajador y el
+        // gestor tocan las vacaciones por separado: gana el cambio más nuevo.
+        if (!deGestion) localStorage.setItem('vacacionesAt', String(Date.now()));
         this._guardarPreferencias();
     },
+
+    _vacacionesAt() { return parseInt(localStorage.getItem('vacacionesAt') || '0', 10); },
 
     _hoyISO() {
         const d = new Date();
@@ -2475,7 +2482,7 @@ const app = {
             // hasta el día siguiente. Sin cambios no se escribe nada.
             const huella = JSON.stringify([payload.version, payload.horasMes, payload.horasTotales,
                                            payload.diasMes, payload.turno, payload.conductor, payload.horasAnuales,
-                                           payload.jornadaHoras,
+                                           payload.jornadaHoras, JSON.stringify(payload.vacaciones),
                                            payload.nombre, payload.horaInicio, payload.horaFin,
                                            payload.horarioDe, jornadas.length,
                                            jornadas.length ? jornadas[jornadas.length - 1].f : '',
@@ -2490,6 +2497,13 @@ const app = {
             if (resp.ok) {
                 localStorage.setItem('resumenHuella', huella);
                 const mio = await resp.json();
+                if (Array.isArray(mio?.vacaciones)
+                    && (mio.vacacionesAt || 0) > this._vacacionesAt()) {
+                    localStorage.setItem('vacacionesAt', String(mio.vacacionesAt));
+                    this._saveVacaciones(mio.vacaciones, true);
+                    this._renderVacaciones();
+                    this._aplicarModoVacaciones();
+                }
                 if (mio?.puesto !== undefined) {
                     this.puestoTrabajo = mio.puesto || '';
                     localStorage.setItem('puestoTrabajo', this.puestoTrabajo);

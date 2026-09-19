@@ -452,6 +452,9 @@
         .be-btn{flex-shrink:0;border:1.5px solid #d5dbe3;background:transparent;color:#95a5a6;font-size:10.5px;font-weight:800;letter-spacing:.6px;padding:4px 9px;border-radius:8px;cursor:pointer;font-family:inherit;}
         .app-content.dark .be-btn{border-color:#2d3561;}
         .be-btn.on{background:#7f8c8d;border-color:#7f8c8d;color:#fff;}
+        .vc-btn.on{background:#16a085;border-color:#16a085;color:#fff;}
+        .cond-card.vacaciones{background:#eefaf6;}
+        .app-content.dark .cond-card.vacaciones{background:#11241f;}
         .cond-card.baja{background:#e9edf2;}
         .app-content.dark .cond-card.baja{background:#151d29;}
         .cond-card.baja .cond-avatar,.cond-card.baja .cond-id,
@@ -1321,6 +1324,26 @@
         <div class="modal-footer">
             <button class="modal-btn modal-btn-cancel" onclick="app._borrarLugar()">Borrar</button>
             <button class="modal-btn modal-btn-confirm" onclick="app._guardarLugar()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Vacaciones -->
+<div class="modal" id="vacModal">
+    <div class="modal-card" id="vacModalContent">
+        <div class="modal-header">
+            <h3>🏖️ Vacaciones (VC)</h3>
+            <button class="modal-close" onclick="document.getElementById('vacModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div id="vacQuien" class="pm-quien"></div>
+            <div id="vacLista" class="baja-lista"></div>
+            <div id="vacResumen" class="baja-resumen"></div>
+            <div class="pm-op pm-nuevo" onclick="app._nuevaVac()">➕ Añadir tramo de vacaciones</div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('vacModal').classList.remove('show')">Cancelar</button>
+            <button class="modal-btn modal-btn-confirm" onclick="app._guardarVacaciones()">Guardar</button>
         </div>
     </div>
 </div>

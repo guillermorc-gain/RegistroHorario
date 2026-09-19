@@ -34,6 +34,26 @@ function limpiarBajas(bajas) {
     .sort((a, b) => a.d.localeCompare(b.d));
 }
 
+// Rangos con fecha ISO, que es como los guarda la app del trabajador
+function limpiarVacaciones(v) {
+  if (!Array.isArray(v)) return [];
+  const ok = f => /^\d{4}-\d{2}-\d{2}$/.test(String(f || ''));
+  return v
+    .filter(x => ok(x?.desde) && ok(x?.hasta) && x.hasta >= x.desde)
+    .slice(0, 60)
+    .map(x => ({ desde: x.desde, hasta: x.hasta }))
+    .sort((a, b) => a.desde.localeCompare(b.desde));
+}
+
+function vacacionesMasNuevas(previo, b) {
+  const suyas = Number(b.vacacionesAt) || 0;
+  const guardadas = Number(previo.vacacionesAt) || 0;
+  if (!Array.isArray(b.vacaciones) || suyas <= guardadas) {
+    return { vacaciones: previo.vacaciones || [], vacacionesAt: guardadas };
+  }
+  return { vacaciones: limpiarVacaciones(b.vacaciones), vacacionesAt: suyas };
+}
+
 function enBajaHoy(bajas) {
   const hoy = new Date();
   const f = `${hoy.getFullYear()}${String(hoy.getMonth() + 1).padStart(2, '0')}${String(hoy.getDate()).padStart(2, '0')}`;
@@ -139,6 +159,9 @@ export default async function handler(req, res) {
           horaFin:      typeof b.horaFin === 'string' ? b.horaFin.slice(0, 5) : previo.horaFin || '',
           horarioDe:    b.horarioDe === 'hoy' ? 'hoy' : 'anterior',
           jornadas:     Array.isArray(b.jornadas) ? b.jornadas.slice(-MAX_JORNADAS) : (previo.jornadas || []),
+          // Las vacaciones las tocan los dos, así que gana la versión más
+          // reciente en vez de pisarse una a otra sin orden.
+          ...vacacionesMasNuevas(previo, b),
           // el puesto lo pone el gestor: una publicación del conductor no lo pisa
           puesto:       previo.puesto || '',
           actualizado:  new Date().toISOString(),
@@ -152,7 +175,7 @@ export default async function handler(req, res) {
     // Solo el gestor asigna el puesto de trabajo
     if (req.method === 'PATCH' || req.method === 'DELETE') {
       if (!await exigirAdmin(req, res, ADMIN_EMAIL)) return;
-      const { email, puesto, ficticio, baja, bajas, desde, hasta } = req.body || {};
+      const { email, puesto, ficticio, baja, bajas, vacaciones, desde, hasta } = req.body || {};
       const clave = (email || '').toLowerCase().trim();
       if (!clave) return res.status(400).json({ error: 'Falta el email' });
       // Los usuarios de prueba solo pueden vivir bajo este dominio, para que no
@@ -174,6 +197,10 @@ export default async function handler(req, res) {
         }
         // La baja (BE) y el lugar de trabajo son campos del gestor; una
         // publicación del trabajador los conserva porque no los sobrescribe.
+        else if (data[clave] && vacaciones !== undefined) {
+          data[clave].vacaciones   = limpiarVacaciones(vacaciones);
+          data[clave].vacacionesAt = Date.now();
+        }
         else if (data[clave] && bajas !== undefined) {
           // Tramos de baja con fecha. `baja` se sigue guardando porque es lo
           // que mira la lista para pintar en gris, y sale de los tramos.
@@ -201,6 +228,7 @@ export default async function handler(req, res) {
       }, req.method === 'DELETE' ? `Quitar ${clave}`
          : ficticio ? `Usuario de prueba ${clave}`
          : baja !== undefined ? `${baja ? 'Baja' : 'Alta'} de ${clave}`
+         : vacaciones !== undefined ? `Vacaciones de ${clave}`
          : bajas !== undefined ? `Bajas de ${clave}`
          : desde && hasta ? `Lugar de ${clave} del ${desde} al ${hasta}`
          : `Lugar de ${clave}`);
