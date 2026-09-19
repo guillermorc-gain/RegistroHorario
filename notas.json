@@ -48,6 +48,11 @@
     "de": "trabajador",
     "tipo": "gestion",
     "estado": "pendiente",
-    "respuesta": null
+    "respuesta": {
+      "texto": "Que",
+      "adjuntos": [],
+      "gestor": "Guillermo Ríos Correa",
+      "en": "2026-09-19T16:54:05.269Z"
+    }
   }
 }
