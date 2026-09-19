@@ -3305,11 +3305,11 @@ const app = {
                     canvas.width = w; canvas.height = h;
                     canvas.getContext('2d').drawImage(img, 0, 0, w, h);
                     let calidad = 0.82, dataUrl = canvas.toDataURL('image/jpeg', calidad);
-                    while (dataUrl.length > 680 * 1024 && calidad > 0.35) {
+                    while (dataUrl.length > 430 * 1024 && calidad > 0.35) {
                         calidad -= 0.12;
                         dataUrl = canvas.toDataURL('image/jpeg', calidad);
                     }
-                    if (dataUrl.length > 680 * 1024) {
+                    if (dataUrl.length > 430 * 1024) {
                         this._mostrarToast('❌ La imagen sigue siendo muy grande', 4000);
                         return;
                     }
