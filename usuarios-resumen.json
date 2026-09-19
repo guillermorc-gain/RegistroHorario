@@ -1577,14 +1577,22 @@
     "conductor": "8596-9",
     "puesto": "Control",
     "avatar": null,
-    "version": "build-40",
+    "version": "build-67",
     "horasMes": 28,
     "horasTotales": 28,
     "diasMes": 4,
     "horaInicio": "06:00",
     "horaFin": "13:00",
-    "horarioDe": "hoy",
+    "horarioDe": "anterior",
     "turno": "M",
+    "jornadaHoras": 7,
+    "horasAnuales": 777,
+    "ritmo": "lv",
+    "dias": [
+      1,
+      2,
+      3
+    ],
     "jornadas": [
       {
         "f": "20260916",
@@ -1617,7 +1625,7 @@
     ],
     "email": "prueba-1789764004986@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-18T20:45:26.486Z"
+    "actualizado": "2026-09-19T09:32:21.277Z"
   },
   "prueba-1789766365436@prueba.local": {
     "nombre": "Toni Valverde",
