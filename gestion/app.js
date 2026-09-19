@@ -2190,20 +2190,50 @@ const app = {
 
     _esCompleta(u) { return (Number(u?.horasAnuales) || 777) >= this.ANUALES_COMPLETA; },
 
-    // Horario puesto desde el cuadrante: entrada y salida. Las versiones
-    // anteriores guardaban solo la letra del turno, que se sigue entendiendo.
-    _horasAsignadas(u) {
-        const h = u?.horario;
-        return (h && typeof h === 'object' && h.i && h.f) ? h : null;
+    // Horario puesto desde el cuadrante: entrada y salida, mes a mes. Lo que
+    // guardaron versiones anteriores (un horario suelto, o solo la letra del
+    // turno) se sigue entendiendo y vale para cualquier mes.
+    _mesDe(fecha) { return String(fecha || '').slice(0, 6); },
+
+    _horasAsignadas(u, mes) {
+        const delMes = u?.horarios?.[mes || ''];
+        if (delMes && delMes.i && delMes.f) return delMes;
+        const suelto = u?.horario;
+        return (suelto && typeof suelto === 'object' && suelto.i && suelto.f) ? suelto : null;
     },
 
-    // El turno (M/T/N) sale de la hora de entrada asignada; si no hay horario
-    // puesto, de la hora a la que ficha de verdad.
+    // El horario que cuenta es el que registra el trabajador: el asignado solo
+    // vale mientras no haya fichado ese día.
+    _horasDelDia(u, fecha, j) {
+        if (j?.i) return { i: j.i, f: j.o || '', real: true };
+        const h = this._horasAsignadas(u, this._mesDe(fecha));
+        return h ? { ...h, real: false } : null;
+    },
+
+    // El turno (M/T/N) sale de la hora de entrada que mande ese día
     _horarioDe(u, fecha, j) {
-        if (typeof u?.horario === 'string' && u.horario) return u.horario;
         const lugar = this._lugarDe(u, fecha, j);
-        const h = this._horasAsignadas(u);
-        return this._turnoDe(lugar, h ? h.i : j?.i) || '';
+        const h = this._horasDelDia(u, fecha, j);
+        if (h) return this._turnoDe(lugar, h.i) || '';
+        if (typeof u?.horario === 'string' && u.horario) return u.horario;
+        return '';
+    },
+
+    // Días del mes en que el trabajador fichó a una hora que no era la
+    // asignada. Se deja un margen porque nadie entra al minuto exacto.
+    MARGEN_HORARIO: 15,
+
+    _desviaciones(u, mes) {
+        const h = this._horasAsignadas(u, mes);
+        if (!h) return 0;
+        const min = v => { const [a, b] = String(v).split(':').map(Number); return a * 60 + b; };
+        const objetivo = min(h.i);
+        return (u.jornadas || []).filter(j => {
+            if (!j?.i || this._mesDe(j.f) !== mes) return false;
+            let d = Math.abs(min(j.i) - objetivo);
+            if (d > 720) d = 1440 - d;               // 23:50 y 00:10 están a 20 min
+            return d > this.MARGEN_HORARIO;
+        }).length;
     },
 
     _duracion(i, f) {
@@ -2229,10 +2259,34 @@ const app = {
         this._renderCuadranteTrab();
     },
 
+    // El cuadrante se hace mes a mes, así que la lista va agrupada por meses.
+    // Solo se pinta lo que hay abierto: doce meses por cada trabajador serían
+    // demasiadas filas para dejarlas todas montadas.
+    _mesesDelAnio() {
+        const anio = new Date().getFullYear();
+        return Array.from({ length: 12 }, (_, m) =>
+            `${anio}${String(m + 1).padStart(2, '0')}`);
+    },
+
+    // Día de referencia del mes: hoy si es el mes en curso, si no el día 1.
+    // De él salen el lugar, la baja y las vacaciones que se ven en la fila.
+    _diaDelMes(mes) {
+        const hoy = this._fechaOffset(0);
+        return this._mesDe(hoy) === mes ? hoy : mes + '01';
+    },
+
+    _plegarMesCuad(mes) {
+        const clave = 'cm:' + mes;
+        const p = JSON.parse(localStorage.getItem('regPlegado') || '{}');
+        const porDefecto = this._mesDe(this._fechaOffset(0)) !== mes;
+        p[clave] = !(clave in p ? p[clave] : porDefecto);
+        localStorage.setItem('regPlegado', JSON.stringify(p));
+        this._renderCuadranteTrab();
+    },
+
     _renderCuadranteTrab() {
         const cont = document.getElementById('ctList');
         if (!cont) return;
-        const fecha = this._fechaOffset(0);
         const orden = localStorage.getItem('ordenCuadrante') || 'nombre';
         const lista = Object.values(this._conductores || {}).sort((a, b) =>
             orden === 'numero'
@@ -2248,13 +2302,40 @@ const app = {
                 + '<span class="tab-empty-s">Aparecerán en cuanto abran su app.</span></div>';
             return;
         }
+        const mesActual = this._mesDe(this._fechaOffset(0));
+        cont.innerHTML = this._mesesDelAnio().map(mes => {
+            const cerrado = this._estaPlegado('cm:' + mes, mes !== mesActual);
+            const conHorario = lista.filter(u => this._horasAsignadas(u, mes)).length;
+            const fuera = lista.reduce((n, u) => n + (this._desviaciones(u, mes) ? 1 : 0), 0);
+            return `<div class="ct-mes${cerrado ? ' cerrado' : ''}">
+                <div class="ct-mes-head" onclick="app._plegarMesCuad('${mes}')">
+                    <span class="ct-mes-chev">▾</span>
+                    <span class="ct-mes-n">${MESES_ES[+mes.slice(4) - 1]} ${mes.slice(0, 4)}</span>
+                    ${fuera ? `<span class="ct-mes-c aviso">${fuera} fuera de horario</span>` : ''}
+                    <span class="ct-mes-c">${conHorario}/${lista.length}</span>
+                </div>
+                <div class="ct-mes-body">${cerrado ? '' : this._filasCuadrante(lista, mes)}</div>
+            </div>`;
+        }).join('');
+    },
+
+    _filasCuadrante(lista, mes) {
+        const fecha = this._diaDelMes(mes);
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
         const q = e => esc(e).replace(/'/g, "\\'");
-        cont.innerHTML = lista.map(u => {
+        return lista.map(u => {
             const { j } = this._jornadaVisible(u, fecha);
             const lugar   = this._lugarDe(u, fecha, j);
-            const horario = this._horarioDe(u, fecha, j);
-            const horas   = this._horasAsignadas(u);
+            const horas   = this._horasAsignadas(u, mes);
+            // La pastilla enseña lo asignado; su turno sale de esa hora, no de
+            // la que fichara ese día, que va aparte.
+            const horario = horas ? (this._turnoDe(lugar, horas.i) || '')
+                : (typeof u.horario === 'string' ? u.horario : '');
+            // Lo que fichó el día de referencia, si no es lo asignado: manda
+            // sobre el cuadrante.
+            const real = this._horasDelDia(u, fecha, j);
+            const suyo = real?.real && (!horas || real.i !== horas.i || real.f !== horas.f) ? real : null;
+            const fuera   = this._desviaciones(u, mes);
             const dias    = this._etiquetaDias(u);
             const completa = this._esCompleta(u);
             const enBaja = this._enBaja(u, fecha) || (!this._bajasDe(u).length && !!u.baja);
@@ -2278,9 +2359,13 @@ const app = {
                     <button class="ct-chip${lugar ? '' : ' vacio'}"
                             onclick="app._editarPuesto('${q(u.email)}','${fecha}')">📍 ${esc(lugar) || 'sin lugar'}</button>
                     <button class="ct-chip${horas || horario ? '' : ' vacio'}"
-                            onclick="app._editarHorario('${q(u.email)}')">🕐 ${
+                            onclick="app._editarHorario('${q(u.email)}','${mes}')">🕐 ${
                                 horario ? `<span class="ct-t ${horario}">${horario}</span>` : ''}${
                                 horas ? ` ${horas.i}–${horas.f}` : horario ? '' : 'sin horario'}</button>
+                    ${suyo ? `<span class="ct-chip real" title="Lo que fichó ese día; manda sobre el asignado">▶ ${
+                            esc(suyo.i)}${suyo.f ? '–' + esc(suyo.f) : ''}</span>` : ''}
+                    ${fuera ? `<button class="ct-chip aviso" onclick="app._editarHorario('${q(u.email)}','${mes}')"
+                            title="Días en que fichó a otra hora">⚠ ${fuera} día${fuera === 1 ? '' : 's'} distinto${fuera === 1 ? '' : 's'}</button>` : ''}
                     <button class="ct-chip${dias ? '' : ' vacio'}"
                             onclick="app._editarDiasTrab('${q(u.email)}')">📅 ${dias || 'todos los días'}</button>
                     ${grupo}
@@ -2348,14 +2433,16 @@ const app = {
     },
 
     // ── Horario ──
-    _editarHorario(email) {
+    _editarHorario(email, mes) {
         const u = (this._conductores || {})[email];
         if (!u) return;
         this._horarioEditando = email;
-        const h = this._horasAsignadas(u);
+        this._mesHorario = /^\d{6}$/.test(String(mes || '')) ? mes : this._mesDe(this._fechaOffset(0));
+        const h = this._horasAsignadas(u, this._mesHorario);
         document.getElementById('hrEntrada').value = h?.i || '';
         document.getElementById('hrSalida').value  = h?.f || '';
-        document.getElementById('horarioQuien').textContent = this._quienEs(u, email);
+        document.getElementById('horarioQuien').textContent = this._quienEs(u, email)
+            + ` · ${MESES_ES[+this._mesHorario.slice(4) - 1].toLowerCase()} ${this._mesHorario.slice(0, 4)}`;
         this._renderHorarioModal();
         this._resumenHorario();
         document.getElementById('horarioModal').classList.add('show');
@@ -2365,11 +2452,12 @@ const app = {
     // Los turnos de su lugar, para no tener que teclear las horas de siempre
     _renderHorarioModal() {
         const u = (this._conductores || {})[this._horarioEditando] || {};
-        const fecha = this._fechaOffset(0);
+        const fecha = this._diaDelMes(this._mesHorario);
         const lugar = this._lugarDe(u, fecha, this._jornadaDe(u, fecha));
         const franjas = TURNOS_POR_PUESTO[this._clavePuesto(lugar)] || [];
         const nombres = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const fuera = this._desviaciones(u, this._mesHorario);
         const atajos = franjas.filter(f => f.desde && f.hasta).map(f =>
             `<div class="pm-op" onclick="app._ponerTurnoHorario('${f.desde}','${f.hasta}')">
                 <div style="flex:1;min-width:0;">${nombres[f.id] || f.id}<br>
@@ -2382,9 +2470,10 @@ const app = {
                 : `<div class="pm-paso">${lugar
                     ? `${esc(lugar)} no tiene turnos definidos. Pon las horas a mano.`
                     : 'Sin lugar asignado. Pon las horas a mano.'}</div>`)
-            + (this._horasAsignadas(u) || (typeof u.horario === 'string' && u.horario)
-                ? `<div class="pm-op pm-quitar" onclick="app._quitarHorario()">✕ Quitar el horario fijo</div>` : '')
-            + `<div class="pm-paso pm-nota">Sin horario fijo se usa el que salga de su hora de entrada.</div>`;
+            + (u.horarios?.[this._mesHorario]
+                ? `<div class="pm-op pm-quitar" onclick="app._quitarHorario()">✕ Quitar el horario de este mes</div>` : '')
+            + `<div class="pm-paso pm-nota">Es el horario asignado para el mes. El día que el trabajador fiche a otra hora manda la suya.${
+                fuera ? ` Este mes se ha salido ${fuera} día${fuera === 1 ? '' : 's'}.` : ''}</div>`;
     },
 
     _ponerTurnoHorario(i, f) {
@@ -2399,7 +2488,8 @@ const app = {
         const el = document.getElementById('hrResumen');
         if (!i || !f) { el.textContent = 'Pon la hora de entrada y la de salida.'; return; }
         const u = (this._conductores || {})[this._horarioEditando] || {};
-        const lugar = this._lugarDe(u, this._fechaOffset(0), this._jornadaDe(u, this._fechaOffset(0)));
+        const fecha = this._diaDelMes(this._mesHorario);
+        const lugar = this._lugarDe(u, fecha, this._jornadaDe(u, fecha));
         const turno = this._turnoDe(lugar, i);
         const nombres = { M: 'mañana', T: 'tarde', N: 'noche' };
         el.textContent = `${this._enHoras(this._duracion(i, f))}`
@@ -2412,12 +2502,15 @@ const app = {
         if (!i || !f) { this._mostrarToast('Pon la entrada y la salida', 3000); return; }
         if (i === f) { this._mostrarToast('La salida no puede ser igual que la entrada', 3000); return; }
         document.getElementById('horarioModal').classList.remove('show');
-        await this._guardarCampoTrab(this._horarioEditando, { horario: { i, f } }, `🕐 ${i}–${f}`);
+        await this._guardarCampoTrab(this._horarioEditando,
+            { horario: { i, f }, mes: this._mesHorario },
+            `🕐 ${i}–${f} · ${MESES_ES[+this._mesHorario.slice(4) - 1].toLowerCase()}`);
     },
 
     async _quitarHorario() {
         document.getElementById('horarioModal').classList.remove('show');
-        await this._guardarCampoTrab(this._horarioEditando, { horario: '' }, 'Horario quitado');
+        await this._guardarCampoTrab(this._horarioEditando,
+            { horario: '', mes: this._mesHorario }, 'Horario quitado');
     },
 
     // ── Grupo de descanso ──

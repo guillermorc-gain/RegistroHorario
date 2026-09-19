@@ -73,6 +73,20 @@ function limpiarHorario(h) {
   return { i: h.i, f: h.f };
 }
 
+// Los horarios se asignan mes a mes: { '202609': {i,f}, ... }. Se guardan los
+// MAX_MESES_HORARIO más recientes para que el fichero no crezca sin fin.
+const MAX_MESES_HORARIO = 36;
+function ponerHorarioDelMes(previos, mes, horario) {
+  const out = { ...(previos || {}) };
+  const limpio = limpiarHorario(horario);
+  if (limpio) out[mes] = limpio; else delete out[mes];
+  const claves = Object.keys(out).sort();
+  if (claves.length <= MAX_MESES_HORARIO) return out;
+  const recorte = {};
+  claves.slice(-MAX_MESES_HORARIO).forEach(k => { recorte[k] = out[k]; });
+  return recorte;
+}
+
 // Grupo de descanso (1–10) de los de jornada completa. 0 / vacío = sin grupo.
 function limpiarGrupo(g) {
   const n = parseInt(g, 10);
@@ -211,6 +225,7 @@ export default async function handler(req, res) {
           // Lo mismo con el horario asignado y el grupo de descanso, que se
           // eligen desde el cuadrante y el trabajador no envía.
           horario:      previo.horario || '',
+          horarios:     previo.horarios || {},
           grupo:        previo.grupo ?? null,
           actualizado:  new Date().toISOString(),
         };
@@ -224,7 +239,7 @@ export default async function handler(req, res) {
     if (req.method === 'PATCH' || req.method === 'DELETE') {
       if (!await exigirAdmin(req, res, ADMIN_EMAIL)) return;
       const { email, puesto, ficticio, baja, bajas, vacaciones, nota, fecha,
-              desde, hasta, dias, grupo, horario } = req.body || {};
+              desde, hasta, dias, grupo, horario, mes } = req.body || {};
       const clave = (email || '').toLowerCase().trim();
       if (!clave) return res.status(400).json({ error: 'Falta el email' });
       // Los usuarios de prueba solo pueden vivir bajo este dominio, para que no
@@ -271,7 +286,12 @@ export default async function handler(req, res) {
         }
         else if (data[clave] && grupo !== undefined) data[clave].grupo = limpiarGrupo(grupo);
         else if (data[clave] && horario !== undefined) {
-          data[clave].horario = limpiarHorario(horario);
+          // Con mes va al horario de ese mes; sin mes, al de siempre.
+          if (/^\d{6}$/.test(String(mes || ''))) {
+            data[clave].horarios = ponerHorarioDelMes(data[clave].horarios, mes, horario);
+          } else {
+            data[clave].horario = limpiarHorario(horario);
+          }
         }
         // Lugar solo para unas fechas: va aparte de `puesto` porque la app del
         // trabajador reescribe sus jornadas enteras cada vez que publica y se
