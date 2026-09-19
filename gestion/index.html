@@ -348,6 +348,16 @@
         .pm-volver{color:#7f8c8d;font-weight:700;justify-content:center;}
         .pm-paso{padding:11px 16px;font-size:12.5px;color:#2c3e50;background:#f4f6f9;border-bottom:1px solid #efefef;}
         .modal-card.dark .pm-paso{color:#e0e0e0;background:#16202e;border-color:#2d3561;}
+        .lg-mapa{height:230px;border-radius:10px;overflow:hidden;margin-bottom:10px;border:1.5px solid #dfe4ea;background:#eef1f6;}
+        .modal-card.dark .lg-mapa{border-color:#2d3561;background:#16202e;}
+        .lg-sinmapa{padding:10px 12px;margin-bottom:10px;border-radius:10px;background:#fdecea;color:#c0392b;font-size:12px;}
+        .lg-pin{font-size:26px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4));cursor:grab;}
+        .mapa-buscar{display:flex;gap:6px;margin-bottom:8px;}
+        .mapa-buscar input{flex:1;min-width:0;border:1.5px solid #dfe4ea;border-radius:8px;padding:9px 10px;font-family:inherit;font-size:13.5px;color:#2c3e50;background:#fff;}
+        .modal-card.dark .mapa-buscar input{background:#16202e;border-color:#2d3561;color:#e0e0e0;}
+        .mapa-buscar button{flex-shrink:0;width:40px;border:none;border-radius:8px;background:#eef1f6;font-size:15px;cursor:pointer;}
+        .modal-card.dark .mapa-buscar button{background:#16202e;}
+        .leaflet-container{font:inherit;}
         .exp-sec{border-bottom:1px solid #f2f2f2;}
         .modal-card.dark .exp-sec{border-color:#2d3561;}
         .exp-sec-h{display:flex;align-items:center;gap:8px;padding:11px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
@@ -576,11 +586,11 @@
         .edit-field{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;}
         .edit-field label{font-size:10px;font-weight:800;color:#7f8c8d;text-transform:uppercase;letter-spacing:0.4px;}
         .modal-card.dark .edit-field label{color:#a0a0a0;}
-        .edit-field input{padding:9px 11px;border:1.5px solid #e8eaf0;border-radius:8px;font-size:14px;font-family:inherit;background:white;color:#2c3e50;}
+        .edit-field input{min-width:0;box-sizing:border-box;width:100%;padding:9px 11px;border:1.5px solid #e8eaf0;border-radius:8px;font-size:14px;font-family:inherit;background:white;color:#2c3e50;}
         .edit-field input:focus{outline:none;border-color:var(--g1);}
         .modal-card.dark .edit-field input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
         .edit-row{display:flex;gap:8px;}
-        .edit-row .edit-field{flex:1;}
+        .edit-row .edit-field{flex:1;min-width:0;}
         .extra-label{font-size:11px;color:#27ae60;font-weight:700;text-align:right;margin-top:2px;}
 
         /* avatar picker */
@@ -615,6 +625,10 @@
         ::-webkit-scrollbar-thumb{background:var(--g1);border-radius:2px;}
         .app-content.dark ::-webkit-scrollbar-thumb,.options-content.dark ::-webkit-scrollbar-thumb{background:#3d4571;}
     </style>
+    <!-- Leaflet va dentro del APK: depender de un CDN dejaría el mapa en
+         blanco con mala cobertura, y es justo donde se usa. -->
+    <link rel="stylesheet" href="vendor/leaflet.css">
+    <script defer src="vendor/leaflet.js"></script>
 </head>
 <body>
 
@@ -1286,17 +1300,24 @@
             <div class="f-sep">Turnos</div>
             <div id="lgTurnos"></div>
             <div class="f-sep">Ubicación</div>
-            <span class="ops-field-sub" style="display:block;margin-bottom:8px;">Si un trabajador registra su jornada dentro del radio, la app le propone este lugar.</span>
-            <div class="edit-row">
-                <div class="edit-field"><label>Latitud</label><input type="text" inputmode="decimal" id="lgLat" placeholder="39.5696"></div>
-                <div class="edit-field"><label>Longitud</label><input type="text" inputmode="decimal" id="lgLng" placeholder="2.6502"></div>
+            <span class="ops-field-sub" style="display:block;margin-bottom:8px;">Toca el mapa o arrastra el marcador. Si un trabajador registra su jornada dentro del círculo, la app le propone este lugar.</span>
+            <div class="mapa-buscar">
+                <input type="text" id="lgBuscar" placeholder="Buscar dirección…" onkeydown="if(event.key==='Enter'){event.preventDefault();app._buscarEnMapa();}">
+                <button onclick="app._buscarEnMapa()">🔍</button>
+                <button onclick="app._ubicacionActualLugar()" title="Mi ubicación">📍</button>
             </div>
+            <div id="lgMapa" class="lg-mapa"></div>
+            <div id="lgSinMapa" class="lg-sinmapa" hidden>No se ha podido cargar el mapa. Puedes escribir las coordenadas a mano.</div>
             <div class="edit-row">
-                <div class="edit-field"><label>Radio (m)</label><input type="text" inputmode="numeric" id="lgRadio" placeholder="150"></div>
+                <div class="edit-field"><label>Radio (m)</label><input type="text" inputmode="numeric" id="lgRadio" placeholder="150" onchange="app._pintarRadio()"></div>
                 <div class="edit-field"><label>Prioridad</label><input type="text" inputmode="numeric" id="lgPrio" placeholder="0"></div>
             </div>
             <span class="ops-field-sub" style="display:block;">Con dos lugares en la misma ubicación se propone el de prioridad más alta.</span>
-            <button class="ops-btn" style="border-radius:8px;margin-top:10px;" onclick="app._ubicacionActualLugar()">📍 Usar mi ubicación actual</button>
+            <div class="edit-row" style="margin-top:8px;">
+                <div class="edit-field"><label>Latitud</label><input type="text" inputmode="decimal" id="lgLat" placeholder="39.5696" onchange="app._centrarDesdeCampos()"></div>
+                <div class="edit-field"><label>Longitud</label><input type="text" inputmode="decimal" id="lgLng" placeholder="2.6502" onchange="app._centrarDesdeCampos()"></div>
+            </div>
+            <button class="ops-btn" style="border-radius:8px;margin-top:6px;" onclick="app._quitarUbicacion()">🚫 Quitar la ubicación</button>
         </div>
         <div class="modal-footer">
             <button class="modal-btn modal-btn-cancel" onclick="app._borrarLugar()">Borrar</button>
