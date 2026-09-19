@@ -2254,9 +2254,51 @@ const app = {
         return this.DIAS_ORDEN.filter(x => d.includes(x)).map(x => this.DIAS_LETRA[x]).join(' ');
     },
 
+    ORDENES_CUAD: [['nombre', 'Trabajador'], ['numero', 'Nº'],
+                   ['grupo', 'Grupo'], ['horario', 'Horario']],
+
     ordenarCuadrante(modo) {
         localStorage.setItem('ordenCuadrante', modo);
         this._renderCuadranteTrab();
+    },
+
+    _mesesAlReves() { return localStorage.getItem('mesesCuadDesc') === '1'; },
+
+    _voltearMeses() {
+        localStorage.setItem('mesesCuadDesc', this._mesesAlReves() ? '0' : '1');
+        this._renderCuadranteTrab();
+    },
+
+    // El horario manda dentro de cada mes, así que se ordena mes a mes
+    _ordenarCuad(lista, mes) {
+        const orden = localStorage.getItem('ordenCuadrante') || 'nombre';
+        const porNombre = (a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es');
+        if (orden === 'numero') {
+            return lista.slice().sort((a, b) =>
+                (a.conductor || '￿').localeCompare(b.conductor || '￿', 'es', { numeric: true }));
+        }
+        if (orden === 'grupo') {
+            // Los que no son de jornada completa no tienen grupo: van al final
+            return lista.slice().sort((a, b) =>
+                ((a.grupo || 99) - (b.grupo || 99)) || porNombre(a, b));
+        }
+        if (orden === 'horario') {
+            const hora = u => this._horasAsignadas(u, mes)?.i || '￿';
+            return lista.slice().sort((a, b) => hora(a).localeCompare(hora(b)) || porNombre(a, b));
+        }
+        return lista.slice().sort(porNombre);
+    },
+
+    _renderOrdenCuad() {
+        const cont = document.getElementById('ctOrden');
+        if (cont) {
+            const sel = localStorage.getItem('ordenCuadrante') || 'nombre';
+            cont.innerHTML = this.ORDENES_CUAD.map(([id, txt]) =>
+                `<button class="${sel === id ? 'activo' : ''}" onclick="app.ordenarCuadrante('${id}')">${
+                    sel === id ? '✓ ' : ''}${txt}</button>`).join('');
+        }
+        const btn = document.getElementById('ctMesOrden');
+        if (btn) btn.textContent = this._mesesAlReves() ? 'Mes ↑' : 'Mes ↓';
     },
 
     // El cuadrante se hace mes a mes, así que la lista va agrupada por meses.
@@ -2264,8 +2306,9 @@ const app = {
     // demasiadas filas para dejarlas todas montadas.
     _mesesDelAnio() {
         const anio = new Date().getFullYear();
-        return Array.from({ length: 12 }, (_, m) =>
+        const meses = Array.from({ length: 12 }, (_, m) =>
             `${anio}${String(m + 1).padStart(2, '0')}`);
+        return this._mesesAlReves() ? meses.reverse() : meses;
     },
 
     // Día de referencia del mes: hoy si es el mes en curso, si no el día 1.
@@ -2287,13 +2330,8 @@ const app = {
     _renderCuadranteTrab() {
         const cont = document.getElementById('ctList');
         if (!cont) return;
-        const orden = localStorage.getItem('ordenCuadrante') || 'nombre';
-        const lista = Object.values(this._conductores || {}).sort((a, b) =>
-            orden === 'numero'
-                ? ((a.conductor || '￿').localeCompare(b.conductor || '￿', 'es', { numeric: true }))
-                : (a.nombre || '').localeCompare(b.nombre || '', 'es'));
-        document.getElementById('ctOrdNombre')?.classList.toggle('activo', orden === 'nombre');
-        document.getElementById('ctOrdNumero')?.classList.toggle('activo', orden === 'numero');
+        const lista = Object.values(this._conductores || {});
+        this._renderOrdenCuad();
         const cnt = document.getElementById('ctCnt');
         if (cnt) cnt.textContent = lista.length ? `${lista.length}` : '';
         if (!lista.length) {
@@ -2319,7 +2357,8 @@ const app = {
         }).join('');
     },
 
-    _filasCuadrante(lista, mes) {
+    _filasCuadrante(todos, mes) {
+        const lista = this._ordenarCuad(todos, mes);
         const fecha = this._diaDelMes(mes);
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
         const q = e => esc(e).replace(/'/g, "\\'");
@@ -2344,7 +2383,10 @@ const app = {
                 ? `<button class="ct-chip ${u.grupo ? 'grupo' : 'aviso'}"
                         onclick="app._editarGrupo('${q(u.email)}')">🔄 ${u.grupo ? 'Grupo ' + u.grupo : 'sin grupo'}</button>`
                 : '';
-            return `<div class="ct-row ${enBaja ? 'baja' : enVac ? 'vacaciones' : 'activo'}">
+            const estado = this._estadoTrabajador(u, fecha);
+            const color = estado === 'be' ? 'baja' : estado === 'vacaciones' ? 'vacaciones'
+                : estado === 'libre' ? 'libre' : lugar.trim() ? 'asignado' : 'sinlugar';
+            return `<div class="ct-row ${color}">
                 <div class="ct-top">
                     <span class="ct-num">${esc(u.conductor) || '—'}</span>
                     <span class="ct-nom">${esc(u.nombre) || esc(u.email)}</span>
@@ -3433,17 +3475,28 @@ const app = {
         </div>`).join('');
     },
 
+    // Los lugares definidos más los que ya estén en uso
+    _lugaresPosibles() {
+        const usados = [...new Set(Object.values(this._conductores || {})
+            .flatMap(x => [(x.puesto || '').trim(), ...(x.jornadas || []).map(j => (j.pu || '').trim())])
+            .filter(Boolean))];
+        const todos = [...PUESTOS_DEFINIDOS];
+        usados.forEach(p => { if (!todos.some(d => this._clavePuesto(d) === this._clavePuesto(p))) todos.push(p); });
+        return todos;
+    },
+
+    _opcionesPuesto(actual) {
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        return '<option value="">Sin lugar</option>' + this._lugaresPosibles().map(p =>
+            `<option${this._clavePuesto(p) === this._clavePuesto(actual) ? ' selected' : ''}>${esc(p)}</option>`).join('');
+    },
+
     _nuevoFicticio(email) {
         const u = email ? (this._conductores || {})[email] : null;
         this._fictEditando = email || `prueba-${Date.now()}@prueba.local`;
         document.getElementById('fNum').value    = u?.conductor || '';
         document.getElementById('fNombre').value = u?.nombre || '';
-        const sel = document.getElementById('fPuesto');
-        const usados = [...new Set(Object.values(this._conductores || {}).map(x => (x.puesto || '').trim()).filter(Boolean))];
-        const todos = [...PUESTOS_DEFINIDOS];
-        usados.forEach(p => { if (!todos.some(d => this._clavePuesto(d) === this._clavePuesto(p))) todos.push(p); });
-        sel.innerHTML = '<option value="">Sin lugar</option>' +
-            todos.map(p => `<option${this._clavePuesto(p) === this._clavePuesto(u?.puesto) ? ' selected' : ''}>${p}</option>`).join('');
+        document.getElementById('fPuesto').innerHTML = this._opcionesPuesto(u?.puesto);
         this._fictJornadas = (u?.jornadas || []).map(j => ({ ...j }));
         this._fictTipo  = (u?.jornadaHoras || 7) >= 7 ? 'completa' : 'media';
         this._fictRitmo = u?.ritmo === 'lv' || u?.ritmo === '6y2' ? u.ritmo : '6y2';
@@ -3519,10 +3572,15 @@ const app = {
         const d2 = document.getElementById('fHasta').value;
         if (!d1 || !d2 || d2 < d1) { this._mostrarToast('Revisa las fechas', 3000); return; }
         const media = this._fictTipo === 'media';
-        const horas = media ? this._horasFict() : 7;
-        const ini   = media ? '09:00' : '06:00';
+        // Si se escriben las horas del patrón mandan ellas; si no, las de siempre
+        const iniPuesto = document.getElementById('fPatIni')?.value || '';
+        const finPuesto = document.getElementById('fPatFin')?.value || '';
+        const ini = iniPuesto || (media ? '09:00' : '06:00');
+        const horas = finPuesto
+            ? this._horasEntre(ini, finPuesto)
+            : (media ? this._horasFict() : 7);
         // La salida sigue a las horas elegidas, no a un horario fijo
-        const fin   = media ? this._sumarHoras(ini, horas) : '13:00';
+        const fin = finPuesto || (media ? this._sumarHoras(ini, horas) : '13:00');
         const clave = d => `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
         const desde = new Date(d1 + 'T12:00:00'), hasta = new Date(d2 + 'T12:00:00');
         const puesto = document.getElementById('fPuesto').value;
@@ -3555,7 +3613,9 @@ const app = {
     _addJornadaFict(silencioso) {
         const hoy = new Date();
         const f = `${hoy.getFullYear()}${String(hoy.getMonth()+1).padStart(2,'0')}${String(hoy.getDate()).padStart(2,'0')}`;
-        (this._fictJornadas = this._fictJornadas || []).push({ f, i: '06:00', o: '14:00', h: 8, n: 0 });
+        // Nace con el lugar elegido arriba: casi siempre es el que toca
+        const pu = document.getElementById('fPuesto')?.value || '';
+        (this._fictJornadas = this._fictJornadas || []).push({ f, i: '06:00', o: '14:00', h: 8, n: 0, pu });
         if (!silencioso) this._renderJornadasFict();
     },
 
@@ -3590,6 +3650,11 @@ const app = {
                     <div style="flex:1;"><label>Inicio</label><input type="time" value="${j.i || ''}" onchange="app._setJ(${k},'i',this.value)"></div>
                     <div style="flex:1;"><label>Fin</label><input type="time" value="${j.o || ''}" onchange="app._setJ(${k},'o',this.value)"></div>
                     <div style="flex:.6;"><label>Horas</label><input type="text" inputmode="decimal" value="${j.h ?? ''}" onchange="app._setJ(${k},'h',this.value)"></div>
+                </div>
+                <div class="fj-row" style="margin-top:5px;">
+                    <div style="flex:1;"><label>Lugar de trabajo</label>
+                        <select class="f-sel" onchange="app._setJ(${k},'pu',this.value)">${
+                            this._opcionesPuesto(j.pu)}</select></div>
                 </div>
                 <div class="fj-flags">
                     <label><input type="checkbox" ${j.x === 1 ? 'checked' : ''} onchange="app._setJ(${k},'x',this.checked)"> Extra</label>
@@ -3986,9 +4051,18 @@ const app = {
             const delDia = gente.filter(({ j, deAyer, enBaja, enVac }) =>
                 !enBaja && !enVac && j && !j.v && !j.p && !deAyer).length;
 
+            // Turnos del lugar que ese día no cubre nadie. El que viene de la
+            // víspera cubre el turno de su hora de entrada, no el de ahora.
+            const franjas = TURNOS_POR_PUESTO[this._clavePuesto(puesto)] || [];
+            const cubiertos = new Set(gente
+                .filter(x => x.j && !x.j.v && !x.j.p)
+                .map(x => this._turnoDe(puesto, x.j.i))
+                .filter(Boolean));
+            const huecos = franjas.filter(f => !cubiertos.has(f.id));
+
             // El filtro escoge qué trabajadores se ven, salvo "sin cubrir", que
-            // es una propiedad del lugar: los que ahora no tienen a nadie dentro.
-            if (filtro === 'sincubrir' && dentro > 0) return;
+            // es una propiedad del lugar: el que tiene algún turno sin nadie.
+            if (filtro === 'sincubrir' && (franjas.length ? !huecos.length : dentro > 0)) return;
             const visibles = filtro === 'trabajando'  ? gente.filter(trabajando)
                            : filtro === 'sinservicio' ? gente.filter(x => !conJornada(x))
                            : gente;
@@ -4013,11 +4087,15 @@ const app = {
                 ? (dentro > 0 ? `${dentro} en turno` : 'sin cubrir')
                 : (delDia > 0 ? `${delDia} ${esFuturo ? 'previstos' : 'ese día'}` : 'sin cubrir');
             const vacio = esHoy ? dentro === 0 : delDia === 0;
+            const NOMBRE_TURNO = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
             tarjetas.push(`<div class="pst-card">
                 <div class="pst-head">
                     <span class="pst-nombre">${esc(puesto)}</span>
                     <span class="pst-cob${vacio ? ' vacio' : ''}">${cob}</span>
                 </div>
+                ${huecos.length ? `<div class="pst-huecos">Sin cubrir: ${huecos.map(f =>
+                    `<span class="pst-hueco"><b>${f.id}</b> ${esc(NOMBRE_TURNO[f.id] || f.id)} ${
+                        esc(f.desde)}–${esc(f.hasta)}</span>`).join('')}</div>` : ''}
                 ${filas}
             </div>`);
         });
@@ -4031,11 +4109,12 @@ const app = {
         if (!cont) return;
         cont.innerHTML = [
             ['todos', 'Todos'],
-            ['trabajando',  esHoy ? 'Trabajando'   : 'Con jornada'],
-            ['sincubrir',   'Sin cubrir'],
-            ['sinservicio', esHoy ? 'Sin servicio' : 'Sin jornada'],
+            ['trabajando',  esHoy ? 'Trabajando' : 'Con jornada'],
+            ['sincubrir',   'Lugar sin cubrir'],
+            ['sinservicio', 'Sin servicio asignado'],
         ].map(([id, txt]) => `<button class="${sel === id ? 'activo' : ''}"
-                onclick="event.stopPropagation();app.filtrarLugares('${id}')">${txt}</button>`).join('');
+                onclick="event.stopPropagation();app.filtrarLugares('${id}')">${
+                    sel === id ? '✓ ' : ''}${txt}</button>`).join('');
     },
 
     filtrarLugares(modo) {
@@ -4048,18 +4127,36 @@ const app = {
         if (this._enBaja(u, fecha) || (!this._bajasDe(u).length && u.baja)) return 'be';
         const { j } = this._jornadaVisible(u, fecha);
         if (j?.v || this._enVacaciones(u, fecha)) return 'vacaciones';
+        // Libre: ese día de la semana no es suyo y no ha registrado nada
+        if (!j && !this._trabajaEseDia(u, fecha)) return 'libre';
         return 'activo';
+    },
+
+    // Sin servicio asignado: le toca trabajar y no tiene lugar ese día
+    _sinServicio(u, fecha) {
+        if (this._estadoTrabajador(u, fecha) !== 'activo') return false;
+        const { j } = this._jornadaVisible(u, fecha);
+        return !this._lugarDe(u, fecha, j).trim();
+    },
+
+    FILTROS_COND: [['todos', 'Todos'], ['activo', 'Activos'], ['libre', 'Libres'],
+                   ['sinservicio', 'Sin servicio asignado'], ['be', 'BE'], ['vacaciones', 'Vacaciones']],
+
+    _pasaFiltroCond(u, fecha, filtro) {
+        if (filtro === 'todos') return true;
+        if (filtro === 'sinservicio') return this._sinServicio(u, fecha);
+        return this._estadoTrabajador(u, fecha) === filtro;
     },
 
     _renderFiltrosCond(lista, fecha) {
         const cont = document.getElementById('condFiltros');
         if (!cont) return;
         const sel = localStorage.getItem('filtroTrabajadores') || 'todos';
-        const n = { todos: lista.length, activo: 0, be: 0, vacaciones: 0 };
-        lista.forEach(u => { n[this._estadoTrabajador(u, fecha)]++; });
-        cont.innerHTML = [['todos','Todos'],['activo','Activos'],['be','BE'],['vacaciones','Vacaciones']]
-            .map(([id, txt]) => `<button class="${sel === id ? 'activo' : ''}"
-                onclick="app.filtrarTrabajadores('${id}')">${txt} ${n[id]}</button>`).join('');
+        cont.innerHTML = this.FILTROS_COND.map(([id, txt]) => {
+            const n = lista.filter(u => this._pasaFiltroCond(u, fecha, id)).length;
+            return `<button class="${sel === id ? 'activo' : ''}"
+                onclick="app.filtrarTrabajadores('${id}')">${sel === id ? '✓ ' : ''}${txt} ${n}</button>`;
+        }).join('');
     },
 
     filtrarTrabajadores(modo) {
@@ -4076,7 +4173,7 @@ const app = {
         const filtro = localStorage.getItem('filtroTrabajadores') || 'todos';
         this._renderFiltrosCond(todos, fecha);
         const lista = todos
-            .filter(u => filtro === 'todos' || this._estadoTrabajador(u, fecha) === filtro)
+            .filter(u => this._pasaFiltroCond(u, fecha, filtro))
             .sort((a, b) =>
             orden === 'numero'
                 // Sin número al final, y comparación numérica para que 209 no
@@ -4112,8 +4209,14 @@ const app = {
             const cerrada = this._estaPlegado('t:' + u.email, true);
             const enBaja = this._enBaja(u, fecha) || (!this._bajasDe(u).length && !!u.baja);
             const enVac  = this._enVacaciones(u, fecha);
-            return `<div class="cond-card${cerrada ? ' plegada' : ''}${
-                enBaja ? ' baja' : enVac ? ' vacaciones' : ' activo'}">
+            // Baja gris, vacaciones naranja, día libre rojo, y entre los que
+            // trabajan: verde el que no tiene lugar y amarillo el que sí.
+            const estado = this._estadoTrabajador(u, fecha);
+            const color = estado === 'be' ? 'baja'
+                : estado === 'vacaciones' ? 'vacaciones'
+                : estado === 'libre' ? 'libre'
+                : lugarHoy.trim() ? 'asignado' : 'sinlugar';
+            return `<div class="cond-card${cerrada ? ' plegada' : ''} ${color}">
                 <div class="cond-top" onclick="app._plegarTrabajador('${esc(u.email)}')">
                     ${av}
                     <div class="cond-id">

@@ -293,6 +293,9 @@
         .orden-btn.activo{background:white;color:var(--g1);box-shadow:0 1px 2px rgba(0,0,0,.08);}
         .app-content.dark .orden-btn.activo,.options-content.dark .orden-btn.activo{background:#1e2a3a;}
         .cond-refresh{flex-shrink:0;width:30px;height:30px;background:linear-gradient(135deg,var(--g1),var(--g2));border:none;border-radius:8px;color:#fff;font-size:16px;cursor:pointer;}
+        .pst-huecos{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:5px 11px 7px;font-size:10px;font-weight:800;color:#e74c3c;text-transform:uppercase;letter-spacing:.4px;}
+        .pst-hueco{background:#fdeaea;border-radius:8px;padding:2px 7px;font-size:10.5px;font-weight:700;text-transform:none;letter-spacing:0;}
+        .app-content.dark .pst-hueco{background:#3a1c1c;}
         .cond-filtros{display:flex;gap:6px;overflow-x:auto;padding:2px 0 9px;}
         .cond-filtros button{flex-shrink:0;border:none;border-radius:9px;padding:6px 12px;font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer;background:#eef1f6;color:#7f8c8d;}
         .app-content.dark .cond-filtros button{background:#16202e;color:#a0a0a0;}
@@ -488,10 +491,16 @@
            leía como apagado en vez de como verde. */
         /* Tres estados con el mismo tratamiento: franja y tinte. Verde en
            activo, amarillo de vacaciones, gris de baja. */
-        .cond-card.activo{background:#e8f8ee;border-left-color:#27ae60;}
-        .app-content.dark .cond-card.activo{background:#17332a;border-left-color:#2ecc71;}
-        .cond-card.vacaciones{background:#fdf6e0;border-left-color:#f0b429;}
-        .app-content.dark .cond-card.vacaciones{background:#3a3117;border-left-color:#f1c40f;}
+        /* Verde: trabaja y no tiene lugar. Amarillo: trabaja y lo tiene.
+           Naranja vacaciones, gris baja, rojo el que hoy libra. */
+        .cond-card.sinlugar{background:#e8f8ee;border-left-color:#27ae60;}
+        .app-content.dark .cond-card.sinlugar{background:#17332a;border-left-color:#2ecc71;}
+        .cond-card.asignado{background:#fdf6e0;border-left-color:#f0b429;}
+        .app-content.dark .cond-card.asignado{background:#3a3117;border-left-color:#f1c40f;}
+        .cond-card.vacaciones{background:#fdefe3;border-left-color:#e67e22;}
+        .app-content.dark .cond-card.vacaciones{background:#3a2517;border-left-color:#e67e22;}
+        .cond-card.libre{background:#fdeaea;border-left-color:#e74c3c;}
+        .app-content.dark .cond-card.libre{background:#3a1c1c;border-left-color:#e74c3c;}
         .cond-card.baja{background:#e9edf2;border-left-color:#95a5a6;}
         .app-content.dark .cond-card.baja{background:#151d29;border-left-color:#7f8c8d;}
         .cond-card.baja .cond-avatar,.cond-card.baja .cond-id,
@@ -517,6 +526,8 @@
         /* ── CUADRANTE ── */
         /* ── Trabajadores dentro del cuadrante ── */
         .ct-list{display:flex;flex-direction:column;gap:6px;padding-bottom:6px;}
+        .ct-mesord{flex-shrink:0;border:none;border-radius:9px;padding:5px 9px;font-family:inherit;font-size:10.5px;font-weight:800;cursor:pointer;background:#eef1f6;color:#5d6d7e;}
+        .app-content.dark .ct-mesord{background:#16202e;color:#93a1b3;}
         .ct-mes{display:flex;flex-direction:column;gap:6px;}
         .ct-mes-head{display:flex;align-items:center;gap:7px;padding:7px 10px;background:#eef1f6;color:#5d6d7e;border-radius:10px;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
         .app-content.dark .ct-mes-head{background:#161f2e;color:#93a1b3;}
@@ -532,10 +543,14 @@
         .ct-mes-body{display:flex;flex-direction:column;gap:6px;}
         .ct-row{background:white;border-radius:11px;padding:8px 10px;box-shadow:0 1px 3px rgba(0,0,0,0.07);border-left:4px solid transparent;}
         .app-content.dark .ct-row{background:#1e2a3a;}
-        .ct-row.activo{background:#e8f8ee;border-left-color:#27ae60;}
-        .app-content.dark .ct-row.activo{background:#17332a;border-left-color:#2ecc71;}
-        .ct-row.vacaciones{background:#fdf6e0;border-left-color:#f0b429;}
-        .app-content.dark .ct-row.vacaciones{background:#3a3117;border-left-color:#f1c40f;}
+        .ct-row.sinlugar{background:#e8f8ee;border-left-color:#27ae60;}
+        .app-content.dark .ct-row.sinlugar{background:#17332a;border-left-color:#2ecc71;}
+        .ct-row.asignado{background:#fdf6e0;border-left-color:#f0b429;}
+        .app-content.dark .ct-row.asignado{background:#3a3117;border-left-color:#f1c40f;}
+        .ct-row.vacaciones{background:#fdefe3;border-left-color:#e67e22;}
+        .app-content.dark .ct-row.vacaciones{background:#3a2517;border-left-color:#e67e22;}
+        .ct-row.libre{background:#fdeaea;border-left-color:#e74c3c;}
+        .app-content.dark .ct-row.libre{background:#3a1c1c;border-left-color:#e74c3c;}
         .ct-row.baja{background:#e9edf2;border-left-color:#95a5a6;}
         .app-content.dark .ct-row.baja{background:#151d29;border-left-color:#7f8c8d;}
         .ct-row.baja .ct-top,.ct-row.baja .ct-chips{filter:grayscale(1);opacity:.5;}
@@ -1014,11 +1029,10 @@
             <div class="sec-head" style="cursor:default;">
                 <span class="cond-title">👥 Trabajadores</span>
                 <span class="sec-cnt" id="ctCnt"></span>
-                <div class="cond-orden" onclick="event.stopPropagation()">
-                    <button id="ctOrdNombre" class="orden-btn activo" onclick="app.ordenarCuadrante('nombre')">Nombre</button>
-                    <button id="ctOrdNumero" class="orden-btn" onclick="app.ordenarCuadrante('numero')">Nº</button>
-                </div>
+                <button class="ct-mesord" id="ctMesOrden" onclick="app._voltearMeses()"
+                        title="Dar la vuelta al orden de los meses">Mes ↓</button>
             </div>
+            <div class="cond-filtros" id="ctOrden"></div>
             <div id="ctList" class="ct-list"></div>
         </div>
 
@@ -1563,10 +1577,15 @@
                 <span class="f-cnt" id="fCuenta">0</span>
                 <span class="f-chev" id="fChev">▾</span>
             </div>
-            <div class="exp-fechas" style="padding:0 0 8px;">
+            <div class="exp-fechas" style="padding:0 0 6px;">
                 <label>Generar desde<input type="date" id="fDesde"></label>
                 <label>hasta<input type="date" id="fHasta"></label>
             </div>
+            <div class="exp-fechas" style="padding:0 0 8px;">
+                <label>Entrada<input type="time" id="fPatIni"></label>
+                <label>Salida<input type="time" id="fPatFin"></label>
+            </div>
+            <span class="ops-field-sub" style="display:block;margin-bottom:8px;">En blanco se usa el horario de siempre y las horas del tipo de jornada.</span>
             <button class="ops-btn" style="border-radius:8px;margin-bottom:10px;" onclick="app._generarJornadasFict()">🎲 Generar según el patrón</button>
             <div id="fPlegable">
             <div id="fJornadas"></div>
