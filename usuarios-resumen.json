@@ -1475,7 +1475,13 @@
     ],
     "email": "prueba-1789758756867@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T14:01:24.046Z"
+    "actualizado": "2026-09-19T14:01:24.046Z",
+    "horarios": {
+      "202609": {
+        "i": "20:00",
+        "f": "00:00"
+      }
+    }
   },
   "prueba-1789759132382@prueba.local": {
     "nombre": "Tomeu Pol",
