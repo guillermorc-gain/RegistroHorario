@@ -12,9 +12,16 @@ const MAX_TEXTO    = 500;
 const MAX_NOTAS    = 400;   // las más viejas se van cayendo
 // Un adjunto va como data URL dentro del JSON, así que hay que acotarlo por
 // las dos puntas: lo que ocupa uno y lo que ocupan todos juntos.
-const MAX_ADJUNTO  = 600 * 1024;
+//
+// Guardando en el repo el techo es duro: la API de contenidos de GitHub no
+// escribe ficheros de más de 1 MB, así que en cuanto el fichero lo pasaba
+// dejaban de entrar mensajes —se guardaban en la app y desaparecían al
+// recargar— sin que nada lo dijera. Con base de datos eso no pasa y caben
+// adjuntos de verdad.
 const MAX_ADJUNTOS = 3;
-const TOTAL_ADJUNTOS = 12 * 1024 * 1024;
+const EN_BASE = () => hayBaseDeDatos();
+const MAX_ADJUNTO = () => (EN_BASE() ? 600 : 380) * 1024;
+const TOTAL_ADJUNTOS = () => EN_BASE() ? 12 * 1024 * 1024 : 700 * 1024;
 
 const ghHeaders = () => ({
   'User-Agent': 'horasemt-app',
@@ -30,7 +37,9 @@ const ghHeaders = () => ({
 async function leerContenido(meta) {
   if (meta.content) return Buffer.from(meta.content, 'base64').toString('utf8');
   if (!meta.size) return '';
-  const r = await fetch(meta.download_url || meta.url, {
+  // Por la URL de la API, no por download_url: la de la API respeta el token
+  // siempre, y la otra es una firma temporal que puede haber caducado.
+  const r = await fetch(meta.url || meta.download_url, {
     headers: { ...ghHeaders(), Accept: 'application/vnd.github.raw' },
     cache: 'no-store',
   });
@@ -82,7 +91,7 @@ function limpiarAdjuntos(a) {
   if (!Array.isArray(a)) return [];
   return a
     .filter(x => typeof x?.datos === 'string' && /^data:[\w.+-]+\/[\w.+-]+;base64,/.test(x.datos))
-    .filter(x => x.datos.length <= MAX_ADJUNTO)
+    .filter(x => x.datos.length <= MAX_ADJUNTO())
     .slice(0, MAX_ADJUNTOS)
     .map(x => ({
       nombre: String(x.nombre || 'adjunto').slice(0, 80),
@@ -95,20 +104,36 @@ const pesaAdjuntos = n => (n.mensajes || [])
   .flatMap(m => m.adjuntos || [])
   .reduce((s, a) => s + (a.datos?.length || 0), 0);
 
+// Guardando en el repo hay un techo duro: la API de contenidos de GitHub no
+// escribe por encima de 1 MB. Se deja margen y se mide el fichero de verdad,
+// no solo la suma de los adjuntos, porque lo que revienta es el conjunto.
+const LIMITE_FICHERO = 900 * 1024;
+
+const sinAdjuntos = n => ({ ...n, adjuntosPurgados: true,
+  mensajes: (n.mensajes || []).map(m => ({ ...m, adjuntos: [] })) });
+
 // Si el fichero se va de tamaño, las notas viejas pierden los adjuntos pero
 // conservan el texto: es lo que de verdad hace falta guardar.
 function acotarAdjuntos(data) {
-  const ids = Object.keys(data);
-  let total = ids.reduce((s, id) => s + pesaAdjuntos(data[id]), 0);
-  if (total <= TOTAL_ADJUNTOS) return data;
+  const viejasPrimero = Object.keys(data)
+    .sort((a, b) => (data[a].creado || '').localeCompare(data[b].creado || ''));
+  let total = viejasPrimero.reduce((s, id) => s + pesaAdjuntos(data[id]), 0);
+  const tope = TOTAL_ADJUNTOS();
   const out = { ...data };
-  for (const id of ids.sort((a, b) => (data[a].creado || '').localeCompare(data[b].creado || ''))) {
-    if (total <= TOTAL_ADJUNTOS) break;
+  for (const id of viejasPrimero) {
+    if (total <= tope) break;
     const peso = pesaAdjuntos(out[id]);
     if (!peso) continue;
-    out[id] = { ...out[id], adjuntosPurgados: true,
-                mensajes: (out[id].mensajes || []).map(m => ({ ...m, adjuntos: [] })) };
+    out[id] = sinAdjuntos(out[id]);
     total -= peso;
+  }
+  if (EN_BASE()) return out;
+  // Y ahora por tamaño real: mientras no quepa, las más viejas con adjuntos
+  // los sueltan. El texto se queda siempre.
+  for (const id of viejasPrimero) {
+    if (JSON.stringify(out).length <= LIMITE_FICHERO) break;
+    if (!pesaAdjuntos(out[id])) continue;
+    out[id] = sinAdjuntos(out[id]);
   }
   return out;
 }

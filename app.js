@@ -2222,7 +2222,9 @@ const app = {
     // bien en el móvil y en un ordenador, y la calidad baja hasta que entren
     // en el tope. Un archivo que no sea imagen no se puede encoger.
 
-    MAX_ADJUNTO: 600 * 1024,
+    // Lo que acepta el servidor guardando en el repo. Con base de datos
+    // cabe más, pero mejor una sola medida que no falle en ningún caso.
+    MAX_ADJUNTO: 380 * 1024,
     LADO_FOTO: 1600,
     _adjuntos: [],
 
@@ -2680,7 +2682,12 @@ const app = {
                         : { nombre: this.usuarioActual?.name || '' }) })
             });
             const data = await r.json();
-            if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return; }
+            if (!r.ok) {
+                // Si no se ha guardado, que se note y que el texto no se pierda
+                this._mostrarToast('❌ No se ha enviado: ' + (data.error || r.status)
+                    + '. Tu mensaje sigue escrito, vuelve a darle a Enviar.', 6000);
+                return;
+            }
             campo.value = '';
             this._adjuntos = [];
             this._renderAdjuntos();
