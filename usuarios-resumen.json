@@ -1317,13 +1317,13 @@
     "conductor": "1250-0",
     "puesto": "Control",
     "avatar": null,
-    "version": "build-69",
-    "horasMes": 54.5,
-    "horasTotales": 58,
-    "diasMes": 15,
+    "version": "build-81",
+    "horasMes": 58.5,
+    "horasTotales": 62,
+    "diasMes": 16,
     "horaInicio": "20:00",
     "horaFin": "00:00",
-    "horarioDe": "hoy",
+    "horarioDe": "anterior",
     "turno": "T",
     "jornadaHoras": 4,
     "horasAnuales": 777,
@@ -1462,11 +1462,19 @@
         "o": "00:00",
         "h": 4,
         "n": 0
+      },
+      {
+        "f": "20260920",
+        "i": "20:00",
+        "o": "00:00",
+        "h": 4,
+        "n": 0,
+        "pu": "Control"
       }
     ],
     "email": "prueba-1789758756867@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T09:56:00.408Z"
+    "actualizado": "2026-09-19T14:00:56.950Z"
   },
   "prueba-1789759132382@prueba.local": {
     "nombre": "Tomeu Pol",
