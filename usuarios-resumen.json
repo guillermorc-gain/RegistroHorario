@@ -1445,14 +1445,22 @@
     "conductor": "8959-9",
     "puesto": "Calle",
     "avatar": null,
-    "version": "build-36",
+    "version": "build-66",
     "horasMes": 7,
     "horasTotales": 7,
     "diasMes": 1,
     "horaInicio": "06:00",
     "horaFin": "13:00",
-    "horarioDe": "hoy",
-    "turno": "",
+    "horarioDe": "anterior",
+    "turno": "M",
+    "jornadaHoras": 3.5,
+    "horasAnuales": 777,
+    "ritmo": "lv",
+    "dias": [
+      1,
+      3,
+      4
+    ],
     "jornadas": [
       {
         "f": "20260918",
@@ -1464,7 +1472,7 @@
     ],
     "email": "prueba-1789760248885@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-18T19:37:48.994Z"
+    "actualizado": "2026-09-19T09:25:50.720Z"
   },
   "prueba-1789760390735@prueba.local": {
     "nombre": "Miguel Moyà",
