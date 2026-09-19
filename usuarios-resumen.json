@@ -1210,9 +1210,9 @@
     "conductor": "1250-0",
     "puesto": "Control",
     "avatar": null,
-    "version": "build-67",
-    "horasMes": 53.5,
-    "horasTotales": 57,
+    "version": "build-69",
+    "horasMes": 54.5,
+    "horasTotales": 58,
     "diasMes": 15,
     "horaInicio": "20:00",
     "horaFin": "00:00",
@@ -1327,17 +1327,17 @@
       },
       {
         "f": "20260916",
-        "i": "09:00",
-        "o": "12:30",
-        "h": 3.5,
+        "i": "20:00",
+        "o": "00:00",
+        "h": 4,
         "n": 0,
         "pu": "Control"
       },
       {
         "f": "20260917",
-        "i": "09:00",
-        "o": "12:30",
-        "h": 3.5,
+        "i": "20:00",
+        "o": "00:00",
+        "h": 4,
         "n": 0,
         "pu": "Control"
       },
@@ -1359,7 +1359,7 @@
     ],
     "email": "prueba-1789758756867@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T09:32:58.535Z"
+    "actualizado": "2026-09-19T09:56:00.408Z"
   },
   "prueba-1789759132382@prueba.local": {
     "nombre": "Tomeu Pol",
