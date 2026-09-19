@@ -109,6 +109,35 @@
         .nt-nueva{display:flex;flex-direction:column;gap:7px;flex-shrink:0;}
         .nt-texto{border:1.5px solid #dfe4ea;border-radius:10px;padding:10px;font-family:inherit;font-size:13.5px;color:#2c3e50;background:#fff;resize:vertical;}
         .app-content.dark .nt-texto{background:#1e2a3a;border-color:#2d3561;color:#e0e0e0;}
+        .nt-para{display:flex;align-items:center;gap:8px;}
+        .nt-para-l{font-size:10px;font-weight:800;color:#7f8c8d;text-transform:uppercase;letter-spacing:.5px;}
+        .nt-para-b{flex:1;min-width:0;text-align:left;border:1.5px solid #dfe4ea;background:#fff;color:#2c3e50;border-radius:8px;padding:7px 9px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;}
+        .app-content.dark .nt-para-b{background:#1e2a3a;border-color:#2d3561;color:#e0e0e0;}
+        .adj-barra{display:flex;gap:6px;}
+        .adj-btn{flex:1;border:1.5px dashed #dfe4ea;background:transparent;color:#7f8c8d;border-radius:8px;padding:8px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;}
+        .app-content.dark .adj-btn{border-color:#2d3561;}
+        .adj-lista{display:flex;flex-wrap:wrap;gap:6px;}
+        .adj-lista:empty{display:none;}
+        .adj-chip{display:flex;align-items:center;gap:6px;background:#eef1f6;border-radius:8px;padding:4px 6px;font-size:11px;font-weight:700;color:#2c3e50;max-width:100%;}
+        .app-content.dark .adj-chip{background:#16202e;color:#e0e0e0;}
+        .adj-chip img{width:34px;height:34px;object-fit:cover;border-radius:5px;flex-shrink:0;}
+        .adj-chip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .adj-chip button{border:none;background:transparent;color:#e74c3c;font-size:15px;cursor:pointer;flex-shrink:0;}
+        .baja-lista{max-height:38vh;overflow-y:auto;}
+        .baja-vacio{padding:12px 16px;font-size:12px;color:#95a5a6;}
+        .dest-buscar{padding:10px 16px;border-bottom:1px solid #efefef;}
+        .modal-card.dark .dest-buscar{border-color:#2d3561;}
+        .dest-buscar input{width:100%;border:1.5px solid #dfe4ea;border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13.5px;color:#2c3e50;background:#fff;}
+        .modal-card.dark .dest-buscar input{background:#16202e;border-color:#2d3561;color:#e0e0e0;}
+        .dest-fila{display:flex;align-items:center;gap:9px;padding:11px 16px;border-bottom:1px solid #f4f4f4;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+        .modal-card.dark .dest-fila{border-color:#2d3561;}
+        .dest-fila:active{background:#f4f6f9;}
+        .nt-num{font-size:10.5px;font-weight:800;color:#7f8c8d;background:#eef1f6;border-radius:7px;padding:2px 6px;flex-shrink:0;}
+        .modal-card.dark .nt-num{background:#16202e;color:#a0a0a0;}
+        .nt-nom{flex:1;min-width:0;font-size:13px;font-weight:700;color:#2c3e50;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .modal-card.dark .nt-nom{color:#e0e0e0;}
+        .nt-card.companero{border-left-color:#8e44ad;}
+        .nt-estado.companero{background:#8e44ad;}
         .nt-lista{display:flex;flex-direction:column;gap:7px;padding-bottom:6px;}
         .nt-card{background:white;border-radius:12px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);border-left:4px solid #bdc3c7;}
         .app-content.dark .nt-card{background:#1e2a3a;}
@@ -130,6 +159,10 @@
         .foto-visor img{max-width:100%;max-height:100%;border-radius:8px;}
         .nt-card.degestor{border-left-color:var(--g1);}
         .nt-estado.degestor{background:var(--g1);}
+        .nt-adj{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;}
+        .nt-adj img{max-width:120px;max-height:120px;border-radius:8px;cursor:pointer;object-fit:cover;}
+        .nt-adj a{display:inline-flex;align-items:center;gap:5px;background:#eef1f6;border-radius:8px;padding:6px 9px;font-size:11.5px;font-weight:700;color:var(--g1);text-decoration:none;}
+        .app-content.dark .nt-adj a{background:#16202e;}
         .nt-vacio{padding:26px 16px;text-align:center;font-size:12.5px;color:#95a5a6;}
         .lugar-box{border:1.5px solid #dfe4ea;border-radius:10px;padding:9px 10px;margin-bottom:7px;display:flex;flex-direction:column;gap:7px;}
         .app-content.dark .lugar-box{border-color:#2d3561;}
@@ -820,9 +853,18 @@
         <!-- ── TAB: Notas ── -->
         <div class="tab-panel" id="tabPanel2">
             <div class="nt-nueva">
+                <div class="nt-para">
+                    <span class="nt-para-l">Para</span>
+                    <button class="nt-para-b" id="ntParaBtn" onclick="app.elegirDestinatario()">Gestión ▾</button>
+                </div>
                 <textarea id="ntTexto" class="nt-texto" rows="2" maxlength="500"
-                          placeholder="Escribe aquí lo que quieras contarle a gestión…"></textarea>
-                <button class="btn-main" onclick="app.enviarNota()">📨 Enviar a gestión</button>
+                          placeholder="Escribe aquí lo que quieras contar…"></textarea>
+                <div class="adj-barra">
+                    <button class="adj-btn" onclick="app._elegirAdjunto('foto')">📷 Foto</button>
+                    <button class="adj-btn" onclick="app._elegirAdjunto('archivo')">📎 Archivo</button>
+                </div>
+                <div id="adjLista" class="adj-lista"></div>
+                <button class="btn-main" id="ntEnviar" onclick="app.enviarNota()">📨 Enviar a gestión</button>
             </div>
             <div id="ntLista" class="nt-lista"></div>
         </div>
@@ -1340,6 +1382,23 @@
             <div class="pm-op" onclick="app.exportarCSV()">
                 <div style="flex:1;">CSV<br><span class="pm-turnos">Lo abre cualquier programa</span></div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Elegir a quién escribir -->
+<div class="modal" id="destModal">
+    <div class="modal-card" id="destModalContent">
+        <div class="modal-header">
+            <h3>✉️ ¿A quién escribes?</h3>
+            <button class="modal-close" onclick="document.getElementById('destModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div class="dest-buscar">
+                <input type="text" id="destBuscar" placeholder="Buscar por nombre o número…"
+                       oninput="app._renderDestinatarios()">
+            </div>
+            <div id="destLista" class="baja-lista" style="max-height:52vh;overflow-y:auto;"></div>
         </div>
     </div>
 </div>

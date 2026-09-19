@@ -106,7 +106,7 @@ function recortar(data) {
   let quitadas = 0;
   for (const id of orden) {
     if (quitadas >= sobran) break;
-    if (out[id].estado === 'pendiente') continue;
+    if (out[id].tipo !== 'companero' && out[id].estado === 'pendiente') continue;
     delete out[id];
     quitadas++;
   }
@@ -125,8 +125,10 @@ export default async function handler(req, res) {
       const { data } = await getFile();
       res.setHeader('Cache-Control', 'no-store');
       const quien = String(req.query?.email || '').toLowerCase().trim();
+      // Las mías son las que me llegan y las que he mandado a un compañero
       const notas = Object.values(data)
-        .filter(n => !quien || (n.email || '').toLowerCase() === quien)
+        .filter(n => !quien || (n.email || '').toLowerCase() === quien
+                            || (n.deEmail || '').toLowerCase() === quien)
         .sort((a, b) => (b.creado || '').localeCompare(a.creado || ''));
       return res.status(200).json(notas);
     }
@@ -144,27 +146,40 @@ export default async function handler(req, res) {
       // El gestor puede abrir la conversación él: la nota se guarda a nombre
       // del trabajador, que es quien la verá en su app, pero firmada por él.
       const para = String(b.para || '').toLowerCase().trim();
-      const delGestor = !!para;
-      // Aquí no vale la cabecera: escribir en nombre de gestión exige el token
+      // Con destinatario hay dos casos: el gestor escribiendo a un trabajador
+      // y un trabajador escribiendo a un compañero. Firmar como gestión exige
+      // el token; con la cabecera sola cualquiera podría hacerse pasar por él.
+      const delGestor = !!para && b.tipo !== 'companero';
       if (delGestor && delToken !== ADMIN_EMAIL) {
         return res.status(403).json({ error: 'Solo el gestor escribe a un trabajador' });
+      }
+      const entreCompaneros = !!para && !delGestor;
+      if (entreCompaneros && !para.includes('@')) {
+        return res.status(400).json({ error: 'Falta el compañero' });
       }
       // La hora la pone el servidor: así no depende del reloj del móvil
       const creado = new Date().toISOString();
       const id = `${creado.replace(/[-:.TZ]/g, '')}-${Math.random().toString(36).slice(2, 7)}`;
       const nueva = {
-        id, email: delGestor ? para : quien, creado,
+        id, email: para || quien, creado,
         nombre:    String(b.nombre || '').slice(0, 80),
         conductor: String(b.conductor || '').slice(0, 12),
         texto: cuerpo,
         adjuntos,
         de: delGestor ? 'gestor' : 'trabajador',
+        // Un mensaje entre compañeros no es una petición a gestión: no lleva
+        // estado que atender y no sale en su lista.
+        tipo: entreCompaneros ? 'companero' : 'gestion',
+        ...(entreCompaneros ? { deEmail: quien,
+              deNombre: String(b.deNombre || '').slice(0, 80),
+              deConductor: String(b.deConductor || '').slice(0, 12) } : {}),
         ...(delGestor ? { gestor: String(b.gestor || '').slice(0, 80) } : {}),
         estado: 'pendiente',
         respuesta: null,
       };
       const nuevo = await guardarConReintento(data => acotarAdjuntos(recortar({ ...data, [id]: nueva })),
-        delGestor ? `Nota del gestor para ${para}` : `Nota de ${quien}`);
+        entreCompaneros ? `Mensaje de ${quien} para ${para}`
+        : delGestor ? `Nota del gestor para ${para}` : `Nota de ${quien}`);
       return nuevo ? res.status(200).json(nueva) : res.status(500).json({ error: 'No se pudo guardar' });
     }
 
