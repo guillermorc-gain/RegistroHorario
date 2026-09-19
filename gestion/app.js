@@ -3071,10 +3071,72 @@ const app = {
         sel.innerHTML = '<option value="">Sin lugar</option>' +
             todos.map(p => `<option${this._clavePuesto(p) === this._clavePuesto(u?.puesto) ? ' selected' : ''}>${p}</option>`).join('');
         this._fictJornadas = (u?.jornadas || []).map(j => ({ ...j }));
+        this._fictTipo  = (u?.jornadaHoras || 7) >= 7 ? 'completa' : 'media';
+        this._fictRitmo = u?.ritmo === 'lv' || u?.ritmo === '6y2' ? u.ritmo : '6y2';
+        this._renderTipoFict();
+        const hoy = new Date();
+        const mes1 = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        document.getElementById('fDesde').value = mes1.toISOString().slice(0, 10);
+        document.getElementById('fHasta').value = hoy.toISOString().slice(0, 10);
         if (!this._fictJornadas.length) this._addJornadaFict(true);
         this._renderJornadasFict();
         document.getElementById('fictModal').classList.add('show');
         if (this.darkMode) document.getElementById('fictModalContent').classList.add('dark');
+    },
+
+    _renderTipoFict() {
+        document.getElementById('fTipo').innerHTML = [['media','3,5 h media'],['completa','7 h completa']]
+            .map(([id, txt]) => `<button class="${this._fictTipo === id ? 'on' : ''}"
+                onclick="app._ponerTipoFict('${id}')">${txt}</button>`).join('');
+        const ritmo = document.getElementById('fRitmo');
+        const sub = document.getElementById('fRitmoSub');
+        // La media jornada es siempre de lunes a viernes; solo la completa elige
+        ritmo.style.display = this._fictTipo === 'completa' ? 'flex' : 'none';
+        ritmo.innerHTML = this._fictTipo === 'completa'
+            ? [['6y2','6 días y 2 libres'],['lv','Lunes a viernes']]
+                .map(([id, txt]) => `<button class="${this._fictRitmo === id ? 'on' : ''}"
+                    onclick="app._ponerRitmoFict('${id}')">${txt}</button>`).join('')
+            : '';
+        sub.textContent = this._fictTipo === 'media'
+            ? 'De lunes a viernes. Los fines de semana solo si los apunta él desde su app.'
+            : this._fictRitmo === '6y2'
+                ? 'Seis días seguidos y dos de descanso, rodando por la semana.'
+                : 'De lunes a viernes, con el fin de semana libre.';
+    },
+
+    _ponerTipoFict(t)  { this._fictTipo = t;  this._renderTipoFict(); },
+    _ponerRitmoFict(r) { this._fictRitmo = r; this._renderTipoFict(); },
+
+    // Rellena las jornadas del tramo siguiendo el patrón elegido. Lo que ya
+    // hubiera fuera del tramo se respeta: solo se reescribe lo de dentro.
+    _generarJornadasFict() {
+        const d1 = document.getElementById('fDesde').value;
+        const d2 = document.getElementById('fHasta').value;
+        if (!d1 || !d2 || d2 < d1) { this._mostrarToast('Revisa las fechas', 3000); return; }
+        const media = this._fictTipo === 'media';
+        const horas = media ? 3.5 : 7;
+        const ini   = media ? '09:00' : '06:00';
+        const fin   = media ? '12:30' : '13:00';
+        const clave = d => `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+        const desde = new Date(d1 + 'T12:00:00'), hasta = new Date(d2 + 'T12:00:00');
+        const puesto = document.getElementById('fPuesto').value;
+
+        const dentro = new Set();
+        const nuevas = [];
+        let ciclo = 0;
+        for (let d = new Date(desde); d <= hasta; d.setDate(d.getDate() + 1)) {
+            const k = clave(d);
+            dentro.add(k);
+            const finde = d.getDay() === 0 || d.getDay() === 6;
+            let trabaja;
+            if (media || this._fictRitmo === 'lv') trabaja = !finde;
+            else { trabaja = (ciclo % 8) < 6; ciclo++; }   // seis y dos, rodando
+            if (trabaja) nuevas.push({ f: k, i: ini, o: fin, h: horas, n: 0, pu: puesto });
+        }
+        const fuera = (this._fictJornadas || []).filter(j => j.f && !dentro.has(j.f));
+        this._fictJornadas = [...fuera, ...nuevas].sort((a, b) => a.f.localeCompare(b.f));
+        this._renderJornadasFict();
+        this._mostrarToast(`🎲 ${nuevas.length} jornadas generadas`, 3000);
     },
 
     _addJornadaFict(silencioso) {
@@ -3144,6 +3206,9 @@ const app = {
             horaInicio: ultima?.i || '', horaFin: ultima?.o || '',
             horarioDe: ultima?.f === hoyId ? 'hoy' : 'anterior',
             turno: this._turnoDe(puesto, ultima?.i) || '',
+            jornadaHoras: this._fictTipo === 'media' ? 3.5 : 7,
+            horasAnuales: this._fictTipo === 'media' ? 777 : 1700,
+            ritmo: this._fictTipo === 'media' ? 'lv' : this._fictRitmo,
             jornadas,
         };
         try {

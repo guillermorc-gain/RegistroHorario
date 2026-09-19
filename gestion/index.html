@@ -1418,7 +1418,16 @@
                 <div class="edit-field"><label>Nombre</label><input type="text" id="fNombre" placeholder="Ana López"></div>
             </div>
             <div class="edit-field"><label>Lugar de trabajo</label><select id="fPuesto" class="f-sel"></select></div>
+            <div class="f-sep">Tipo de jornada</div>
+            <div class="lg-dias" id="fTipo"></div>
+            <div class="lg-dias" id="fRitmo"></div>
+            <span class="ops-field-sub" id="fRitmoSub" style="display:block;margin-top:4px;"></span>
             <div class="f-sep">Jornadas</div>
+            <div class="exp-fechas" style="padding:0 0 8px;">
+                <label>Generar desde<input type="date" id="fDesde"></label>
+                <label>hasta<input type="date" id="fHasta"></label>
+            </div>
+            <button class="ops-btn" style="border-radius:8px;margin-bottom:10px;" onclick="app._generarJornadasFict()">🎲 Generar según el patrón</button>
             <div id="fJornadas"></div>
             <button class="ops-btn" style="border-radius:8px;" onclick="app._addJornadaFict()">➕ Añadir jornada</button>
         </div>
