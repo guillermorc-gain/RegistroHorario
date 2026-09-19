@@ -438,9 +438,12 @@
         .pr-ed{background:#3498db;color:#fff;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;}
         .pr-del{background:#e74c3c;color:#fff;border:none;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px;}
         /* Barra de día: el bloque entero acepta swipe horizontal */
-        .pst-dia{display:flex;align-items:center;gap:6px;margin-bottom:10px;}
+        .pst-dia{position:relative;display:flex;align-items:center;gap:6px;margin-bottom:10px;}
+        .pst-dia-txt{cursor:pointer;-webkit-tap-highlight-color:transparent;}
+        /* Invisible pero presente: showPicker() necesita un campo renderizado */
+        .pst-fecha{position:absolute;left:8px;bottom:0;width:1px;height:1px;padding:0;border:0;opacity:0;pointer-events:none;}
         .pst-hoy{flex-shrink:0;border:none;border-radius:8px;padding:6px 12px;font-family:inherit;font-size:11.5px;font-weight:800;cursor:pointer;background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;}
-        .pst-hoy.oculto{visibility:hidden;}
+
         .pst-dia-txt{flex:1;text-align:center;font-size:11.5px;font-weight:800;color:#2c3e50;text-transform:capitalize;}
         .app-content.dark .pst-dia-txt{color:#e0e0e0;}
         .pst-nav{width:28px;height:28px;flex-shrink:0;border:none;border-radius:8px;background:#e8eaf0;color:#2c3e50;font-size:16px;font-weight:800;cursor:pointer;font-family:inherit;line-height:1;}
@@ -702,9 +705,11 @@
                  o arrastrando en horizontal por cualquier punto de la pestaña. -->
             <div class="pst-dia">
                 <button class="pst-nav" onclick="app.cambiarDiaPuestos(-1)">‹</button>
-                <span class="pst-dia-txt" id="pstDiaTxt">Hoy</span>
-                <button class="pst-hoy" id="pstHoy" onclick="app.irAHoy()">Hoy</button>
+                <span class="pst-dia-txt" id="pstDiaTxt" onclick="app.abrirCalendario()">Hoy</span>
+                <button class="pst-hoy" id="pstHoy" onclick="app.pulsarHoy()">Hoy</button>
                 <button class="pst-nav" onclick="app.cambiarDiaPuestos(1)">›</button>
+                <!-- El calendario nativo cuelga de aquí; se abre desde el botón -->
+                <input type="date" id="pstFecha" class="pst-fecha" onchange="app.irAFecha(this.value)">
             </div>
 
             <div class="sec" id="secPuestos">
