@@ -74,5 +74,26 @@
     "de": "trabajador",
     "tipo": "gestion",
     "estado": "pendiente"
+  },
+  "20260919181109452-5djr1": {
+    "id": "20260919181109452-5djr1",
+    "email": "guillermo.rcxx@gmail.com",
+    "creado": "2026-09-19T18:11:09.452Z",
+    "nombre": "Guillermo Ríos Correa",
+    "conductor": "1234-5",
+    "mensajes": [
+      {
+        "de": "gestor",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Uuu",
+        "adjuntos": [],
+        "en": "2026-09-19T18:11:09.452Z"
+      }
+    ],
+    "archivada": false,
+    "de": "gestor",
+    "tipo": "gestion",
+    "gestor": "Guillermo Ríos Correa",
+    "estado": "pendiente"
   }
 }
