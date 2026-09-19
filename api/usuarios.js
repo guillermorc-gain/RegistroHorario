@@ -262,14 +262,40 @@ function leTocaEse(u, f) {
   return u.dias.includes(d);
 }
 
-// El horario que vale es el que fichó; si no ha fichado, el asignado del mes.
-function horarioDelDia(u, f) {
-  const suya = (u.jornadas || []).filter(j => j && j.f === f).pop();
-  if (suya?.i) return { i: suya.i, f: suya.o || '', real: true };
+// El horario asignado para ese día: primero el que le hayan puesto a esa
+// fecha, luego el del mes y por último el de siempre.
+function planDelDia(u, f) {
+  const delDia = u.horariosDia?.[f];
+  if (delDia?.i && delDia?.f) return { ...delDia, real: false };
   const delMes = u.horarios?.[f.slice(0, 6)];
   if (delMes?.i) return { ...delMes, real: false };
   const suelto = u.horario;
   return (suelto && typeof suelto === 'object' && suelto.i) ? { ...suelto, real: false } : null;
+}
+
+// El horario que vale es el que fichó; si no ha fichado, el asignado.
+function horarioDelDia(u, f) {
+  const suya = (u.jornadas || []).filter(j => j && j.f === f).pop();
+  if (suya?.i) return { i: suya.i, f: suya.o || '', real: true };
+  return planDelDia(u, f);
+}
+
+// Lo que le toca ese día: dónde y a qué hora. Un lugar puesto para esa fecha
+// manda sobre el habitual, y como va por fecha, al día siguiente vuelve solo
+// al del mes sin que nadie tenga que deshacer nada.
+function loQueLeToca(u, f) {
+  if (!u) return null;
+  const delDia = (u.lugares || {})[f] || '';
+  return {
+    fecha: f,
+    lugar: delDia || u.puesto || '',
+    // Para que la app pueda decir que ese día va a otro sitio
+    excepcion: !!delDia && clavePuesto(delDia) !== clavePuesto(u.puesto || ''),
+    horario: planDelDia(u, f),
+    libre: !leTocaEse(u, f),
+    baja: deBajaEse(u, f),
+    vacaciones: deVacacionesEse(u, f),
+  };
 }
 
 function quienHayEn(data, lugar, fecha) {
@@ -304,7 +330,11 @@ export default async function handler(req, res) {
       res.setHeader('Cache-Control', 'no-store');
       // Con ?lugar= se devuelve solo quién trabaja ahí ese día. Lo usa la app
       // del trabajador para enseñarle con quién va, sin bajarse todo.
-      const { lugar, fecha, directorio, avatares } = req.query || {};
+      const { lugar, fecha, directorio, avatares, mio } = req.query || {};
+      const hoyClave = () => {
+        const d = new Date();
+        return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+      };
       // Las fotos, aparte y cacheables: cambian una vez al año y pesan más que
       // todo lo demás junto.
       if (avatares !== undefined) {
@@ -315,6 +345,13 @@ export default async function handler(req, res) {
       }
       if (lugar !== undefined) {
         return res.status(200).json(quienHayEn(data, lugar, fecha));
+      }
+      // Lo que le toca a uno ese día. Es lo que mira su app para la cabecera,
+      // y así no se baja la plantilla entera para leer dos datos suyos.
+      if (mio !== undefined) {
+        const u = data[String(mio).toLowerCase().trim()];
+        const f = /^\d{8}$/.test(String(fecha || '')) ? fecha : hoyClave();
+        return res.status(200).json(loQueLeToca(u, f) || { fecha: f, lugar: '', horario: null });
       }
       // Solo nombre y número, para que la app del trabajador pueda escribir a
       // un compañero sin bajarse las jornadas de toda la plantilla.
