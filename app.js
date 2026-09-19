@@ -126,6 +126,7 @@ const app = {
         this._setupDeepLinkListener();
         this._setupAppLifecycleBackup();
         this._setupNotificationActions(); // must register listener before any async
+        this._setupNotifChat();           // y las del chat, por lo mismo
         this._initGoogleAuth();
         this._actualizarVersionDisplay();
     },
@@ -565,6 +566,9 @@ const app = {
             if (this.accessToken && Date.now() < this.tokenExpiry) this._autoBackup();
         };
         const onForeground = () => {
+            // Al volver se miran los mensajes: es lo que hace que salte el
+            // aviso cuando la app estaba de fondo.
+            if (this.usuarioActual) this._cargarNotas();
             // If RegistrarReceiver updated Drive while in background, refresh the data
             const flag = window.AndroidBridge?.getPref?.('pendingRefresh');
             if (flag === '1' && this.usuarioActual) {
@@ -2125,6 +2129,7 @@ const app = {
         }
         this._renderNotas();
         this._avisarSiHayNuevos();
+        this._atenderChatPendiente();
     },
 
     _fechaNota(iso) {
@@ -2343,6 +2348,125 @@ const app = {
         if (e) e.textContent = d ? '📨 Enviar al compañero' : '📨 Enviar a gestión';
     },
 
+    // ── Avisos del chat en la barra de Android ───────────────────────────────
+    // Un aviso por conversación, que se actualiza si llegan más mensajes y se
+    // retira al leerla. Desde él se puede contestar sin abrir la app, o
+    // tocarlo para entrar directamente en esa conversación.
+
+    _notificadas: {},          // id de conversación -> hora del último avisado
+    _pendienteChat: null,      // lo que se pulsó antes de estar la sesión lista
+
+    // Un id numérico estable por conversación, lejos del 1001 del aviso de
+    // trabajo para que no se pisen.
+    _idAviso(conv) {
+        let h = 0;
+        for (let i = 0; i < conv.length; i++) h = (h * 31 + conv.charCodeAt(i)) | 0;
+        return 2000 + Math.abs(h % 90000);
+    },
+
+    async _setupNotifChat() {
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (!LN) return;
+        try {
+            await LN.registerActionTypes({
+                types: [{
+                    id: 'CHAT_MENSAJE',
+                    actions: [
+                        // input: true es la respuesta directa de Android, la que
+                        // se escribe sin salir de la barra de notificaciones
+                        { id: 'chat-responder', title: 'Responder', input: true,
+                          inputPlaceholder: 'Escribe tu respuesta…', foreground: false },
+                        { id: 'chat-leido', title: 'Marcar leído', foreground: false },
+                    ],
+                }],
+            });
+            LN.addListener('localNotificationActionPerformed', (ev) => {
+                const conv = ev?.notification?.extra?.conv;
+                if (!conv) return;                       // no es del chat
+                if (ev.actionId === 'chat-responder' && (ev.inputValue || '').trim()) {
+                    this._responderDesdeAviso(conv, ev.inputValue.trim());
+                } else if (ev.actionId === 'chat-leido') {
+                    this._marcarLeida(conv);
+                    this._retirarAviso(conv);
+                } else {
+                    this._abrirDesdeAviso(conv);
+                }
+            });
+        } catch (e) { console.error('acciones del chat:', e); }
+    },
+
+    // Puede llegar con la app recién abierta y sin sesión: se guarda y se
+    // atiende en cuanto haya usuario.
+    _abrirDesdeAviso(conv) {
+        if (!this.usuarioActual) { this._pendienteChat = { abrir: conv }; return; }
+        this.mostrarApp();
+        this.switchTab(2);
+        this._cargarNotas().then(() => this.abrirHilo(conv));
+    },
+
+    async _responderDesdeAviso(conv, texto) {
+        if (!this.usuarioActual) { this._pendienteChat = { conv, texto }; return; }
+        try {
+            const r = await fetch(this.NOTAS_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json',
+                           'X-User-Email': this.usuarioActual.email || '' },
+                body: JSON.stringify({ id: conv, texto,
+                    ...(false ? { gestor: this._nombreGestor() }
+                                   : { nombre: this.usuarioActual.name || '' }) }),
+            });
+            if (!r.ok) return;
+            const data = await r.json();
+            this._notas = (this._notas || []).map(x => x.id === data.id ? data : x);
+            this._marcarLeida(conv);
+            this._retirarAviso(conv);
+            this._renderNotas();
+        } catch (_) { /* sin red, se queda sin mandar */ }
+    },
+
+    _atenderChatPendiente() {
+        const p = this._pendienteChat;
+        if (!p || !this.usuarioActual) return;
+        this._pendienteChat = null;
+        if (p.abrir) this._abrirDesdeAviso(p.abrir);
+        else this._responderDesdeAviso(p.conv, p.texto);
+    },
+
+    async _retirarAviso(conv) {
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (!LN) return;
+        delete this._notificadas[conv];
+        try { await LN.cancel({ notifications: [{ id: this._idAviso(conv) }] }); } catch (_) {}
+    },
+
+    // Un aviso por conversación sin leer que no se haya avisado ya
+    async _avisarEnLaBarra() {
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (!LN?.schedule || !window.Capacitor?.isNativePlatform?.()) return;
+        const pendientes = (this._notas || []).filter(n => !n.archivada && this._sinLeer(n));
+        const vivas = new Set(pendientes.map(n => n.id));
+        // Las que ya se han leído en otro sitio dejan de molestar
+        Object.keys(this._notificadas).forEach(id => { if (!vivas.has(id)) this._retirarAviso(id); });
+
+        const avisos = [];
+        for (const n of pendientes) {
+            const ultimo = this._ultimoMensaje(n);
+            if (!ultimo || this._notificadas[n.id] === ultimo.en) continue;
+            this._notificadas[n.id] = ultimo.en;
+            avisos.push({
+                id: this._idAviso(n.id),
+                title: this._tituloHilo(n),
+                body: ultimo.texto || '📎 Adjunto',
+                actionTypeId: 'CHAT_MENSAJE',
+                extra: { conv: n.id },
+                ...(this.notifSoundChat && this.notifSoundChat !== 'ninguno'
+                    && this.notifSoundChat !== 'default'
+                    ? { channelId: this.notifSoundChat } : {}),
+            });
+        }
+        if (!avisos.length) return;
+        try { await LN.schedule({ notifications: avisos }); } catch (e) { console.error('aviso chat:', e); }
+    },
     // ── Sin leer ─────────────────────────────────────────────────────────────
     // De cada conversación se guarda la hora del último mensaje que se ha
     // visto. Si llega uno más nuevo y no es mío, está sin leer. Va por móvil,
@@ -2367,6 +2491,7 @@ const app = {
         const l = this._leidas();
         l[id] = ultimo.en || new Date().toISOString();
         localStorage.setItem('convLeidas', JSON.stringify(l));
+        this._retirarAviso(id);
     },
 
     _totalSinLeer() {
@@ -2401,6 +2526,7 @@ const app = {
             try { this._previewNotifSound(this.notifSoundChat); } catch (_) {}
         }
         this._pintarCampana();
+        this._avisarEnLaBarra();
     },
     // ── Conversaciones ───────────────────────────────────────────────────────
     // Una nota es un hilo: se abre, se lee entero y se contesta dentro, como
