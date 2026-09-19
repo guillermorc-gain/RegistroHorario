@@ -2191,7 +2191,8 @@ const app = {
         try {
             const r = await fetch(this.NOTAS_URL, { cache: 'no-store' });
             if (!r.ok) throw new Error(r.status);
-            this._notas = await r.json();
+            // Lo que se escriben entre compañeros no pasa por aquí
+            this._notas = (await r.json()).filter(n => n.tipo !== 'companero');
             localStorage.setItem('notasCache', JSON.stringify(this._notas));
         } catch (_) {
             try { this._notas = JSON.parse(localStorage.getItem('notasCache') || '[]'); } catch (__) {}

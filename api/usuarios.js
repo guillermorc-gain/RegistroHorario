@@ -245,9 +245,17 @@ export default async function handler(req, res) {
       res.setHeader('Cache-Control', 'no-store');
       // Con ?lugar= se devuelve solo quién trabaja ahí ese día. Lo usa la app
       // del trabajador para enseñarle con quién va, sin bajarse todo.
-      const { lugar, fecha } = req.query || {};
+      const { lugar, fecha, directorio } = req.query || {};
       if (lugar !== undefined) {
         return res.status(200).json(quienHayEn(data, lugar, fecha));
+      }
+      // Solo nombre y número, para que la app del trabajador pueda escribir a
+      // un compañero sin bajarse las jornadas de toda la plantilla.
+      if (directorio !== undefined) {
+        return res.status(200).json(Object.values(data)
+          .filter(u => u && u.email && !u.ficticio)
+          .map(u => ({ email: u.email, nombre: u.nombre || '', conductor: u.conductor || '' }))
+          .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es')));
       }
       return res.status(200).json(data);
     }
