@@ -1261,7 +1261,14 @@
     ],
     "email": "prueba-1789759132382@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-18T19:19:44.899Z"
+    "actualizado": "2026-09-18T19:19:44.899Z",
+    "vacaciones": [
+      {
+        "desde": "2026-06-15",
+        "hasta": "2026-09-30"
+      }
+    ],
+    "vacacionesAt": 1789806931920
   },
   "prueba-1789759514777@prueba.local": {
     "nombre": "Xisca",
