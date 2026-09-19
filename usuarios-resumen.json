@@ -1445,7 +1445,39 @@
         "h": "20260930"
       }
     ],
-    "baja": true
+    "baja": true,
+    "lugares": {
+      "20260901": "Control de acceso",
+      "20260902": "Control de acceso",
+      "20260903": "Control de acceso",
+      "20260904": "Control de acceso",
+      "20260905": "Control de acceso",
+      "20260906": "Control de acceso",
+      "20260907": "Control de acceso",
+      "20260908": "Control de acceso",
+      "20260909": "Control de acceso",
+      "20260910": "Control de acceso",
+      "20260911": "Control de acceso",
+      "20260912": "Control de acceso",
+      "20260913": "Control de acceso",
+      "20260914": "Control de acceso",
+      "20260915": "Control de acceso",
+      "20260916": "Control de acceso",
+      "20260917": "Control de acceso",
+      "20260918": "Control de acceso",
+      "20260919": "Control de acceso",
+      "20260920": "Control de acceso",
+      "20260921": "Control de acceso",
+      "20260922": "Control de acceso",
+      "20260923": "Control de acceso",
+      "20260924": "Control de acceso",
+      "20260925": "Control de acceso",
+      "20260926": "Control de acceso",
+      "20260927": "Control de acceso",
+      "20260928": "Control de acceso",
+      "20260929": "Control de acceso",
+      "20260930": "Control de acceso"
+    }
   },
   "prueba-1789759539366@prueba.local": {
     "nombre": "Juan",
