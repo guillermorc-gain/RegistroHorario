@@ -311,15 +311,6 @@
         .dest-fila{display:flex;align-items:center;gap:9px;padding:11px 16px;border-bottom:1px solid #f4f4f4;cursor:pointer;-webkit-tap-highlight-color:transparent;}
         .modal-card.dark .dest-fila{border-color:#2d3561;}
         .dest-fila:active{background:#f4f6f9;}
-        .adj-barra{display:flex;gap:6px;margin-top:10px;}
-        .adj-btn{flex:1;border:1.5px dashed #dfe4ea;background:transparent;color:#7f8c8d;border-radius:8px;padding:8px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;}
-        .modal-card.dark .adj-btn{border-color:#2d3561;}
-        .adj-lista{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
-        .adj-chip{display:flex;align-items:center;gap:6px;background:#eef1f6;border-radius:8px;padding:4px 6px;font-size:11px;font-weight:700;color:#2c3e50;max-width:100%;}
-        .modal-card.dark .adj-chip{background:#16202e;color:#e0e0e0;}
-        .adj-chip img{width:34px;height:34px;object-fit:cover;border-radius:5px;flex-shrink:0;}
-        .adj-chip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-        .adj-chip button{border:none;background:transparent;color:#e74c3c;font-size:15px;cursor:pointer;flex-shrink:0;}
         .nt-adj{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;}
         .nt-adj img{max-width:120px;max-height:120px;border-radius:8px;cursor:pointer;object-fit:cover;}
         .nt-adj a{display:inline-flex;align-items:center;gap:5px;background:#eef1f6;border-radius:8px;padding:6px 9px;font-size:11.5px;font-weight:700;color:var(--g1);text-decoration:none;}
@@ -1648,11 +1639,6 @@
             <div id="hiloMensajes" class="hilo"></div>
             <div class="responder">
                 <textarea id="hiloTexto" rows="2" maxlength="500" placeholder="Escribe tu respuesta…"></textarea>
-                <div class="adj-barra">
-                    <button class="adj-btn" onclick="app._elegirAdjunto('foto')">📷 Foto</button>
-                    <button class="adj-btn" onclick="app._elegirAdjunto('archivo')">📎 Archivo</button>
-                </div>
-                <div class="adj-lista"></div>
             </div>
         </div>
         <div class="modal-footer" id="hiloPie"></div>
@@ -1694,11 +1680,6 @@
             <div class="edit-field"><label>Tu respuesta</label>
                 <textarea id="respTexto" rows="3" maxlength="500"
                     style="border:1.5px solid #dfe4ea;border-radius:8px;padding:8px;font-family:inherit;font-size:13.5px;resize:vertical;"></textarea></div>
-            <div class="adj-barra">
-                <button class="adj-btn" onclick="app._elegirAdjunto('foto')">📷 Foto</button>
-                <button class="adj-btn" onclick="app._elegirAdjunto('archivo')">📎 Archivo</button>
-            </div>
-            <div class="adj-lista"></div>
             <span class="ops-field-sub" id="respFirma" style="display:block;margin-top:6px;"></span>
         </div>
         <div class="modal-footer">

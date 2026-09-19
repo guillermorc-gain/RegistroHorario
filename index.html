@@ -113,16 +113,6 @@
         .nt-para-l{font-size:10px;font-weight:800;color:#7f8c8d;text-transform:uppercase;letter-spacing:.5px;}
         .nt-para-b{flex:1;min-width:0;text-align:left;border:1.5px solid #dfe4ea;background:#fff;color:#2c3e50;border-radius:8px;padding:7px 9px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;}
         .app-content.dark .nt-para-b{background:#1e2a3a;border-color:#2d3561;color:#e0e0e0;}
-        .adj-barra{display:flex;gap:6px;}
-        .adj-btn{flex:1;border:1.5px dashed #dfe4ea;background:transparent;color:#7f8c8d;border-radius:8px;padding:8px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;}
-        .app-content.dark .adj-btn{border-color:#2d3561;}
-        .adj-lista{display:flex;flex-wrap:wrap;gap:6px;}
-        .adj-lista:empty{display:none;}
-        .adj-chip{display:flex;align-items:center;gap:6px;background:#eef1f6;border-radius:8px;padding:4px 6px;font-size:11px;font-weight:700;color:#2c3e50;max-width:100%;}
-        .app-content.dark .adj-chip{background:#16202e;color:#e0e0e0;}
-        .adj-chip img{width:34px;height:34px;object-fit:cover;border-radius:5px;flex-shrink:0;}
-        .adj-chip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-        .adj-chip button{border:none;background:transparent;color:#e74c3c;font-size:15px;cursor:pointer;flex-shrink:0;}
         .baja-lista{max-height:38vh;overflow-y:auto;}
         .baja-vacio{padding:12px 16px;font-size:12px;color:#95a5a6;}
         .dest-buscar{padding:10px 16px;border-bottom:1px solid #efefef;}
@@ -905,11 +895,6 @@
                 </div>
                 <textarea id="ntTexto" class="nt-texto" rows="2" maxlength="500"
                           placeholder="Escribe aquí lo que quieras contar…"></textarea>
-                <div class="adj-barra">
-                    <button class="adj-btn" onclick="app._elegirAdjunto('foto')">📷 Foto</button>
-                    <button class="adj-btn" onclick="app._elegirAdjunto('archivo')">📎 Archivo</button>
-                </div>
-                <div class="adj-lista"></div>
                 <button class="btn-main" id="ntEnviar" onclick="app.enviarNota()">📨 Enviar a gestión</button>
             </div>
             <div class="cond-filtros" id="ntArchivadas"></div>
@@ -1476,11 +1461,6 @@
             <div id="hiloMensajes" class="hilo"></div>
             <div class="responder">
                 <textarea id="hiloTexto" rows="2" maxlength="500" placeholder="Escribe tu respuesta…"></textarea>
-                <div class="adj-barra">
-                    <button class="adj-btn" onclick="app._elegirAdjunto('foto')">📷 Foto</button>
-                    <button class="adj-btn" onclick="app._elegirAdjunto('archivo')">📎 Archivo</button>
-                </div>
-                <div class="adj-lista"></div>
             </div>
         </div>
         <div class="modal-footer" id="hiloPie"></div>
