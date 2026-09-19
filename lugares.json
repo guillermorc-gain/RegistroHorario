@@ -20,5 +20,31 @@
     ],
     "ubicacion": null,
     "prioridad": 0
+  },
+  "control": {
+    "nombre": "Control",
+    "turnos": [
+      {
+        "id": "M",
+        "desde": "03:45",
+        "hasta": "13:00"
+      },
+      {
+        "id": "T",
+        "desde": "13:00",
+        "hasta": "20:00"
+      },
+      {
+        "id": "N",
+        "desde": "20:00",
+        "hasta": "03:00"
+      }
+    ],
+    "ubicacion": {
+      "lat": 39.560621,
+      "lng": 2.711581,
+      "radio": 100
+    },
+    "prioridad": 0
   }
 }
