@@ -749,27 +749,93 @@ const app = {
         });
     },
 
+    _recordarFicheroDrive(id) {
+        this.driveFileId = id;
+        localStorage.setItem('driveFileId', id);
+        window.AndroidBridge?.saveToPrefs('driveFileId', id);
+    },
+
+    // Una búsqueda fallida no puede pasar por "no hay copia": si pasa, el que
+    // llama se cree que el historial está vacío y escribe encima, o crea una
+    // segunda copia y la historia se parte en dos.
+    async _listarFicherosDrive() {
+        const resp = await this._driveGet(
+            `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D'${DRIVE_FILE_NAME}'`
+            + `&fields=files(id,modifiedTime)&orderBy=modifiedTime desc`
+        );
+        if (!resp.ok) throw new Error('Drive buscar: ' + resp.status);
+        const data = await resp.json();
+        return Array.isArray(data.files) ? data.files : [];
+    },
+
     async _getDriveFileId() {
         if (this.driveFileId) return this.driveFileId;
-        const resp = await this._driveGet(
-            `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D'${DRIVE_FILE_NAME}'&fields=files(id)`
-        );
-        const data = await resp.json();
-        if (data.files && data.files.length > 0) {
-            this.driveFileId = data.files[0].id;
-            localStorage.setItem('driveFileId', this.driveFileId);
-            window.AndroidBridge?.saveToPrefs('driveFileId', this.driveFileId);
+        const files = await this._listarFicherosDrive();
+        if (!files.length) return null;                 // aún no hay copia
+        if (files.length > 1) return this._unirFicherosDrive(files);
+        this._recordarFicheroDrive(files[0].id);
+        return this.driveFileId;
+    },
+
+    // Si han quedado varias copias con el mismo nombre, se juntan todas las
+    // jornadas en la más reciente y a las demás se les cambia el nombre, para
+    // que la búsqueda deje de encontrarlas y no se vuelva a partir.
+    async _unirFicherosDrive(files) {
+        const contenidos = [];
+        for (const f of files) {
+            try {
+                const r = await this._driveGet(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
+                if (r.ok) contenidos.push({ id: f.id, datos: await r.json() });
+            } catch (_) { /* si una no se puede leer, se deja donde está */ }
+        }
+        if (!contenidos.length) { this._recordarFicheroDrive(files[0].id); return this.driveFileId; }
+        const historial = {};
+        contenidos.forEach(({ datos }) => {
+            Object.entries(datos?.historial || {}).forEach(([id, r]) => {
+                // Ante el mismo día repetido gana el que se tocó más tarde
+                const ya = historial[id];
+                if (!ya || (r?.timestamp || 0) >= (ya.timestamp || 0)) historial[id] = r;
+            });
+        });
+        const principal = contenidos[0];                 // el de modificación más reciente
+        const unido = { ...principal.datos, historial };
+        unido.horasTrabajadas = this._calcTotales(historial).anualReal;
+        this._recordarFicheroDrive(principal.id);
+        const antes = Object.keys(principal.datos?.historial || {}).length;
+        const ahora = Object.keys(historial).length;
+        if (ahora > antes) {
+            await this._writeDriveFile(unido);
+            this._mostrarToast(`✅ Recuperadas ${ahora - antes} jornada${ahora - antes === 1 ? '' : 's'} de otra copia`, 5000);
+        }
+        for (const c of contenidos.slice(1)) {
+            try {
+                await fetch(`https://www.googleapis.com/drive/v3/files/${c.id}`, {
+                    method: 'PATCH',
+                    headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: `${DRIVE_FILE_NAME}.copia-${c.id.slice(0, 8)}` })
+                });
+            } catch (_) { /* si no se puede renombrar, se volverá a unir la próxima vez */ }
         }
         return this.driveFileId;
     },
 
+    // null significa "todavía no hay copia", nunca "no se ha podido leer": un
+    // fallo de lectura tiene que doler aquí y no acabar borrando el historial.
     async _readDriveFile() {
         const fileId = await this._getDriveFileId();
         if (!fileId) return null;
         const resp = await this._driveGet(
             `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
         );
-        if (!resp.ok) return null;
+        if (resp.status === 404) {
+            // El id guardado ya no vale; se busca otra vez desde cero
+            this.driveFileId = null;
+            localStorage.removeItem('driveFileId');
+            const otros = await this._listarFicherosDrive();
+            if (!otros.length) return null;
+            return this._readDriveFile();
+        }
+        if (!resp.ok) throw new Error('Drive leer: ' + resp.status);
         return resp.json();
     },
 
@@ -883,6 +949,7 @@ const app = {
             const data = await this._readDriveFile();
             if (data?.preferencias) this._aplicarPreferenciasDesde(data.preferencias);
             this.actualizarUI(data || { horasTrabajadas: 0, historial: {} });
+            this._lecturaOk = true;
             this._renderGpsSettings();
             this._startScheduleTimer();
             this.verificarUbicacion();
@@ -897,7 +964,13 @@ const app = {
             }
         } catch(e) {
             console.error('Error cargando datos:', e);
-            this.actualizarUI({ horasTrabajadas: 0, historial: {} });
+            // Sin lectura no se pinta un historial vacío: parecería que se ha
+            // perdido todo, y encima se publicaría ese vacío a gestión.
+            this._lecturaOk = false;
+            if (!this._historialFull || !Object.keys(this._historialFull).length) {
+                this.actualizarUI({ horasTrabajadas: 0, historial: {} });
+            }
+            this._mostrarToast('⚠️ No se ha podido leer tu copia: ' + e.message, 6000);
         }
     },
 
@@ -2740,6 +2813,7 @@ const app = {
 
     async _publicarResumen() {
         if (!this.usuarioActual?.email) return;
+        if (this._lecturaOk === false) return;   // no mandar lo que no se ha podido leer
         try {
             const hist = this._historialFull || {};
             const ahora = new Date();
