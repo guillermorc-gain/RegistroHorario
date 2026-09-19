@@ -88,5 +88,18 @@
     "deConductor": "1234-5",
     "estado": "pendiente",
     "respuesta": null
+  },
+  "20260919170200698-bmqcn": {
+    "id": "20260919170200698-bmqcn",
+    "email": "guillermo.rc82@gmail.com",
+    "creado": "2026-09-19T17:02:00.698Z",
+    "nombre": "Guillermo Ríos Correa",
+    "conductor": "1418-3",
+    "texto": "Me voy a las 12h hoy",
+    "adjuntos": [],
+    "de": "trabajador",
+    "tipo": "gestion",
+    "estado": "pendiente",
+    "respuesta": null
   }
 }
