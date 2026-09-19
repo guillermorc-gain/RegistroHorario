@@ -1,5 +1,5 @@
 import { emailDelToken, tokenDe, exigirAdmin } from './_auth.js';
-import { hayBaseDeDatos, leerUsuarios, leerUsuario, guardarUsuario, borrarUsuario } from './_almacen.js';
+import { hayBaseDeDatos, leerUsuarios, leerUsuario, leerAvatares, guardarUsuario, borrarUsuario } from './_almacen.js';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO         = 'guillermorc-gain/RegistroHorario';
@@ -285,7 +285,15 @@ export default async function handler(req, res) {
       res.setHeader('Cache-Control', 'no-store');
       // Con ?lugar= se devuelve solo quién trabaja ahí ese día. Lo usa la app
       // del trabajador para enseñarle con quién va, sin bajarse todo.
-      const { lugar, fecha, directorio } = req.query || {};
+      const { lugar, fecha, directorio, avatares } = req.query || {};
+      // Las fotos, aparte y cacheables: cambian una vez al año y pesan más que
+      // todo lo demás junto.
+      if (avatares !== undefined) {
+        if (hayBaseDeDatos()) return res.status(200).json(await leerAvatares());
+        const out = {};
+        Object.values(data).forEach(u => { if (u?.avatar) out[u.email] = u.avatar; });
+        return res.status(200).json(out);
+      }
       if (lugar !== undefined) {
         return res.status(200).json(quienHayEn(data, lugar, fecha));
       }

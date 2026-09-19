@@ -45,8 +45,9 @@ async function pedir(ruta, opciones = {}) {
 
 // ── Trabajadores ────────────────────────────────────────────────────────────
 
-// El mismo objeto { email: documento } que devolvía el fichero, para que los
-// endpoints y la app de gestión no noten el cambio.
+// El mismo objeto { email: documento } que devolvía el fichero, pero sin los
+// avatares: son la mitad del peso y cambian una vez al año, así que gestión
+// los pide aparte y se los queda cacheados.
 export async function leerUsuarios() {
   const filas = await pedir('emt_usuarios?select=email,datos');
   const out = {};
@@ -54,24 +55,52 @@ export async function leerUsuarios() {
   return out;
 }
 
+export async function leerAvatares() {
+  const filas = await pedir('emt_avatares?select=email,datos');
+  const out = {};
+  (filas || []).forEach(f => { out[f.email] = f.datos; });
+  return out;
+}
+
+// Aquí sí se devuelve con su avatar: es lo que lee el propio trabajador al
+// publicar, y la mezcla de siempre cuenta con encontrarlo donde estaba.
 export async function leerUsuario(email) {
-  const filas = await pedir(`emt_usuarios?select=datos&email=eq.${encodeURIComponent(email)}`);
-  return filas?.[0]?.datos || null;
+  const filtro = `email=eq.${encodeURIComponent(email)}`;
+  const [filas, avatares] = await Promise.all([
+    pedir(`emt_usuarios?select=datos&${filtro}`),
+    pedir(`emt_avatares?select=datos&${filtro}`),
+  ]);
+  const datos = filas?.[0]?.datos;
+  if (!datos) return null;
+  return { ...datos, avatar: avatares?.[0]?.datos ?? null };
 }
 
 // Leer y escribir un solo trabajador: aquí ya no hay nada que colisione, cada
-// uno va a su fila.
+// uno va a su fila. El avatar se guarda aparte para que no lastre la lista.
 export async function guardarUsuario(email, datos) {
+  const { avatar, ...resto } = datos || {};
   await pedir('emt_usuarios', {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates' },
-    body: JSON.stringify({ email, datos, actualizado: new Date().toISOString() }),
+    body: JSON.stringify({ email, datos: resto, actualizado: new Date().toISOString() }),
   });
+  if (avatar) {
+    await pedir('emt_avatares', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify({ email, datos: avatar, actualizado: new Date().toISOString() }),
+    });
+  } else {
+    // Quitarse la foto también tiene que llegar
+    await pedir(`emt_avatares?email=eq.${encodeURIComponent(email)}`, { method: 'DELETE' });
+  }
   return datos;
 }
 
 export async function borrarUsuario(email) {
-  await pedir(`emt_usuarios?email=eq.${encodeURIComponent(email)}`, { method: 'DELETE' });
+  const filtro = `email=eq.${encodeURIComponent(email)}`;
+  await pedir(`emt_usuarios?${filtro}`, { method: 'DELETE' });
+  await pedir(`emt_avatares?${filtro}`, { method: 'DELETE' });
 }
 
 // ── Notas ───────────────────────────────────────────────────────────────────

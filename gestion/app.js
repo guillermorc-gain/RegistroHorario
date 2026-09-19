@@ -3151,6 +3151,9 @@ const app = {
             const data = await resp.json();
             this._conductores = data || {};
             this._renderConductores();
+            // Las fotos van detrás y sin bloquear: la lista ya se ve, y cuando
+            // llegan se repinta. Si no llegan, queda la inicial de siempre.
+            this._cargarAvatares();
         } catch (e) {
             cont.innerHTML = '<div class="tab-empty"><span class="tab-empty-ico">⚠️</span>'
                 + '<span class="tab-empty-t">No se pudo cargar</span>'
@@ -4567,6 +4570,20 @@ const app = {
         this._renderConductores();
     },
 
+    // Las fotos van en su propia consulta y se guardan en el móvil: no tiene
+    // sentido bajarlas enteras cada vez que se abre la app.
+    _avatares: (() => { try { return JSON.parse(localStorage.getItem('avatares') || '{}'); } catch (_) { return {}; } })(),
+
+    async _cargarAvatares() {
+        try {
+            const r = await fetch(`${this.USUARIOS_URL}?avatares=1`, { cache: 'no-store' });
+            if (!r.ok) return;
+            this._avatares = await r.json();
+            localStorage.setItem('avatares', JSON.stringify(this._avatares));
+            this._renderConductores();
+        } catch (_) { /* con lo cacheado vale; si no hay, sale la inicial */ }
+    },
+
     _renderConductores() {
         const cont = document.getElementById('condList');
         const fecha = this._fechaOffset(this._puestosOffset);
@@ -4605,8 +4622,9 @@ const app = {
             const excepcion = !!(u.lugares && u.lugares[fecha]) && this._clavePuesto(lugarHoy) !== this._clavePuesto(u.puesto);
             const turno = this._turnoDe(lugarHoy, j?.i) || (esHoy ? u.turno : '');
             const t = this._totalesDe(u, fecha);
-            const av = u.avatar
-                ? `<img class="cond-avatar" src="${esc(u.avatar)}">`
+            const foto = u.avatar || this._avatares[u.email];
+            const av = foto
+                ? `<img class="cond-avatar" src="${esc(foto)}">`
                 : `<div class="cond-avatar">${esc(ini)}</div>`;
             const ver = u.version ? this._buildNumToVersion(parseInt(String(u.version).replace('build-',''),10) || 0) : '—';
             const cerrada = this._estaPlegado('t:' + u.email, true);
