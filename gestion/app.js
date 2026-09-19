@@ -237,7 +237,9 @@ const app = {
             window.Capacitor.Plugins.App?.addListener('appUrlOpen', (data) => {
                 this._processOAuthUrl(data?.url);
             });
-            window.Capacitor.Plugins.App?.addListener('backButton', () => this.atras());
+            window.Capacitor.Plugins.App?.addListener('backButton', () => {
+                if (!this.atras()) window.Capacitor.Plugins.App?.minimizeApp?.();
+            });
         } catch (_) {}
     },
 
@@ -266,8 +268,9 @@ const app = {
             this.mostrarApp();
             return true;
         }
-        // Nada abierto: que se encargue Android
-        window.Capacitor.Plugins.App?.minimizeApp?.();
+        // Nada abierto: se devuelve false y decide quien llamó. En el móvil
+        // llama Java, que hace moveTaskToBack; aquí no se minimiza nada para
+        // no hacerlo dos veces.
         return false;
     },
 
