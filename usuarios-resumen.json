@@ -1740,7 +1740,10 @@
     ],
     "email": "prueba-1789766752991@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T09:51:11.961Z"
+    "actualizado": "2026-09-19T09:51:11.961Z",
+    "lugares": {
+      "20260919": "Son Rossinyol"
+    }
   },
   "prueba-1789766856622@prueba.local": {
     "nombre": "Juan Valera",
