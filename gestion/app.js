@@ -3673,17 +3673,39 @@ const app = {
     // Los turnos y las ubicaciones se guardan en el servidor, no en el código,
     // para poder cambiarlos sin publicar una versión nueva de las apps.
 
+    // El catálogo del servidor manda, pero lo que no traiga se completa con la
+    // última copia local. Así un campo que el servidor todavía no guarde —o un
+    // rato sin red— no borra lo que el gestor acaba de poner.
+    _mezclarCatalogo(servidor) {
+        const local = this._catalogoLocal();
+        const claves = new Set([...Object.keys(local), ...Object.keys(servidor || {})]);
+        const fin = {};
+        claves.forEach(k => { fin[k] = { ...(local[k] || {}), ...((servidor || {})[k] || {}) }; });
+        return fin;
+    },
+
+    _catalogoLocal() {
+        try { return JSON.parse(localStorage.getItem('lugaresCatalogo') || '{}') || {}; }
+        catch (_) { return {}; }
+    },
+
+    _guardarCatalogo(cat) {
+        this._lugares = cat;
+        try { localStorage.setItem('lugaresCatalogo', JSON.stringify(cat)); } catch (_) {}
+        aplicarCatalogoLugares(cat);
+    },
+
     async _cargarLugares() {
+        this._guardarCatalogo(this._catalogoLocal());   // pintar ya con lo que haya
         try {
             const r = await fetch(LUGARES_URL, { cache: 'no-store' });
             if (!r.ok) return;
             const data = await r.json();
             if (data && typeof data === 'object') {
-                this._lugares = data;
-                aplicarCatalogoLugares(data);
+                this._guardarCatalogo(this._mezclarCatalogo(data));
                 this._renderConductores();
             }
-        } catch (_) { /* silencioso: se sigue con la tabla de siempre */ }
+        } catch (_) { /* silencioso: se sigue con la copia local */ }
     },
 
     _renderLugares() {
@@ -3900,8 +3922,17 @@ const app = {
             });
             const data = await resp.json();
             if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return false; }
-            this._lugares = data;
-            aplicarCatalogoLugares(data);
+            if (metodo === 'PUT' && cuerpo.nombre) {
+                const k = this._clavePuesto(cuerpo.nombre);
+                const local = this._catalogoLocal();
+                local[k] = { ...(local[k] || {}), ...cuerpo };
+                try { localStorage.setItem('lugaresCatalogo', JSON.stringify(local)); } catch (_) {}
+            } else if (metodo === 'DELETE' && cuerpo.nombre) {
+                const local = this._catalogoLocal();
+                delete local[this._clavePuesto(cuerpo.nombre)];
+                try { localStorage.setItem('lugaresCatalogo', JSON.stringify(local)); } catch (_) {}
+            }
+            this._guardarCatalogo(this._mezclarCatalogo(data));
             document.getElementById('lugarModal').classList.remove('show');
             this._renderLugares();
             this._renderConductores();
