@@ -293,8 +293,6 @@
         .app-content.dark .cond-filtros button{background:#16202e;color:#a0a0a0;}
         .cond-filtros button.activo{background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;}
         .sec.cerrada .solo-abierta{display:none;}
-        .lug-filtro-btn{flex-shrink:0;width:30px;height:30px;border:none;border-radius:8px;background:#eef1f6;color:var(--g1);font-size:14px;cursor:pointer;font-family:inherit;}
-        .app-content.dark .lug-filtro-btn{background:#16202e;}
         .baja-lista{max-height:38vh;overflow-y:auto;}
         .baja-fila{display:flex;align-items:flex-end;gap:8px;padding:9px 16px;border-bottom:1px solid #f4f4f4;}
         .modal-card.dark .baja-fila{border-color:#2d3561;}
@@ -708,11 +706,10 @@
                 <div class="sec-head" onclick="app.toggleSeccion('secPuestos')">
                     <span class="cond-title">🧩 Lugares de trabajo</span>
                     <span class="sec-cnt" id="puestosCnt"></span>
-                    <button class="lug-filtro-btn solo-abierta" onclick="event.stopPropagation();app.toggleFiltroLugares()" title="Filtrar">⚟</button>
                     <button class="mensual-toggle sec-chev">▼</button>
                 </div>
                 <div class="sec-body" id="puestosBody">
-                    <div class="cond-filtros" id="lugFiltros" hidden></div>
+                    <div class="cond-filtros" id="lugFiltros"></div>
                     <div id="puestosList"></div>
                 </div>
             </div>
