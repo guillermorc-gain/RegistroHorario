@@ -100,7 +100,12 @@
     "de": "trabajador",
     "tipo": "gestion",
     "estado": "pendiente",
-    "respuesta": null
+    "respuesta": {
+      "texto": "No puedes",
+      "adjuntos": [],
+      "gestor": "Guillermo Ríos Correa",
+      "en": "2026-09-19T17:02:41.787Z"
+    }
   },
   "20260919170214199-xrqcq": {
     "id": "20260919170214199-xrqcq",
