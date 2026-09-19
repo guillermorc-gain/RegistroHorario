@@ -1,3 +1,24 @@
+// En la web las dos apps se sirven desde el mismo dominio, y localStorage va
+// por origen, no por ruta: sin esto gestión y la app de los trabajadores se
+// pisarían la sesión, el historial y los ajustes. En el móvil cada APK tiene su
+// propio almacenamiento, así que no hace falta y se deja tal cual.
+(function aislarAlmacenamiento() {
+    try {
+        if (window.Capacitor?.isNativePlatform?.()) return;
+        const real = window.localStorage;
+        const P = 'gestion:';
+        const shim = {
+            getItem:    k => real.getItem(P + k),
+            setItem:    (k, v) => real.setItem(P + k, v),
+            removeItem: k => real.removeItem(P + k),
+            clear:      () => Object.keys(real).filter(k => k.startsWith(P)).forEach(k => real.removeItem(k)),
+            key:        i => Object.keys(real).filter(k => k.startsWith(P))[i]?.slice(P.length) ?? null,
+            get length() { return Object.keys(real).filter(k => k.startsWith(P)).length; },
+        };
+        Object.defineProperty(window, 'localStorage', { value: shim, configurable: true });
+    } catch (_) { /* si el navegador no deja, se sigue con el de siempre */ }
+})();
+
 (function(){var t=localStorage.getItem('tema');if(t&&t!=='azul')document.body.classList.add('theme-'+t);})();
 'use strict';
 
@@ -7,7 +28,7 @@ const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.goo
 const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file profile email';
 const AUTH_SCOPE       = 'profile email';
 // Turnos de cada puesto. La hora de entrada registrada decide en cuál cae.
-const PUESTOS_DEFINIDOS = ['Son Rossinyol', 'Control', 'Calle', 'Taller'];
+let PUESTOS_DEFINIDOS = ['Son Rossinyol', 'Control', 'Calle', 'Taller', 'Anselmo Clavé'];
 
 const TURNOS_POR_PUESTO = {
     'son rossinyol': [
@@ -31,8 +52,24 @@ const TURNOS_POR_PUESTO = {
     ],
 };
 
+// El catálogo que mantiene el gestor manda sobre la tabla de aquí abajo: así
+// se pueden cambiar turnos y añadir lugares sin publicar una versión nueva.
+let LUGARES_CATALOGO = {};
+function aplicarCatalogoLugares(cat) {
+    LUGARES_CATALOGO = cat || {};
+    Object.entries(LUGARES_CATALOGO).forEach(([k, l]) => {
+        if (Array.isArray(l?.turnos) && l.turnos.length) TURNOS_POR_PUESTO[k] = l.turnos;
+        const nombre = l?.nombre;
+        if (nombre && !PUESTOS_DEFINIDOS.some(p => p.toLowerCase().normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '') === k)) {
+            PUESTOS_DEFINIDOS.push(nombre);
+        }
+    });
+}
+
 const SUPER_USER_EMAIL = 'g.rioscorrea@gmail.com';
 const ALLOWLIST_APP    = 'gestion';
+const LUGARES_URL      = 'https://registro-horario-emt.vercel.app/api/lugares';
 const VERSION_URL      = 'https://registro-horario-emt.vercel.app/api/version';
 const ANDROID_PACKAGE  = 'com.guillermorc.gestionemt';
 const RELEASE_PREFIX   = 'gestion-build-';
@@ -810,6 +847,7 @@ const app = {
             this.verificarUbicacion();
             this._updateGpsState();
             this._cargarConductores();
+            this._cargarLugares();
             this._pedirPermisosIniciales();
             if (this._pendingNotifAction === 'registro-rapido') {
                 this._pendingNotifAction = null;
@@ -2962,7 +3000,13 @@ const app = {
     _renderPrueba() {
         const cont = document.getElementById('pruebaList');
         if (!cont) return;
-        const fict = Object.values(this._conductores || {}).filter(u => u.ficticio);
+        const orden = localStorage.getItem('ordenPrueba') || 'nombre';
+        const fict = Object.values(this._conductores || {}).filter(u => u.ficticio)
+            .sort((a, b) => orden === 'numero'
+                ? (a.conductor || '\uffff').localeCompare(b.conductor || '\uffff', 'es', { numeric: true })
+                : (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+        document.getElementById('ordenPruebaNombre')?.classList.toggle('activo', orden === 'nombre');
+        document.getElementById('ordenPruebaNumero')?.classList.toggle('activo', orden === 'numero');
         if (!fict.length) {
             cont.innerHTML = '<div class="ops-field-sub" style="padding:8px 14px;">Ninguno todavía</div>';
             return;
@@ -3160,8 +3204,12 @@ const app = {
     // la app del trabajador: las jornadas marcadas como extra no suman al
     // cómputo anual, y un festivo sin horas cuenta como una jornada entera.
     _totalesDe(u, hasta) {
-        const tope = u.horasAnuales || 777;
         const jor  = u.jornadaHoras || 7;
+        // Los días de baja no los pudo trabajar, así que se le quitan del
+        // objetivo en vez de dejárselos como horas pendientes.
+        const diasBaja = this._diasBaja(u, hasta);
+        const horasBaja = Math.round(diasBaja * jor * 10) / 10;
+        const tope = Math.max(0, (u.horasAnuales || 777) - horasBaja);
         const mes  = hasta.slice(0, 6);
         let anual = 0, extras = 0, delMes = 0, dias = 0, festTrabajados = 0;
         (u.jornadas || []).forEach(j => {
@@ -3175,6 +3223,7 @@ const app = {
         const exceso = Math.max(0, anual - tope);
         const r1 = n => Math.round(n * 10) / 10;
         return { mes: r1(delMes), dias, extras: r1(extras + exceso), festTrabajados,
+                 diasBaja, horasBaja, objetivo: r1(tope),
                  realizadas: r1(anual), restantes: r1(Math.max(0, tope - anual)) };
     },
 
@@ -3217,8 +3266,8 @@ const app = {
         return ayer ? { j: ayer, deAyer: true } : { j: null, deAyer: false };
     },
 
-    _estadoJornada(u, j, esHoy, esFuturo, deAyer) {
-        if (u.baja) return { clase: 'baja', texto: 'de baja (BE)' };
+    _estadoJornada(u, j, esHoy, esFuturo, deAyer, enBaja) {
+        if (enBaja) return { clase: 'baja', texto: 'de baja (BE)' };
         if (!j)      return { clase: 'gris', texto: esFuturo ? 'sin previsión' : 'sin registro' };
         if (j.v)     return { clase: 'gris', texto: 'vacaciones' };
         if (j.p)     return { clase: 'gris', texto: 'permiso retribuido' };
@@ -3257,23 +3306,24 @@ const app = {
         document.getElementById('pstHoy')?.classList.toggle('oculto', off === 0);
 
         const lista    = Object.values(this._conductores || {});
-        const conPuesto = lista
-            .map(u => {
-                const v = this._jornadaVisible(u, fecha);
-                return { u, j: v.j, deAyer: v.deAyer, lugar: this._lugarDe(u, fecha, v.j) };
-            })
-            .filter(x => x.lugar.trim());
+        // Los que no tienen lugar asignado también salen, en su propio grupo:
+        // si no, un trabajador nuevo se quedaba invisible hasta asignárselo.
+        const SIN = 'Sin asignar';
+        const conPuesto = lista.map(u => {
+            const v = this._jornadaVisible(u, fecha);
+            return { u, j: v.j, deAyer: v.deAyer,
+                     enBaja: this._enBaja(u, fecha) || (!this._bajasDe(u).length && !!u.baja),
+                     lugar: this._lugarDe(u, fecha, v.j).trim() || SIN };
+        });
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
 
         // Contadores de la cabecera: quién ha trabajado ese día y quién está
         // dentro ahora mismo (esto último solo tiene sentido en el día de hoy).
         let trabajaron = 0, ahoraMismo = 0;
-        lista.forEach(u => {
-            if (u.baja) return;
-            const { j, deAyer } = this._jornadaVisible(u, fecha);
-            if (!j || j.v || j.p) return;
+        conPuesto.forEach(({ u, j, deAyer, enBaja }) => {
+            if (enBaja || !j || j.v || j.p) return;
             if (!deAyer) trabajaron++;          // la de ayer ya se contó en su día
-            if (esHoy && this._estadoJornada(u, j, true, false, deAyer).clase === 'verde') ahoraMismo++;
+            if (esHoy && this._estadoJornada(u, j, true, false, deAyer, false).clase === 'verde') ahoraMismo++;
         });
         const cnt = document.getElementById('puestosCnt');
         if (cnt) {
@@ -3285,14 +3335,18 @@ const app = {
 
         if (!conPuesto.length) {
             cont.innerHTML = '<div class="tab-empty" style="padding:22px 16px;">'
-                + '<span class="tab-empty-s">Asigna un lugar tocando el nombre de un trabajador<br>'
-                + 'y aquí verás si queda cubierto.</span></div>';
+                + '<span class="tab-empty-s">Aquí verás a cada trabajador en su lugar<br>'
+                + 'en cuanto abran su app.</span></div>';
+            this._renderFiltroLugares(localStorage.getItem('filtroLugares') || 'todos');
             return;
         }
         const porPuesto = {};
         conPuesto.forEach(x => { (porPuesto[x.lugar] = porPuesto[x.lugar] || []).push(x); });
 
-        cont.innerHTML = Object.keys(porPuesto).sort().map(puesto => {
+        const filtro = localStorage.getItem('filtroLugares') || 'todos';
+        const tarjetas = [];
+        Object.keys(porPuesto).sort((a, b) =>
+            a === SIN ? 1 : b === SIN ? -1 : a.localeCompare(b, 'es')).forEach(puesto => {
             // Ordenar por hora de entrada: así se ve de un vistazo si el relevo encaja
             const gente = porPuesto[puesto].slice().sort((a, b) => {
                 // El que viene de la víspera va primero: lleva dentro desde ayer
@@ -3302,16 +3356,16 @@ const app = {
                 if (mb === null) return -1;
                 return ma - mb;
             });
-            const dentro = gente.filter(({ u, j, deAyer }) =>
-                this._estadoJornada(u, j, esHoy, esFuturo, deAyer).clase === 'verde').length;
-            const delDia = gente.filter(({ u, j, deAyer }) => !u.baja && j && !j.v && !j.p && !deAyer).length;
-            const filas = gente.map(({ u, j, deAyer }) => {
-                const e = this._estadoJornada(u, j, esHoy, esFuturo, deAyer);
+            const dentro = gente.filter(({ u, j, deAyer, enBaja }) =>
+                this._estadoJornada(u, j, esHoy, esFuturo, deAyer, enBaja).clase === 'verde').length;
+            const delDia = gente.filter(({ j, deAyer, enBaja }) => !enBaja && j && !j.v && !j.p && !deAyer).length;
+            const filas = gente.map(({ u, j, deAyer, enBaja }) => {
+                const e = this._estadoJornada(u, j, esHoy, esFuturo, deAyer, enBaja);
                 const horario = (j?.i && j?.o)
                     ? (deAyer ? `→${esc(j.o)}` : `${esc(j.i)}–${esc(j.o)}`)
-                    : (u.baja ? 'BE' : '—');
+                    : (enBaja ? 'BE' : '—');
                 const t = this._turnoDe(puesto, j?.i) || '';
-                return `<div class="pst-fila${u.baja ? ' baja' : ''}">
+                return `<div class="pst-fila${enBaja ? ' baja' : ''}">
                     <span class="pst-dot ${e.clase}" title="${esc(e.texto)}"></span>
                     <span class="pst-quien"><b>${esc(u.conductor) || '—'}</b> ${esc(u.nombre)}</span>
                     ${t ? `<span class="cond-turno ${t}">${t}</span>` : ''}
@@ -3323,19 +3377,45 @@ const app = {
                 ? (dentro > 0 ? `${dentro} en turno` : 'sin cubrir')
                 : (delDia > 0 ? `${delDia} ${esFuturo ? 'previstos' : 'ese día'}` : 'sin cubrir');
             const vacio = esHoy ? dentro === 0 : delDia === 0;
-            return `<div class="pst-card">
+            // "sin servicio" es que ese día no fue de nadie; "sin cubrir",
+            // que hay gente asignada pero ninguna dentro ahora mismo.
+            const estado = delDia === 0 ? 'sinservicio' : dentro > 0 ? 'trabajando' : 'sincubrir';
+            if (filtro !== 'todos' && filtro !== estado) return;
+            tarjetas.push(`<div class="pst-card">
                 <div class="pst-head">
                     <span class="pst-nombre">${esc(puesto)}</span>
                     <span class="pst-cob${vacio ? ' vacio' : ''}">${cob}</span>
                 </div>
                 ${filas}
-            </div>`;
-        }).join('');
+            </div>`);
+        });
+        cont.innerHTML = tarjetas.join('') || '<div class="tab-empty" style="padding:22px 16px;">'
+            + '<span class="tab-empty-s">Ningún lugar en este grupo.</span></div>';
+        this._renderFiltroLugares(filtro);
+    },
+
+    _renderFiltroLugares(sel) {
+        const cont = document.getElementById('lugFiltros');
+        if (!cont) return;
+        cont.innerHTML = [['todos','Todos'],['trabajando','Trabajando'],
+                          ['sincubrir','Sin cubrir'],['sinservicio','Sin servicio']]
+            .map(([id, txt]) => `<button class="${sel === id ? 'activo' : ''}"
+                onclick="event.stopPropagation();app.filtrarLugares('${id}')">${txt}</button>`).join('');
+    },
+
+    toggleFiltroLugares() {
+        const c = document.getElementById('lugFiltros');
+        if (c) c.hidden = !c.hidden;
+    },
+
+    filtrarLugares(modo) {
+        localStorage.setItem('filtroLugares', modo);
+        this._renderPuestos();
     },
 
     // Estado de un trabajador ese día, para el filtro de la lista
     _estadoTrabajador(u, fecha) {
-        if (u.baja) return 'be';
+        if (this._enBaja(u, fecha) || (!this._bajasDe(u).length && u.baja)) return 'be';
         const { j } = this._jornadaVisible(u, fecha);
         if (j?.v) return 'vacaciones';
         return 'activo';
@@ -3399,7 +3479,8 @@ const app = {
                 : `<div class="cond-avatar">${esc(ini)}</div>`;
             const ver = u.version ? this._buildNumToVersion(parseInt(String(u.version).replace('build-',''),10) || 0) : '—';
             const cerrada = this._estaPlegado('t:' + u.email, true);
-            return `<div class="cond-card${cerrada ? ' plegada' : ''}${u.baja ? ' baja' : ''}">
+            const enBaja = this._enBaja(u, fecha) || (!this._bajasDe(u).length && !!u.baja);
+            return `<div class="cond-card${cerrada ? ' plegada' : ''}${enBaja ? ' baja' : ''}">
                 <div class="cond-top" onclick="app._plegarTrabajador('${esc(u.email)}')">
                     ${av}
                     <div class="cond-id">
@@ -3409,8 +3490,8 @@ const app = {
                         <div class="cond-num">${esc(u.conductor) || 'sin nº'}
                             <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app._editarPuesto('${esc(u.email)}','${esc(fecha)}')">· ${esc(lugarHoy) || 'asignar lugar'}${excepcion ? ' ·' : ''} ✎</span></div>
                     </div>
-                    <button class="be-btn${u.baja ? ' on' : ''}" title="${u.baja ? 'Dar de alta' : 'Marcar baja'}"
-                            onclick="event.stopPropagation();app.toggleBaja('${esc(u.email)}')">BE</button>
+                    <button class="be-btn${enBaja ? ' on' : ''}" title="Fechas de baja"
+                            onclick="event.stopPropagation();app.editarBajas('${esc(u.email)}')">BE</button>
                     <span class="cond-chev">▾</span>
                 </div>
                 <div class="cond-cuerpo">
@@ -3420,6 +3501,7 @@ const app = {
                         <div class="cond-stat"><div class="cond-stat-v">${t.realizadas.toFixed(1)}</div><div class="cond-stat-l">realizadas</div></div>
                         <div class="cond-stat"><div class="cond-stat-v">${t.restantes.toFixed(1)}</div><div class="cond-stat-l">restantes</div></div>
                     </div>
+                    ${t.diasBaja ? `<div class="cond-baja">BE: ${t.diasBaja} día${t.diasBaja === 1 ? '' : 's'} · objetivo ${t.objetivo}h en vez de ${u.horasAnuales || 777}h</div>` : ''}
                     <div class="cond-ver">${ver} · actualizado ${u.actualizado
                         ? new Date(u.actualizado).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
                         : 'nunca'}</div>
@@ -3466,40 +3548,239 @@ const app = {
         this._renderConductores();
     },
 
-    // BE = baja del trabajador. Se guarda en el resumen compartido: lo pone el
-    // gestor y la publicación del trabajador no lo pisa.
-    async toggleBaja(email) {
+    // ── Catálogo de lugares ─────────────────────────────────────────────────
+    // Los turnos y las ubicaciones se guardan en el servidor, no en el código,
+    // para poder cambiarlos sin publicar una versión nueva de las apps.
+
+    async _cargarLugares() {
+        try {
+            const r = await fetch(LUGARES_URL, { cache: 'no-store' });
+            if (!r.ok) return;
+            const data = await r.json();
+            if (data && typeof data === 'object') {
+                this._lugares = data;
+                aplicarCatalogoLugares(data);
+                this._renderConductores();
+            }
+        } catch (_) { /* silencioso: se sigue con la tabla de siempre */ }
+    },
+
+    _renderLugares() {
+        const cont = document.getElementById('lugaresList');
+        if (!cont) return;
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const claves = [...new Set([
+            ...Object.keys(this._lugares || {}),
+            ...PUESTOS_DEFINIDOS.map(p => this._clavePuesto(p)),
+        ])].sort();
+        cont.innerHTML = claves.map(k => {
+            const l = (this._lugares || {})[k];
+            const nombre = l?.nombre || PUESTOS_DEFINIDOS.find(p => this._clavePuesto(p) === k) || k;
+            const franjas = (TURNOS_POR_PUESTO[k] || []).map(f => `${f.id} ${f.desde}–${f.hasta}`).join(' · ')
+                || 'sin turnos definidos';
+            const ubi = l?.ubicacion ? `📍 ${l.ubicacion.radio}m` : '';
+            return `<div class="ver-item" onclick="app._editarLugar('${esc(k)}')" style="cursor:pointer;">
+                <div class="ver-n">${esc(nombre)}<br><span class="pm-turnos">${esc(franjas)}</span></div>
+                <span class="ver-fecha">${ubi}</span><span class="ops-arrow">›</span>
+            </div>`;
+        }).join('');
+    },
+
+    _nuevoLugar() { this._editarLugar(null); },
+
+    _editarLugar(k) {
+        this._lugarEditando = k;
+        const l = k ? ((this._lugares || {})[k] || {}) : {};
+        const nombre = l.nombre || (k ? PUESTOS_DEFINIDOS.find(p => this._clavePuesto(p) === k) || k : '');
+        document.getElementById('lgNombre').value = nombre;
+        this._turnosTmp = (TURNOS_POR_PUESTO[k] || []).map(f => ({ ...f }));
+        this._renderTurnosLugar();
+        const u = l.ubicacion || {};
+        document.getElementById('lgLat').value   = u.lat ?? '';
+        document.getElementById('lgLng').value   = u.lng ?? '';
+        document.getElementById('lgRadio').value = u.radio ?? '';
+        document.getElementById('lgPrio').value  = l.prioridad ?? '';
+        document.getElementById('lugarModal').classList.add('show');
+        if (this.darkMode) document.getElementById('lugarModalContent').classList.add('dark');
+    },
+
+    _renderTurnosLugar() {
+        const nombres = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
+        document.getElementById('lgTurnos').innerHTML = ['M', 'T', 'N'].map(id => {
+            const f = this._turnosTmp.find(x => x.id === id) || {};
+            return `<div class="edit-row" style="align-items:flex-end;">
+                <div class="edit-field" style="flex:0 0 74px;"><label>&nbsp;</label>
+                    <div style="font-weight:700;font-size:13px;padding:8px 0;">${nombres[id]}</div></div>
+                <div class="edit-field"><label>Desde</label>
+                    <input type="time" value="${f.desde || ''}" onchange="app._editarTurno('${id}','desde',this.value)"></div>
+                <div class="edit-field"><label>Hasta</label>
+                    <input type="time" value="${f.hasta || ''}" onchange="app._editarTurno('${id}','hasta',this.value)"></div>
+            </div>`;
+        }).join('');
+    },
+
+    _editarTurno(id, campo, valor) {
+        let f = this._turnosTmp.find(x => x.id === id);
+        if (!f) { f = { id, desde: '', hasta: '' }; this._turnosTmp.push(f); }
+        f[campo] = valor;
+    },
+
+    _ubicacionActualLugar() {
+        const Geo = window.Capacitor?.Plugins?.Geolocation || navigator.geolocation;
+        if (!Geo) { this._mostrarToast('Sin acceso a la ubicación', 3000); return; }
+        const poner = c => {
+            document.getElementById('lgLat').value = (c.coords?.latitude ?? c.latitude).toFixed(6);
+            document.getElementById('lgLng').value = (c.coords?.longitude ?? c.longitude).toFixed(6);
+            if (!document.getElementById('lgRadio').value) document.getElementById('lgRadio').value = 150;
+            this._mostrarToast('📍 Ubicación tomada', 2500);
+        };
+        if (Geo.getCurrentPosition.length === 0) Geo.getCurrentPosition().then(poner).catch(() => this._mostrarToast('No se pudo obtener la ubicación', 3000));
+        else Geo.getCurrentPosition(poner, () => this._mostrarToast('No se pudo obtener la ubicación', 3000), { enableHighAccuracy: true });
+    },
+
+    async _enviarLugar(cuerpo, metodo) {
+        try {
+            const resp = await fetch(LUGARES_URL, {
+                method: metodo,
+                headers: { 'Content-Type': 'application/json',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify(cuerpo)
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return false; }
+            this._lugares = data;
+            aplicarCatalogoLugares(data);
+            document.getElementById('lugarModal').classList.remove('show');
+            this._renderLugares();
+            this._renderConductores();
+            return true;
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); return false; }
+    },
+
+    async _guardarLugar() {
+        const nombre = document.getElementById('lgNombre').value.trim();
+        if (!nombre) { this._mostrarToast('Ponle un nombre al lugar', 3000); return; }
+        const lat = this._leerDecimal(document.getElementById('lgLat').value);
+        const lng = this._leerDecimal(document.getElementById('lgLng').value);
+        const cuerpo = {
+            nombre,
+            turnos: this._turnosTmp.filter(f => f.desde && f.hasta),
+            ubicacion: (lat !== null && lng !== null)
+                ? { lat, lng, radio: this._leerDecimal(document.getElementById('lgRadio').value) || 150 }
+                : null,
+            prioridad: this._leerDecimal(document.getElementById('lgPrio').value) || 0,
+        };
+        if (await this._enviarLugar(cuerpo, 'PUT')) this._mostrarToast(`✅ ${nombre} guardado`, 2500);
+    },
+
+    async _borrarLugar() {
+        const k = this._lugarEditando;
+        if (!k) { document.getElementById('lugarModal').classList.remove('show'); return; }
+        if (!confirm('¿Borrar este lugar del catálogo?')) return;
+        if (await this._enviarLugar({ nombre: k }, 'DELETE')) this._mostrarToast('Lugar borrado', 2500);
+    },
+
+    ordenarPrueba(modo) {
+        localStorage.setItem('ordenPrueba', modo);
+        this._renderPrueba();
+    },
+
+    // ── Bajas (BE) ──────────────────────────────────────────────────────────
+    // Una baja es un tramo con fecha, no un interruptor: hace falta saber qué
+    // días estuvo fuera para descontarle las horas que no pudo hacer.
+
+    _bajasDe(u) { return Array.isArray(u?.bajas) ? u.bajas : []; },
+
+    _enBaja(u, fecha) {
+        return this._bajasDe(u).some(b => b.d <= fecha && (!b.h || b.h >= fecha));
+    },
+
+    // Días de baja de lunes a viernes dentro del año, que son los que habría
+    // trabajado. Se corta en hoy: los días futuros aún no ha dejado de hacerlos.
+    _diasBaja(u, hasta) {
+        const anio = hasta.slice(0, 4);
+        const dias = new Set();
+        this._bajasDe(u).forEach(b => {
+            const fin = (!b.h || b.h > hasta) ? hasta : b.h;
+            const d = new Date(+b.d.slice(0,4), +b.d.slice(4,6) - 1, +b.d.slice(6,8), 12);
+            const f = new Date(+fin.slice(0,4), +fin.slice(4,6) - 1, +fin.slice(6,8), 12);
+            for (let i = 0; d <= f && i < 400; d.setDate(d.getDate() + 1), i++) {
+                if (d.getDay() === 0 || d.getDay() === 6) continue;
+                const k = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+                if (k.slice(0, 4) === anio) dias.add(k);
+            }
+        });
+        return dias.size;
+    },
+
+    editarBajas(email) {
         const u = (this._conductores || {})[email];
         if (!u) return;
-        const baja = !u.baja;
-        u.baja = baja;                    // pintar ya: la red puede tardar
-        this._renderConductores();
+        this._bajaEditando = email;
+        this._bajasTmp = this._bajasDe(u).map(b => ({ ...b }));
+        document.getElementById('bajaQuien').textContent =
+            `${u.conductor ? u.conductor + ' · ' : ''}${u.nombre || email}`;
+        this._renderBajas();
+        document.getElementById('bajaModal').classList.add('show');
+        if (this.darkMode) document.getElementById('bajaModalContent').classList.add('dark');
+    },
+
+    _renderBajas() {
+        const cont = document.getElementById('bajaLista');
+        const iso = v => v ? `${v.slice(0,4)}-${v.slice(4,6)}-${v.slice(6,8)}` : '';
+        cont.innerHTML = this._bajasTmp.map((b, i) => `<div class="baja-fila">
+                <label>Desde<input type="date" value="${iso(b.d)}"
+                    onchange="app._editarBaja(${i},'d',this.value)"></label>
+                <label>Hasta<input type="date" value="${iso(b.h)}"
+                    onchange="app._editarBaja(${i},'h',this.value)"></label>
+                <button class="baja-x" onclick="app._quitarBaja(${i})">×</button>
+            </div>`).join('')
+            || '<div class="baja-vacio">Sin bajas registradas</div>';
+        const u = (this._conductores || {})[this._bajaEditando] || {};
+        const jor = u.jornadaHoras || 7;
+        const dias = this._diasBajaTmp();
+        document.getElementById('bajaResumen').textContent = dias
+            ? `${dias} día${dias === 1 ? '' : 's'} laborables · −${(dias * jor).toFixed(1)}h de su objetivo`
+            : 'Deja "Hasta" en blanco si sigue de baja';
+    },
+
+    _diasBajaTmp() {
+        const u = (this._conductores || {})[this._bajaEditando] || {};
+        return this._diasBaja({ ...u, bajas: this._bajasTmp }, this._fechaOffset(0));
+    },
+
+    _editarBaja(i, campo, valor) {
+        if (!this._bajasTmp[i]) return;
+        this._bajasTmp[i][campo] = String(valor || '').replace(/-/g, '');
+        this._renderBajas();
+    },
+
+    _quitarBaja(i) { this._bajasTmp.splice(i, 1); this._renderBajas(); },
+
+    _nuevaBaja() {
+        this._bajasTmp.push({ d: this._fechaOffset(0), h: '' });
+        this._renderBajas();
+    },
+
+    async _guardarBajas() {
+        const email = this._bajaEditando;
+        const bajas = this._bajasTmp.filter(b => /^\d{8}$/.test(b.d) && (!b.h || b.h >= b.d));
+        document.getElementById('bajaModal').classList.remove('show');
         try {
             const resp = await fetch(this.USUARIOS_URL, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json',
                            'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ email, baja })
+                body: JSON.stringify({ email, bajas })
             });
             const data = await resp.json();
-            if (!resp.ok) {
-                u.baja = !baja;
-                this._renderConductores();
-                this._mostrarToast('❌ ' + (data.error || resp.status), 4000);
-                return;
-            }
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
             this._conductores = data;
             this._renderConductores();
-            this._mostrarToast(baja ? `🟡 ${u.nombre || email} de baja` : `✅ ${u.nombre || email} de alta`, 2500);
-        } catch (e) {
-            u.baja = !baja;
-            this._renderConductores();
-            this._mostrarToast('❌ Error: ' + e.message, 4000);
-        }
+            this._mostrarToast(bajas.length ? `✅ ${bajas.length} tramo${bajas.length === 1 ? '' : 's'} de baja` : 'Sin bajas', 2500);
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
-    // Abre el selector de lugar. `fecha` (YYYYMMDD) es el día de referencia
-    // para los alcances; sin ella se usa hoy.
     _editarPuesto(email, fecha) {
         const u = (this._conductores || {})[email];
         if (!u) return;

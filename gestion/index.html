@@ -293,6 +293,20 @@
         .app-content.dark .cond-filtros button{background:#16202e;color:#a0a0a0;}
         .cond-filtros button.activo{background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;}
         .sec.cerrada .solo-abierta{display:none;}
+        .lug-filtro-btn{flex-shrink:0;width:30px;height:30px;border:none;border-radius:8px;background:#eef1f6;color:var(--g1);font-size:14px;cursor:pointer;font-family:inherit;}
+        .app-content.dark .lug-filtro-btn{background:#16202e;}
+        .baja-lista{max-height:38vh;overflow-y:auto;}
+        .baja-fila{display:flex;align-items:flex-end;gap:8px;padding:9px 16px;border-bottom:1px solid #f4f4f4;}
+        .modal-card.dark .baja-fila{border-color:#2d3561;}
+        .baja-fila label{flex:1;display:flex;flex-direction:column;gap:3px;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#95a5a6;}
+        .baja-fila input{border:1.5px solid #dfe4ea;border-radius:8px;padding:7px 8px;font-family:inherit;font-size:13px;color:#2c3e50;background:#fff;}
+        .modal-card.dark .baja-fila input{background:#16202e;border-color:#2d3561;color:#e0e0e0;}
+        .baja-x{flex-shrink:0;width:32px;height:32px;border:none;border-radius:8px;background:#fdecea;color:#c0392b;font-size:17px;cursor:pointer;}
+        .baja-vacio,.baja-resumen{padding:12px 16px;font-size:12px;color:#95a5a6;}
+        .baja-resumen{font-weight:800;color:var(--g1);border-top:1px solid #f2f2f2;}
+        .modal-card.dark .baja-resumen{border-color:#2d3561;}
+        .cond-baja{margin-top:7px;padding:6px 9px;border-radius:8px;background:#f4f6f9;font-size:10.5px;font-weight:700;color:#7f8c8d;}
+        .app-content.dark .cond-baja{background:#16202e;color:#a0a0a0;}
         .cond-list{flex:none;display:flex;flex-direction:column;gap:8px;}
         .cond-card{background:white;border-radius:12px;padding:11px 13px;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
         .app-content.dark .cond-card{background:#1e2a3a;}
@@ -680,9 +694,13 @@
                 <div class="sec-head" onclick="app.toggleSeccion('secPuestos')">
                     <span class="cond-title">🧩 Lugares de trabajo</span>
                     <span class="sec-cnt" id="puestosCnt"></span>
+                    <button class="lug-filtro-btn solo-abierta" onclick="event.stopPropagation();app.toggleFiltroLugares()" title="Filtrar">⚟</button>
                     <button class="mensual-toggle sec-chev">▼</button>
                 </div>
-                <div class="sec-body" id="puestosBody"><div id="puestosList"></div></div>
+                <div class="sec-body" id="puestosBody">
+                    <div class="cond-filtros" id="lugFiltros" hidden></div>
+                    <div id="puestosList"></div>
+                </div>
             </div>
 
             <div class="sec" id="secTrabajadores">
@@ -1026,12 +1044,28 @@
                 </div>
             </div>
 
+            <!-- Lugares de trabajo: turnos y ubicación -->
+            <div class="ops-section" id="sectionLugares">
+                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._renderLugares()">🧩 Lugares de trabajo <span class="ops-chevron">›</span></button>
+                <div class="ops-body">
+                    <div class="ops-field">
+                        <span class="ops-field-sub">Los turnos de mañana, tarde y noche de cada lugar, y su ubicación. Las dos apps los leen de aquí: al guardarlos, los trabajadores los ven sin actualizar la app.</span>
+                    </div>
+                    <div id="lugaresList"></div>
+                    <button class="ops-btn" onclick="app._nuevoLugar()">➕ Añadir lugar de trabajo <span class="ops-arrow">›</span></button>
+                </div>
+            </div>
+
             <!-- Usuarios de prueba -->
             <div class="ops-section" id="sectionPrueba">
                 <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._renderPrueba()">🧪 Usuarios de prueba <span class="ops-chevron">›</span></button>
                 <div class="ops-body">
                     <div class="ops-field">
                         <span class="ops-field-sub">Trabajadores inventados para probar las pantallas. Se ven igual que los reales pero llevan la marca PRUEBA, y puedes borrarlos cuando quieras.</span>
+                    </div>
+                    <div class="cond-orden" style="margin-bottom:8px;">
+                        <button id="ordenPruebaNombre" class="orden-btn activo" onclick="app.ordenarPrueba('nombre')">Nombre</button>
+                        <button id="ordenPruebaNumero" class="orden-btn" onclick="app.ordenarPrueba('numero')">Nº</button>
                     </div>
                     <div id="pruebaList"></div>
                     <button class="ops-btn" onclick="app._nuevoFicticio()">➕ Añadir usuario de prueba <span class="ops-arrow">›</span></button>
@@ -1239,6 +1273,57 @@
     </div>
 </div>
 
+
+<!-- Editor de un lugar de trabajo -->
+<div class="modal" id="lugarModal">
+    <div class="modal-card" id="lugarModalContent">
+        <div class="modal-header">
+            <h3>🧩 Lugar de trabajo</h3>
+            <button class="modal-close" onclick="document.getElementById('lugarModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="edit-field"><label>Nombre</label><input type="text" id="lgNombre" placeholder="Son Rossinyol"></div>
+            <div class="f-sep">Turnos</div>
+            <div id="lgTurnos"></div>
+            <div class="f-sep">Ubicación</div>
+            <span class="ops-field-sub" style="display:block;margin-bottom:8px;">Si un trabajador registra su jornada dentro del radio, la app le propone este lugar.</span>
+            <div class="edit-row">
+                <div class="edit-field"><label>Latitud</label><input type="text" inputmode="decimal" id="lgLat" placeholder="39.5696"></div>
+                <div class="edit-field"><label>Longitud</label><input type="text" inputmode="decimal" id="lgLng" placeholder="2.6502"></div>
+            </div>
+            <div class="edit-row">
+                <div class="edit-field"><label>Radio (m)</label><input type="text" inputmode="numeric" id="lgRadio" placeholder="150"></div>
+                <div class="edit-field"><label>Prioridad</label><input type="text" inputmode="numeric" id="lgPrio" placeholder="0"></div>
+            </div>
+            <span class="ops-field-sub" style="display:block;">Con dos lugares en la misma ubicación se propone el de prioridad más alta.</span>
+            <button class="ops-btn" style="border-radius:8px;margin-top:10px;" onclick="app._ubicacionActualLugar()">📍 Usar mi ubicación actual</button>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" onclick="app._borrarLugar()">Borrar</button>
+            <button class="modal-btn modal-btn-confirm" onclick="app._guardarLugar()">Guardar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Fechas de baja -->
+<div class="modal" id="bajaModal">
+    <div class="modal-card" id="bajaModalContent">
+        <div class="modal-header">
+            <h3>🩺 Baja (BE)</h3>
+            <button class="modal-close" onclick="document.getElementById('bajaModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div id="bajaQuien" class="pm-quien"></div>
+            <div id="bajaLista" class="baja-lista"></div>
+            <div id="bajaResumen" class="baja-resumen"></div>
+            <div class="pm-op pm-nuevo" onclick="app._nuevaBaja()">➕ Añadir tramo de baja</div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('bajaModal').classList.remove('show')">Cancelar</button>
+            <button class="modal-btn modal-btn-confirm" onclick="app._guardarBajas()">Guardar</button>
+        </div>
+    </div>
+</div>
 
 <!-- Elegir lugar de trabajo -->
 <div class="modal" id="puestoModal">

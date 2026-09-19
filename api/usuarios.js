@@ -20,6 +20,24 @@ function diasEntre(desde, hasta) {
   return out;
 }
 
+// Un tramo sin inicio no se puede situar en el calendario; el fin vacío
+// significa que sigue de baja.
+function limpiarBajas(bajas) {
+  if (!Array.isArray(bajas)) return [];
+  const ok = f => /^\d{8}$/.test(String(f || ''));
+  return bajas
+    .filter(b => ok(b?.d) && (!b.h || ok(b.h)) && (!b.h || b.h >= b.d))
+    .slice(0, 50)
+    .map(b => ({ d: b.d, h: b.h || '' }))
+    .sort((a, b) => a.d.localeCompare(b.d));
+}
+
+function enBajaHoy(bajas) {
+  const hoy = new Date();
+  const f = `${hoy.getFullYear()}${String(hoy.getMonth() + 1).padStart(2, '0')}${String(hoy.getDate()).padStart(2, '0')}`;
+  return (bajas || []).some(b => b.d <= f && (!b.h || b.h >= f));
+}
+
 function recortarLugares(lugares) {
   const claves = Object.keys(lugares).sort();
   if (claves.length <= MAX_LUGARES) return lugares;
@@ -130,7 +148,7 @@ export default async function handler(req, res) {
       if (admin !== ADMIN_EMAIL.toLowerCase()) {
         return res.status(403).json({ error: 'Solo el gestor puede hacer esto' });
       }
-      const { email, puesto, ficticio, baja, desde, hasta } = req.body || {};
+      const { email, puesto, ficticio, baja, bajas, desde, hasta } = req.body || {};
       const clave = (email || '').toLowerCase().trim();
       if (!clave) return res.status(400).json({ error: 'Falta el email' });
       // Los usuarios de prueba solo pueden vivir bajo este dominio, para que no
@@ -152,6 +170,12 @@ export default async function handler(req, res) {
         }
         // La baja (BE) y el lugar de trabajo son campos del gestor; una
         // publicación del trabajador los conserva porque no los sobrescribe.
+        else if (data[clave] && bajas !== undefined) {
+          // Tramos de baja con fecha. `baja` se sigue guardando porque es lo
+          // que mira la lista para pintar en gris, y sale de los tramos.
+          data[clave].bajas = limpiarBajas(bajas);
+          data[clave].baja  = enBajaHoy(data[clave].bajas);
+        }
         else if (data[clave] && baja !== undefined) data[clave].baja = !!baja;
         // Lugar solo para unas fechas: va aparte de `puesto` porque la app del
         // trabajador reescribe sus jornadas enteras cada vez que publica y se
@@ -173,6 +197,7 @@ export default async function handler(req, res) {
       }, req.method === 'DELETE' ? `Quitar ${clave}`
          : ficticio ? `Usuario de prueba ${clave}`
          : baja !== undefined ? `${baja ? 'Baja' : 'Alta'} de ${clave}`
+         : bajas !== undefined ? `Bajas de ${clave}`
          : desde && hasta ? `Lugar de ${clave} del ${desde} al ${hasta}`
          : `Lugar de ${clave}`);
 

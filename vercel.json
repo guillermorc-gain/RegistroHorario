@@ -39,11 +39,37 @@
           "value": "public, max-age=0, must-revalidate"
         }
       ]
+    },
+    {
+      "source": "/gestion/app.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/gestion/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     }
   ],
   "rewrites": [
     {
-      "source": "/((?!api/|icons/|screenshots/|manifest\\.json|service-worker\\.js|app\\.js).*)",
+      "source": "/gestion",
+      "destination": "/gestion/index.html"
+    },
+    {
+      "source": "/gestion/",
+      "destination": "/gestion/index.html"
+    },
+    {
+      "source": "/((?!api/|gestion/|icons/|screenshots/|manifest\\.json|service-worker\\.js|app\\.js).*)",
       "destination": "/index.html"
     }
   ]

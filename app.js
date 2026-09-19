@@ -7,7 +7,7 @@ const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.goo
 const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file profile email';
 const AUTH_SCOPE       = 'profile email';
 // Turnos de cada puesto. La hora de entrada registrada decide en cuál cae.
-const PUESTOS_DEFINIDOS = ['Son Rossinyol', 'Control', 'Calle', 'Taller'];
+let PUESTOS_DEFINIDOS = ['Son Rossinyol', 'Control', 'Calle', 'Taller', 'Anselmo Clavé'];
 
 const TURNOS_POR_PUESTO = {
     'son rossinyol': [
@@ -31,8 +31,24 @@ const TURNOS_POR_PUESTO = {
     ],
 };
 
+// El catálogo que mantiene el gestor manda sobre la tabla de aquí abajo: así
+// se pueden cambiar turnos y añadir lugares sin publicar una versión nueva.
+let LUGARES_CATALOGO = {};
+function aplicarCatalogoLugares(cat) {
+    LUGARES_CATALOGO = cat || {};
+    Object.entries(LUGARES_CATALOGO).forEach(([k, l]) => {
+        if (Array.isArray(l?.turnos) && l.turnos.length) TURNOS_POR_PUESTO[k] = l.turnos;
+        const nombre = l?.nombre;
+        if (nombre && !PUESTOS_DEFINIDOS.some(p => p.toLowerCase().normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '') === k)) {
+            PUESTOS_DEFINIDOS.push(nombre);
+        }
+    });
+}
+
 const SUPER_USER_EMAIL = 'guillermo.rc82@gmail.com';
 const ALLOWLIST_APP    = 'movilidad';
+const LUGARES_URL      = 'https://registro-horario-emt.vercel.app/api/lugares';
 const VERSION_URL      = 'https://registro-horario-emt.vercel.app/api/version';
 const ANDROID_PACKAGE  = 'com.guillermorc.horasemt';
 const RELEASE_PREFIX   = 'build-';
@@ -130,6 +146,7 @@ const app = {
 
         if (code) {
             const pkgDestino = this._paqueteDestino(searchParams);
+            if (this._rebotarAGestion(pkgDestino, searchParams)) return;
             history.replaceState(null, '', window.location.pathname);
             // PKCE: exchange code for tokens via Vercel endpoint
             if (!window.Capacitor && /Android/i.test(navigator.userAgent)) {
@@ -349,6 +366,18 @@ const app = {
     // The return page is served by the shared Vercel deployment, which runs apk2's
     // code, so without this every login would come back to apk2. Google echoes
     // `state` verbatim, so it tells us which app to reopen.
+    // El verificador PKCE está en localStorage, que se comparte entre / y
+    // /gestion/ por ser el mismo origen, así que el intercambio del código
+    // funciona igual desde allí.
+    _rebotarAGestion(pkgDestino, searchParams) {
+        if (pkgDestino !== 'com.guillermorc.gestionemt') return false;
+        if (window.Capacitor?.isNativePlatform?.()) return false;
+        if (/Android/i.test(navigator.userAgent)) return false;   // ahí se vuelve por intent
+        if (window.location.pathname.startsWith('/gestion')) return false;
+        window.location.replace('/gestion/?' + searchParams.toString());
+        return true;
+    },
+
     _paqueteDestino(searchParams) {
         const permitidos = ['com.guillermorc.horasemt','com.guillermorc.gestionemt'];
         const s = searchParams?.get('state');
@@ -817,6 +846,7 @@ const app = {
             this._updateGpsState();
             this._exportarMesesPendientes();
             this._publicarResumen();
+            this._cargarLugares();
             this._pedirPermisosIniciales();
             if (this._pendingNotifAction === 'registro-rapido') {
                 this._pendingNotifAction = null;
@@ -870,6 +900,7 @@ const app = {
                 ...(esNoche && horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
                 ...(esPR ? { pr: true } : {}),
                 ...(esFestivo ? { festivo: true } : {}),
+                ...(this.puestoTrabajo ? { puesto: this.puestoTrabajo } : {}),
                 ...(esExtra ? { extraManual: true, extraDestino } : {}),
                 ...(esVacaciones ? { vacaciones: true } : {})
             };
@@ -902,6 +933,7 @@ const app = {
             this.actualizarUI(datos);
             this.cancelarEdicion();
             this._publicarResumen();
+            this._comprobarLugarPorUbicacion();
         } catch(e) {
             alert('❌ Error al guardar: ' + e.message);
         }
@@ -1954,6 +1986,10 @@ const app = {
                 ? `<div style="font-size:10px;color:#856404;font-weight:600;">🌙 ${reg.horasNocturnas}h noct. · +${(reg.extraNoche||0).toFixed(2)}€</div>` : '';
             const horario = (reg.horaInicio && reg.horaFin)
                 ? `<span style="color:#95a5a6;font-size:10px;font-style:italic;">${reg.horaInicio}–${reg.horaFin}</span>` : '';
+            // Las jornadas viejas no lo llevan guardado: se usa el lugar actual
+            const lugar = reg.puesto || this.puestoTrabajo;
+            const lugarStr = lugar
+                ? `<span style="color:var(--g1);font-size:10px;font-weight:700;">${lugar}</span>` : '';
             const prBadge     = reg.pr      ? `<span class="pr-badge">PR</span>` : '';
             const festivoBadge= reg.festivo ? `<span class="festivo-badge">🎉 Festivo</span>` : '';
             const vacBadge    = reg.vacaciones ? `<span class="vacaciones-badge">🏖️ Vacaciones</span>` : '';
@@ -1965,6 +2001,7 @@ const app = {
                         <span style="color:#7f8c8d;font-weight:700;font-size:12px;">${reg.fecha}</span>
                         ${horario}
                         <span style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;padding:3px 9px;border-radius:20px;font-weight:700;font-size:10px;">${reg.horas}h</span>
+                        ${lugarStr}
                         ${prBadge}${festivoBadge}${extraBadge}${vacBadge}
                     </div>
                     ${nocheStr}
@@ -2279,6 +2316,73 @@ const app = {
         return this._turnoDe(this.puestoTrabajo, conHora[0].horaInicio);
     },
 
+    async _cargarLugares() {
+        try {
+            const r = await fetch(LUGARES_URL, { cache: 'no-store' });
+            if (!r.ok) throw new Error(r.status);
+            const data = await r.json();
+            if (data && typeof data === 'object') {
+                aplicarCatalogoLugares(data);
+                localStorage.setItem('lugaresCatalogo', JSON.stringify(data));
+            }
+        } catch (_) {
+            // Sin red se tira de lo último que se vio, que es mejor que nada
+            try { aplicarCatalogoLugares(JSON.parse(localStorage.getItem('lugaresCatalogo') || '{}')); } catch (_) {}
+        }
+    },
+
+    // Lugar del catálogo cuya ubicación cae más cerca, dentro de su radio. Si
+    // hay varios en el mismo sitio (control y taller comparten nave) gana el de
+    // prioridad más alta, que es donde suele estar la gente.
+    _lugarPorUbicacion(lat, lng) {
+        let mejor = null;
+        Object.values(LUGARES_CATALOGO || {}).forEach(l => {
+            const u = l?.ubicacion;
+            if (!u) return;
+            const d = this.calcularDistancia(lat, lng, u.lat, u.lng);
+            if (d > u.radio) return;
+            if (!mejor || (l.prioridad || 0) > mejor.prioridad
+                || ((l.prioridad || 0) === mejor.prioridad && d < mejor.d)) {
+                mejor = { nombre: l.nombre, prioridad: l.prioridad || 0, d };
+            }
+        });
+        return mejor;
+    },
+
+    _posicionActual() {
+        return new Promise(resolve => {
+            const Geo = window.Capacitor?.Plugins?.Geolocation || navigator.geolocation;
+            if (!Geo) return resolve(null);
+            let hecho = false;
+            const ok = c => { if (!hecho) { hecho = true; resolve({ lat: c.coords?.latitude ?? c.latitude, lng: c.coords?.longitude ?? c.longitude }); } };
+            const fallo = () => { if (!hecho) { hecho = true; resolve(null); } };
+            try {
+                if (Geo.getCurrentPosition.length === 0) Geo.getCurrentPosition().then(ok).catch(fallo);
+                else Geo.getCurrentPosition(ok, fallo, { enableHighAccuracy: true, timeout: 8000 });
+            } catch (_) { fallo(); }
+            setTimeout(fallo, 9000);
+        });
+    },
+
+    // Al registrar, si estás en un lugar conocido y no es el que tienes puesto,
+    // se te pregunta. Confirmarlo lo cambia también en gestión.
+    async _comprobarLugarPorUbicacion() {
+        if (!Object.keys(LUGARES_CATALOGO || {}).length) return;
+        const pos = await this._posicionActual();
+        if (!pos) return;
+        const cerca = this._lugarPorUbicacion(pos.lat, pos.lng);
+        if (!cerca) return;
+        if (this._clavePuesto(cerca.nombre) === this._clavePuesto(this.puestoTrabajo)) return;
+        if (!confirm(`Parece que estás en ${cerca.nombre}.\n\n¿Lo pongo como tu lugar de trabajo?`)) return;
+        this.puestoTrabajo = cerca.nombre;
+        localStorage.setItem('puestoTrabajo', this.puestoTrabajo);
+        this._actualizarCabeceraUsuario();
+        this._actualizarConductorDisplay();
+        localStorage.removeItem('resumenHuella');     // forzar que se vuelva a publicar
+        this._publicarResumen();
+        this._mostrarToast(`📍 Lugar: ${cerca.nombre}`, 3000);
+    },
+
     async _publicarResumen() {
         if (!this.usuarioActual?.email) return;
         try {
@@ -2310,7 +2414,7 @@ const app = {
                     i: r.horaInicio || '',
                     o: r.horaFin || '',
                     n: r.horasNocturnas || 0,
-                    pu: this.puestoTrabajo || '',
+                    pu: r.puesto || this.puestoTrabajo || '',
                     ...(r.extraManual ? { x: r.extraDestino === 'extras' ? 1 : 2 } : {}),
                     ...(r.festivo ? { fe: 1 } : {}),
                     ...(r.vacaciones ? { v: 1 } : {}),
