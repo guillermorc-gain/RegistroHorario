@@ -68,18 +68,20 @@
         "texto": "Nnee",
         "adjuntos": [],
         "en": "2026-09-20T10:59:25.374Z"
+      },
+      {
+        "de": "gestor",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Bebej",
+        "adjuntos": [],
+        "en": "2026-09-20T15:01:13.714Z"
       }
     ],
     "archivada": false,
     "de": "gestor",
     "tipo": "gestion",
     "gestor": "Guillermo Ríos Correa",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "g.rioscorrea@gmail.com",
-      "nombre": "Guillermo Ríos Correa",
-      "en": "2026-09-20T11:02:28.338Z"
-    }
+    "estado": "pendiente"
   },
   "20260919222956226-dd65e-1": {
     "id": "20260919222956226-dd65e-1",
