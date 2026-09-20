@@ -507,51 +507,8 @@
         .lg-turno.off .edit-field{opacity:.4;}
         .lg-turno-sw{flex:0 0 96px;display:flex;align-items:center;gap:6px;background:#eaf3ea;border:2px solid #27ae60;color:#1e7a45;border-radius:10px;padding:9px 8px;margin-bottom:10px;font-size:12.5px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent;}
         .lg-turno.off .lg-turno-sw{background:#f4f6f9;border-color:#cfd8e3;color:#95a5a6;}
-        .nom-mes-btn{background:#eef2f7;border:none;border-radius:9px;width:32px;height:30px;font-size:15px;font-weight:800;color:#5a6b7d;cursor:pointer;font-family:inherit;flex-shrink:0;}
-        .app-content.dark .nom-mes-btn{background:#232b45;color:#c8cfe0;}
-        .nom-resumen{display:flex;gap:8px;padding:0 2px 8px;}
-        .nom-caja{flex:1;background:white;border-radius:11px;padding:9px 11px;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
-        .app-content.dark .nom-caja{background:#1e2a3a;}
-        .nom-caja-v{font-size:17px;font-weight:800;color:var(--g1);}
-        .nom-caja-l{font-size:9.5px;font-weight:700;color:#95a5a6;text-transform:uppercase;letter-spacing:.4px;}
-        .nom-fila{display:flex;align-items:center;gap:9px;background:white;border-radius:11px;padding:11px 12px;margin-bottom:7px;box-shadow:0 1px 4px rgba(0,0,0,0.07);cursor:pointer;-webkit-tap-highlight-color:transparent;}
-        .app-content.dark .nom-fila{background:#1e2a3a;}
-        .nom-fila.hecha{border-left:4px solid #27ae60;}
-        .nom-fila.falta{border-left:4px solid #e8eaf0;}
-        .nom-nom{flex:1;min-width:0;font-size:13.5px;font-weight:700;color:#2c3e50;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-        .app-content.dark .nom-nom{color:#e0e0e0;}
-        .nom-imp{font-size:13.5px;font-weight:800;color:var(--g1);flex-shrink:0;}
-        .nom-imp.vacio{color:#bdc3c7;font-weight:600;}
-        .nom-dif{font-size:10.5px;font-weight:800;flex-shrink:0;min-width:52px;text-align:right;}
-        .nom-dif.sube{color:#27ae60;} .nom-dif.baja{color:#e74c3c;}
-        .nom-datos{display:flex;flex-wrap:wrap;gap:6px;}
-        .nom-dato{background:#f4f6f9;border-radius:9px;padding:6px 10px;font-size:11.5px;font-weight:700;color:#5a6b7d;}
-        .modal-card.dark .nom-dato{background:#232b45;color:#c8cfe0;}
-        .nom-dato b{color:var(--g1);font-size:12.5px;}
-        .nom-linea{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
-        .nom-linea input.nom-c{flex:1;min-width:0;box-sizing:border-box;padding:9px 10px;border:1.5px solid #e8eaf0;border-radius:8px;font-size:12.5px;font-family:inherit;background:white;color:#2c3e50;}
         /* Sin min-width, un input no baja de su ancho por defecto y se comía
            el hueco del concepto aunque la base fueran 86px */
-        .nom-linea input.nom-i{flex:0 0 86px;min-width:0;box-sizing:border-box;padding:9px 8px;border:1.5px solid #e8eaf0;border-radius:8px;font-size:12.5px;font-family:inherit;text-align:right;background:white;color:#2c3e50;}
-        .modal-card.dark .nom-linea input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
-        .nom-quitar{flex:0 0 28px;height:36px;border:1.5px solid #f2c9c0;background:transparent;color:#e74c3c;border-radius:9px;font-size:12px;padding:0;cursor:pointer;font-family:inherit;}
-        .nom-mas{width:100%;background:transparent;border:1.5px dashed #cfd8e3;border-radius:10px;padding:8px;font-size:11.5px;font-weight:800;color:#5a6b7d;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;}
-        .modal-card.dark .nom-mas{border-color:#2d3561;color:#c8cfe0;}
-        .nom-total{margin-top:12px;background:var(--g1);color:#fff;border-radius:11px;padding:11px 13px;font-size:13px;font-weight:800;display:flex;justify-content:space-between;}
-        .nom-si{flex:0 0 72px;background:#f4f6f9;border:1.5px solid #e8eaf0;border-radius:8px;padding:9px 6px;font-size:12px;font-weight:800;color:#7f8c8d;cursor:pointer;font-family:inherit;}
-        .nom-si.on{background:var(--g1);border-color:var(--g1);color:#fff;}
-        .modal-card.dark .nom-si{background:#232b45;border-color:#2d3561;color:#c8cfe0;}
-        .modal-card.dark .nom-si.on{background:var(--g1);border-color:#9fc8ff;color:#fff;}
-        .nom-pie{margin-top:10px;padding-top:8px;border-top:1.5px solid #f0f0f0;font-size:12px;}
-        .modal-card.dark .nom-pie{border-color:#2d3561;}
-        .nom-cmp-c small{font-weight:600;color:#95a5a6;font-size:10.5px;}
-        .nom-comparar{font-size:12px;}
-        .nom-cmp{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid #f4f4f4;}
-        .modal-card.dark .nom-cmp{border-color:#2d3561;}
-        .nom-cmp-c{color:#7f8c8d;font-weight:700;}
-        .nom-cmp-v{font-weight:800;flex-shrink:0;}
-        .nom-cmp-v.sube{color:#27ae60;} .nom-cmp-v.baja{color:#e74c3c;} .nom-cmp-v.igual{color:#95a5a6;}
-        .nom-vacio{padding:22px 16px;text-align:center;font-size:12.5px;color:#95a5a6;}
         .lg-cuantos{display:flex;align-items:center;gap:8px;margin:-4px 0 12px 104px;}
         .lg-cuantos button{width:30px;height:30px;border-radius:9px;border:1.5px solid #e8eaf0;background:#f4f6f9;color:#5a6b7d;font-size:16px;font-weight:800;line-height:1;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;}
         .modal-card.dark .lg-cuantos button{background:#232b45;border-color:#2d3561;color:#c8cfe0;}
@@ -1267,18 +1224,6 @@
         </div><!-- end appContent -->
 
         <!-- ── BOTTOM TAB BAR ── -->
-        <!-- ── TAB: Nóminas ── -->
-        <div class="tab-panel" id="tabPanel4">
-            <div class="reg-barra">
-                <button class="nom-mes-btn" onclick="app.nomMes(-1)">‹</button>
-                <span class="cond-title" id="nomMesTxt" style="flex:1;text-align:center;"></span>
-                <button class="nom-mes-btn" onclick="app.nomMes(1)">›</button>
-                <button class="cond-refresh" onclick="app.exportarNominas()" title="Exportar">📊</button>
-            </div>
-            <div class="nom-resumen" id="nomResumen"></div>
-            <div id="nomList" class="reg-list"></div>
-        </div>
-
         <div class="tab-bar" id="tabBar">
             <button class="tab-btn active" data-tab="0" draggable="true"
                     onclick="app.switchTab(0)"
@@ -1307,13 +1252,6 @@
                     ondragover="app._tabDragOver(event)" ondragleave="app._tabDragLeave(event)"
                     ondrop="app._tabDrop(event)">
                 <span class="tab-ico">📝</span><span class="tab-lbl">Notas</span>
-            </button>
-            <button class="tab-btn" data-tab="4" draggable="true"
-                    onclick="app.switchTab(4)"
-                    ondragstart="app._tabDragStart(event)" ondragend="app._tabDragEnd(event)"
-                    ondragover="app._tabDragOver(event)" ondragleave="app._tabDragLeave(event)"
-                    ondrop="app._tabDrop(event)">
-                <span class="tab-ico">💶</span><span class="tab-lbl">Nóminas</span>
             </button>
         </div>
     </div>
@@ -1794,35 +1732,6 @@
         <div class="modal-footer">
             <button class="modal-btn modal-btn-cancel" onclick="app._quitarJornada()">Quitar</button>
             <button class="modal-btn modal-btn-confirm" onclick="app._guardarJornada()">Guardar</button>
-        </div>
-    </div>
-</div>
-
-<!-- Nómina de un trabajador -->
-<div class="modal" id="nominaModal">
-    <div class="modal-card" id="nominaModalContent">
-        <div class="modal-header">
-            <h3>💶 Nómina</h3>
-            <button class="modal-close" onclick="document.getElementById('nominaModal').classList.remove('show')">×</button>
-        </div>
-        <div class="modal-body">
-            <div id="nomQuien" class="pm-quien" style="margin:-16px -16px 12px;"></div>
-            <div class="f-sep">Días de este mes</div>
-            <div class="nom-datos" id="nomDatos"></div>
-            <div class="f-sep">Devengos</div>
-            <div id="nomLineas"></div>
-            <div class="f-sep">Deducciones · solo los porcentajes</div>
-            <div id="nomDeducciones"></div>
-            <div class="nom-pie" id="nomPie"></div>
-            <div class="nom-total" id="nomTotal"></div>
-            <div class="f-sep">Comparación</div>
-            <div class="nom-comparar" id="nomComparar"></div>
-            <div class="edit-field" style="margin-top:12px;"><label>Nota</label>
-                <input type="text" id="nomNota" placeholder="Lo que quieras recordar de esta nómina"></div>
-        </div>
-        <div class="modal-footer">
-            <button class="modal-btn modal-btn-cancel" onclick="app._borrarNomina()">Borrar</button>
-            <button class="modal-btn modal-btn-confirm" onclick="app._guardarNomina()">Guardar</button>
         </div>
     </div>
 </div>
