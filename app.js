@@ -2778,11 +2778,90 @@ const app = {
                 catch (__) { this._misNominas = null; }
             }
         }
+        this._nomEditando = null;
         this._renderMiNomina();
+    },
+
+    // ── Rellenarla ───────────────────────────────────────────────────────────
+    // Los días y las horas salen de lo que ha registrado; lo demás lo pone él:
+    // los precios de su convenio, los porcentajes, los bienios y el sindicato.
+    // Un mes nuevo parte del anterior, que casi nunca cambia.
+
+    editarMiNomina() {
+        const mes = this._miNomMes;
+        const g = this._misNominas?.[mes]
+            || this._misNominas?.[this._mesMas(mes, -1)] || {};
+        const C = this.CONVENIO;
+        this._nomEditando = {
+            precios: {
+                porDia: { ...C.porDia, ...(g.precios?.porDia || {}) },
+                delMes: { ...C.delMes, ...(g.precios?.delMes || {}) },
+            },
+            bienios:   Number(g.bienios ?? 0),
+            sindicato: Number(g.sindicato ?? 0),
+            prorrata:  Number(g.prorrata ?? this.PRORRATA_EXTRAS),
+            tipos:     { ...this.TIPOS_NOMINA, ...(g.tipos || {}) },
+            dias:      { asistencia: Number(g.dias?.asistencia ?? this.DIAS_NOMINA) },
+            responsabilidad: !!g.responsabilidad,
+            extra:     { h: g.extra?.h, p: Number(g.extra?.p ?? 0) },
+            extras:    (g.extras || []).map(e => ({ ...e })),
+            nota:      g.nota || '',
+        };
+        this._renderMiNomina();
+    },
+
+    cancelarMiNomina() { this._nomEditando = null; this._renderMiNomina(); },
+
+    _setMiNom(campo, valor) {
+        const n = Number(String(valor).replace(',', '.')) || 0;
+        const partes = campo.split('.');
+        let o = this._nomEditando;
+        while (partes.length > 1) o = o[partes.shift()];
+        o[partes[0]] = n;
+        this._renderMiNomina();
+    },
+
+    _alternarMiResp() {
+        this._nomEditando.responsabilidad = !this._nomEditando.responsabilidad;
+        this._renderMiNomina();
+    },
+
+    _setMiExtra(k, campo, valor) {
+        if (!this._nomEditando.extras[k]) return;
+        this._nomEditando.extras[k][campo] = campo === 'i'
+            ? (Number(String(valor).replace(',', '.')) || 0) : valor;
+        this._renderMiNomina();
+    },
+
+    _nuevoMiExtra() { this._nomEditando.extras.push({ c: '', i: 0 }); this._renderMiNomina(); },
+    _quitarMiExtra(k) { this._nomEditando.extras.splice(k, 1); this._renderMiNomina(); },
+
+    async _guardarMiNomina() {
+        const cuerpo = { mes: this._miNomMes, email: this.usuarioActual?.email,
+            ...this._nomEditando,
+            extras: (this._nomEditando.extras || []).filter(e => String(e.c || '').trim()),
+            nota: document.getElementById('miNomNota')?.value || '' };
+        try {
+            const r = await fetch(this.NOMINAS_URL, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cuerpo),
+            });
+            const data = await r.json();
+            if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return; }
+            this._misNominas = this._misNominas || {};
+            this._misNominas[this._miNomMes] = data?.[this._miNomMes] || cuerpo;
+            localStorage.setItem('misNominas', JSON.stringify(this._misNominas));
+            this._nomEditando = null;
+            this._renderMiNomina();
+            this._mostrarToast('💶 Nómina guardada', 2500);
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
     // El mismo convenio y el mismo cálculo que en gestión: si cada app hiciera
     // sus cuentas, tarde o temprano dirían cosas distintas.
+    // El convenio de partida, sacado de una nómina de media jornada. Todo es
+    // editable: la completa cobra otra cosa, y el convenio se actualiza.
     CONVENIO: {
         porDia: { base: 772.58 / 30, vacaciones: 375.66 / 14, asistencia: 4.19 },
         delMes: { noAbsorbible: 136.21, transporte: 68.02, ajuste: 130.01,
@@ -2817,8 +2896,13 @@ const app = {
     },
 
     _calcNomina(mes, n) {
-        const C = this.CONVENIO, D = this.DIAS_NOMINA;
+        const D = this.DIAS_NOMINA;
         const g = n || {};
+        // Los precios guardados mandan sobre los de partida
+        const C = {
+            porDia: { ...this.CONVENIO.porDia, ...(g.precios?.porDia || {}) },
+            delMes: { ...this.CONVENIO.delMes, ...(g.precios?.delMes || {}) },
+        };
         const dias = this._diasDeNomina(mes);
         const diasAsist = Number(g.dias?.asistencia ?? D);
         const bienios   = Number(g.bienios ?? 0);
@@ -2861,7 +2945,8 @@ const app = {
         if (sindicato) deducciones.push({ c: 'Sindicato SITEIB', base: 0, pct: 0, i: sindicato });
         const aDeducir = r2(deducciones.reduce((t, l) => t + l.i, 0));
         return { dias, devengos, deducciones, devengado, prorrata, base, aDeducir,
-                 liquido: r2(devengado - aDeducir) };
+                 liquido: r2(devengado - aDeducir), precios: C, tipos, bienios, sindicato,
+                 hExtra, pExtra, diasAsist, responsabilidad: !!g.responsabilidad };
     },
 
     _renderMiNomina() {
@@ -2872,19 +2957,75 @@ const app = {
         const titulo = document.getElementById('miNomMes');
         if (titulo) titulo.textContent = this._nombreMes(mes);
 
-        const n = this._misNominas?.[mes];
+        const editando = this._nomEditando;
+        const n = editando || this._misNominas?.[mes];
         if (!n) {
             cont.innerHTML = `<div class="nom-tarjeta"><div class="nom-vacio">
-                Todavía no hay nómina de ${esc(this._nombreMes(mes))}.<br>
-                Cuando gestión la rellene, la verás aquí.</div></div>`;
+                Todavía no has rellenado la nómina de ${esc(this._nombreMes(mes))}.</div>
+                <button class="btn-main" onclick="app.editarMiNomina()">Rellenarla</button></div>`;
             return;
         }
         const c = this._calcNomina(mes, n);
-        const num = v => String(v).replace('.', ',');
+        // Los precios del convenio salen de dividir, así que traen una ristra
+        // de decimales que no dice nada: se enseñan con cuatro como mucho.
+        const num = v => {
+            const x = Number(v);
+            if (!isFinite(x)) return String(v);
+            return String(Math.round(x * 10000) / 10000).replace('.', ',');
+        };
         const linea = (l, resta) => `<div class="nom-l${resta ? ' resta' : ''}">
             <span class="nom-l-c">${esc(l.c)}${l.d ? ` <small>${num(l.d)}${l.horas ? 'h' : ''} × ${num(l.p)}</small>`
                 : l.pct ? ` <small>${num(l.pct)} %</small>` : ''}</span>
             <span class="nom-l-i">${resta ? '−' : ''}${this._eur(l.i)}</span></div>`;
+
+        // Las casillas solo salen al rellenarla; mirando queda la nómina limpia
+        const campo = (etiqueta, valor, ruta, sufijo) => !editando ? '' :
+            `<div class="nom-edit"><span>${etiqueta}</span>
+                <input type="text" inputmode="decimal" value="${num(valor)}"
+                       onchange="app._setMiNom('${ruta}', this.value)">${
+                sufijo ? `<em>${sufijo}</em>` : ''}</div>`;
+
+        const P = c.precios;
+        const ajustes = !editando ? '' : `
+            <div class="nom-sec">Tu convenio</div>
+            ${campo('Salario base', P.porDia.base, 'precios.porDia.base', '€/día')}
+            ${campo('Vacaciones', P.porDia.vacaciones, 'precios.porDia.vacaciones', '€/día')}
+            ${campo('Asistencia', P.porDia.asistencia, 'precios.porDia.asistencia', '€/día')}
+            ${campo('Comp. No Absorbible', P.delMes.noAbsorbible, 'precios.delMes.noAbsorbible', '€/mes')}
+            ${campo('Plus Transporte', P.delMes.transporte, 'precios.delMes.transporte', '€/mes')}
+            ${campo('Ajuste convenio', P.delMes.ajuste, 'precios.delMes.ajuste', '€/mes')}
+            ${campo('Complemento convenio', P.delMes.ajuste2, 'precios.delMes.ajuste2', '€/mes')}
+            ${campo('Responsabilidad/Calidad', P.delMes.responsabilidad, 'precios.delMes.responsabilidad', '€/mes')}
+            ${campo('Prorrata pagas extra', c.prorrata, 'prorrata', '€/mes')}
+            <div class="nom-sec">Este mes</div>
+            ${campo('Bienios', c.bienios, 'bienios', '€/mes')}
+            ${campo('Horas extras', c.hExtra, 'extra.h', 'horas')}
+            ${campo('Precio de la hora extra', c.pExtra, 'extra.p', '€/hora')}
+            ${campo('Días de asistencia', c.diasAsist, 'dias.asistencia', 'días')}
+            <div class="nom-edit"><span>Responsabilidad/Calidad</span>
+                <button class="nom-si${c.responsabilidad ? ' on' : ''}"
+                        onclick="app._alternarMiResp()">${c.responsabilidad ? 'Sí' : 'No'}</button></div>
+            ${(n.extras || []).map((e, k) => `<div class="nom-edit">
+                <input type="text" style="flex:1" value="${esc(e.c)}" placeholder="Otro concepto"
+                       onchange="app._setMiExtra(${k},'c',this.value)">
+                <input type="text" inputmode="decimal" value="${num(e.i ?? 0)}"
+                       onchange="app._setMiExtra(${k},'i',this.value)">
+                <button class="nom-x" onclick="app._quitarMiExtra(${k})">✕</button></div>`).join('')}
+            <button class="nom-mas" onclick="app._nuevoMiExtra()">➕ Añadir concepto</button>
+            <div class="nom-sec">Porcentajes</div>
+            ${campo('Contingencias comunes', c.tipos.cc, 'tipos.cc', '%')}
+            ${campo('Desempleo', c.tipos.desempleo, 'tipos.desempleo', '%')}
+            ${campo('Formación profesional', c.tipos.fp, 'tipos.fp', '%')}
+            ${campo('Mecanismo de equidad', c.tipos.mei, 'tipos.mei', '%')}
+            ${campo('IRPF', c.tipos.irpf, 'tipos.irpf', '%')}
+            ${campo('Sindicato', c.sindicato, 'sindicato', '€')}
+            <div class="edit-field" style="margin-top:10px;"><label>Nota</label>
+                <input type="text" id="miNomNota" value="${esc(n.nota || '')}"
+                       placeholder="Lo que quieras recordar"></div>
+            <div class="nom-botones">
+                <button class="nom-cancel" onclick="app.cancelarMiNomina()">Cancelar</button>
+                <button class="btn-main" onclick="app._guardarMiNomina()">Guardar</button>
+            </div>`;
 
         cont.innerHTML = `<div class="nom-tarjeta">
             <div class="nom-sec">Días del mes</div>
@@ -2892,6 +3033,7 @@ const app = {
                 <span class="nom-dato"><b>${c.dias.base}</b> de salario base</span>
                 ${c.dias.vacaciones ? `<span class="nom-dato"><b>${c.dias.vacaciones}</b> de vacaciones</span>` : ''}
                 ${c.dias.permiso ? `<span class="nom-dato"><b>${c.dias.permiso}</b> de permiso</span>` : ''}
+                ${c.hExtra ? `<span class="nom-dato"><b>${num(c.hExtra)}</b> horas extras</span>` : ''}
             </div>
             <div class="nom-sec">Devengos</div>
             ${c.devengos.map(l => linea(l, false)).join('')}
@@ -2907,9 +3049,12 @@ const app = {
             <div class="nom-sec">Base de cotización</div>
             <div class="nom-l"><span class="nom-l-c">Devengado + prorrata de pagas extra</span>
                 <span class="nom-l-i">${this._eur(c.base)}</span></div>
-            ${n.nota ? `<div class="nom-sec">Nota de gestión</div>
+            ${!editando && n.nota ? `<div class="nom-sec">Nota</div>
                 <div class="nom-l"><span class="nom-l-c" style="white-space:normal;">${esc(n.nota)}</span></div>` : ''}
-            ${this._compararMiNomina(mes, c)}
+            ${ajustes}
+            ${!editando ? `<button class="nom-mas" style="margin-top:12px;"
+                onclick="app.editarMiNomina()">✎ Cambiar los datos</button>` : ''}
+            ${!editando ? this._compararMiNomina(mes, c) : ''}
         </div>`;
     },
 

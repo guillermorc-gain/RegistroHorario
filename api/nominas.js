@@ -150,6 +150,14 @@ export default async function handler(req, res) {
       return res.status(200).json(out);
     }
 
+    // Cada uno rellena la suya. El correo sale del token, así que escribir la
+    // de otro no lleva a ninguna parte; el gestor puede con todas.
+    if (req.method !== 'GET') {
+        const delToken = await emailDelToken(tokenDe(req));
+        const suyo = String(req.body?.email || '').toLowerCase().trim();
+        if (delToken && delToken === suyo) return await guardar(req, res, suyo);
+    }
+
     // Lo que cobra la gente no lo lee nadie más que el gestor
     if (!await exigirAdmin(req, res, ADMIN_EMAIL)) return;
 
@@ -162,10 +170,18 @@ export default async function handler(req, res) {
       return res.status(200).json(data);
     }
 
-    const { mes, email } = req.body || {};
-    if (!/^\d{6}$/.test(String(mes || ''))) return res.status(400).json({ error: 'Falta el mes' });
-    const quien = String(email || '').toLowerCase().trim();
+    const quien = String(req.body?.email || '').toLowerCase().trim();
     if (!quien.includes('@')) return res.status(400).json({ error: 'Falta el trabajador' });
+    return await guardar(req, res, quien);
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
+  }
+}
+
+async function guardar(req, res, quien) {
+  try {
+    const mes = String(req.body?.mes || '');
+    if (!/^\d{6}$/.test(mes)) return res.status(400).json({ error: 'Falta el mes' });
 
     for (let intento = 0; intento < 3; intento++) {
       const { data, sha } = await getFile();
