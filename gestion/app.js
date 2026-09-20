@@ -5058,21 +5058,27 @@ const app = {
             // aquí es lo normal: el gestor pone el turno y el trabajador ficha
             // al llegar—. Mirando solo lo fichado, el filtro salía a cero con
             // media plantilla en la calle.
+            // En jornada: todo el que trabaja ese día, haya fichado o lo tenga
+            // asignado. Aquí lo normal es que el gestor ponga el turno y el
+            // trabajador fiche al llegar, si ficha, así que mirando solo lo
+            // fichado el filtro salía a cero con gente en la calle.
             const trabajando = x => {
                 if (x.enBaja || x.enVac) return false;
-                if (x.j && !x.j.v && !x.j.p) {
-                    return esHoy
-                        ? this._estadoJornada(x.u, x.j, true, false, x.deAyer, false, false).clase === 'verde'
-                        : true;
-                }
-                if (!x.plan) return false;
-                return esHoy
-                    ? this._dentroDeFranja(ahoraMin, { desde: x.plan.i, hasta: x.plan.f }, 0)
-                    : true;
+                if (x.j && !x.j.v && !x.j.p) return true;
+                return !!x.plan;
             };
-            const dentro = gente.filter(trabajando).length;
-            const delDia = gente.filter(({ j, deAyer, enBaja, enVac }) =>
-                !enBaja && !enVac && j && !j.v && !j.p && !deAyer).length;
+            // Y aparte, quién está dentro en este momento: eso solo tiene
+            // sentido en el día de hoy y es lo que dice la etiqueta verde.
+            const dentroAhora = x => {
+                if (!esHoy || x.enBaja || x.enVac) return false;
+                if (x.j && !x.j.v && !x.j.p) {
+                    return this._estadoJornada(x.u, x.j, true, false, x.deAyer, false, false).clase === 'verde';
+                }
+                return !!x.plan
+                    && this._dentroDeFranja(ahoraMin, { desde: x.plan.i, hasta: x.plan.f }, 0);
+            };
+            const conTurno = gente.filter(trabajando).length;
+            const dentro   = gente.filter(dentroAhora).length;
 
             // Turnos del lugar que ese día no cubre nadie. El que viene de la
             // víspera cubre el turno de su hora de entrada, no el de ahora.
@@ -5084,22 +5090,19 @@ const app = {
                 .map(x => this._turnoDe(puesto, horaTurno(x)))
                 .filter(Boolean));
             const huecos = franjas.filter(f => !cubiertos.has(f.id));
-            // Los que tienen turno puesto ese día pero aún no les toca entrar
-            const previstos = gente.filter(x => !x.j && x.plan && !trabajando(x)).length;
-
             // Las cuentas van aquí, antes de descartar nada por el filtro, para
             // que cada botón diga lo suyo y no solo el que esté puesto.
             cuenta.todos      += personas(gente);
             cuenta.trabajando += personas(gente.filter(trabajando));
             if (!dePegaPuesto(puesto)
-                && (franjas.length ? huecos.length > 0 : dentro + previstos === 0)) cuenta.sincubrir++;
+                && (franjas.length ? huecos.length > 0 : conTurno === 0)) cuenta.sincubrir++;
 
             // El filtro escoge qué trabajadores se ven, salvo "sin cubrir", que
             // es una propiedad del lugar: el que tiene algún turno sin nadie.
             // Los dos grupos de pega no son lugares: no tienen turnos que cubrir
             if (filtro === 'sincubrir'
                 && (dePegaPuesto(puesto)
-                    || (franjas.length ? !huecos.length : dentro + previstos > 0))) return;
+                    || (franjas.length ? !huecos.length : conTurno > 0))) return;
             // En "Horarios sin cubrir" lo que se busca es el hueco, no la
             // gente: quien ya tiene turno no pinta nada ahí. Se enseña el
             // lugar con los turnos que nadie cubre y punto.
@@ -5152,13 +5155,12 @@ const app = {
                 // que aún no haya entrado o que ya haya salido: "con turno"
                 // vale para los dos, "previsto" solo para el primero.
                 ? (dentro > 0 ? `${dentro} en turno`
-                   : previstos > 0 ? `${previstos} con turno` : 'sin cubrir')
-                : (delDia + previstos > 0
-                   ? `${delDia + previstos} ${esFuturo
-                        ? `previsto${delDia + previstos === 1 ? '' : 's'}` : 'ese día'}`
+                   : conTurno > 0 ? `${conTurno} con turno` : 'sin cubrir')
+                : (conTurno > 0
+                   ? `${conTurno} ${esFuturo
+                        ? `previsto${conTurno === 1 ? '' : 's'}` : 'ese día'}`
                    : 'sin cubrir');
-            const vacio = soloHuecos
-                || (!dePega && (esHoy ? dentro + previstos === 0 : delDia + previstos === 0));
+            const vacio = soloHuecos || (!dePega && conTurno === 0);
             const NOMBRE_TURNO = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
             tarjetas.push(`<div class="pst-card">
                 <div class="pst-head">
