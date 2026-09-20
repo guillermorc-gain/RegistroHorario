@@ -2284,7 +2284,8 @@
     "jornadas": [],
     "email": "prueba-1789764004986@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:34:58.671Z"
+    "actualizado": "2026-09-20T15:35:02.839Z",
+    "oculto": true
   },
   "prueba-1789766365436@prueba.local": {
     "nombre": "Toni Valverde",
