@@ -2797,7 +2797,8 @@ const app = {
                 porDia: { ...C.porDia, ...(g.precios?.porDia || {}) },
                 delMes: { ...C.delMes, ...(g.precios?.delMes || {}) },
             },
-            bienios:   Number(g.bienios ?? 0),
+            desde:     g.desde || '',
+            pctBienios: Number(g.pctBienios ?? 0),
             sindicato: Number(g.sindicato ?? 0),
             prorrata:  Number(g.prorrata ?? this.PRORRATA_EXTRAS),
             tipos:     { ...this.TIPOS_NOMINA, ...(g.tipos || {}) },
@@ -2805,6 +2806,7 @@ const app = {
             // partir de los registros; en cuanto se escriben, mandan.
             dias:      { asistencia: g.dias?.asistencia },
             extra:     { h: g.extra?.h, p: Number(g.extra?.p ?? 0) },
+            noct:      { h: g.noct?.h,  p: Number(g.noct?.p ?? 0) },
             extras:    (g.extras || []).map(e => ({ ...e })),
             nota:      g.nota || '',
         };
@@ -2817,8 +2819,15 @@ const app = {
         const n = Number(String(valor).replace(',', '.')) || 0;
         const partes = campo.split('.');
         let o = this._nomEditando;
+        if (partes.length > 1 && !o[partes[0]]) o[partes[0]] = {};
         while (partes.length > 1) o = o[partes.shift()];
         o[partes[0]] = n;
+        this._renderMiNomina();
+    },
+
+    // La fecha de entrada no es un número, así que va por su cuenta
+    _setMiFecha(valor) {
+        this._nomEditando.desde = valor || '';
         this._renderMiNomina();
     },
 
@@ -2880,24 +2889,67 @@ const app = {
     // permiso retribuido y los días de asistencia. El salario base son los que
     // quedan del mes.
     _diasDeNomina(mes) {
-        const vac = new Set(), pr = new Set(), trabajados = new Set();
+        const vac = new Set(), pr = new Set(), baja = new Set();
         Object.entries(this._historialFull || {}).forEach(([id, r]) => {
             const f = this._fechaDeId(id);
             if (f.slice(0, 6) !== mes) return;
-            if (r.vacaciones) { vac.add(f); return; }
-            if (r.pr) { pr.add(f); return; }
-            if (r.be) return;
-            if ((parseFloat(r.horas) || 0) > 0) trabajados.add(f);
+            if (r.vacaciones) vac.add(f);
+            else if (r.pr)    pr.add(f);
+            else if (r.be)    baja.add(f);
         });
         const vacaciones = Math.min(this.DIAS_NOMINA, vac.size);
         const permiso    = Math.min(this.DIAS_NOMINA - vacaciones, pr.size);
-        return { vacaciones, permiso, asistencia: trabajados.size,
+        // La asistencia se cobra todos los laborables salvo los de baja: no
+        // depende de los días que haya fichado.
+        let asistencia = 0;
+        const ultimo = new Date(+mes.slice(0, 4), +mes.slice(4, 6), 0).getDate();
+        for (let d = 1; d <= ultimo; d++) {
+            const dia = new Date(+mes.slice(0, 4), +mes.slice(4, 6) - 1, d, 12).getDay();
+            if (dia === 0 || dia === 6) continue;
+            if (baja.has(`${mes}${String(d).padStart(2, '0')}`)) continue;
+            asistencia++;
+        }
+        return { vacaciones, permiso, asistencia, baja: baja.size,
                  base: Math.max(0, this.DIAS_NOMINA - vacaciones - permiso) };
     },
 
-    // Un bienio vale un 5 % del salario base del mes entero: en la nómina,
-    // 38,63 son justo el 5 % de 772,58. Dos bienios el 10 %, y así hasta doce.
-    PCT_BIENIO: 5,
+    // Horas nocturnas registradas ese mes
+    _horasNocturnasDelMes(mes) {
+        let h = 0;
+        Object.entries(this._historialFull || {}).forEach(([id, r]) => {
+            if (this._fechaDeId(id).slice(0, 6) === mes) h += parseFloat(r.horasNocturnas) || 0;
+        });
+        return Math.round(h * 100) / 100;
+    },
+
+    // La antigüedad manda sobre los bienios: con la fecha de entrada puesta,
+    // el porcentaje cambia solo el mes que toca y no hay que acordarse.
+    // Es un 5 % del salario base del mes entero por tramo: en la nómina de
+    // julio, 38,63 son justo el 5 % de 772,58.
+    TRAMOS_ANTIGUEDAD: [
+        { anios: 24, pct: 60 }, { anios: 20, pct: 50 }, { anios: 16, pct: 40 },
+        { anios: 12, pct: 30 }, { anios:  8, pct: 20 }, { anios:  4, pct: 10 },
+        { anios:  0, pct:  5 },
+    ],
+
+    // Años cumplidos el último día del mes que se está pagando
+    _aniosEnLaEmpresa(desde, mes) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(desde || ''))) return null;
+        const d = new Date(desde + 'T12:00:00');
+        if (isNaN(d)) return null;
+        const fin = new Date(+mes.slice(0, 4), +mes.slice(4, 6), 0, 12);
+        let a = fin.getFullYear() - d.getFullYear();
+        const cumpleYa = (fin.getMonth() > d.getMonth())
+            || (fin.getMonth() === d.getMonth() && fin.getDate() >= d.getDate());
+        if (!cumpleYa) a--;
+        return Math.max(0, a);
+    },
+
+    _pctAntiguedad(desde, mes) {
+        const a = this._aniosEnLaEmpresa(desde, mes);
+        if (a === null) return null;
+        return this.TRAMOS_ANTIGUEDAD.find(t => a >= t.anios).pct;
+    },
 
     _calcNomina(mes, n) {
         const D = this.DIAS_NOMINA;
@@ -2913,7 +2965,11 @@ const app = {
         const diasAsist = Number(g.dias?.asistencia ?? dias.asistencia) || 0;
         const hExtra    = Number(g.extra?.h ?? this._horasExtraDelMes(mes)) || 0;
         const pExtra    = Number(g.extra?.p ?? 0) || 0;
-        const nBienios  = Math.max(0, Math.min(12, Number(g.bienios ?? 0) || 0));
+        const hNoct     = Number(g.noct?.h ?? this._horasNocturnasDelMes(mes)) || 0;
+        const pNoct     = Number(g.noct?.p ?? 0) || 0;
+        // Con la fecha de entrada puesta manda la antigüedad; si no, lo que
+        // se haya escrito a mano.
+        const pctAnt    = this._pctAntiguedad(g.desde, mes);
         const tipos     = { ...this.TIPOS_NOMINA, ...(g.tipos || {}) };
         const r2 = v => Math.round(v * 100) / 100;
 
@@ -2927,10 +2983,11 @@ const app = {
         // Los bienios son un porcentaje del salario base del mes entero, no de
         // los días que haya trabajado: en junio, con catorce de vacaciones,
         // siguen siendo los mismos 38,63 que en julio.
-        const pctBienios = nBienios * this.PCT_BIENIO;
-        if (nBienios) devengos.push({
+        const pctBienios = pctAnt !== null ? pctAnt
+            : Math.max(0, Math.min(60, Number(g.pctBienios ?? 0) || 0));
+        if (pctBienios) devengos.push({
             ...delMes('Bienios', D * C.porDia.base * pctBienios / 100),
-            bienios: nBienios, pctBienios });
+            pctBienios, anios: this._aniosEnLaEmpresa(g.desde, mes) });
         devengos.push(delMes('Comp. No Absorbible', C.delMes.noAbsorbible));
         devengos.push(delMes('Plus Transporte', C.delMes.transporte));
         devengos.push(delMes('Complemento Ajuste convenio', C.delMes.ajuste));
@@ -2938,6 +2995,8 @@ const app = {
         // El de responsabilidad es fijo: va siempre
         devengos.push(delMes('Compl. Responsabilidad/Calidad', C.delMes.responsabilidad));
         if (diasAsist) devengos.push(porDia('Complemento Asistencia', diasAsist, C.porDia.asistencia));
+        if (hNoct)     devengos.push({ c: 'Complemento horas nocturnas', d: hNoct, p: r2(pNoct),
+                                       i: r2(hNoct * pNoct), horas: true });
         if (hExtra)    devengos.push({ c: 'Horas extras', d: hExtra, p: r2(pExtra),
                                        i: r2(hExtra * pExtra), horas: true });
         (g.extras || []).forEach(e => {
@@ -2960,7 +3019,8 @@ const app = {
         const aDeducir = r2(deducciones.reduce((t, l) => t + l.i, 0));
         return { dias, devengos, deducciones, devengado, prorrata, base, aDeducir,
                  liquido: r2(devengado - aDeducir), precios: C, tipos, sindicato,
-                 bienios: nBienios, pctBienios, hExtra, pExtra, diasAsist };
+                 pctBienios, pctAnt, anios: this._aniosEnLaEmpresa(g.desde, mes),
+                 hExtra, pExtra, hNoct, pNoct, diasAsist };
     },
 
     _renderMiNomina() {
@@ -2988,7 +3048,8 @@ const app = {
             return String(Math.round(x * 10000) / 10000).replace('.', ',');
         };
         const linea = (l, resta) => `<div class="nom-l${resta ? ' resta' : ''}">
-            <span class="nom-l-c">${esc(l.c)}${l.bienios ? ` <small>${l.bienios} · ${l.pctBienios} %</small>` : ''
+            <span class="nom-l-c">${esc(l.c)}${l.pctBienios ? ` <small>${l.pctBienios} %${
+                l.anios !== null && l.anios !== undefined ? ` · ${l.anios} años` : ''}</small>` : ''
                 }${l.d ? ` <small>${num(l.d)}${l.horas ? 'h' : ''} × ${num(l.p)}</small>`
                 : l.pct ? ` <small>${num(l.pct)} %</small>` : ''}</span>
             <span class="nom-l-i">${resta ? '−' : ''}${this._eur(l.i)}</span></div>`;
@@ -3012,11 +3073,19 @@ const app = {
             ${campo('Complemento convenio', P.delMes.ajuste2, 'precios.delMes.ajuste2', '€/mes')}
             ${campo('Responsabilidad/Calidad', P.delMes.responsabilidad, 'precios.delMes.responsabilidad', '€/mes')}
             ${campo('Prorrata pagas extra', c.prorrata, 'prorrata', '€/mes')}
+            <div class="nom-sec">Antigüedad</div>
+            <div class="nom-edit"><span>Entré en la empresa el</span>
+                <input type="date" value="${esc(n.desde || '')}" style="flex:0 0 138px;"
+                       onchange="app._setMiFecha(this.value)"></div>
+            ${c.pctAnt !== null
+                ? `<div class="nom-nota">Con ${c.anios} año${c.anios === 1 ? '' : 's'} en la empresa
+                     te toca un <b>${c.pctAnt} %</b> de antigüedad. Cambia solo cuando cumplas años.</div>`
+                : campo('Antigüedad', c.pctBienios, 'pctBienios', '%')}
             <div class="nom-sec">Este mes</div>
-            ${campo(`Bienios${c.pctBienios ? ` <b>(${c.pctBienios} %)</b>` : ''}`,
-                    c.bienios, 'bienios', 'bienios')}
             ${campo('Horas extras', c.hExtra, 'extra.h', 'horas')}
             ${campo('Precio de la hora extra', c.pExtra, 'extra.p', '€/hora')}
+            ${campo('Horas nocturnas', c.hNoct, 'noct.h', 'horas')}
+            ${campo('Precio de la hora nocturna', c.pNoct, 'noct.p', '€/hora')}
             ${campo('Días de asistencia', c.diasAsist, 'dias.asistencia', 'días')}
             ${(n.extras || []).map((e, k) => `<div class="nom-edit">
                 <input type="text" style="flex:1" value="${esc(e.c)}" placeholder="Otro concepto"
@@ -4862,21 +4931,46 @@ const app = {
             if (r.puesto) sitios.add(this._clavePuesto(r.puesto));
             (r.tramos || []).forEach(t => { if (t?.p) sitios.add(this._clavePuesto(t.p)); });
         });
+        // Y la ubicación guardada que corresponda a cada uno, por si el aviso
+        // nativo compara por el nombre que se le puso al GPS.
+        this._getWorkLocations().forEach((loc, i) => {
+            if (sitios.has(this._clavePuesto(this._nombreDeUbicacion(i)))) {
+                sitios.add(this._clavePuesto(loc.name || ''));
+            }
+        });
+        sitios.delete('');
         return sitios;
+    },
+
+    // Cómo se llama de verdad la ubicación `i`: el nombre que se le puso al
+    // guardarla puede no ser el del cuadrante —"Trabajo" contra "Control"—, y
+    // comparando esos nombres el aviso no callaba nunca. Si cae dentro de un
+    // lugar del catálogo, manda el nombre del catálogo.
+    _nombreDeUbicacion(i) {
+        const loc = this._getWorkLocations()[i];
+        if (!loc) return '';
+        let mejor = '', cerca = Infinity;
+        Object.values(LUGARES_CATALOGO || {}).forEach(l => {
+            if (!l?.ubicacion || !l?.nombre) return;
+            const d = this.calcularDistancia(loc.lat, loc.lng, l.ubicacion.lat, l.ubicacion.lng);
+            if (d < Math.max(300, l.ubicacion.radio || 0) && d < cerca) { cerca = d; mejor = l.nombre; }
+        });
+        return mejor || loc.name || '';
     },
 
     // ¿Toca avisar por este lugar? `i` es su sitio en la lista de ubicaciones.
     _tocaAvisar(i) {
         const hoy = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        // Una jornada a medias es la que se ha empezado y no se ha cerrado:
+        // mientras no tenga salida, sigue teniendo sentido avisar.
         if (this.avisoLugar === 'una') {
-            // Una vez al día y solo la primera ubicación, que es la de siempre
             if (i !== 0) return false;
             return localStorage.getItem('lastRegisteredDate') !== hoy
-                && !this._historialFull?.[hoy];
+                && !this._hayRegistroEnFecha(hoy);
         }
-        const loc = this._getWorkLocations()[i];
-        if (!loc) return false;
-        return !this._lugaresRegistradosHoy().has(this._clavePuesto(loc.name || ''));
+        const nombre = this._clavePuesto(this._nombreDeUbicacion(i));
+        if (!nombre) return !this._hayRegistroEnFecha(hoy);
+        return !this._lugaresRegistradosHoy().has(nombre);
     },
 
     // Lo mismo, para el aviso nativo que corre con la app cerrada

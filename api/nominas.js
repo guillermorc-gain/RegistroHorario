@@ -92,8 +92,10 @@ const numero = (v, max) => {
 function limpiarNomina(n) {
   const t = n?.tipos || {};
   return {
-    // Los bienios son cuántos tiene, no euros: cada uno vale un 5 %
-    bienios:   Math.round(numero(n?.bienios, 12)),
+    // La antigüedad: con la fecha de entrada el porcentaje sale solo, y si no
+    // se guarda el que se haya puesto a mano.
+    desde:      /^\d{4}-\d{2}-\d{2}$/.test(String(n?.desde || '')) ? n.desde : '',
+    pctBienios: numero(n?.pctBienios, 100),
     sindicato: numero(n?.sindicato, 9999),
     prorrata:  numero(n?.prorrata, 99999),
     tipos: {
@@ -110,6 +112,11 @@ function limpiarNomina(n) {
       ...(n?.extra?.h === undefined || n?.extra?.h === null || n?.extra?.h === ''
           ? {} : { h: numero(n.extra.h, 999) }),
       p: numero(n?.extra?.p, 999),
+    },
+    noct: {
+      ...(n?.noct?.h === undefined || n?.noct?.h === null || n?.noct?.h === ''
+          ? {} : { h: numero(n.noct.h, 999) }),
+      p: numero(n?.noct?.p, 999),
     },
     extras:      limpiarLineas(n?.extras),
     nota:        String(n?.nota ?? '').trim().slice(0, 300),
