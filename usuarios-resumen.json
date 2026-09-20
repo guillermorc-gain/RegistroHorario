@@ -2646,10 +2646,16 @@
     "ficticio": true,
     "actualizado": "2026-09-19T09:33:58.155Z",
     "lugares": {
-      "20260921": "Control"
+      "20260921": "Anselmo Clavé"
     },
     "horarios": {
       "202609": {
+        "i": "07:00",
+        "f": "14:00"
+      }
+    },
+    "horariosDia": {
+      "20260921": {
         "i": "07:00",
         "f": "14:00"
       }
