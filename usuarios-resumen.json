@@ -1382,7 +1382,8 @@
     "jornadas": [],
     "email": "prueba-1789758756867@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:41:03.317Z"
+    "actualizado": "2026-09-20T15:41:05.652Z",
+    "oculto": true
   },
   "prueba-1789759132382@prueba.local": {
     "nombre": "Tomeu Pol",
