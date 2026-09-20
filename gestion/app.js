@@ -1741,6 +1741,7 @@ const app = {
         if (idx === 1) this._cargarCuadrante();
         if (idx === 2) this._cargarNotasGestor();
         if (idx === 3) this._cargarConductores();
+        if (idx === 4) { this._cargarConductores(); this._cargarNominas(); }
     },
 
     _tabDragStart(e) {
@@ -3071,6 +3072,334 @@ const app = {
         this._renderPuestos();
     },
 
+    // ── Nóminas ──────────────────────────────────────────────────────────────
+    // Una nómina por trabajador y mes. Lo que ha trabajado sale de las jornadas
+    // que ya hay —no se copia, se calcula—, y lo que cobra se escribe aquí.
+    // Cada mes se puede comparar con el anterior, línea a línea.
+
+    NOMINAS_URL: 'https://registro-horario-emt.vercel.app/api/nominas',
+    _nominas: {},                       // { '202609': { email: {...} } }
+    _nomMes: null,                      // el mes que se está mirando
+
+    // Lo típico de una nómina, para no empezar con la hoja en blanco
+    LINEAS_POR_DEFECTO: [
+        { c: 'Salario base',      i: 0 },
+        { c: 'Plus transporte',   i: 0 },
+        { c: 'Horas extras',      i: 0 },
+        { c: 'Plus nocturnidad',  i: 0 },
+        { c: 'Festivos',          i: 0 },
+    ],
+    DEDUCCIONES_POR_DEFECTO: [
+        { c: 'Seguridad Social',  i: 0 },
+        { c: 'IRPF',              i: 0 },
+    ],
+
+    _mesDeHoy() {
+        const d = new Date();
+        return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+    },
+
+    _mesMas(mes, n) {
+        const d = new Date(+mes.slice(0, 4), +mes.slice(4, 6) - 1 + n, 1, 12);
+        return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+    },
+
+    _nombreMes(mes) {
+        return `${MESES_ES[+mes.slice(4, 6) - 1]} ${mes.slice(0, 4)}`;
+    },
+
+    _eur(n) {
+        return (Math.round((Number(n) || 0) * 100) / 100)
+            .toFixed(2).replace('.', ',') + ' €';
+    },
+
+    nomMes(paso) {
+        this._nomMes = this._mesMas(this._nomMes || this._mesDeHoy(), paso);
+        this._cargarNominas();
+    },
+
+    async _cargarNominas() {
+        this._nomMes = this._nomMes || this._mesDeHoy();
+        // El mes de al lado también, que es con el que se compara
+        const meses = [this._nomMes, this._mesMas(this._nomMes, -1)];
+        for (const m of meses) {
+            if (this._nominas[m]) continue;
+            try {
+                const r = await fetch(`${this.NOMINAS_URL}?mes=${m}`, {
+                    cache: 'no-store',
+                    headers: { 'X-Admin-Email': this.usuarioActual?.email || '' },
+                });
+                if (!r.ok) throw new Error(r.status);
+                const data = await r.json();
+                this._nominas[m] = data?.[m] || {};
+            } catch (_) { this._nominas[m] = this._nominas[m] || {}; }
+        }
+        this._renderNominas();
+    },
+
+    _nominaDe(email, mes) {
+        return this._nominas?.[mes || this._nomMes]?.[email] || null;
+    },
+
+    _totalNomina(n) {
+        if (!n) return null;
+        const suma = ls => (ls || []).reduce((t, l) => t + (Number(l.i) || 0), 0);
+        const bruto = suma(n.lineas), descuentos = suma(n.deducciones);
+        return { bruto, descuentos, liquido: Math.round((bruto - descuentos) * 100) / 100 };
+    },
+
+    // Lo que ha trabajado ese mes, sacado de sus jornadas
+    _trabajoDelMes(u, mes) {
+        const jor = Number(u?.jornadaHoras) || 7;
+        let horas = 0, extras = 0, nocturnas = 0, festivos = 0;
+        const dias = new Set();
+        (u?.jornadas || []).forEach(j => {
+            if (!j || String(j.f || '').slice(0, 6) !== mes) return;
+            const h = Number(j.h) || 0;
+            dias.add(j.f);
+            if (j.x === 1) extras += h; else horas += h;
+            nocturnas += Number(j.n) || 0;
+            if (j.fe && h > 0) festivos++;
+        });
+        const r1 = n => Math.round(n * 10) / 10;
+        return { dias: dias.size, horas: r1(horas), extras: r1(extras),
+                 nocturnas: r1(nocturnas), festivos,
+                 baja: this._diasBajaEnMes(u, mes), jornadaHoras: jor };
+    },
+
+    _diasBajaEnMes(u, mes) {
+        const dias = this._bajasDe(u) || [];
+        if (!dias.length) return 0;
+        const ultimo = new Date(+mes.slice(0, 4), +mes.slice(4, 6), 0).getDate();
+        let n = 0;
+        for (let d = 1; d <= ultimo; d++) {
+            const f = `${mes}${String(d).padStart(2, '0')}`;
+            if (this._enBaja(u, f)) n++;
+        }
+        return n;
+    },
+
+    _renderNominas() {
+        const cont = document.getElementById('nomList');
+        if (!cont) return;
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const mes = this._nomMes = this._nomMes || this._mesDeHoy();
+        const anterior = this._mesMas(mes, -1);
+        const txt = document.getElementById('nomMesTxt');
+        if (txt) txt.textContent = '💶 ' + this._nombreMes(mes);
+
+        const lista = Object.values(this._conductores || {})
+            .filter(u => u && u.email)
+            .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+
+        let hechas = 0, total = 0;
+        const filas = lista.map(u => {
+            const n = this._nominaDe(u.email, mes);
+            const t = this._totalNomina(n);
+            const prev = this._totalNomina(this._nominaDe(u.email, anterior));
+            if (t) { hechas++; total += t.liquido; }
+            const dif = (t && prev) ? Math.round((t.liquido - prev.liquido) * 100) / 100 : null;
+            const q = esc(u.email).replace(/'/g, "\\'");
+            return `<div class="nom-fila ${t ? 'hecha' : 'falta'}" onclick="app.abrirNomina('${q}')">
+                <span class="nt-num">${esc(u.conductor) || '—'}</span>
+                <span class="nom-nom">${esc(u.nombre) || esc(u.email)}</span>
+                ${dif !== null && dif !== 0
+                    ? `<span class="nom-dif ${dif > 0 ? 'sube' : 'baja'}">${dif > 0 ? '▲' : '▼'} ${
+                        this._eur(Math.abs(dif))}</span>` : ''}
+                <span class="nom-imp${t ? '' : ' vacio'}">${t ? this._eur(t.liquido) : 'sin rellenar'}</span>
+            </div>`;
+        }).join('');
+
+        cont.innerHTML = filas || '<div class="nom-vacio">Todavía no hay trabajadores.</div>';
+        const res = document.getElementById('nomResumen');
+        if (res) {
+            res.innerHTML = `<div class="nom-caja"><div class="nom-caja-v">${hechas}/${lista.length}</div>
+                    <div class="nom-caja-l">rellenadas</div></div>
+                <div class="nom-caja"><div class="nom-caja-v">${this._eur(total)}</div>
+                    <div class="nom-caja-l">total del mes</div></div>`;
+        }
+    },
+
+    // ── El formulario ────────────────────────────────────────────────────────
+
+    abrirNomina(email) {
+        const u = (this._conductores || {})[email];
+        if (!u) return;
+        this._nomEditando = email;
+        const guardada = this._nominaDe(email, this._nomMes);
+        this._nomLineas = (guardada?.lineas?.length ? guardada.lineas : this.LINEAS_POR_DEFECTO)
+            .map(l => ({ ...l }));
+        this._nomDeducciones = (guardada?.deducciones?.length ? guardada.deducciones : this.DEDUCCIONES_POR_DEFECTO)
+            .map(l => ({ ...l }));
+        document.getElementById('nomNota').value = guardada?.nota || '';
+        document.getElementById('nomQuien').textContent =
+            `${this._quienEs(u, email)} · ${this._nombreMes(this._nomMes)}`;
+        this._renderNominaModal();
+        document.getElementById('nominaModal').classList.add('show');
+        if (this.darkMode) document.getElementById('nominaModalContent').classList.add('dark');
+    },
+
+    _renderNominaModal() {
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const u = (this._conductores || {})[this._nomEditando] || {};
+        const t = this._trabajoDelMes(u, this._nomMes);
+        const plural = (n, una, varias) => n === 1 ? una : varias;
+        document.getElementById('nomDatos').innerHTML = [
+            [plural(t.dias, 'día', 'días'), t.dias],
+            [plural(t.horas, 'hora', 'horas'), t.horas],
+            ['extras', t.extras],
+            ['nocturnas', t.nocturnas],
+            [plural(t.festivos, 'festivo', 'festivos'), t.festivos],
+            [plural(t.baja, 'día BE', 'días BE'), t.baja],
+        ].map(([l, v]) => `<span class="nom-dato"><b>${String(v).replace('.', ',')}</b> ${l}</span>`).join('');
+
+        const pinta = (lista, cual) => lista.map((l, k) => `<div class="nom-linea">
+                <input class="nom-c" type="text" value="${esc(l.c)}" placeholder="Concepto"
+                       onchange="app._setNomLinea('${cual}',${k},'c',this.value)">
+                <input class="nom-i" type="text" inputmode="decimal" value="${String(l.i ?? '').replace('.', ',')}"
+                       placeholder="0,00" onchange="app._setNomLinea('${cual}',${k},'i',this.value)">
+                <button class="nom-quitar" onclick="app._quitarNomLinea('${cual}',${k})">✕</button>
+            </div>`).join('')
+            + `<button class="nom-mas" onclick="app._nuevaNomLinea('${cual}')">➕ Añadir concepto</button>`;
+
+        document.getElementById('nomLineas').innerHTML = pinta(this._nomLineas, 'lineas');
+        document.getElementById('nomDeducciones').innerHTML = pinta(this._nomDeducciones, 'deducciones');
+
+        const tot = this._totalNomina({ lineas: this._nomLineas, deducciones: this._nomDeducciones });
+        document.getElementById('nomTotal').innerHTML =
+            `<span>Líquido a percibir</span><span>${this._eur(tot.liquido)}</span>`;
+        this._renderComparacion();
+    },
+
+    // Frente al mes anterior, concepto a concepto
+    _renderComparacion() {
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const el = document.getElementById('nomComparar');
+        if (!el) return;
+        const anterior = this._mesMas(this._nomMes, -1);
+        const prev = this._nominaDe(this._nomEditando, anterior);
+        if (!prev) {
+            el.innerHTML = `<div class="nom-vacio">No hay nómina de ${
+                esc(this._nombreMes(anterior))} con la que comparar.</div>`;
+            return;
+        }
+        const aMapa = ls => Object.fromEntries((ls || []).map(l => [l.c, Number(l.i) || 0]));
+        const ahoraD = aMapa(this._nomLineas), ahoraR = aMapa(this._nomDeducciones);
+        const antesD = aMapa(prev.lineas),     antesR = aMapa(prev.deducciones);
+        const conceptos = [...new Set([...Object.keys(ahoraD), ...Object.keys(antesD),
+                                       ...Object.keys(ahoraR), ...Object.keys(antesR)])];
+        const filas = conceptos.map(c => {
+            const a = (ahoraD[c] ?? 0) - (ahoraR[c] ?? 0);
+            const b = (antesD[c] ?? 0) - (antesR[c] ?? 0);
+            const d = Math.round((a - b) * 100) / 100;
+            const clase = d > 0 ? 'sube' : d < 0 ? 'baja' : 'igual';
+            const signo = d > 0 ? '+' : '';
+            return `<div class="nom-cmp"><span class="nom-cmp-c">${esc(c)}</span>
+                <span class="nom-cmp-v ${clase}">${signo}${this._eur(d)}</span></div>`;
+        }).join('');
+        const tA = this._totalNomina({ lineas: this._nomLineas, deducciones: this._nomDeducciones });
+        const tB = this._totalNomina(prev);
+        const dif = Math.round((tA.liquido - tB.liquido) * 100) / 100;
+        el.innerHTML = `<div class="nom-cmp"><span class="nom-cmp-c">
+                <b>Frente a ${esc(this._nombreMes(anterior))}</b> (${this._eur(tB.liquido)})</span>
+            <span class="nom-cmp-v ${dif > 0 ? 'sube' : dif < 0 ? 'baja' : 'igual'}">${
+                dif > 0 ? '+' : ''}${this._eur(dif)}</span></div>` + filas;
+    },
+
+    _setNomLinea(cual, k, campo, valor) {
+        const lista = cual === 'lineas' ? this._nomLineas : this._nomDeducciones;
+        if (!lista[k]) return;
+        lista[k][campo] = campo === 'i'
+            ? (Number(String(valor).replace(',', '.')) || 0) : valor;
+        this._renderNominaModal();
+    },
+
+    _nuevaNomLinea(cual) {
+        (cual === 'lineas' ? this._nomLineas : this._nomDeducciones).push({ c: '', i: 0 });
+        this._renderNominaModal();
+    },
+
+    _quitarNomLinea(cual, k) {
+        (cual === 'lineas' ? this._nomLineas : this._nomDeducciones).splice(k, 1);
+        this._renderNominaModal();
+    },
+
+    async _enviarNomina(metodo, cuerpo, mensaje) {
+        try {
+            const r = await fetch(this.NOMINAS_URL, {
+                method: metodo,
+                headers: { 'Content-Type': 'application/json',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify(cuerpo),
+            });
+            const data = await r.json();
+            if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return false; }
+            this._nominas[this._nomMes] = data?.[this._nomMes] || {};
+            document.getElementById('nominaModal').classList.remove('show');
+            this._renderNominas();
+            this._mostrarToast(mensaje, 2500);
+            return true;
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); return false; }
+    },
+
+    _guardarNomina() {
+        const limpias = ls => ls.filter(l => String(l.c || '').trim());
+        return this._enviarNomina('PUT', {
+            mes: this._nomMes, email: this._nomEditando,
+            lineas: limpias(this._nomLineas), deducciones: limpias(this._nomDeducciones),
+            nota: document.getElementById('nomNota').value || '',
+        }, '💶 Nómina guardada');
+    },
+
+    _borrarNomina() {
+        if (!confirm('¿Borrar esta nómina? No se puede deshacer.')) return;
+        return this._enviarNomina('DELETE',
+            { mes: this._nomMes, email: this._nomEditando }, '🗑️ Nómina borrada');
+    },
+
+    // ── Exportar el mes ──────────────────────────────────────────────────────
+    // Una fila por trabajador y una columna por concepto, con los del mes
+    // anterior al lado para que la comparación se vea en la propia hoja.
+
+    _filasNominas() {
+        const mes = this._nomMes, anterior = this._mesMas(mes, -1);
+        const delMes = this._nominas[mes] || {};
+        const conceptos = [...new Set(Object.values(delMes)
+            .flatMap(n => [...(n.lineas || []), ...(n.deducciones || [])].map(l => l.c)))];
+        const lista = Object.values(this._conductores || {})
+            .filter(u => delMes[u.email])
+            .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
+        const cabeceras = ['Nº', 'Trabajador', 'Mes', 'Días', 'Horas', 'Extras', 'Nocturnas',
+                           ...conceptos, 'Devengado', 'Deducciones', 'Líquido',
+                           `Líquido ${this._nombreMes(anterior)}`, 'Diferencia'];
+        const filas = lista.map(u => {
+            const n = delMes[u.email];
+            const t = this._totalNomina(n);
+            const prev = this._totalNomina(this._nominaDe(u.email, anterior));
+            const tr = this._trabajoDelMes(u, mes);
+            const mapa = {};
+            (n.lineas || []).forEach(l => { mapa[l.c] = (mapa[l.c] || 0) + (Number(l.i) || 0); });
+            (n.deducciones || []).forEach(l => { mapa[l.c] = (mapa[l.c] || 0) - (Number(l.i) || 0); });
+            return [u.conductor || '', u.nombre || u.email, this._nombreMes(mes),
+                    tr.dias, tr.horas, tr.extras, tr.nocturnas,
+                    ...conceptos.map(c => mapa[c] ?? ''),
+                    t.bruto, t.descuentos, t.liquido,
+                    prev ? prev.liquido : '',
+                    prev ? Math.round((t.liquido - prev.liquido) * 100) / 100 : ''];
+        });
+        return { cabeceras, filas };
+    },
+
+    exportarNominas() {
+        const { cabeceras, filas } = this._filasNominas();
+        if (!filas.length) { this._mostrarToast('No hay nóminas rellenadas este mes', 3000); return; }
+        const nombre = `nominas-${this._nomMes}`;
+        const bytes = this._xlsxDe('Nóminas', cabeceras, filas);
+        const ok = this._descargarBinario(bytes, `${nombre}.xlsx`,
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        if (ok !== false) this._mostrarToast(`📊 ${filas.length} nóminas en Excel`, 4000);
+    },
+
     // ── Trabajadores del cuadrante ───────────────────────────────────────────
     // La misma gente que la pestaña de trabajadores, pero en una fila por
     // persona con lo que hace falta para montar el cuadrante: lugar, horario,
@@ -4199,10 +4528,15 @@ const app = {
     },
 
     _xlsxRegistro() {
+        return this._xlsxDe('Registro', this.CABECERAS_EXPORT,
+            this._filasExport().map(f => this._valoresFila(f)));
+    },
+
+    // La misma hoja para cualquier tabla: el registro y las nóminas salen de
+    // aquí, que no tiene sentido tener dos veces el mismo ZIP escrito a mano.
+    _xlsxDe(hoja, cabeceras, filas) {
         const esc = v => String(v ?? '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))
             .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
-        const cabeceras = this.CABECERAS_EXPORT;
-        const filas = this._filasExport().map(f => this._valoresFila(f));
 
         const celda = (v, col, fila, estilo) => {
             const ref = `${this._colExcel(col)}${fila}`;
@@ -4241,7 +4575,7 @@ const app = {
             + `</Relationships>` },
             { nombre: 'xl/workbook.xml', texto: X
             + `<workbook xmlns="${NS}" xmlns:r="${DOC}">`
-            + `<sheets><sheet name="Registro" sheetId="1" r:id="rId1"/></sheets></workbook>` },
+            + `<sheets><sheet name="${esc(hoja)}" sheetId="1" r:id="rId1"/></sheets></workbook>` },
             { nombre: 'xl/_rels/workbook.xml.rels', texto: X
             + `<Relationships xmlns="${REL}">`
             + `<Relationship Id="rId1" Type="${DOC}/worksheet" Target="worksheets/sheet1.xml"/>`
