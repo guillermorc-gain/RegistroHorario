@@ -5086,10 +5086,17 @@ const app = {
             // La hora que cuenta para el turno: la que fichó, y si aún no ha
             // fichado, la que tiene asignada.
             const horaTurno = x => (x.j && !x.j.v && !x.j.p) ? x.j.i : (x.plan?.i || '');
-            const cubiertos = new Set(gente
-                .map(x => this._turnoDe(puesto, horaTurno(x)))
-                .filter(Boolean));
-            const huecos = franjas.filter(f => !cubiertos.has(f.id));
+            // Cuánta gente hay en cada turno: un turno de dos plazas con una
+            // sola persona sigue estando a medias, así que se cuenta en vez de
+            // dar por bueno que haya alguien.
+            const cuantosHay = {};
+            gente.forEach(x => {
+                const t = this._turnoDe(puesto, horaTurno(x));
+                if (t) cuantosHay[t] = (cuantosHay[t] || 0) + 1;
+            });
+            const huecos = franjas
+                .map(f => ({ ...f, faltan: Math.max(0, (Number(f.n) || 1) - (cuantosHay[f.id] || 0)) }))
+                .filter(f => f.faltan > 0);
             // Las cuentas van aquí, antes de descartar nada por el filtro, para
             // que cada botón diga lo suyo y no solo el que esté puesto.
             cuenta.todos      += personas(gente);
@@ -5145,9 +5152,10 @@ const app = {
             // En la vista de huecos el número que importa es cuántos faltan,
             // no cuánta gente hay: verde con "1 previsto" al lado de un turno
             // descubierto se lee como que está resuelto.
+            const faltanTotal = huecos.reduce((n, f) => n + f.faltan, 0);
             const cob = soloHuecos
                 ? (huecos.length
-                    ? `${huecos.length} sin cubrir` : 'sin turnos definidos')
+                    ? `faltan ${faltanTotal}` : 'sin turnos definidos')
                 : dePega
                 ? `${visibles.length} ${visibles.length === 1 ? 'persona' : 'personas'}`
                 : esHoy
@@ -5169,7 +5177,8 @@ const app = {
                 </div>
                 ${huecos.length ? `<div class="pst-huecos">Sin cubrir: ${huecos.map(f =>
                     `<span class="pst-hueco"><b>${f.id}</b> ${esc(NOMBRE_TURNO[f.id] || f.id)} ${
-                        esc(f.desde)}–${esc(f.hasta)}</span>`).join('')}</div>` : ''}
+                        esc(f.desde)}–${esc(f.hasta)}${
+                        (Number(f.n) || 1) > 1 ? ` · faltan ${f.faltan} de ${f.n}` : ''}</span>`).join('')}</div>` : ''}
                 ${soloHuecos && !huecos.length
                     ? '<div class="pst-huecos">Sin turnos definidos y sin nadie ese día.</div>' : ''}
                 ${filas}
@@ -5471,7 +5480,8 @@ const app = {
         cont.innerHTML = claves.map(k => {
             const l = (this._lugares || {})[k];
             const nombre = l?.nombre || PUESTOS_DEFINIDOS.find(p => this._clavePuesto(p) === k) || k;
-            const franjas = (TURNOS_POR_PUESTO[k] || []).map(f => `${f.id} ${f.desde}–${f.hasta}`).join(' · ')
+            const franjas = (TURNOS_POR_PUESTO[k] || []).map(f =>
+                `${f.id} ${f.desde}–${f.hasta}${Number(f.n) > 1 ? ` ×${f.n}` : ''}`).join(' · ')
                 || 'sin turnos definidos';
             const ubi = l?.ubicacion ? `📍 ${l.ubicacion.radio}m` : '';
             const nd = ['D','L','M','X','J','V','S'];
@@ -5639,6 +5649,7 @@ const app = {
             const f = this._turnosTmp.find(x => x.id === id);
             const off = !f;
             const horas = f || (this._turnosApagados || {})[id] || {};
+            const n = Math.max(1, Number(horas.n) || 1);
             return `<div class="lg-turno${off ? ' off' : ''}">
                 <button class="lg-turno-sw" onclick="app._alternarTurnoLugar('${id}')">
                     <span class="lg-turno-marca">${off ? '' : '✓'}</span>${nombres[id]}</button>
@@ -5648,8 +5659,22 @@ const app = {
                 <div class="edit-field"><label>Hasta</label>
                     <input type="time" value="${horas.hasta || ''}" ${off ? 'disabled' : ''}
                            onchange="app._editarTurno('${id}','hasta',this.value)"></div>
-            </div>`;
+            </div>`
+            // Cuánta gente hace falta para darlo por cubierto: en Control son
+            // dos por la mañana y dos por la tarde.
+            + (off ? '' : `<div class="lg-cuantos">
+                <button onclick="app._cuantosTurno('${id}',-1)">−</button>
+                <span><b>${n}</b> ${n === 1 ? 'persona' : 'personas'} para cubrirlo</span>
+                <button onclick="app._cuantosTurno('${id}',1)">+</button>
+            </div>`);
         }).join('');
+    },
+
+    _cuantosTurno(id, paso) {
+        const f = this._turnosTmp.find(x => x.id === id);
+        if (!f) return;
+        f.n = Math.min(20, Math.max(1, (Number(f.n) || 1) + paso));
+        this._renderTurnosLugar();
     },
 
     _alternarTurnoLugar(id) {
@@ -5663,8 +5688,8 @@ const app = {
             const previo = this._turnosApagados[id];
             const [desde, hasta] = this.TURNOS_POR_DEFECTO[id];
             this._turnosTmp.push(previo && previo.desde && previo.hasta
-                ? { id, desde: previo.desde, hasta: previo.hasta }
-                : { id, desde, hasta });
+                ? { id, desde: previo.desde, hasta: previo.hasta, n: previo.n || 1 }
+                : { id, desde, hasta, n: 1 });
             // Que queden en el orden de siempre: mañana, tarde y noche
             this._turnosTmp.sort((a, b) => 'MTN'.indexOf(a.id) - 'MTN'.indexOf(b.id));
         }
@@ -5728,7 +5753,9 @@ const app = {
         const lng = this._leerDecimal(document.getElementById('lgLng').value);
         const cuerpo = {
             nombre,
-            turnos: this._turnosTmp.filter(f => f.desde && f.hasta && f.desde !== f.hasta),
+            turnos: this._turnosTmp
+                .filter(f => f.desde && f.hasta && f.desde !== f.hasta)
+                .map(f => ({ ...f, n: Math.min(20, Math.max(1, Number(f.n) || 1)) })),
             dias: this._diasTmp.slice().sort(),
             ubicacion: (lat !== null && lng !== null)
                 ? { lat, lng, radio: this._leerDecimal(document.getElementById('lgRadio').value) || 150 }

@@ -67,6 +67,11 @@ const clave = n => String(n || '').trim().toLowerCase()
 
 const hora = v => (/^\d{1,2}:\d{2}$/.test(String(v || '')) ? String(v) : '');
 
+// Cuánta gente hace falta para cubrir un turno. Lo normal es una, pero en
+// Control hacen falta dos por la mañana y dos por la tarde.
+const CUANTOS_MAX = 20;
+const cuantos = v => Math.min(CUANTOS_MAX, Math.max(1, parseInt(v, 10) || 1));
+
 // Un turno sin horas no sirve para deducir nada, así que se descarta. Uno que
 // empieza y acaba a la misma hora tampoco: es lo que deja el reloj del móvil
 // al vaciarle las horas para quitarlo, y luego se tragaba el día entero.
@@ -76,7 +81,7 @@ function limpiarTurnos(turnos) {
     .filter(t => ['M', 'T', 'N'].includes(t?.id) && hora(t.desde) && hora(t.hasta)
                  && hora(t.desde) !== hora(t.hasta))
     .slice(0, 3)
-    .map(t => ({ id: t.id, desde: hora(t.desde), hasta: hora(t.hasta) }));
+    .map(t => ({ id: t.id, desde: hora(t.desde), hasta: hora(t.hasta), n: cuantos(t.n) }));
 }
 
 // Días de la semana en que se trabaja ahí, 0 domingo a 6 sábado. Sin lista se
