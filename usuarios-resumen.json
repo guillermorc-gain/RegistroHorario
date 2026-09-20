@@ -2751,7 +2751,7 @@
     ],
     "email": "prueba-1789812365837@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:01:29.753Z",
+    "actualizado": "2026-09-20T15:34:02.485Z",
     "horariosDia": {
       "20260918": {
         "i": "14:00",
@@ -2778,7 +2778,7 @@
       "20260919": "plan"
     },
     "tramosDia": {},
-    "oculto": true
+    "oculto": false
   },
   "prueba-1789812576607@prueba.local": {
     "nombre": "Enrique",
