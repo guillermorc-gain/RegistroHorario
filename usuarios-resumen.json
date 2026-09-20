@@ -1588,7 +1588,8 @@
     "jornadas": [],
     "email": "prueba-1789759132382@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:35:41.368Z"
+    "actualizado": "2026-09-20T15:35:45.054Z",
+    "oculto": true
   },
   "prueba-1789759514777@prueba.local": {
     "nombre": "Xisca",
