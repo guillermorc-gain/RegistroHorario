@@ -1531,16 +1531,16 @@
   "prueba-1789763845092@prueba.local": {
     "nombre": "Toni Sánchez",
     "conductor": "1086-5",
-    "puesto": "",
+    "puesto": "Control",
     "avatar": null,
     "version": "build-119",
-    "horasMes": 0,
-    "horasTotales": 0,
-    "diasMes": 0,
-    "horaInicio": "",
-    "horaFin": "",
-    "horarioDe": "anterior",
-    "turno": "",
+    "horasMes": 8,
+    "horasTotales": 8,
+    "diasMes": 1,
+    "horaInicio": "06:00",
+    "horaFin": "14:00",
+    "horarioDe": "hoy",
+    "turno": "M",
     "jornadaHoras": 3.5,
     "horasAnuales": 777,
     "ritmo": "lv",
@@ -1551,11 +1551,19 @@
       4,
       5
     ],
-    "jornadas": [],
+    "jornadas": [
+      {
+        "f": "20260920",
+        "i": "06:00",
+        "o": "14:00",
+        "h": 8,
+        "n": 0,
+        "pu": ""
+      }
+    ],
     "email": "prueba-1789763845092@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:40:46.035Z",
-    "oculto": true
+    "actualizado": "2026-09-20T15:41:15.098Z"
   },
   "prueba-1789764004986@prueba.local": {
     "nombre": "Pepe",
