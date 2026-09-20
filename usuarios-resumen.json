@@ -1621,30 +1621,21 @@
     "puesto": "Calle",
     "avatar": null,
     "version": "build-119",
-    "horasMes": 8,
-    "horasTotales": 8,
-    "diasMes": 1,
-    "horaInicio": "06:00",
-    "horaFin": "14:00",
-    "horarioDe": "hoy",
-    "turno": "M",
+    "horasMes": 0,
+    "horasTotales": 0,
+    "diasMes": 0,
+    "horaInicio": "",
+    "horaFin": "",
+    "horarioDe": "anterior",
+    "turno": "",
     "jornadaHoras": 7,
     "horasAnuales": 1700,
     "ritmo": "6y2",
     "dias": null,
-    "jornadas": [
-      {
-        "f": "20260920",
-        "i": "06:00",
-        "o": "14:00",
-        "h": 8,
-        "n": 0,
-        "pu": "Calle"
-      }
-    ],
+    "jornadas": [],
     "email": "prueba-1789766752991@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:42:00.678Z"
+    "actualizado": "2026-09-20T15:42:08.066Z"
   },
   "prueba-1789766856622@prueba.local": {
     "nombre": "Juan Valera",
