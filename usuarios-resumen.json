@@ -1259,8 +1259,26 @@
       "20260907": "ojo",
       "20260909": "real"
     },
-    "horariosDia": {},
-    "tramosDia": {}
+    "horariosDia": {
+      "20260920": {
+        "i": "09:00",
+        "f": "12:30"
+      }
+    },
+    "tramosDia": {
+      "20260920": [
+        {
+          "p": "Control",
+          "i": "09:00",
+          "o": "10:30"
+        },
+        {
+          "p": "Son Rossinyol",
+          "i": "10:30",
+          "o": "12:30"
+        }
+      ]
+    }
   },
   "guillermo.rcxx@gmail.com": {
     "email": "guillermo.rcxx@gmail.com",
