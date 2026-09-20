@@ -2331,7 +2331,9 @@
       "20260928": "plan",
       "20260930": "plan"
     },
-    "oculto": true
+    "oculto": true,
+    "horariosDia": {},
+    "tramosDia": {}
   },
   "prueba-1789760390735@prueba.local": {
     "nombre": "Miguel Moyà",
