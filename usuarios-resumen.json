@@ -2263,70 +2263,28 @@
     "conductor": "8596-9",
     "puesto": "Control",
     "avatar": null,
-    "version": "build-67",
-    "horasMes": 28,
-    "horasTotales": 28,
-    "diasMes": 4,
-    "horaInicio": "06:00",
-    "horaFin": "13:00",
+    "version": "build-119",
+    "horasMes": 0,
+    "horasTotales": 0,
+    "diasMes": 0,
+    "horaInicio": "",
+    "horaFin": "",
     "horarioDe": "anterior",
-    "turno": "M",
+    "turno": "",
     "jornadaHoras": 7,
-    "horasAnuales": 777,
+    "horasAnuales": 1700,
     "ritmo": "lv",
     "dias": [
       1,
       2,
-      3
+      3,
+      4,
+      5
     ],
-    "jornadas": [
-      {
-        "f": "20260916",
-        "i": "06:00",
-        "o": "13:00",
-        "h": 7,
-        "n": 0
-      },
-      {
-        "f": "20260917",
-        "i": "06:00",
-        "o": "13:00",
-        "h": 7,
-        "n": 0
-      },
-      {
-        "f": "20260911",
-        "i": "06:00",
-        "o": "13:00",
-        "h": 7,
-        "n": 0
-      },
-      {
-        "f": "20260918",
-        "i": "06:00",
-        "o": "13:00",
-        "h": 7,
-        "n": 0
-      }
-    ],
+    "jornadas": [],
     "email": "prueba-1789764004986@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:34:50.671Z",
-    "horarios": {
-      "202609": {
-        "i": "07:00",
-        "f": "13:00"
-      }
-    },
-    "revisiones": {
-      "20260911": "ok",
-      "20260916": "ok",
-      "20260917": "ok",
-      "20260918": "ok"
-    },
-    "oculto": false,
-    "horariosDia": {},
-    "tramosDia": {}
+    "actualizado": "2026-09-20T15:34:58.671Z"
   },
   "prueba-1789766365436@prueba.local": {
     "nombre": "Toni Valverde",
