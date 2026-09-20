@@ -1633,7 +1633,8 @@
     "jornadas": [],
     "email": "prueba-1789766365436@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:36:17.877Z"
+    "actualizado": "2026-09-20T15:36:21.203Z",
+    "oculto": true
   },
   "prueba-1789766752991@prueba.local": {
     "nombre": "Emilio Espadas",
