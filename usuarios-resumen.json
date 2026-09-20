@@ -3003,7 +3003,15 @@
     "email": "prueba-1789814286874@prueba.local",
     "ficticio": true,
     "actualizado": "2026-09-20T00:09:34.254Z",
-    "horariosDia": {}
+    "horariosDia": {
+      "20260921": {
+        "i": "05:30",
+        "f": "09:00"
+      }
+    },
+    "lugares": {
+      "20260921": "Son Rossinyol"
+    }
   },
   "prueba-1789850043571@prueba.local": {
     "nombre": "Buja",
