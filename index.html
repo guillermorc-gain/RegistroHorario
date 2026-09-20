@@ -210,8 +210,6 @@
         .be-compact{display:flex;align-items:center;gap:5px;padding:7px 9px;border:1.5px solid #dfe4ea;border-radius:9px;cursor:pointer;font-size:13px;font-weight:700;color:#7f8c8d;background:transparent;}
         .app-content.dark .be-compact{border-color:#2d3561;}
         .be-compact.active{background:#7f8c8d;border-color:#7f8c8d;color:#fff;}
-        .cuadros-btn{order:99;margin-left:auto;flex-shrink:0;border:1.5px dashed #dfe4ea;background:transparent;color:#95a5a6;border-radius:9px;padding:7px 10px;font-size:13px;cursor:pointer;font-family:inherit;}
-        .app-content.dark .cuadros-btn{border-color:#2d3561;}
         .cu-fila{display:flex;align-items:center;gap:9px;padding:11px 16px;border-bottom:1px solid #f2f2f2;}
         .modal-card.dark .cu-fila{border-color:#2d3561;}
         .cu-nom{flex:1;min-width:0;font-size:13.5px;font-weight:700;color:#2c3e50;}
@@ -224,7 +222,6 @@
         .cu-fila.dragging{opacity:0.4;}
         .cu-fila.drag-over{position:relative;}
         .cu-fila.drag-over::before{content:'';position:absolute;inset:1px 4px;border-radius:8px;background:rgba(21,101,192,0.14);}
-        .stats-grid-head{display:flex;margin-bottom:6px;}
         /* Debajo del número: lo que le toca hoy, a qué hora y dónde */
         .app-header-hoy{font-size:11px;font-weight:700;opacity:0.9;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
         .app-header-hoy:empty{display:none;}
@@ -769,9 +766,6 @@
             </div>
 
             <!-- Stats 2x2 -->
-            <div class="stats-grid-head">
-                <button class="cuadros-btn" onclick="app.mostrarCuadrosResumen()" title="Elegir los cuadros de arriba">⚙</button>
-            </div>
             <div class="stats-grid" id="statsGrid">
                 <div class="stat-card accent" id="statCardRestantes" data-cuadro="restantes">
                     <div class="stat-label">Restantes</div>
@@ -878,7 +872,6 @@
                         <span>🩺</span>
                         <input type="checkbox" id="beToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#7f8c8d;cursor:pointer;">
                     </div>
-                    <button class="cuadros-btn" onclick="app.mostrarCuadros()" title="Elegir los cuadros">⚙</button>
                 </div>
                 <div class="lugar-box" id="lugarBox">
                     <div class="lugar-head">
@@ -1078,6 +1071,10 @@
                             <div class="tema-dot" id="dot-rojo"  style="background:linear-gradient(135deg,#E53935,#B71C1C);" onclick="app.seleccionarTema('rojo')"  title="Rojo"></div>
                         </div>
                     </div>
+                    <button class="ops-btn" onclick="app.mostrarCuadros()">⚙ Cuadros del registro
+                        <span class="ops-arrow">›</span></button>
+                    <button class="ops-btn" onclick="app.mostrarCuadrosResumen()">⚙ Cuadros de arriba
+                        <span class="ops-arrow">›</span></button>
                 </div>
             </div>
 
