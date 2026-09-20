@@ -3681,6 +3681,12 @@ const app = {
             const lugar = reg.puesto || this.puestoTrabajo;
             const lugarStr = lugar
                 ? `<span style="color:var(--g1);font-size:10px;font-weight:700;">${lugar}</span>` : '';
+            // Un día repartido entre varios sitios enseñaba solo el primero, y
+            // el resto de la jornada no aparecía por ningún lado.
+            const tramos = Array.isArray(reg.tramos) ? reg.tramos.filter(t => t && t.p && t.i && t.o) : [];
+            const tramosStr = tramos.length > 1
+                ? `<div class="hm-tramos">${tramos.map(t =>
+                    `<span>📍 ${String(t.p).replace(/</g, '&lt;')} ${t.i}–${t.o}</span>`).join('')}</div>` : '';
             const prBadge     = reg.pr      ? `<span class="pr-badge">PR</span>` : '';
             const festivoBadge= reg.festivo ? `<span class="festivo-badge">🎉 Festivo</span>` : '';
             const vacBadge    = reg.vacaciones ? `<span class="vacaciones-badge">🏖️ Vacaciones</span>` : '';
@@ -3697,6 +3703,7 @@ const app = {
                         ${lugarStr}
                         ${prBadge}${festivoBadge}${extraBadge}${vacBadge}${beBadge}
                     </div>
+                    ${tramosStr}
                     ${nocheStr}
                     ${reg.nota ? `<div class="hm-nota-txt">📝 ${reg.nota.replace(/</g,'&lt;')}</div>` : ''}
                 </div>

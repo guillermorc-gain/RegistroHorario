@@ -4872,18 +4872,21 @@ const app = {
         const horasBaja = Math.round(diasBaja * horasDeBaja * 10) / 10;
         const tope = Math.max(0, objetivoAnual - horasBaja);
         const mes  = hasta.slice(0, 6);
-        let anual = 0, extras = 0, delMes = 0, dias = 0, festTrabajados = 0;
+        let anual = 0, extras = 0, delMes = 0, festTrabajados = 0;
+        // Días distintos, no jornadas: quien parte el día entre dos sitios
+        // registra dos y seguía siendo un día trabajado.
+        const diasDelMes = new Set();
         (u.jornadas || []).forEach(j => {
             if (!j || j.f > hasta) return;
             const h = j.h || 0;
-            if (j.f.slice(0, 6) === mes) { delMes += h; dias++; }
+            if (j.f.slice(0, 6) === mes) { delMes += h; diasDelMes.add(j.f); }
             if (j.x === 1) { extras += h; return; }
             if (j.fe && h > 0) festTrabajados++;
             anual += this._horasEfectivas(j, jor, u);
         });
         const exceso = Math.max(0, anual - tope);
         const r1 = n => Math.round(n * 10) / 10;
-        return { mes: r1(delMes), dias, extras: r1(extras + exceso), festTrabajados,
+        return { mes: r1(delMes), dias: diasDelMes.size, extras: r1(extras + exceso), festTrabajados,
                  diasBaja, horasBaja, objetivo: r1(tope),
                  realizadas: r1(anual), restantes: r1(Math.max(0, tope - anual)) };
     },
@@ -4933,8 +4936,14 @@ const app = {
     },
 
     // Jornada de un trabajador en una fecha concreta (la última si hay varias)
+    // Todas las jornadas de ese día: quien parte el día en dos sitios registra
+    // dos, y quedarse con una sola hacía desaparecer media jornada.
+    _jornadasDe(u, fecha) {
+        return (u?.jornadas || []).filter(j => j && j.f === fecha);
+    },
+
     _jornadaDe(u, fecha) {
-        const dia = (u.jornadas || []).filter(j => j && j.f === fecha);
+        const dia = this._jornadasDe(u, fecha);
         return dia.length ? dia[dia.length - 1] : null;
     },
 
@@ -5014,9 +5023,13 @@ const app = {
         // Los que no tienen lugar asignado también salen, en su propio grupo:
         // si no, un trabajador nuevo se quedaba invisible hasta asignárselo.
         const SIN = 'Sin asignar';
-        const conPuesto = lista.map(u => {
+        const conPuesto = lista.flatMap(u => {
             const v = this._jornadaVisible(u, fecha);
-            return { u, j: v.j, deAyer: v.deAyer,
+            // Un día puede llevar más de una jornada, cada una en su sitio: se
+            // saca una fila por cada una. La que viene de la víspera va sola,
+            // que esa no es de hoy.
+            const todas = v.deAyer ? [] : this._jornadasDe(u, fecha);
+            const base = { u, deAyer: v.deAyer,
                      enBaja: this._enBaja(u, fecha) || (!this._bajasDe(u).length && !!u.baja),
                      // Unas vacaciones valen igual apuntadas como tramo por el
                      // gestor que como jornada suelta por el trabajador.
@@ -5028,8 +5041,14 @@ const app = {
                      // fichado: de hoy en adelante eso ya cubre el turno, así
                      // que el lugar no sale como vacío teniendo gente puesta.
                      plan: (esHoy || esFuturo) && !v.j ? this._horasPlan(u, fecha) : null,
-                     planTramos: (esHoy || esFuturo) && !v.j ? this._tramosPlan(u, fecha) : null,
-                     lugar: this._lugarDe(u, fecha, v.j).trim() || SIN };
+                     planTramos: (esHoy || esFuturo) && !v.j ? this._tramosPlan(u, fecha) : null };
+            if (todas.length < 2) {
+                return [{ ...base, j: v.j, lugar: this._lugarDe(u, fecha, v.j).trim() || SIN }];
+            }
+            // Con varias, manda el lugar que traiga cada una: el que puso el
+            // gestor para ese día vale para el conjunto, no para cada tramo.
+            return todas.map(j => ({ ...base, j,
+                lugar: String(j.pu || '').trim() || this._lugarDe(u, fecha, j).trim() || SIN }));
         // Quien está de vacaciones o de baja no ocupa lugar ese día, así que no
         // sale en el cuadro. Sigue en la lista de trabajadores, con su botón.
         }).filter(x => !x.enVac && !x.enBaja && !x.fueraDeSemana);
@@ -5063,12 +5082,17 @@ const app = {
         // dentro ahora mismo (esto último solo tiene sentido en el día de hoy).
         const _ahora = new Date();
         const ahoraMin = _ahora.getHours() * 60 + _ahora.getMinutes();
-        let trabajaron = 0, ahoraMismo = 0;
+        // Por persona, no por fila: quien parte el día en dos sitios sale dos
+        // veces en el cuadro pero es un solo trabajador.
+        const quienesTrabajaron = new Set(), quienesDentro = new Set();
         conPuesto.forEach(({ u, j, deAyer, enBaja, enVac }) => {
             if (enBaja || enVac || !j || j.v || j.p) return;
-            if (!deAyer) trabajaron++;          // la de ayer ya se contó en su día
-            if (esHoy && this._estadoJornada(u, j, true, false, deAyer, false, false).clase === 'verde') ahoraMismo++;
+            if (!deAyer) quienesTrabajaron.add(u.email);
+            if (esHoy && this._estadoJornada(u, j, true, false, deAyer, false, false).clase === 'verde') {
+                quienesDentro.add(u.email);
+            }
         });
+        const trabajaron = quienesTrabajaron.size, ahoraMismo = quienesDentro.size;
         const cnt = document.getElementById('puestosCnt');
         if (cnt) {
             cnt.textContent = esFuturo
@@ -5402,9 +5426,15 @@ const app = {
             const ini = (u.nombre || u.email || '?').trim()[0]?.toUpperCase() || '?';
             // La tarjeta muestra los datos del día elegido, no siempre los de hoy
             const { j, deAyer } = this._jornadaVisible(u, fecha);
-            const lugarHoy  = this._lugarDe(u, fecha, j);
-            const excepcion = !!(u.lugares && u.lugares[fecha]) && this._clavePuesto(lugarHoy) !== this._clavePuesto(u.puesto);
-            const turno = this._turnoDe(lugarHoy, j?.i) || (esHoy ? u.turno : '');
+            // Si ese día trabajó en varios sitios, se dicen todos: quedarse con
+            // el último escondía media jornada.
+            const delDia = deAyer ? [] : this._jornadasDe(u, fecha);
+            const sitios = [...new Set(delDia.map(x => String(x.pu || '').trim()).filter(Boolean))];
+            const lugarHoy  = sitios.length > 1 ? sitios.join(' · ') : this._lugarDe(u, fecha, j);
+            const excepcion = sitios.length < 2 && !!(u.lugares && u.lugares[fecha])
+                && this._clavePuesto(lugarHoy) !== this._clavePuesto(u.puesto);
+            const turno = sitios.length > 1 ? ''
+                : (this._turnoDe(lugarHoy, j?.i) || (esHoy ? u.turno : ''));
             const t = this._totalesDe(u, fecha);
             const foto = u.avatar || this._avatares[u.email];
             const av = foto
