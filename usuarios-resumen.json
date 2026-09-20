@@ -2869,13 +2869,13 @@
     "puesto": "Son Rossinyol",
     "avatar": null,
     "version": "build-107",
-    "horasMes": 0,
-    "horasTotales": 0,
-    "diasMes": 0,
-    "horaInicio": "",
-    "horaFin": "",
+    "horasMes": 56,
+    "horasTotales": 56,
+    "diasMes": 14,
+    "horaInicio": "05:30",
+    "horaFin": "09:30",
     "horarioDe": "anterior",
-    "turno": "",
+    "turno": "M",
     "jornadaHoras": 3.5,
     "horasAnuales": 777,
     "ritmo": "lv",
@@ -2886,10 +2886,123 @@
       4,
       5
     ],
-    "jornadas": [],
+    "jornadas": [
+      {
+        "f": "20260901",
+        "i": "05:30",
+        "o": "09:30",
+        "h": 4,
+        "n": 0,
+        "pu": "Son Rossinyol"
+      },
+      {
+        "f": "20260902",
+        "i": "05:30",
+        "o": "09:30",
+        "h": 4,
+        "n": 0,
+        "pu": "Son Rossinyol"
+      },
+      {
+        "f": "20260903",
+        "i": "05:30",
+        "o": "09:30",
+        "h": 4,
+        "n": 0,
+        "pu": "Son Rossinyol"
+      },
+      {
+        "f": "20260904",
+        "i": "05:30",
+        "o": "09:30",
+        "h": 4,
+        "n": 0,
+        "pu": "Son Rossinyol"
+      },
+      {
+        "f": "20260907",
+        "i": "05:30",
+        "o": "09:30",
+        "h": 4,
+        "n": 0,
+        "pu": "Son Rossinyol"
+      },
+      {
+        "f": "20260908",
+        "i": "05:30",
+        "o": "09:30",
+        "h": 4,
+        "n": 0,
+        "pu": "Son Rossinyol"
+      },
+      {
+        "f": "20260909",
+        "i": "05:30",
+        "o": "09:30",
+        "h": 4,
+        "n": 0,
+        "pu": "Son Rossinyol"
+      },
+      {
+        "f": "20260910",
+        "i": "05:30",
+        "o": "09:30",
+        "h": 4,
+        "n": 0,
+        "pu": "Son Rossinyol"
+      },
+      {
+        "f": "20260911",
+        "i": "05:30",
+        "o": "09:30",
+        "h": 4,
+        "n": 0,
+        "pu": "Son Rossinyol"
+      },
+      {
+        "f": "20260914",
+        "i": "05:30",
+        "o": "09:30",
+        "h": 4,
+        "n": 0,
+        "pu": "Son Rossinyol"
+      },
+      {
+        "f": "20260915",
+        "i": "05:30",
+        "o": "09:30",
+        "h": 4,
+        "n": 0,
+        "pu": "Son Rossinyol"
+      },
+      {
+        "f": "20260916",
+        "i": "05:30",
+        "o": "09:30",
+        "h": 4,
+        "n": 0,
+        "pu": "Son Rossinyol"
+      },
+      {
+        "f": "20260917",
+        "i": "05:30",
+        "o": "09:30",
+        "h": 4,
+        "n": 0,
+        "pu": "Son Rossinyol"
+      },
+      {
+        "f": "20260918",
+        "i": "05:30",
+        "o": "09:30",
+        "h": 4,
+        "n": 0,
+        "pu": "Son Rossinyol"
+      }
+    ],
     "email": "prueba-1789814286874@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T00:09:15.748Z"
+    "actualizado": "2026-09-20T00:09:34.254Z"
   },
   "prueba-1789850043571@prueba.local": {
     "nombre": "Buja",
