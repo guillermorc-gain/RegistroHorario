@@ -3495,7 +3495,11 @@ const app = {
         })).sort((a, b) => b.f.localeCompare(a.f));
     },
 
-    _desviaciones(u, mes) { return this._desajustes(u, mes).length; },
+    // Días distintos, que es lo que dice la etiqueta: dos jornadas del mismo
+    // día que no cuadran son un día, no dos.
+    _desviaciones(u, mes) {
+        return new Set(this._desajustes(u, mes).map(d => d.f)).size;
+    },
 
     // ── Revisar los horarios que no cuadran ──
     // De cada día se ven los dos horarios, el que puso gestión y el que fichó
@@ -3549,7 +3553,7 @@ const app = {
             : elegidos
             ? `${elegidos} de ${lista.length} elegido${elegidos === 1 ? '' : 's'}.`
               + (quedan ? ` Queda${quedan === 1 ? '' : 'n'} ${quedan}.` : ' Dale a Confirmar.')
-            : `${lista.length} día${lista.length === 1 ? '' : 's'} sin cuadrar.`
+            : `${lista.length} jornada${lista.length === 1 ? '' : 's'} sin cuadrar.`
               + ' Toca el horario que sea el bueno; 👁 lo deja para luego.';
         const btn = document.getElementById('revConfirmar');
         if (btn) btn.textContent = elegidos ? `Confirmar ${elegidos}` : 'Confirmar';
@@ -3700,17 +3704,28 @@ const app = {
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
         const q = e => esc(e).replace(/'/g, "\\'");
         return lista.map(u => {
-            const { j } = this._jornadaVisible(u, fecha);
-            const lugar   = this._lugarDe(u, fecha, j);
+            const { j, deAyer } = this._jornadaVisible(u, fecha);
+            // Ese día puede haber trabajado en varios sitios, y eran varias
+            // jornadas: enseñarlas todas, que antes salía solo la última.
+            const delDia = deAyer ? [] : this._jornadasDe(u, fecha).filter(x => x.i);
+            const sitios = [...new Set(delDia.map(x => String(x.pu || '').trim()).filter(Boolean))];
+            const lugar   = sitios.length > 1 ? sitios.join(' · ') : this._lugarDe(u, fecha, j);
             const horas   = this._horasAsignadas(u, mes);
             // La pastilla enseña lo asignado; su turno sale de esa hora, no de
             // la que fichara ese día, que va aparte.
-            const horario = horas ? (this._turnoDe(lugar, horas.i) || '')
-                : (typeof u.horario === 'string' ? u.horario : '');
+            const horario = sitios.length > 1 ? ''
+                : (horas ? (this._turnoDe(lugar, horas.i) || '')
+                         : (typeof u.horario === 'string' ? u.horario : ''));
             // Lo que fichó el día de referencia, si no es lo asignado: manda
-            // sobre el cuadrante.
-            const real = this._horasDelDia(u, fecha, j);
-            const suyo = real?.real && (!horas || real.i !== horas.i || real.f !== horas.f) ? real : null;
+            // sobre el cuadrante. Con varias jornadas salen todas, aunque una
+            // coincida con lo asignado: si no, el día se vería a medias.
+            const suyos = delDia.length > 1
+                ? delDia.map(x => ({ i: x.i, f: x.o || '', pu: String(x.pu || '').trim() }))
+                : (() => {
+                    const real = this._horasDelDia(u, fecha, j);
+                    return (real?.real && (!horas || real.i !== horas.i || real.f !== horas.f))
+                        ? [{ i: real.i, f: real.f, pu: '' }] : [];
+                  })();
             const fuera   = this._desviaciones(u, mes);
             const dias    = this._etiquetaDias(u);
             const completa = this._esCompleta(u);
@@ -3741,8 +3756,9 @@ const app = {
                             onclick="app._editarHorario('${q(u.email)}','${mes}')">🕐 ${
                                 horario ? `<span class="ct-t ${horario}">${horario}</span>` : ''}${
                                 horas ? ` ${horas.i}–${horas.f}` : horario ? '' : 'sin horario'}</button>
-                    ${suyo ? `<span class="ct-chip real" title="Lo que fichó ese día; manda sobre el asignado">▶ ${
-                            esc(suyo.i)}${suyo.f ? '–' + esc(suyo.f) : ''}</span>` : ''}
+                    ${suyos.map(x => `<span class="ct-chip real" title="Lo que fichó ese día; manda sobre el asignado">▶ ${
+                            esc(x.i)}${x.f ? '–' + esc(x.f) : ''}${
+                            suyos.length > 1 && x.pu ? ` ${esc(x.pu)}` : ''}</span>`).join('')}
                     ${fuera ? `<button class="ct-chip aviso" onclick="app._editarHorario('${q(u.email)}','${mes}')"
                             title="Días en que fichó a otra hora">⚠ ${fuera} día${fuera === 1 ? '' : 's'} distinto${fuera === 1 ? '' : 's'}</button>` : ''}
                     <button class="ct-chip${dias ? '' : ' vacio'}"
