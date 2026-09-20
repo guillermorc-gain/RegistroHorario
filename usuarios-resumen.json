@@ -1918,7 +1918,8 @@
     "jornadas": [],
     "email": "prueba-1789766752991@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:42:08.066Z"
+    "actualizado": "2026-09-20T15:46:18.486Z",
+    "oculto": true
   },
   "prueba-1789766856622@prueba.local": {
     "nombre": "Juan Valera",
