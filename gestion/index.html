@@ -490,6 +490,16 @@
             border-color:#9fc8ff;}
         .jor-turno.on span,.jor-tramo.on span,
         .modal-card.dark .jor-turno.on span,.modal-card.dark .jor-tramo.on span{color:#e8f1ff;}
+        .jor-extra{display:flex;align-items:flex-end;gap:5px;margin-top:8px;}
+        .jor-extra .edit-field{flex:1 1 0;min-width:0;margin-bottom:0;}
+        /* El lugar cabe en menos que una hora, y así las dos horas se leen */
+        .jor-extra .edit-field:nth-child(3){flex:0 0 88px;}
+        .jor-extra input{padding-left:6px;padding-right:2px;}
+        .jor-extra select{width:100%;min-width:0;box-sizing:border-box;padding:9px 4px;border:1.5px solid #e8eaf0;border-radius:8px;font-size:12px;font-family:inherit;background:white;color:#2c3e50;}
+        .modal-card.dark .jor-extra select{background:#111827;color:#e0e0e0;border-color:#2d3561;}
+        .jor-quitar{flex:0 0 28px;height:36px;border:1.5px solid #f2c9c0;background:transparent;color:#e74c3c;border-radius:9px;font-size:12px;padding:0;cursor:pointer;font-family:inherit;}
+        .jor-mas{margin-top:9px;width:100%;background:transparent;border:1.5px dashed #cfd8e3;border-radius:10px;padding:9px;font-size:12px;font-weight:800;color:#5a6b7d;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;}
+        .modal-card.dark .jor-mas{border-color:#2d3561;color:#c8cfe0;}
         .jor-resumen{margin-top:10px;font-size:12px;font-weight:700;color:#5a6b7d;background:#f4f6f9;border-radius:9px;padding:9px 11px;}
         .modal-card.dark .jor-resumen{background:#232b45;color:#c8cfe0;}
         .lg-turno{display:flex;align-items:flex-end;gap:8px;}
@@ -1712,6 +1722,7 @@
             <div class="jor-turnos" id="jorTurnos"></div>
             <div class="f-sep">Lugar de trabajo</div>
             <div class="jor-lugares" id="jorLugares"></div>
+            <div id="jorExtras"></div>
             <div class="f-sep">¿Para cuántos días?</div>
             <div class="jor-tramos" id="jorTramos"></div>
             <div class="jor-resumen" id="jorResumen"></div>
