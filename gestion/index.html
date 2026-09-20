@@ -32,6 +32,13 @@
         body.dark{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);}
         .container{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:500px;height:100%;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:white;display:flex;flex-direction:column;overflow:hidden;}
         .container.dark{background:#111827;color:#e0e0e0;}
+        /* En una tablet 500px se queda en medio de la pantalla con los
+           laterales en blanco; a partir de cierto ancho se deja crecer, sin
+           llegar a ir de borde a borde porque las líneas de texto muy largas
+           se leen peor. */
+        @media (min-width:700px){.container{max-width:640px;}}
+        @media (min-width:1000px){.container{max-width:820px;}}
+        @media (min-width:1400px){.container{max-width:960px;}}
 
         /* ── AUTH ── */
         .auth-screen{display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;padding:20px;gap:18px;background:white;}
@@ -76,6 +83,7 @@
 
         /* ── STATS ROW ── */
         .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex-shrink:0;}
+        @media (min-width:700px){.stats-grid{grid-template-columns:repeat(3,1fr);}}
         .stat-card{background:white;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
         .app-content.dark .stat-card{background:#1e2a3a;}
         .stat-card.accent{background:linear-gradient(135deg,var(--g1) 0%,var(--g2) 100%);color:white;}
@@ -898,6 +906,9 @@
 
         /* ── INSTALL BANNER ── */
         .install-banner{display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:500px;z-index:9997;background:#0052CC;color:white;padding:12px 15px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));align-items:center;gap:10px;box-shadow:0 -2px 10px rgba(0,0,0,0.3);}
+        @media (min-width:700px){.install-banner{max-width:640px;}}
+        @media (min-width:1000px){.install-banner{max-width:820px;}}
+        @media (min-width:1400px){.install-banner{max-width:960px;}}
         .install-banner.show{display:flex;}
         .install-banner-close{background:transparent;color:white;border:none;font-size:22px;cursor:pointer;padding:0 4px;line-height:1;opacity:0.8;}
 
