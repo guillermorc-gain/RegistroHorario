@@ -5085,12 +5085,14 @@ const app = {
                     plan: { i: t.i, f: t.o },
                     lugar: String(t.p).trim() || SIN }));
             }
+            // Con las horas basta: un tramo sin lugar son horas trabajadas que
+            // hay que ver, y van al grupo de "Sin servicio" como las demás.
             const tr = (Array.isArray(x.j?.tr) ? x.j.tr : [])
-                .filter(t => t && t.p && t.i && t.o);
+                .filter(t => t && t.i && t.o);
             if (!tr.length) return [x];
             const filas = tr.map(t => ({ ...x, tramo: true,
                 j: { ...x.j, i: t.i, o: t.o, h: this._horasEntre(t.i, t.o) },
-                lugar: String(t.p).trim() || SIN }));
+                lugar: String(t.p || '').trim() || SIN_SERVICIO }));
             const puestas = tr.reduce((n, t) => n + this._horasEntre(t.i, t.o), 0);
             const falta = Math.round(((x.j.h || 0) - puestas) * 10) / 10;
             if (falta > 0.1) filas.push({ ...x, tramo: true, sinServicio: falta,
