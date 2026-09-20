@@ -2960,7 +2960,16 @@
         "h": "20260921"
       }
     ],
-    "baja": true
+    "baja": true,
+    "horariosDia": {
+      "20260922": {
+        "i": "07:00",
+        "f": "14:00"
+      }
+    },
+    "lugares": {
+      "20260922": "Control de acceso"
+    }
   },
   "prueba-1789812974724@prueba.local": {
     "nombre": "Pepe Tur",
