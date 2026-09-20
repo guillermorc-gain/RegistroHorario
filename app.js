@@ -79,6 +79,9 @@ const app = {
     precioNocheDefault: parseFloat(localStorage.getItem('precioNoche')) || 0,
     precioExtraDefault: parseFloat(localStorage.getItem('precioExtra')) || 0,
     precioFestivoDefault: parseFloat(localStorage.getItem('precioFestivo')) || 0,
+    // Antigüedad: se fija una vez en el perfil y de ahí la coge cada nómina.
+    fechaAltaDefault: localStorage.getItem('fechaAlta') || '',
+    pctBieniosDefault: parseFloat(localStorage.getItem('pctBieniosManual')) || 0,
     modalCallback: null,
     editingId: null,
     prActivo: false,
@@ -769,6 +772,10 @@ const app = {
         if (this.precioNocheDefault > 0) {
             document.getElementById('precioNocheGlobal').value = this.precioNocheDefault;
         }
+        const fa = document.getElementById('fechaAltaGlobal');
+        if (fa) fa.value = this.fechaAltaDefault || '';
+        const pb = document.getElementById('pctBieniosGlobal');
+        if (pb && this.pctBieniosDefault) pb.value = this.pctBieniosDefault;
         this.actualizarEstadoGPS();
         const lastInicio = localStorage.getItem('lastHoraInicio');
         if (lastInicio) document.getElementById('horaInicio').value = lastInicio;
@@ -2797,16 +2804,21 @@ const app = {
                 porDia: { ...C.porDia, ...(g.precios?.porDia || {}) },
                 delMes: { ...C.delMes, ...(g.precios?.delMes || {}) },
             },
-            desde:     g.desde || '',
-            pctBienios: Number(g.pctBienios ?? 0),
-            sindicato: Number(g.sindicato ?? 0),
+            // La fecha de alta y, si no hay fecha, el % manual salen del
+            // perfil (Opciones › Perfil) — se ponen una vez y valen para
+            // todas las nóminas.
+            desde:     g.desde || this.fechaAltaDefault || '',
+            pctBienios: Number(g.pctBienios ?? this.pctBieniosDefault ?? 0),
+            // El sindicato se paga siempre, 12 € por defecto; si se deja de
+            // pagar se pone a 0 a mano y ese 0 es lo que sigue arrastrándose.
+            sindicato: Number(g.sindicato ?? 12),
             prorrata:  Number(g.prorrata ?? this.PRORRATA_EXTRAS),
             tipos:     { ...this.TIPOS_NOMINA, ...(g.tipos || {}) },
             // Sin nada guardado se quedan a undefined y los pone el cálculo a
             // partir de los registros; en cuanto se escriben, mandan.
             dias:      { asistencia: g.dias?.asistencia },
-            extra:     { h: g.extra?.h, p: Number(g.extra?.p ?? 0) },
-            noct:      { h: g.noct?.h,  p: Number(g.noct?.p ?? 0) },
+            extra:     { h: g.extra?.h, p: Number(g.extra?.p ?? this.precioExtraDefault ?? 0) },
+            noct:      { h: g.noct?.h,  p: Number(g.noct?.p ?? this.precioNocheDefault ?? 0) },
             extras:    (g.extras || []).map(e => ({ ...e })),
             nota:      g.nota || '',
         };
@@ -2822,12 +2834,6 @@ const app = {
         if (partes.length > 1 && !o[partes[0]]) o[partes[0]] = {};
         while (partes.length > 1) o = o[partes.shift()];
         o[partes[0]] = n;
-        this._renderMiNomina();
-    },
-
-    // La fecha de entrada no es un número, así que va por su cuenta
-    _setMiFecha(valor) {
-        this._nomEditando.desde = valor || '';
         this._renderMiNomina();
     },
 
@@ -2966,12 +2972,16 @@ const app = {
         // corregir a mano el mes que no cuadren.
         const diasAsist = Number(g.dias?.asistencia ?? dias.asistencia) || 0;
         const hExtra    = Number(g.extra?.h ?? this._horasExtraDelMes(mes)) || 0;
-        const pExtra    = Number(g.extra?.p ?? 0) || 0;
+        // El precio de la hora extra y de la nocturna salen de Ajustes › Trabajo,
+        // así no hay que volver a escribirlos en cada nómina.
+        const pExtra    = Number(g.extra?.p ?? this.precioExtraDefault ?? 0) || 0;
         const hNoct     = Number(g.noct?.h ?? this._horasNocturnasDelMes(mes)) || 0;
-        const pNoct     = Number(g.noct?.p ?? 0) || 0;
+        const pNoct     = Number(g.noct?.p ?? this.precioNocheDefault ?? 0) || 0;
         // Con la fecha de entrada puesta manda la antigüedad; si no, lo que
-        // se haya escrito a mano.
-        const pctAnt    = this._pctAntiguedad(g.desde, mes);
+        // se haya escrito a mano. Ambas salen del perfil si la nómina no
+        // guarda las suyas propias.
+        const desde     = g.desde || this.fechaAltaDefault || '';
+        const pctAnt    = this._pctAntiguedad(desde, mes);
         const tipos     = { ...this.TIPOS_NOMINA, ...(g.tipos || {}) };
         const r2 = v => Math.round(v * 100) / 100;
 
@@ -2980,7 +2990,7 @@ const app = {
 
         // El orden es el de la nómina en papel
         const pctBienios = pctAnt !== null ? pctAnt
-            : Math.max(0, Math.min(60, Number(g.pctBienios ?? 0) || 0));
+            : Math.max(0, Math.min(60, Number(g.pctBienios ?? this.pctBieniosDefault ?? 0) || 0));
 
         const devengos = [porDia('Salario Base', dias.base, C.porDia.base)];
         // La antigüedad sube el día de vacaciones y la hora extra, no solo el
@@ -2993,7 +3003,7 @@ const app = {
         // siguen siendo los mismos 38,63 que en julio.
         if (pctBienios) devengos.push({
             ...delMes('Bienios', D * C.porDia.base * pctBienios / 100),
-            pctBienios, anios: this._aniosEnLaEmpresa(g.desde, mes) });
+            pctBienios, anios: this._aniosEnLaEmpresa(desde, mes) });
         devengos.push(delMes('Comp. No Absorbible', C.delMes.noAbsorbible));
         devengos.push(delMes('Plus Transporte', C.delMes.transporte));
         devengos.push(delMes('Complemento Ajuste convenio', C.delMes.ajuste));
@@ -3014,7 +3024,7 @@ const app = {
         const devengado = r2(devengos.reduce((t, l) => t + l.i, 0));
         const prorrata  = r2(Number(g.prorrata ?? this.PRORRATA_EXTRAS));
         const base      = r2(devengado + prorrata);
-        const sindicato = r2(Number(g.sindicato ?? 0));
+        const sindicato = r2(Number(g.sindicato ?? 12));
         const pct = (c, sobre, p) => ({ c, base: sobre, pct: p, i: r2(sobre * p / 100) });
         const deducciones = [
             pct('Aportac. Contingencias Comunes', base, tipos.cc),
@@ -3027,7 +3037,7 @@ const app = {
         const aDeducir = r2(deducciones.reduce((t, l) => t + l.i, 0));
         return { dias, devengos, deducciones, devengado, prorrata, base, aDeducir,
                  liquido: r2(devengado - aDeducir), precios: C, tipos, sindicato,
-                 pctBienios, pctAnt, anios: this._aniosEnLaEmpresa(g.desde, mes),
+                 pctBienios, pctAnt, anios: this._aniosEnLaEmpresa(desde, mes), desde,
                  hExtra, pExtra, hNoct, pNoct, diasAsist };
     },
 
@@ -3082,19 +3092,22 @@ const app = {
             ${campo('Responsabilidad/Calidad', P.delMes.responsabilidad, 'precios.delMes.responsabilidad', '€/mes')}
             ${campo('Prorrata pagas extra', c.prorrata, 'prorrata', '€/mes')}
             <div class="nom-sec">Antigüedad</div>
-            <div class="nom-edit"><span>Entré en la empresa el</span>
-                <input type="date" value="${esc(n.desde || '')}" style="flex:0 0 138px;"
-                       onchange="app._setMiFecha(this.value)"></div>
-            ${c.pctAnt !== null
-                ? `<div class="nom-nota">Con ${c.anios} año${c.anios === 1 ? '' : 's'} en la empresa
-                     te toca un <b>${c.pctAnt} %</b> de antigüedad, que sube también el día de
-                     vacaciones y la hora extra. Cambia solo cuando cumplas años.</div>`
-                : campo('Antigüedad', c.pctBienios, 'pctBienios', '%')}
+            ${c.desde
+                ? `<div class="nom-nota">Entraste en la empresa el <b>${esc(c.desde)}</b>
+                     (Opciones › Perfil).${c.pctAnt !== null
+                     ? ` Con ${c.anios} año${c.anios === 1 ? '' : 's'} te toca un
+                        <b>${c.pctAnt} %</b> de antigüedad, que sube también el día de
+                        vacaciones y la hora extra. Cambia solo cuando cumplas años.` : ''}</div>`
+                : `<div class="nom-nota">Sin fecha de alta puesta en Opciones › Perfil, la
+                     antigüedad se aplica con el <b>${num(c.pctBienios)} %</b> manual que
+                     hayas puesto allí.</div>`}
             <div class="nom-sec">Este mes</div>
             ${campo('Horas extras', c.hExtra, 'extra.h', 'horas')}
-            ${campo('Hora extra <small>sin antigüedad</small>', c.pExtra, 'extra.p', '€/hora')}
+            <div class="nom-nota">Hora extra a <b>${num(c.pExtra)} €</b>, el precio que hay
+                puesto en Ajustes › Trabajo.</div>
             ${campo('Horas nocturnas', c.hNoct, 'noct.h', 'horas')}
-            ${campo('Hora nocturna', c.pNoct, 'noct.p', '€/hora')}
+            <div class="nom-nota">Hora nocturna a <b>${num(c.pNoct)} €</b>, el precio que hay
+                puesto en Ajustes › Trabajo.</div>
             ${campo('Días de asistencia', c.diasAsist, 'dias.asistencia', 'días')}
             ${(n.extras || []).map((e, k) => `<div class="nom-edit">
                 <input type="text" style="flex:1" value="${esc(e.c)}" placeholder="Otro concepto"
@@ -4888,6 +4901,22 @@ const app = {
         await this._guardarPreferencias(true);
     },
 
+    async guardarFechaAlta() {
+        const valor = document.getElementById('fechaAltaGlobal')?.value || '';
+        this.fechaAltaDefault = valor;
+        localStorage.setItem('fechaAlta', valor);
+        this._renderMiNomina();
+        await this._guardarPreferencias(true);
+    },
+
+    async guardarPctBieniosManual() {
+        const pct = this._leerDecimal(document.getElementById('pctBieniosGlobal').value) || 0;
+        this.pctBieniosDefault = pct;
+        localStorage.setItem('pctBieniosManual', String(pct));
+        this._renderMiNomina();
+        await this._guardarPreferencias(true);
+    },
+
     mostrarCambiarAnuales() {
         document.querySelectorAll('#anualesModal .jm-op').forEach(op => {
             const c = op.querySelector('.jm-check');
@@ -5355,6 +5384,8 @@ const app = {
             precioNocheDefault: this.precioNocheDefault,
             precioExtraDefault: this.precioExtraDefault,
             precioFestivoDefault: this.precioFestivoDefault,
+            fechaAltaDefault: this.fechaAltaDefault,
+            pctBieniosDefault: this.pctBieniosDefault,
             horasAnualesCustom: this.horasAnualesCustom,
             jornadaHoras: this.jornadaHoras,
             diasSemana: this.diasSemana || null,
@@ -5409,6 +5440,18 @@ const app = {
             localStorage.setItem('precioExtra', String(prefs.precioExtraDefault));
             const el = document.getElementById('precioExtraGlobal');
             if (el) el.value = prefs.precioExtraDefault;
+        }
+        if (prefs.fechaAltaDefault !== undefined && prefs.fechaAltaDefault !== null) {
+            this.fechaAltaDefault = prefs.fechaAltaDefault;
+            localStorage.setItem('fechaAlta', prefs.fechaAltaDefault);
+            const el = document.getElementById('fechaAltaGlobal');
+            if (el) el.value = prefs.fechaAltaDefault;
+        }
+        if (prefs.pctBieniosDefault !== undefined && prefs.pctBieniosDefault !== null) {
+            this.pctBieniosDefault = prefs.pctBieniosDefault;
+            localStorage.setItem('pctBieniosManual', String(prefs.pctBieniosDefault));
+            const el = document.getElementById('pctBieniosGlobal');
+            if (el) el.value = prefs.pctBieniosDefault;
         }
         if (Array.isArray(prefs.vacaciones)) {
             localStorage.setItem('vacaciones', JSON.stringify(prefs.vacaciones));
