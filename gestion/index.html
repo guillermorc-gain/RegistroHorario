@@ -538,6 +538,13 @@
         .nom-mas{width:100%;background:transparent;border:1.5px dashed #cfd8e3;border-radius:10px;padding:8px;font-size:11.5px;font-weight:800;color:#5a6b7d;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;}
         .modal-card.dark .nom-mas{border-color:#2d3561;color:#c8cfe0;}
         .nom-total{margin-top:12px;background:var(--g1);color:#fff;border-radius:11px;padding:11px 13px;font-size:13px;font-weight:800;display:flex;justify-content:space-between;}
+        .nom-si{flex:0 0 72px;background:#f4f6f9;border:1.5px solid #e8eaf0;border-radius:8px;padding:9px 6px;font-size:12px;font-weight:800;color:#7f8c8d;cursor:pointer;font-family:inherit;}
+        .nom-si.on{background:var(--g1);border-color:var(--g1);color:#fff;}
+        .modal-card.dark .nom-si{background:#232b45;border-color:#2d3561;color:#c8cfe0;}
+        .modal-card.dark .nom-si.on{background:var(--g1);border-color:#9fc8ff;color:#fff;}
+        .nom-pie{margin-top:10px;padding-top:8px;border-top:1.5px solid #f0f0f0;font-size:12px;}
+        .modal-card.dark .nom-pie{border-color:#2d3561;}
+        .nom-cmp-c small{font-weight:600;color:#95a5a6;font-size:10.5px;}
         .nom-comparar{font-size:12px;}
         .nom-cmp{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid #f4f4f4;}
         .modal-card.dark .nom-cmp{border-color:#2d3561;}
@@ -1800,12 +1807,13 @@
         </div>
         <div class="modal-body">
             <div id="nomQuien" class="pm-quien" style="margin:-16px -16px 12px;"></div>
-            <div class="f-sep">Lo que ha trabajado este mes</div>
+            <div class="f-sep">Días de este mes</div>
             <div class="nom-datos" id="nomDatos"></div>
             <div class="f-sep">Devengos</div>
             <div id="nomLineas"></div>
-            <div class="f-sep">Deducciones</div>
+            <div class="f-sep">Deducciones · solo los porcentajes</div>
             <div id="nomDeducciones"></div>
+            <div class="nom-pie" id="nomPie"></div>
             <div class="nom-total" id="nomTotal"></div>
             <div class="f-sep">Comparación</div>
             <div class="nom-comparar" id="nomComparar"></div>

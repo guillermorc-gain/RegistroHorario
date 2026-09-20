@@ -3081,41 +3081,105 @@ const app = {
     _nominas: {},                       // { '202609': { email: {...} } }
     _nomMes: null,                      // el mes que se está mirando
 
-    // Lo típico de una nómina, para no empezar con la hoja en blanco
-    LINEAS_POR_DEFECTO: [
-        { c: 'Salario base',      i: 0 },
-        { c: 'Plus transporte',   i: 0 },
-        { c: 'Horas extras',      i: 0 },
-        { c: 'Plus nocturnidad',  i: 0 },
-        { c: 'Festivos',          i: 0 },
-    ],
-    DEDUCCIONES_POR_DEFECTO: [
-        { c: 'Seguridad Social',  i: 0 },
-        { c: 'IRPF',              i: 0 },
-    ],
+    // El convenio, tal y como sale en la nómina de EMT Palma (nivel 002).
+    //
+    // Hay dos clases de concepto y no se calculan igual. Los que van por día
+    // —salario base, vacaciones, asistencia— se multiplican por los días; los
+    // complementos son un importe del mes que no depende de cuántos días se
+    // trabaje, y la nómina imprime su "precio" dividiéndolo entre 30. Por eso
+    // aquí se guarda el importe y no el precio: al revés no cuadra, porque el
+    // precio impreso está redondeado a dos decimales y arrastra céntimos.
+    CONVENIO: {
+        porDia: {
+            base:       772.58 / 30,
+            vacaciones: 375.66 / 14,
+            asistencia: 4.19,
+        },
+        delMes: {
+            noAbsorbible:    136.21,
+            transporte:       68.02,
+            ajuste:          130.01,
+            ajuste2:           6.44,
+            responsabilidad:  51.77,
+        },
+    },
+    // La nómina va a meses de 30 días, no a los del calendario
+    DIAS_NOMINA: 30,
+    // Lo que se suma al devengado para sacar la base de cotización
+    PRORRATA_EXTRAS: 135.20,
+    // Lo único que hay que tocar, junto con los bienios y el sindicato
+    TIPOS_NOMINA: { cc: 4.70, desempleo: 1.55, fp: 0.10, mei: 0.15, irpf: 15.00 },
 
-    _mesDeHoy() {
-        const d = new Date();
-        return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+    // Cuántos días de cada cosa lleva ese mes. Vacaciones y permiso salen de
+    // lo que él mismo registró, y el resto del mes son días de salario base.
+    _diasDeNomina(u, mes) {
+        const vac = new Set(), pr = new Set();
+        (u?.jornadas || []).forEach(j => {
+            if (!j || String(j.f || '').slice(0, 6) !== mes) return;
+            if (j.v) vac.add(j.f);
+            if (j.p) pr.add(j.f);
+        });
+        // Las vacaciones que puso el gestor por fechas cuentan igual
+        const ultimo = new Date(+mes.slice(0, 4), +mes.slice(4, 6), 0).getDate();
+        for (let d = 1; d <= ultimo; d++) {
+            const f = `${mes}${String(d).padStart(2, '0')}`;
+            if (this._enVacaciones(u, f)) vac.add(f);
+        }
+        const vacaciones = Math.min(this.DIAS_NOMINA, vac.size);
+        const permiso    = Math.min(this.DIAS_NOMINA - vacaciones, pr.size);
+        return { vacaciones, permiso,
+                 base: Math.max(0, this.DIAS_NOMINA - vacaciones - permiso) };
     },
 
-    _mesMas(mes, n) {
-        const d = new Date(+mes.slice(0, 4), +mes.slice(4, 6) - 1 + n, 1, 12);
-        return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
-    },
+    // La nómina entera, calculada. Lo que se guarda son cuatro números; todo
+    // lo demás sale de aquí, que es lo que evita cuadrarla a mano cada mes.
+    _calcNomina(u, mes, n) {
+        const C = this.CONVENIO, D = this.DIAS_NOMINA;
+        const g = n || {};
+        const dias = this._diasDeNomina(u, mes);
+        const diasAsist = Number(g.dias?.asistencia ?? D);
+        const bienios   = Number(g.bienios ?? 0);
+        const tipos     = { ...this.TIPOS_NOMINA, ...(g.tipos || {}) };
+        const r2 = v => Math.round(v * 100) / 100;
 
-    _nombreMes(mes) {
-        return `${MESES_ES[+mes.slice(4, 6) - 1]} ${mes.slice(0, 4)}`;
-    },
+        // Por días: el importe sale de multiplicar. Del mes: el importe es el
+        // que es y el precio se imprime dividiéndolo, como hace la nómina.
+        const porDia = (c, d, p) => ({ c, d, p: r2(p), i: r2(d * p) });
+        const delMes = (c, i) => ({ c, d: D, p: r2(i / D), i: r2(i) });
 
-    _eur(n) {
-        return (Math.round((Number(n) || 0) * 100) / 100)
-            .toFixed(2).replace('.', ',') + ' €';
-    },
+        const devengos = [porDia('Salario Base', dias.base, C.porDia.base)];
+        if (dias.vacaciones) devengos.push(porDia('Vacaciones', dias.vacaciones, C.porDia.vacaciones));
+        if (dias.permiso)    devengos.push(porDia('Permiso retribuido', dias.permiso, C.porDia.base));
+        if (bienios)         devengos.push(delMes('Bienios', bienios));
+        devengos.push(delMes('Comp. No Absorbible', C.delMes.noAbsorbible));
+        devengos.push(delMes('Plus Transporte', C.delMes.transporte));
+        devengos.push(delMes('Complemento Ajuste convenio', C.delMes.ajuste));
+        devengos.push(delMes('Complemento convenio', C.delMes.ajuste2));
+        if (g.responsabilidad) devengos.push(delMes('Compl. Responsabilidad/Calidad', C.delMes.responsabilidad));
+        if (diasAsist) devengos.push(porDia('Complemento Asistencia', diasAsist, C.porDia.asistencia));
+        (g.extras || []).forEach(e => {
+            if (e && String(e.c || '').trim()) devengos.push({ c: e.c, d: 0, p: 0, i: r2(Number(e.i) || 0) });
+        });
 
-    nomMes(paso) {
-        this._nomMes = this._mesMas(this._nomMes || this._mesDeHoy(), paso);
-        this._cargarNominas();
+        const devengado = r2(devengos.reduce((t, l) => t + l.i, 0));
+        const prorrata  = r2(Number(g.prorrata ?? this.PRORRATA_EXTRAS));
+        const base      = r2(devengado + prorrata);
+        const sindicato = r2(Number(g.sindicato ?? 0));
+
+        const pct = (c, sobre, p) => ({ c, base: sobre, pct: p, i: r2(sobre * p / 100) });
+        const deducciones = [
+            pct('Aportac. Contingencias Comunes', base, tipos.cc),
+            pct('Desempleo', base, tipos.desempleo),
+            pct('Formación Profesional', base, tipos.fp),
+            pct('Aportac. Mecanismo de equidad', base, tipos.mei),
+            pct('IRPF Cta. Ajena Dinerarios', devengado, tipos.irpf),
+        ];
+        if (sindicato) deducciones.push({ c: 'Sindicato SITEIB', base: 0, pct: 0, i: sindicato });
+
+        const aDeducir = r2(deducciones.reduce((t, l) => t + l.i, 0));
+        return { dias, devengos, deducciones, devengado, prorrata, base, aDeducir,
+                 liquido: r2(devengado - aDeducir), tipos, bienios, sindicato, diasAsist,
+                 responsabilidad: !!g.responsabilidad };
     },
 
     async _cargarNominas() {
@@ -3141,11 +3205,10 @@ const app = {
         return this._nominas?.[mes || this._nomMes]?.[email] || null;
     },
 
-    _totalNomina(n) {
+    _totalNomina(u, n) {
         if (!n) return null;
-        const suma = ls => (ls || []).reduce((t, l) => t + (Number(l.i) || 0), 0);
-        const bruto = suma(n.lineas), descuentos = suma(n.deducciones);
-        return { bruto, descuentos, liquido: Math.round((bruto - descuentos) * 100) / 100 };
+        const c = this._calcNomina(u, this._nomMes, n);
+        return { bruto: c.devengado, descuentos: c.aDeducir, liquido: c.liquido };
     },
 
     // Lo que ha trabajado ese mes, sacado de sus jornadas
@@ -3195,8 +3258,8 @@ const app = {
         let hechas = 0, total = 0;
         const filas = lista.map(u => {
             const n = this._nominaDe(u.email, mes);
-            const t = this._totalNomina(n);
-            const prev = this._totalNomina(this._nominaDe(u.email, anterior));
+            const t = this._totalNomina(u, n);
+            const prev = this._totalNomina(u, this._nominaDe(u.email, anterior));
             if (t) { hechas++; total += t.liquido; }
             const dif = (t && prev) ? Math.round((t.liquido - prev.liquido) * 100) / 100 : null;
             const q = esc(u.email).replace(/'/g, "\\'");
@@ -3226,12 +3289,19 @@ const app = {
         const u = (this._conductores || {})[email];
         if (!u) return;
         this._nomEditando = email;
-        const guardada = this._nominaDe(email, this._nomMes);
-        this._nomLineas = (guardada?.lineas?.length ? guardada.lineas : this.LINEAS_POR_DEFECTO)
-            .map(l => ({ ...l }));
-        this._nomDeducciones = (guardada?.deducciones?.length ? guardada.deducciones : this.DEDUCCIONES_POR_DEFECTO)
-            .map(l => ({ ...l }));
-        document.getElementById('nomNota').value = guardada?.nota || '';
+        const g = this._nominaDe(email, this._nomMes) || {};
+        // Lo único que se guarda, y lo único que hay que tocar
+        this._nom = {
+            bienios:   Number(g.bienios ?? 0),
+            sindicato: Number(g.sindicato ?? 0),
+            prorrata:  Number(g.prorrata ?? this.PRORRATA_EXTRAS),
+            tipos:     { ...this.TIPOS_NOMINA, ...(g.tipos || {}) },
+            dias:      { asistencia: Number(g.dias?.asistencia ?? this.DIAS_NOMINA) },
+            responsabilidad: !!g.responsabilidad,
+            extras:    (g.extras || []).map(e => ({ ...e })),
+            nota:      g.nota || '',
+        };
+        document.getElementById('nomNota').value = this._nom.nota;
         document.getElementById('nomQuien').textContent =
             `${this._quienEs(u, email)} · ${this._nombreMes(this._nomMes)}`;
         this._renderNominaModal();
@@ -3242,86 +3312,128 @@ const app = {
     _renderNominaModal() {
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
         const u = (this._conductores || {})[this._nomEditando] || {};
-        const t = this._trabajoDelMes(u, this._nomMes);
-        const plural = (n, una, varias) => n === 1 ? una : varias;
+        const c = this._calcNomina(u, this._nomMes, this._nom);
+        const num = (v, campo, ancho) => `<input class="nom-i" type="text" inputmode="decimal"
+            style="flex:0 0 ${ancho || 72}px" value="${String(v).replace('.', ',')}"
+            onchange="app._setNom('${campo}', this.value)">`;
+
+        // Lo que sale de lo que él registró: ni se pregunta ni se toca
         document.getElementById('nomDatos').innerHTML = [
-            [plural(t.dias, 'día', 'días'), t.dias],
-            [plural(t.horas, 'hora', 'horas'), t.horas],
-            ['extras', t.extras],
-            ['nocturnas', t.nocturnas],
-            [plural(t.festivos, 'festivo', 'festivos'), t.festivos],
-            [plural(t.baja, 'día BE', 'días BE'), t.baja],
-        ].map(([l, v]) => `<span class="nom-dato"><b>${String(v).replace('.', ',')}</b> ${l}</span>`).join('');
+            ['de salario base', c.dias.base],
+            ['de vacaciones', c.dias.vacaciones],
+            ['de permiso', c.dias.permiso],
+        ].map(([l, v]) => `<span class="nom-dato"><b>${v}</b> ${l}</span>`).join('');
 
-        const pinta = (lista, cual) => lista.map((l, k) => `<div class="nom-linea">
-                <input class="nom-c" type="text" value="${esc(l.c)}" placeholder="Concepto"
-                       onchange="app._setNomLinea('${cual}',${k},'c',this.value)">
-                <input class="nom-i" type="text" inputmode="decimal" value="${String(l.i ?? '').replace('.', ',')}"
-                       placeholder="0,00" onchange="app._setNomLinea('${cual}',${k},'i',this.value)">
-                <button class="nom-quitar" onclick="app._quitarNomLinea('${cual}',${k})">✕</button>
+        document.getElementById('nomLineas').innerHTML =
+            c.devengos.map(l => `<div class="nom-cmp">
+                <span class="nom-cmp-c">${esc(l.c)}${l.d ? ` <small>${
+                    String(l.d).replace('.', ',')} × ${String(l.p).replace('.', ',')}</small>` : ''}</span>
+                <span class="nom-cmp-v">${this._eur(l.i)}</span></div>`).join('')
+            + `<div class="nom-linea" style="margin-top:8px;">
+                <span class="nom-l-c" style="flex:1;font-size:12.5px;font-weight:700;color:#5a6b7d;">Bienios (€ del mes)</span>
+                ${num(this._nom.bienios, 'bienios')}</div>`
+            + `<div class="nom-linea">
+                <span class="nom-l-c" style="flex:1;font-size:12.5px;font-weight:700;color:#5a6b7d;">Días de asistencia</span>
+                ${num(this._nom.dias.asistencia, 'dias.asistencia')}</div>`
+            + `<div class="nom-linea">
+                <span class="nom-l-c" style="flex:1;font-size:12.5px;font-weight:700;color:#5a6b7d;">Compl. Responsabilidad/Calidad</span>
+                <button class="nom-si${this._nom.responsabilidad ? ' on' : ''}"
+                        onclick="app._alternarResp()">${this._nom.responsabilidad ? '✓ Sí' : 'No'}</button></div>`
+            + (this._nom.extras || []).map((e, k) => `<div class="nom-linea">
+                <input class="nom-c" type="text" value="${esc(e.c)}" placeholder="Otro concepto"
+                       onchange="app._setNomExtra(${k},'c',this.value)">
+                <input class="nom-i" type="text" inputmode="decimal" value="${String(e.i ?? '').replace('.', ',')}"
+                       placeholder="0,00" onchange="app._setNomExtra(${k},'i',this.value)">
+                <button class="nom-quitar" onclick="app._quitarNomExtra(${k})">✕</button>
             </div>`).join('')
-            + `<button class="nom-mas" onclick="app._nuevaNomLinea('${cual}')">➕ Añadir concepto</button>`;
+            + `<button class="nom-mas" onclick="app._nuevoNomExtra()">➕ Añadir concepto suelto</button>`;
 
-        document.getElementById('nomLineas').innerHTML = pinta(this._nomLineas, 'lineas');
-        document.getElementById('nomDeducciones').innerHTML = pinta(this._nomDeducciones, 'deducciones');
+        const TIPO = { cc: 'Contingencias comunes', desempleo: 'Desempleo',
+                       fp: 'Formación profesional', mei: 'Mecanismo de equidad', irpf: 'IRPF' };
+        document.getElementById('nomDeducciones').innerHTML =
+            Object.keys(TIPO).map(k => `<div class="nom-linea">
+                <span class="nom-l-c" style="flex:1;font-size:12.5px;font-weight:700;color:#5a6b7d;">${TIPO[k]} <small>%</small></span>
+                ${num(this._nom.tipos[k], 'tipos.' + k, 66)}
+                <span class="nom-l-i" style="flex:0 0 76px;text-align:right;">${
+                    this._eur(c.deducciones.find(d => d.c.includes(
+                        k === 'cc' ? 'Contingencias' : k === 'fp' ? 'Formación'
+                        : k === 'mei' ? 'equidad' : k === 'irpf' ? 'IRPF' : 'Desempleo'))?.i || 0)}</span>
+            </div>`).join('')
+            + `<div class="nom-linea">
+                <span class="nom-l-c" style="flex:1;font-size:12.5px;font-weight:700;color:#5a6b7d;">Sindicato SITEIB (€)</span>
+                ${num(this._nom.sindicato, 'sindicato')}</div>`;
 
-        const tot = this._totalNomina({ lineas: this._nomLineas, deducciones: this._nomDeducciones });
         document.getElementById('nomTotal').innerHTML =
-            `<span>Líquido a percibir</span><span>${this._eur(tot.liquido)}</span>`;
+            `<span>Líquido a percibir</span><span>${this._eur(c.liquido)}</span>`;
+        const pie = document.getElementById('nomPie');
+        if (pie) pie.innerHTML = `<div class="nom-cmp"><span class="nom-cmp-c">Devengado</span>
+                <span class="nom-cmp-v">${this._eur(c.devengado)}</span></div>
+            <div class="nom-cmp"><span class="nom-cmp-c">Prorrata pagas extra</span>
+                <span class="nom-cmp-v">${this._eur(c.prorrata)}</span></div>
+            <div class="nom-cmp"><span class="nom-cmp-c"><b>Base de cotización</b></span>
+                <span class="nom-cmp-v">${this._eur(c.base)}</span></div>
+            <div class="nom-cmp"><span class="nom-cmp-c">A deducir</span>
+                <span class="nom-cmp-v">−${this._eur(c.aDeducir)}</span></div>`;
         this._renderComparacion();
     },
 
-    // Frente al mes anterior, concepto a concepto
-    _renderComparacion() {
-        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-        const el = document.getElementById('nomComparar');
-        if (!el) return;
-        const anterior = this._mesMas(this._nomMes, -1);
-        const prev = this._nominaDe(this._nomEditando, anterior);
-        if (!prev) {
-            el.innerHTML = `<div class="nom-vacio">No hay nómina de ${
-                esc(this._nombreMes(anterior))} con la que comparar.</div>`;
-            return;
-        }
-        const aMapa = ls => Object.fromEntries((ls || []).map(l => [l.c, Number(l.i) || 0]));
-        const ahoraD = aMapa(this._nomLineas), ahoraR = aMapa(this._nomDeducciones);
-        const antesD = aMapa(prev.lineas),     antesR = aMapa(prev.deducciones);
-        const conceptos = [...new Set([...Object.keys(ahoraD), ...Object.keys(antesD),
-                                       ...Object.keys(ahoraR), ...Object.keys(antesR)])];
-        const filas = conceptos.map(c => {
-            const a = (ahoraD[c] ?? 0) - (ahoraR[c] ?? 0);
-            const b = (antesD[c] ?? 0) - (antesR[c] ?? 0);
-            const d = Math.round((a - b) * 100) / 100;
-            const clase = d > 0 ? 'sube' : d < 0 ? 'baja' : 'igual';
-            const signo = d > 0 ? '+' : '';
-            return `<div class="nom-cmp"><span class="nom-cmp-c">${esc(c)}</span>
-                <span class="nom-cmp-v ${clase}">${signo}${this._eur(d)}</span></div>`;
-        }).join('');
-        const tA = this._totalNomina({ lineas: this._nomLineas, deducciones: this._nomDeducciones });
-        const tB = this._totalNomina(prev);
-        const dif = Math.round((tA.liquido - tB.liquido) * 100) / 100;
-        el.innerHTML = `<div class="nom-cmp"><span class="nom-cmp-c">
-                <b>Frente a ${esc(this._nombreMes(anterior))}</b> (${this._eur(tB.liquido)})</span>
-            <span class="nom-cmp-v ${dif > 0 ? 'sube' : dif < 0 ? 'baja' : 'igual'}">${
-                dif > 0 ? '+' : ''}${this._eur(dif)}</span></div>` + filas;
+    _setNom(campo, valor) {
+        const n = Number(String(valor).replace(',', '.')) || 0;
+        if (campo.startsWith('tipos.')) this._nom.tipos[campo.slice(6)] = n;
+        else if (campo.startsWith('dias.')) this._nom.dias[campo.slice(5)] = n;
+        else this._nom[campo] = n;
+        this._renderNominaModal();
     },
 
-    _setNomLinea(cual, k, campo, valor) {
-        const lista = cual === 'lineas' ? this._nomLineas : this._nomDeducciones;
-        if (!lista[k]) return;
-        lista[k][campo] = campo === 'i'
+    _alternarResp() {
+        this._nom.responsabilidad = !this._nom.responsabilidad;
+        this._renderNominaModal();
+    },
+
+    _setNomExtra(k, campo, valor) {
+        if (!this._nom.extras[k]) return;
+        this._nom.extras[k][campo] = campo === 'i'
             ? (Number(String(valor).replace(',', '.')) || 0) : valor;
         this._renderNominaModal();
     },
 
-    _nuevaNomLinea(cual) {
-        (cual === 'lineas' ? this._nomLineas : this._nomDeducciones).push({ c: '', i: 0 });
-        this._renderNominaModal();
-    },
+    _nuevoNomExtra() { this._nom.extras.push({ c: '', i: 0 }); this._renderNominaModal(); },
+    _quitarNomExtra(k) { this._nom.extras.splice(k, 1); this._renderNominaModal(); },
 
-    _quitarNomLinea(cual, k) {
-        (cual === 'lineas' ? this._nomLineas : this._nomDeducciones).splice(k, 1);
-        this._renderNominaModal();
+    // Frente al mes anterior, línea a línea
+    _renderComparacion() {
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const el = document.getElementById('nomComparar');
+        if (!el) return;
+        const u = (this._conductores || {})[this._nomEditando] || {};
+        const anterior = this._mesMas(this._nomMes, -1);
+        const prevG = this._nominaDe(this._nomEditando, anterior);
+        if (!prevG) {
+            el.innerHTML = `<div class="nom-vacio">No hay nómina de ${
+                esc(this._nombreMes(anterior))} con la que comparar.</div>`;
+            return;
+        }
+        const guardar = this._nomMes;
+        this._nomMes = anterior;
+        const antes = this._calcNomina(u, anterior, prevG);
+        this._nomMes = guardar;
+        const ahora = this._calcNomina(u, this._nomMes, this._nom);
+        const aMapa = c => {
+            const m = {};
+            c.devengos.forEach(l => { m[l.c] = (m[l.c] || 0) + l.i; });
+            c.deducciones.forEach(l => { m[l.c] = (m[l.c] || 0) - l.i; });
+            return m;
+        };
+        const A = aMapa(ahora), B = aMapa(antes);
+        const fila = (c, d) => {
+            const clase = d > 0 ? 'sube' : d < 0 ? 'baja' : 'igual';
+            return `<div class="nom-cmp"><span class="nom-cmp-c">${esc(c)}</span>
+                <span class="nom-cmp-v ${clase}">${d > 0 ? '+' : ''}${this._eur(d)}</span></div>`;
+        };
+        el.innerHTML = fila(`Líquido (antes ${this._eur(antes.liquido)})`,
+                            Math.round((ahora.liquido - antes.liquido) * 100) / 100)
+            + [...new Set([...Object.keys(A), ...Object.keys(B)])]
+                .map(c => fila(c, Math.round(((A[c] ?? 0) - (B[c] ?? 0)) * 100) / 100)).join('');
     },
 
     async _enviarNomina(metodo, cuerpo, mensaje) {
@@ -3343,10 +3455,10 @@ const app = {
     },
 
     _guardarNomina() {
-        const limpias = ls => ls.filter(l => String(l.c || '').trim());
         return this._enviarNomina('PUT', {
             mes: this._nomMes, email: this._nomEditando,
-            lineas: limpias(this._nomLineas), deducciones: limpias(this._nomDeducciones),
+            ...this._nom,
+            extras: (this._nom.extras || []).filter(e => String(e.c || '').trim()),
             nota: document.getElementById('nomNota').value || '',
         }, '💶 Nómina guardada');
     },
@@ -3364,28 +3476,29 @@ const app = {
     _filasNominas() {
         const mes = this._nomMes, anterior = this._mesMas(mes, -1);
         const delMes = this._nominas[mes] || {};
-        const conceptos = [...new Set(Object.values(delMes)
-            .flatMap(n => [...(n.lineas || []), ...(n.deducciones || [])].map(l => l.c)))];
         const lista = Object.values(this._conductores || {})
             .filter(u => delMes[u.email])
             .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
-        const cabeceras = ['Nº', 'Trabajador', 'Mes', 'Días', 'Horas', 'Extras', 'Nocturnas',
-                           ...conceptos, 'Devengado', 'Deducciones', 'Líquido',
+        // Una columna por concepto, con los de todos juntos para que la hoja
+        // salga cuadrada aunque a uno le falte alguno.
+        const calc = new Map(lista.map(u => [u.email, this._calcNomina(u, mes, delMes[u.email])]));
+        const conceptos = [...new Set([...calc.values()]
+            .flatMap(c => [...c.devengos, ...c.deducciones].map(l => l.c)))];
+        const cabeceras = ['Nº', 'Trabajador', 'Mes', 'Días base', 'Días vacaciones', 'Días permiso',
+                           ...conceptos, 'Devengado', 'Base cotización', 'A deducir', 'Líquido',
                            `Líquido ${this._nombreMes(anterior)}`, 'Diferencia'];
         const filas = lista.map(u => {
-            const n = delMes[u.email];
-            const t = this._totalNomina(n);
-            const prev = this._totalNomina(this._nominaDe(u.email, anterior));
-            const tr = this._trabajoDelMes(u, mes);
+            const c = calc.get(u.email);
+            const prev = this._totalNomina(u, this._nominaDe(u.email, anterior));
             const mapa = {};
-            (n.lineas || []).forEach(l => { mapa[l.c] = (mapa[l.c] || 0) + (Number(l.i) || 0); });
-            (n.deducciones || []).forEach(l => { mapa[l.c] = (mapa[l.c] || 0) - (Number(l.i) || 0); });
+            c.devengos.forEach(l => { mapa[l.c] = (mapa[l.c] || 0) + l.i; });
+            c.deducciones.forEach(l => { mapa[l.c] = (mapa[l.c] || 0) - l.i; });
             return [u.conductor || '', u.nombre || u.email, this._nombreMes(mes),
-                    tr.dias, tr.horas, tr.extras, tr.nocturnas,
-                    ...conceptos.map(c => mapa[c] ?? ''),
-                    t.bruto, t.descuentos, t.liquido,
+                    c.dias.base, c.dias.vacaciones, c.dias.permiso,
+                    ...conceptos.map(x => mapa[x] ?? ''),
+                    c.devengado, c.base, c.aDeducir, c.liquido,
                     prev ? prev.liquido : '',
-                    prev ? Math.round((t.liquido - prev.liquido) * 100) / 100 : ''];
+                    prev ? Math.round((c.liquido - prev.liquido) * 100) / 100 : ''];
         });
         return { cabeceras, filas };
     },
