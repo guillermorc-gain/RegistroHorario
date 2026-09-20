@@ -4398,6 +4398,63 @@ const app = {
         if (this.darkMode) document.getElementById('editModalContent').classList.add('dark');
     },
 
+    // El cuadro de horas extras empieza mirando el año, y el de nocturnas el
+    // mes; tocarlos alterna al otro periodo, y vuelve a tocarlos, al de antes.
+    _vistaStatExtra: 'anio',
+    _vistaStatNoct: 'mes',
+
+    _toggleStatExtra() {
+        this._vistaStatExtra = this._vistaStatExtra === 'anio' ? 'mes' : 'anio';
+        this._renderStatsExtraNoct();
+    },
+
+    _toggleStatNoct() {
+        this._vistaStatNoct = this._vistaStatNoct === 'mes' ? 'anio' : 'mes';
+        this._renderStatsExtraNoct();
+    },
+
+    _horasNocturnasAnuales(historial) {
+        let h = 0;
+        Object.values(historial || {}).forEach(r => { h += parseFloat(r.horasNocturnas) || 0; });
+        return Math.round(h * 10) / 10;
+    },
+
+    _renderStatsExtraNoct() {
+        const historial = this._historialFull || {};
+        const t = this._calcTotales(historial);
+        const ahora = new Date();
+        const key = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}`;
+        const mes = this._calcTodosMeses(historial)[key] || { nocturnas: 0, horasExtras: 0 };
+
+        const elE  = document.getElementById('statExtras');
+        const elES = document.getElementById('statExtrasSub');
+        if (this._vistaStatExtra === 'anio') {
+            if (elE) elE.textContent = t.extras.toFixed(1);
+            if (elES) {
+                const importe = this.precioExtraDefault > 0
+                    ? ` · ${(t.extras * this.precioExtraDefault).toFixed(2)}€` : '';
+                elES.textContent = `de ${t.topeExtras.toFixed(1)}h${importe}`;
+            }
+        } else {
+            if (elE) elE.textContent = mes.horasExtras.toFixed(1);
+            if (elES) {
+                const importe = this.precioExtraDefault > 0
+                    ? ` · ${(mes.horasExtras * this.precioExtraDefault).toFixed(2)}€` : '';
+                elES.textContent = `este mes${importe}`;
+            }
+        }
+
+        const elN  = document.getElementById('statMesNoche');
+        const elNS = document.getElementById('statMesNocheSub');
+        if (this._vistaStatNoct === 'mes') {
+            if (elN) elN.textContent = mes.nocturnas.toFixed(1);
+            if (elNS) elNS.textContent = 'horas este mes';
+        } else {
+            if (elN) elN.textContent = this._horasNocturnasAnuales(historial).toFixed(1);
+            if (elNS) elNS.textContent = 'horas del año';
+        }
+    },
+
     _calcMesStats(historial, año, mes) {
         const entries = Object.values(historial).filter(r => {
             const d = new Date(r.timestamp);
@@ -4465,24 +4522,16 @@ const app = {
         document.getElementById('porcentaje').textContent = Math.min(Math.round(pct), 100);
         document.getElementById('progressFill').style.width = Math.min(pct, 100) + '%';
         if (pct >= 100) document.getElementById('progressFill').style.background = 'linear-gradient(90deg,#27ae60,#229954)';
-        // Festivos + horas extras
+        // Festivos
         const pctExt = t.topeExtras > 0 ? (t.extras / t.topeExtras) * 100 : 0;
         const elF = document.getElementById('statFestivos');
         const elFS= document.getElementById('statFestivosSub');
-        const elE = document.getElementById('statExtras');
-        const elES= document.getElementById('statExtrasSub');
         if (elF)  elF.textContent  = t.festivo.toFixed(1);
         if (elFS) {
             const dias = t.diasFestivos === 1 ? '1 día festivo' : `${t.diasFestivos} días festivos`;
             elFS.textContent = t.importeDiasExtra > 0
                 ? `${dias} · ${t.diasExtra} día${t.diasExtra === 1 ? '' : 's'} extra: ${t.importeDiasExtra.toFixed(2)}€`
                 : dias;
-        }
-        if (elE)  elE.textContent  = t.extras.toFixed(1);
-        if (elES) {
-            const importe = this.precioExtraDefault > 0
-                ? ` · ${(t.extras * this.precioExtraDefault).toFixed(2)}€` : '';
-            elES.textContent = `de ${t.topeExtras.toFixed(1)}h${importe}`;
         }
         const barExt = document.getElementById('progressFillExtra');
         if (barExt) barExt.style.width = Math.min(pctExt, 100) + '%';
@@ -4492,9 +4541,8 @@ const app = {
         const ahora = new Date();
         const mesStats = this._calcMesStats(this._historialFull, ahora.getFullYear(), ahora.getMonth() + 1);
         const elMesH = document.getElementById('statMesHoras');
-        const elMesN = document.getElementById('statMesNoche');
         if (elMesH) elMesH.textContent = mesStats.horas.toFixed(1);
-        if (elMesN) elMesN.textContent = mesStats.nocturnas.toFixed(1);
+        this._renderStatsExtraNoct();
         this._renderMensual(this._historialFull);
         this.actualizarHistorial(datos.historial || {});
         if (datos.prefs?.horaInicio && !localStorage.getItem('lastHoraInicio')) {

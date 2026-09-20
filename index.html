@@ -780,17 +780,17 @@
                     <div class="stat-value" id="statMesHoras">0</div>
                     <div class="stat-sub">horas trabajadas</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" style="cursor:pointer;" onclick="app._toggleStatNoct()" title="Toca para ver el mes o el año">
                     <div class="stat-label">🌙 Nocturnas</div>
                     <div class="stat-value" id="statMesNoche">0</div>
-                    <div class="stat-sub">horas este mes</div>
+                    <div class="stat-sub" id="statMesNocheSub">horas este mes</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-label" id="statFestivosLabel">🎉 Festivos</div>
                     <div class="stat-value" id="statFestivos">0</div>
                     <div class="stat-sub" id="statFestivosSub">horas del año</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" style="cursor:pointer;" onclick="app._toggleStatExtra()" title="Toca para ver el mes o el año">
                     <div class="stat-label">⏱️ Horas extras</div>
                     <div class="stat-value" id="statExtras">0</div>
                     <div class="stat-sub" id="statExtrasSub">de 0h</div>
