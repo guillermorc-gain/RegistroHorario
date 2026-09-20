@@ -1020,7 +1020,7 @@ const app = {
     async registrarHoras() {
         if (!this.usuarioActual) { alert('❌ No hay sesión activa'); return; }
         const horasRaw = document.getElementById('horasInput').value;
-        const horas = parseFloat(horasRaw) || 0;
+        let   horas = parseFloat(horasRaw) || 0;
         const fecha = document.getElementById('fechaInput').value;
         const esFestivo      = this.festivoActivo;
         const esVacaciones   = this.vacacionesActivo;
@@ -1032,11 +1032,11 @@ const app = {
         }
         if (horas < 0) { alert('❌ Las horas no pueden ser negativas'); return; }
         const horaInicio     = document.getElementById('horaInicio').value;
-        const horaFin        = document.getElementById('horaFin').value;
-        // Solo los tramos con lugar y las dos horas: uno a medias no dice nada
-        const tramos = this._tramosConHoras()
-            .filter(t => t.p && t.i && t.o)
-            .map(t => ({ p: t.p, i: t.i, o: t.o }));
+        let   horaFin        = document.getElementById('horaFin').value;
+        // Todos los sitios del día, el del desplegable incluido
+        const tramos = this._tramosDelDia();
+        const total  = this._jornadaDeLosTramos(tramos);
+        if (total) { horaFin = total.fin; horas = total.horas; }
         const esNoche        = document.getElementById('nocheToggle').checked;
         const esPR           = this.prActivo;
         const esExtra        = this.extraActivo;
@@ -2781,28 +2781,73 @@ const app = {
         this._renderMiNomina();
     },
 
-    _totalNomina(n) {
-        if (!n) return null;
-        const suma = ls => (ls || []).reduce((t, l) => t + (Number(l.i) || 0), 0);
-        const bruto = suma(n.lineas), descuentos = suma(n.deducciones);
-        return { bruto, descuentos, liquido: Math.round((bruto - descuentos) * 100) / 100 };
+    // El mismo convenio y el mismo cálculo que en gestión: si cada app hiciera
+    // sus cuentas, tarde o temprano dirían cosas distintas.
+    CONVENIO: {
+        porDia: { base: 772.58 / 30, vacaciones: 375.66 / 14, asistencia: 4.19 },
+        delMes: { noAbsorbible: 136.21, transporte: 68.02, ajuste: 130.01,
+                  ajuste2: 6.44, responsabilidad: 51.77 },
+    },
+    DIAS_NOMINA: 30,
+    PRORRATA_EXTRAS: 135.20,
+    TIPOS_NOMINA: { cc: 4.70, desempleo: 1.55, fp: 0.10, mei: 0.15, irpf: 15.00 },
+
+    // Días de vacaciones y de permiso de ese mes, de lo que él registró
+    _diasDeNomina(mes) {
+        const vac = new Set(), pr = new Set();
+        Object.entries(this._historialFull || {}).forEach(([id, r]) => {
+            const f = this._fechaDeId(id);
+            if (f.slice(0, 6) !== mes) return;
+            if (r.vacaciones) vac.add(f);
+            if (r.pr) pr.add(f);
+        });
+        const vacaciones = Math.min(this.DIAS_NOMINA, vac.size);
+        const permiso    = Math.min(this.DIAS_NOMINA - vacaciones, pr.size);
+        return { vacaciones, permiso,
+                 base: Math.max(0, this.DIAS_NOMINA - vacaciones - permiso) };
     },
 
-    // Lo que ha trabajado ese mes, de su propio historial
-    _miTrabajoDelMes(mes) {
-        let horas = 0, extras = 0, nocturnas = 0, festivos = 0;
-        const dias = new Set();
-        Object.entries(this._historialFull || {}).forEach(([id, r]) => {
-            if (this._fechaDeId(id).slice(0, 6) !== mes) return;
-            const h = parseFloat(r.horas) || 0;
-            dias.add(this._fechaDeId(id));
-            if (r.extraManual) extras += h; else horas += h;
-            nocturnas += parseFloat(r.horasNocturnas) || 0;
-            if (r.festivo && h > 0) festivos++;
+    _calcNomina(mes, n) {
+        const C = this.CONVENIO, D = this.DIAS_NOMINA;
+        const g = n || {};
+        const dias = this._diasDeNomina(mes);
+        const diasAsist = Number(g.dias?.asistencia ?? D);
+        const bienios   = Number(g.bienios ?? 0);
+        const tipos     = { ...this.TIPOS_NOMINA, ...(g.tipos || {}) };
+        const r2 = v => Math.round(v * 100) / 100;
+        const porDia = (c, d, p) => ({ c, d, p: r2(p), i: r2(d * p) });
+        const delMes = (c, i) => ({ c, d: D, p: r2(i / D), i: r2(i) });
+
+        const devengos = [porDia('Salario Base', dias.base, C.porDia.base)];
+        if (dias.vacaciones) devengos.push(porDia('Vacaciones', dias.vacaciones, C.porDia.vacaciones));
+        if (dias.permiso)    devengos.push(porDia('Permiso retribuido', dias.permiso, C.porDia.base));
+        if (bienios)         devengos.push(delMes('Bienios', bienios));
+        devengos.push(delMes('Comp. No Absorbible', C.delMes.noAbsorbible));
+        devengos.push(delMes('Plus Transporte', C.delMes.transporte));
+        devengos.push(delMes('Complemento Ajuste convenio', C.delMes.ajuste));
+        devengos.push(delMes('Complemento convenio', C.delMes.ajuste2));
+        if (g.responsabilidad) devengos.push(delMes('Compl. Responsabilidad/Calidad', C.delMes.responsabilidad));
+        if (diasAsist) devengos.push(porDia('Complemento Asistencia', diasAsist, C.porDia.asistencia));
+        (g.extras || []).forEach(e => {
+            if (e && String(e.c || '').trim()) devengos.push({ c: e.c, d: 0, p: 0, i: r2(Number(e.i) || 0) });
         });
-        const r1 = n => Math.round(n * 10) / 10;
-        return { dias: dias.size, horas: r1(horas), extras: r1(extras),
-                 nocturnas: r1(nocturnas), festivos };
+
+        const devengado = r2(devengos.reduce((t, l) => t + l.i, 0));
+        const prorrata  = r2(Number(g.prorrata ?? this.PRORRATA_EXTRAS));
+        const base      = r2(devengado + prorrata);
+        const sindicato = r2(Number(g.sindicato ?? 0));
+        const pct = (c, sobre, p) => ({ c, base: sobre, pct: p, i: r2(sobre * p / 100) });
+        const deducciones = [
+            pct('Aportac. Contingencias Comunes', base, tipos.cc),
+            pct('Desempleo', base, tipos.desempleo),
+            pct('Formación Profesional', base, tipos.fp),
+            pct('Aportac. Mecanismo de equidad', base, tipos.mei),
+            pct('IRPF Cta. Ajena Dinerarios', devengado, tipos.irpf),
+        ];
+        if (sindicato) deducciones.push({ c: 'Sindicato SITEIB', base: 0, pct: 0, i: sindicato });
+        const aDeducir = r2(deducciones.reduce((t, l) => t + l.i, 0));
+        return { dias, devengos, deducciones, devengado, prorrata, base, aDeducir,
+                 liquido: r2(devengado - aDeducir) };
     },
 
     _renderMiNomina() {
@@ -2814,66 +2859,70 @@ const app = {
         if (titulo) titulo.textContent = this._nombreMes(mes);
 
         const n = this._misNominas?.[mes];
-        const t = this._miTrabajoDelMes(mes);
-        const plural = (v, una, varias) => v === 1 ? una : varias;
-        const trabajo = `<div class="nom-datos">` + [
-            [plural(t.dias, 'día', 'días'), t.dias],
-            [plural(t.horas, 'hora', 'horas'), t.horas],
-            ['extras', t.extras], ['nocturnas', t.nocturnas],
-            [plural(t.festivos, 'festivo', 'festivos'), t.festivos],
-        ].map(([l, v]) => `<span class="nom-dato"><b>${String(v).replace('.', ',')}</b> ${l}</span>`)
-         .join('') + `</div>`;
-
         if (!n) {
-            cont.innerHTML = `<div class="nom-tarjeta">
-                <div class="nom-sec">Lo que has trabajado</div>${trabajo}
-                <div class="nom-vacio">Todavía no hay nómina de ${esc(this._nombreMes(mes))}.<br>
-                    Cuando gestión la rellene, la verás aquí.</div></div>`;
+            cont.innerHTML = `<div class="nom-tarjeta"><div class="nom-vacio">
+                Todavía no hay nómina de ${esc(this._nombreMes(mes))}.<br>
+                Cuando gestión la rellene, la verás aquí.</div></div>`;
             return;
         }
-
+        const c = this._calcNomina(mes, n);
+        const num = v => String(v).replace('.', ',');
         const linea = (l, resta) => `<div class="nom-l${resta ? ' resta' : ''}">
-            <span class="nom-l-c">${esc(l.c)}</span>
+            <span class="nom-l-c">${esc(l.c)}${l.d ? ` <small>${num(l.d)} × ${num(l.p)}</small>`
+                : l.pct ? ` <small>${num(l.pct)} %</small>` : ''}</span>
             <span class="nom-l-i">${resta ? '−' : ''}${this._eur(l.i)}</span></div>`;
-        const tot = this._totalNomina(n);
+
         cont.innerHTML = `<div class="nom-tarjeta">
-            <div class="nom-sec">Lo que has trabajado</div>${trabajo}
+            <div class="nom-sec">Días del mes</div>
+            <div class="nom-datos">
+                <span class="nom-dato"><b>${c.dias.base}</b> de salario base</span>
+                ${c.dias.vacaciones ? `<span class="nom-dato"><b>${c.dias.vacaciones}</b> de vacaciones</span>` : ''}
+                ${c.dias.permiso ? `<span class="nom-dato"><b>${c.dias.permiso}</b> de permiso</span>` : ''}
+            </div>
             <div class="nom-sec">Devengos</div>
-            ${(n.lineas || []).map(l => linea(l, false)).join('') || '<div class="nom-l"><span class="nom-l-c">—</span></div>'}
-            ${(n.deducciones || []).length ? `<div class="nom-sec">Deducciones</div>`
-                + n.deducciones.map(l => linea(l, true)).join('') : ''}
+            ${c.devengos.map(l => linea(l, false)).join('')}
+            <div class="nom-l" style="font-weight:800;"><span class="nom-l-c">Devengado</span>
+                <span class="nom-l-i">${this._eur(c.devengado)}</span></div>
+            <div class="nom-sec">Deducciones</div>
+            ${c.deducciones.map(l => linea(l, true)).join('')}
+            <div class="nom-l" style="font-weight:800;"><span class="nom-l-c">A deducir</span>
+                <span class="nom-l-i">−${this._eur(c.aDeducir)}</span></div>
             <div class="nom-liquido">
                 <span class="nom-liquido-l">Líquido</span>
-                <span class="nom-liquido-v">${this._eur(tot.liquido)}</span></div>
+                <span class="nom-liquido-v">${this._eur(c.liquido)}</span></div>
+            <div class="nom-sec">Base de cotización</div>
+            <div class="nom-l"><span class="nom-l-c">Devengado + prorrata de pagas extra</span>
+                <span class="nom-l-i">${this._eur(c.base)}</span></div>
             ${n.nota ? `<div class="nom-sec">Nota de gestión</div>
                 <div class="nom-l"><span class="nom-l-c" style="white-space:normal;">${esc(n.nota)}</span></div>` : ''}
-            ${this._compararMiNomina(mes, n)}
+            ${this._compararMiNomina(mes, c)}
         </div>`;
     },
 
     // Frente al mes anterior, si lo hay
-    _compararMiNomina(mes, actual) {
+    _compararMiNomina(mes, ahora) {
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
         const anterior = this._mesMas(mes, -1);
         const prev = this._misNominas?.[anterior];
         if (!prev) return '';
-        const aMapa = ls => Object.fromEntries((ls || []).map(l => [l.c, Number(l.i) || 0]));
-        const ahoraD = aMapa(actual.lineas), ahoraR = aMapa(actual.deducciones);
-        const antesD = aMapa(prev.lineas),   antesR = aMapa(prev.deducciones);
-        const conceptos = [...new Set([...Object.keys(ahoraD), ...Object.keys(antesD),
-                                       ...Object.keys(ahoraR), ...Object.keys(antesR)])];
+        const antes = this._calcNomina(anterior, prev);
+        const aMapa = c => {
+            const m = {};
+            c.devengos.forEach(l => { m[l.c] = (m[l.c] || 0) + l.i; });
+            c.deducciones.forEach(l => { m[l.c] = (m[l.c] || 0) - l.i; });
+            return m;
+        };
+        const A = aMapa(ahora), B = aMapa(antes);
         const fila = (c, d) => {
             const clase = d > 0 ? 'sube' : d < 0 ? 'baja' : 'igual';
             return `<div class="nom-cmp"><span class="nom-cmp-c">${esc(c)}</span>
                 <span class="nom-cmp-v ${clase}">${d > 0 ? '+' : ''}${this._eur(d)}</span></div>`;
         };
-        const tA = this._totalNomina(actual), tB = this._totalNomina(prev);
         return `<div class="nom-sec">Frente a ${esc(this._nombreMes(anterior))}</div>`
-            + fila(`Líquido (antes ${this._eur(tB.liquido)})`,
-                   Math.round((tA.liquido - tB.liquido) * 100) / 100)
-            + conceptos.map(c => fila(c, Math.round((
-                ((ahoraD[c] ?? 0) - (ahoraR[c] ?? 0)) - ((antesD[c] ?? 0) - (antesR[c] ?? 0))
-              ) * 100) / 100)).join('');
+            + fila(`Líquido (antes ${this._eur(antes.liquido)})`,
+                   Math.round((ahora.liquido - antes.liquido) * 100) / 100)
+            + [...new Set([...Object.keys(A), ...Object.keys(B)])]
+                .map(c => fila(c, Math.round(((A[c] ?? 0) - (B[c] ?? 0)) * 100) / 100)).join('');
     },
 
     // ── Lugar de trabajo de la jornada ───────────────────────────────────────
@@ -2959,6 +3008,31 @@ const app = {
         }));
     },
 
+    // Todos los sitios del día, el de arriba incluido.
+    //
+    // El lugar de trabajo del formulario es el primer sitio de la jornada:
+    // desde la hora de entrada hasta que empieza el siguiente. Sin contarlo,
+    // de un día repartido solo viajaban los sitios de abajo y la primera
+    // parte —la que casi siempre es la más larga— no aparecía en ningún lado:
+    // ni en las jornadas anteriores, ni en el cuadro de lugares de gestión.
+    _tramosDelDia() {
+        const ini = document.getElementById('horaInicio')?.value || '';
+        const extras = this._tramosConHoras().filter(t => t.p && t.i && t.o);
+        if (!extras.length) return [];
+        return [{ p: this.puestoTrabajo || '', i: ini, o: extras[0].i }, ...extras]
+            .filter(t => t.p && t.i && t.o && t.i !== t.o)
+            .map(t => ({ p: t.p, i: t.i, o: t.o }));
+    },
+
+    // Con el día repartido, la jornada va de la primera entrada a la última
+    // salida y las horas son las de todos los sitios juntos: antes se quedaba
+    // con lo que pusiera arriba y el resto del día no contaba.
+    _jornadaDeLosTramos(tramos) {
+        if (!tramos.length) return null;
+        const horas = tramos.reduce((t, x) => t + this._horasEntre(x.i, x.o), 0);
+        return { fin: tramos[tramos.length - 1].o, horas: Math.round(horas * 100) / 100 };
+    },
+
     _horasRepartidas() {
         return this._tramosConHoras().reduce((s, t) =>
             s + (t.i && t.o ? this._horasEntre(t.i, t.o) : 0), 0);
@@ -2979,16 +3053,23 @@ const app = {
         const resto = document.getElementById('lugarResto');
         if (!resto) return;
         if (!this._tramos.length) { resto.textContent = ''; resto.classList.remove('falta'); return; }
-        const total = parseFloat(document.getElementById('horasInput')?.value) || 0;
-        const puestas = Math.round(this._horasRepartidas() * 10) / 10;
-        const falta = Math.round((total - puestas) * 10) / 10;
-        const h = n => String(n).replace('.', ',') + 'h';
-        const sitios = conHoras.filter(t => t.p && t.i && t.o)
-            .map(t => `${h(this._horasEntre(t.i, t.o))} en ${t.p}`).join(' · ');
-        resto.classList.toggle('falta', falta > 0);
-        resto.textContent = falta > 0
-            ? `${sitios}${sitios ? ' · ' : ''}faltan ${h(falta)} sin lugar: saldrán como sin servicio`
-            : sitios;
+        // El día entero, con el lugar de arriba incluido: es lo que se va a
+        // guardar, así que es lo que hay que enseñar.
+        const todos = this._tramosDelDia();
+        const total = this._jornadaDeLosTramos(todos);
+        const h = n => String(Math.round(n * 100) / 100).replace('.', ',') + 'h';
+        const sitios = todos.map(t => `${h(this._horasEntre(t.i, t.o))} en ${t.p}`).join(' · ');
+        resto.classList.remove('falta');
+        resto.textContent = total ? `${sitios} · ${h(total.horas)} en total` : sitios;
+        // Y la casilla de horas y la de salida, al día con lo repartido
+        if (total) {
+            const horasInput = document.getElementById('horasInput');
+            const finInput   = document.getElementById('horaFin');
+            // La casilla es numérica: con coma se queda en blanco y luego no
+            // deja registrar porque cree que no hay horas.
+            if (horasInput) horasInput.value = String(total.horas);
+            if (finInput && total.fin) finInput.value = total.fin;
+        }
     },
 
     // ── Cuadros del registro ─────────────────────────────────────────────────
