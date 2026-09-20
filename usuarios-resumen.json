@@ -2150,7 +2150,7 @@
     ],
     "email": "prueba-1789760248885@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:01:38.249Z",
+    "actualizado": "2026-09-20T15:35:19.626Z",
     "horarios": {
       "202609": {
         "i": "06:00",
@@ -2172,7 +2172,7 @@
       "20260928": "plan",
       "20260930": "plan"
     },
-    "oculto": true,
+    "oculto": false,
     "horariosDia": {},
     "tramosDia": {}
   },
