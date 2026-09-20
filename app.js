@@ -3247,16 +3247,18 @@ const app = {
 
     _quitarTramo(k) { this._tramos.splice(k, 1); this._renderTramos(); },
 
-    // Horas del día ya repartidas entre lugares. La primera y la última heredan
-    // la entrada y la salida de la jornada, que es lo que se pide no repetir.
+    // Horas del día ya repartidas en los tramos de abajo. Cada uno empieza,
+    // si no se le pone hora, donde acabó el anterior: el de arriba para el
+    // primero. La salida siempre se escribe, porque entre un tramo y el
+    // siguiente puede haber un hueco sin trabajar y nadie puede adivinarlo.
     _tramosConHoras() {
-        const ini = document.getElementById('horaInicio')?.value || '';
         const fin = document.getElementById('horaFin')?.value || '';
-        return this._tramos.map((t, k) => ({
-            ...t,
-            i: t.i || (k === 0 ? ini : ''),
-            o: t.o || (k === this._tramos.length - 1 ? fin : ''),
-        }));
+        let antes = fin;
+        return this._tramos.map(t => {
+            const con = { ...t, i: t.i || antes, o: t.o || '' };
+            if (con.o) antes = con.o;
+            return con;
+        });
     },
 
     // Todos los sitios del día, el de arriba incluido.
@@ -3268,11 +3270,19 @@ const app = {
     // ni en las jornadas anteriores, ni en el cuadro de lugares de gestión.
     _tramosDelDia() {
         const ini = document.getElementById('horaInicio')?.value || '';
-        const extras = this._tramosConHoras().filter(t => t.p && t.i && t.o);
+        const fin = document.getElementById('horaFin')?.value || '';
+        // Con las horas basta. Un tramo sin lugar es un rato trabajado que aún
+        // no se sabe dónde va, no un tramo a medias: pidiéndole también el
+        // lugar se tiraba sin avisar y esas horas no aparecían en ningún sitio.
+        const extras = this._tramosConHoras().filter(t => t.i && t.o && t.i !== t.o);
         if (!extras.length) return [];
-        return [{ p: this.puestoTrabajo || '', i: ini, o: extras[0].i }, ...extras]
-            .filter(t => t.p && t.i && t.o && t.i !== t.o)
-            .map(t => ({ p: t.p, i: t.i, o: t.o }));
+        // El de arriba va de su entrada a su salida, ni un minuto más. Antes
+        // se estiraba hasta que empezaba el siguiente tramo, así que un día
+        // partido —mañana, comer, tarde— cobraba también las horas de en
+        // medio: de 9 a 12:30 y de 15:30 a 19 salían 10 horas en vez de 7.
+        return [{ p: this.puestoTrabajo || '', i: ini, o: fin }, ...extras]
+            .filter(t => t.i && t.o && t.i !== t.o)
+            .map(t => ({ p: t.p || '', i: t.i, o: t.o }));
     },
 
     // Con el día repartido, la jornada va de la primera entrada a la última
@@ -3296,9 +3306,9 @@ const app = {
         cont.innerHTML = this._tramos.map((t, k) => `<div class="tramo">
             <select onchange="app._setTramo(${k},'p',this.value)">${this._opcionesLugar(t.p)}</select>
             <input type="time" value="${t.i}" placeholder="entrada"
-                onchange="app._setTramo(${k},'i',this.value)" title="${k === 0 ? 'En blanco: la hora de entrada' : ''}">
+                onchange="app._setTramo(${k},'i',this.value)" title="En blanco: donde acabó el anterior">
             <input type="time" value="${t.o}"
-                onchange="app._setTramo(${k},'o',this.value)" title="${k === this._tramos.length - 1 ? 'En blanco: la hora de salida' : ''}">
+                onchange="app._setTramo(${k},'o',this.value)" title="La hora a la que se sale de este sitio">
             <button class="tramo-x" onclick="app._quitarTramo(${k})">×</button>
         </div>`).join('');
         const resto = document.getElementById('lugarResto');
@@ -3309,17 +3319,18 @@ const app = {
         const todos = this._tramosDelDia();
         const total = this._jornadaDeLosTramos(todos);
         const h = n => String(Math.round(n * 100) / 100).replace('.', ',') + 'h';
-        const sitios = todos.map(t => `${h(this._horasEntre(t.i, t.o))} en ${t.p}`).join(' · ');
+        const sitios = todos.map(t => `${h(this._horasEntre(t.i, t.o))}${
+            t.p ? ' en ' + t.p : ' sin lugar'}`).join(' · ');
         resto.classList.remove('falta');
         resto.textContent = total ? `${sitios} · ${h(total.horas)} en total` : sitios;
-        // Y la casilla de horas y la de salida, al día con lo repartido
+        // Y la casilla de horas, al día con lo repartido. La de salida no se
+        // toca: es la de este primer sitio, y pisarla con el final del día
+        // alargaba el tramo de arriba hasta el último tramo de la tarde.
         if (total) {
             const horasInput = document.getElementById('horasInput');
-            const finInput   = document.getElementById('horaFin');
             // La casilla es numérica: con coma se queda en blanco y luego no
             // deja registrar porque cree que no hay horas.
             if (horasInput) horasInput.value = String(total.horas);
-            if (finInput && total.fin) finInput.value = total.fin;
         }
     },
 
@@ -4175,10 +4186,10 @@ const app = {
                 ? `<span style="color:var(--g1);font-size:10px;font-weight:700;">${lugar}</span>` : '';
             // Un día repartido entre varios sitios enseñaba solo el primero, y
             // el resto de la jornada no aparecía por ningún lado.
-            const tramos = Array.isArray(reg.tramos) ? reg.tramos.filter(t => t && t.p && t.i && t.o) : [];
+            const tramos = Array.isArray(reg.tramos) ? reg.tramos.filter(t => t && t.i && t.o) : [];
             const tramosStr = tramos.length > 1
                 ? `<div class="hm-tramos">${tramos.map(t =>
-                    `<span>📍 ${String(t.p).replace(/</g, '&lt;')} ${t.i}–${t.o}</span>`).join('')}</div>` : '';
+                    `<span>📍 ${t.p ? String(t.p).replace(/</g, '&lt;') : 'sin lugar'} ${t.i}–${t.o}</span>`).join('')}</div>` : '';
             const prBadge     = reg.pr      ? `<span class="pr-badge">PR</span>` : '';
             const festivoBadge= reg.festivo ? `<span class="festivo-badge">🎉 Festivo</span>` : '';
             const vacBadge    = reg.vacaciones ? `<span class="vacaciones-badge">🏖️ Vacaciones</span>` : '';
