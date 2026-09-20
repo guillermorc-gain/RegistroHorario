@@ -3646,13 +3646,13 @@
     ],
     "email": "prueba-1789850043571@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:01:25.183Z",
+    "actualizado": "2026-09-20T15:30:34.502Z",
     "horarios": {
       "202609": {
         "i": "09:00",
         "f": "12:30"
       }
     },
-    "oculto": true
+    "oculto": false
   }
 }
