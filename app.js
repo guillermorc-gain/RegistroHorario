@@ -1124,9 +1124,15 @@ const app = {
     async _guardarDesdeModal() {
         if (!this.usuarioActual || !this.editingId) return;
         const fecha     = document.getElementById('editModalFecha').value;
-        const horas     = parseFloat(document.getElementById('editModalHoras').value);
+        let   horas     = parseFloat(document.getElementById('editModalHoras').value);
         const horaInicio= document.getElementById('editModalInicio').value;
-        const horaFin   = document.getElementById('editModalFin').value;
+        let   horaFin   = document.getElementById('editModalFin').value;
+        const puesto    = document.getElementById('editModalLugar')?.value || '';
+        // Los lugares de abajo, igual que al registrar: si hay más de uno, la
+        // jornada va de la primera entrada a la última salida.
+        const tramos    = this._tramosDelDiaDe(this._tramosEdit, puesto, horaInicio, horaFin);
+        const total     = this._jornadaDeLosTramos(tramos);
+        if (total) { horaFin = total.fin; horas = total.horas; }
         const horasN    = parseFloat(document.getElementById('editModalNocturnas').value) || 0;
         const precioN   = parseFloat(document.getElementById('editModalPrecioN').value) || 0;
         const esPR      = document.getElementById('editModalPR').checked;
@@ -1150,12 +1156,15 @@ const app = {
             ...(horasN > 0 ? { horasNocturnas: horasN, precioNoche: precioN, extraNoche: Math.round(horasN * precioN * 100) / 100 } : {}),
             ...(esPR ? { pr: true } : {}),
             ...(esFestivo ? { festivo: true } : {}),
+            ...(puesto ? { puesto } : {}),
+            ...(tramos.length ? { tramos } : {}),
             ...(prev.extraManual ? { extraManual: true, extraDestino: prev.extraDestino } : {})
         };
         datos.horasTrabajadas = this._calcTotales(datos.historial).anualReal;
 
         await this._writeDriveFile(datos);
         this.editingId = null;
+        this._tramosEdit = [];
         document.getElementById('editModal').classList.remove('show');
         this.actualizarUI(datos);
         this._publicarResumen();
@@ -3242,11 +3251,13 @@ const app = {
     // última salida no hace falta escribirlas: son las de la jornada.
 
     _tramos: [],
+    _tramosEdit: [],
 
     _lugaresConocidos() {
         const cat = Object.values(LUGARES_CATALOGO || {}).map(l => l?.nombre).filter(Boolean);
         const todos = [...cat];
-        [this.puestoTrabajo, this._lugarDeHoy(), ...this._tramos.map(t => t.p)].forEach(p => {
+        [this.puestoTrabajo, this._lugarDeHoy(),
+         ...this._tramos.map(t => t.p), ...this._tramosEdit.map(t => t.p)].forEach(p => {
             if (p && !todos.some(x => this._clavePuesto(x) === this._clavePuesto(p))) todos.push(p);
         });
         return todos;
@@ -3311,14 +3322,17 @@ const app = {
     // si no se le pone hora, donde acabó el anterior: el de arriba para el
     // primero. La salida siempre se escribe, porque entre un tramo y el
     // siguiente puede haber un hueco sin trabajar y nadie puede adivinarlo.
-    _tramosConHoras() {
-        const fin = document.getElementById('horaFin')?.value || '';
-        let antes = fin;
-        return this._tramos.map(t => {
+    _tramosConHorasDe(tramosArr, finPrincipal) {
+        let antes = finPrincipal;
+        return tramosArr.map(t => {
             const con = { ...t, i: t.i || antes, o: t.o || '' };
             if (con.o) antes = con.o;
             return con;
         });
+    },
+
+    _tramosConHoras() {
+        return this._tramosConHorasDe(this._tramos, document.getElementById('horaFin')?.value || '');
     },
 
     // Todos los sitios del día, el de arriba incluido.
@@ -3328,21 +3342,24 @@ const app = {
     // de un día repartido solo viajaban los sitios de abajo y la primera
     // parte —la que casi siempre es la más larga— no aparecía en ningún lado:
     // ni en las jornadas anteriores, ni en el cuadro de lugares de gestión.
-    _tramosDelDia() {
-        const ini = document.getElementById('horaInicio')?.value || '';
-        const fin = document.getElementById('horaFin')?.value || '';
+    _tramosDelDiaDe(tramosArr, puestoPrincipal, iniPrincipal, finPrincipal) {
         // Con las horas basta. Un tramo sin lugar es un rato trabajado que aún
         // no se sabe dónde va, no un tramo a medias: pidiéndole también el
         // lugar se tiraba sin avisar y esas horas no aparecían en ningún sitio.
-        const extras = this._tramosConHoras().filter(t => t.i && t.o && t.i !== t.o);
+        const extras = this._tramosConHorasDe(tramosArr, finPrincipal).filter(t => t.i && t.o && t.i !== t.o);
         if (!extras.length) return [];
         // El de arriba va de su entrada a su salida, ni un minuto más. Antes
         // se estiraba hasta que empezaba el siguiente tramo, así que un día
         // partido —mañana, comer, tarde— cobraba también las horas de en
         // medio: de 9 a 12:30 y de 15:30 a 19 salían 10 horas en vez de 7.
-        return [{ p: this.puestoTrabajo || '', i: ini, o: fin }, ...extras]
+        return [{ p: puestoPrincipal || '', i: iniPrincipal, o: finPrincipal }, ...extras]
             .filter(t => t.i && t.o && t.i !== t.o)
             .map(t => ({ p: t.p || '', i: t.i, o: t.o }));
+    },
+
+    _tramosDelDia() {
+        return this._tramosDelDiaDe(this._tramos, this.puestoTrabajo,
+            document.getElementById('horaInicio')?.value || '', document.getElementById('horaFin')?.value || '');
     },
 
     // Con el día repartido, la jornada va de la primera entrada a la última
@@ -3392,6 +3409,48 @@ const app = {
             // deja registrar porque cree que no hay horas.
             if (horasInput) horasInput.value = String(total.horas);
         }
+    },
+
+    // Los mismos tramos de arriba, pero para el cuadro de editar una jornada
+    // ya guardada: antes se abría sin ellos y guardar la dejaba con un solo
+    // lugar, aunque tuviera dos o más.
+    _nuevoTramoEdit() {
+        const puesto = document.getElementById('editModalLugar')?.value || '';
+        this._tramosEdit.push({ p: puesto, i: '', o: '' });
+        this._renderTramosEdit();
+    },
+
+    _setTramoEdit(k, campo, valor) {
+        if (!this._tramosEdit[k]) return;
+        this._tramosEdit[k][campo] = valor;
+        this._renderTramosEdit();
+    },
+
+    _quitarTramoEdit(k) { this._tramosEdit.splice(k, 1); this._renderTramosEdit(); },
+
+    _renderTramosEdit() {
+        const cont = document.getElementById('editModalTramosLista');
+        if (!cont) return;
+        cont.innerHTML = this._tramosEdit.map((t, k) => `<div class="tramo">
+            <select onchange="app._setTramoEdit(${k},'p',this.value)">${this._opcionesLugar(t.p)}</select>
+            <input type="time" value="${t.i}" placeholder="entrada"
+                onchange="app._setTramoEdit(${k},'i',this.value)" title="En blanco: donde acabó el anterior">
+            <input type="time" value="${t.o}"
+                onchange="app._setTramoEdit(${k},'o',this.value)" title="La hora a la que se sale de este sitio">
+            <button class="tramo-x" onclick="app._quitarTramoEdit(${k})">×</button>
+        </div>`).join('');
+        const resto = document.getElementById('editModalLugarResto');
+        if (!resto) return;
+        if (!this._tramosEdit.length) { resto.textContent = ''; return; }
+        const puesto = document.getElementById('editModalLugar')?.value || '';
+        const ini    = document.getElementById('editModalInicio')?.value || '';
+        const fin    = document.getElementById('editModalFin')?.value || '';
+        const todos  = this._tramosDelDiaDe(this._tramosEdit, puesto, ini, fin);
+        const total  = this._jornadaDeLosTramos(todos);
+        const h = n => String(Math.round(n * 100) / 100).replace('.', ',') + 'h';
+        const sitios = todos.map(t => `${h(this._horasEntre(t.i, t.o))}${
+            t.p ? ' en ' + t.p : ' sin lugar'}`).join(' · ');
+        resto.textContent = total ? `${sitios} · ${h(total.horas)} en total` : sitios;
     },
 
     // ── Cuadros del registro ─────────────────────────────────────────────────
@@ -4065,6 +4124,7 @@ const app = {
         if (nocturnas > 0 && this.precioNocheDefault > 0 && !document.getElementById('editModalPrecioN').value)
             document.getElementById('editModalPrecioN').value = this.precioNocheDefault;
         this.calcularExtraModal();
+        this._renderTramosEdit();
     },
 
     guardarUltimaHoraInicio() { const val = document.getElementById('horaInicio').value; if (val) { localStorage.setItem('lastHoraInicio', val); this._guardarPreferencias(); } },
@@ -4308,6 +4368,7 @@ const app = {
     // Cerrar el cuadro sin guardar deja de contar como editar
     cerrarEdicion() {
         this.editingId = null;
+        this._tramosEdit = [];
         document.getElementById('editModal').classList.remove('show');
     },
 
@@ -4327,6 +4388,12 @@ const app = {
             reg.horasNocturnas ? `+${(reg.extraNoche || 0).toFixed(2)}€ extra nocturno` : '';
         document.getElementById('editModalPR').checked = !!reg.pr;
         document.getElementById('editModalFestivo').checked = !!reg.festivo;
+        const selLugar = document.getElementById('editModalLugar');
+        if (selLugar) selLugar.innerHTML = this._opcionesLugar(reg.puesto || '');
+        // Si la jornada tenía más de un lugar, aquí es donde se pierdían al
+        // editar: el cuadro no los pintaba y guardar los borraba.
+        this._tramosEdit = Array.isArray(reg.tramos) ? reg.tramos.map(t => ({ ...t })) : [];
+        this._renderTramosEdit();
         document.getElementById('editModal').classList.add('show');
         if (this.darkMode) document.getElementById('editModalContent').classList.add('dark');
     },
