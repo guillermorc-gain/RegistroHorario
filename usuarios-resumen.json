@@ -3059,7 +3059,7 @@
     ],
     "email": "prueba-1789812974724@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T10:16:44.884Z",
+    "actualizado": "2026-09-20T15:01:36.385Z",
     "lugares": {
       "20260901": "Calle",
       "20260902": "Calle",
@@ -3113,7 +3113,8 @@
         "f": "13:00"
       }
     },
-    "tramosDia": {}
+    "tramosDia": {},
+    "oculto": true
   },
   "prueba-1789814286874@prueba.local": {
     "nombre": "Manolo Rodríguez",
