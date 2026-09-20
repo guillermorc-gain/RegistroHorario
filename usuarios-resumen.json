@@ -2882,7 +2882,8 @@
     "jornadas": [],
     "email": "prueba-1789814286874@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:32:33.871Z"
+    "actualizado": "2026-09-20T15:34:20.303Z",
+    "oculto": true
   },
   "prueba-1789850043571@prueba.local": {
     "nombre": "Buja",
