@@ -220,6 +220,11 @@
         .cu-mov{border:1.5px solid #dfe4ea;background:transparent;color:#7f8c8d;border-radius:7px;width:28px;height:28px;font-size:13px;cursor:pointer;font-family:inherit;flex-shrink:0;}
         .modal-card.dark .cu-mov{border-color:#2d3561;}
         .cu-mov:disabled{opacity:.3;}
+        .cu-drag{cursor:grab;color:#bbb;flex-shrink:0;font-size:15px;touch-action:none;}
+        .cu-fila.dragging{opacity:0.4;}
+        .cu-fila.drag-over{position:relative;}
+        .cu-fila.drag-over::before{content:'';position:absolute;inset:1px 4px;border-radius:8px;background:rgba(21,101,192,0.14);}
+        .stats-grid-head{display:flex;margin-bottom:6px;}
         /* Debajo del número: lo que le toca hoy, a qué hora y dónde */
         .app-header-hoy{font-size:11px;font-weight:700;opacity:0.9;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
         .app-header-hoy:empty{display:none;}
@@ -764,33 +769,36 @@
             </div>
 
             <!-- Stats 2x2 -->
-            <div class="stats-grid">
-                <div class="stat-card accent">
+            <div class="stats-grid-head">
+                <button class="cuadros-btn" onclick="app.mostrarCuadrosResumen()" title="Elegir los cuadros de arriba">⚙</button>
+            </div>
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card accent" id="statCardRestantes" data-cuadro="restantes">
                     <div class="stat-label">Restantes</div>
                     <div class="stat-value" id="horasRestantes">777</div>
                     <div class="stat-sub">horas del año</div>
                 </div>
-                <div class="stat-card accent">
+                <div class="stat-card accent" id="statCardTrabajadas" data-cuadro="trabajadas">
                     <div class="stat-label">Trabajadas</div>
                     <div class="stat-value" id="horasTrabajadas">0</div>
                     <div class="stat-sub">horas totales</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" id="statCardMes" data-cuadro="mes">
                     <div class="stat-label">Este mes</div>
                     <div class="stat-value" id="statMesHoras">0</div>
                     <div class="stat-sub">horas trabajadas</div>
                 </div>
-                <div class="stat-card" style="cursor:pointer;" onclick="app._toggleStatNoct()" title="Toca para ver el mes o el año">
+                <div class="stat-card" id="statCardNoct" data-cuadro="noct" style="cursor:pointer;" onclick="app._toggleStatNoct()" title="Toca para ver el mes o el año">
                     <div class="stat-label">🌙 Nocturnas</div>
                     <div class="stat-value" id="statMesNoche">0</div>
                     <div class="stat-sub" id="statMesNocheSub">horas este mes</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" id="statCardFestivos" data-cuadro="festivos">
                     <div class="stat-label" id="statFestivosLabel">🎉 Festivos</div>
                     <div class="stat-value" id="statFestivos">0</div>
                     <div class="stat-sub" id="statFestivosSub">horas del año</div>
                 </div>
-                <div class="stat-card" style="cursor:pointer;" onclick="app._toggleStatExtra()" title="Toca para ver el mes o el año">
+                <div class="stat-card" id="statCardExtras" data-cuadro="extras" style="cursor:pointer;" onclick="app._toggleStatExtra()" title="Toca para ver el mes o el año">
                     <div class="stat-label">⏱️ Horas extras</div>
                     <div class="stat-value" id="statExtras">0</div>
                     <div class="stat-sub" id="statExtrasSub">de 0h</div>
@@ -1516,6 +1524,24 @@
         <div class="modal-footer">
             <button class="modal-btn modal-btn-cancel" onclick="app._cuadrosPorDefecto()">Por defecto</button>
             <button class="modal-btn modal-btn-confirm" onclick="document.getElementById('cuadrosModal').classList.remove('show')">Listo</button>
+        </div>
+    </div>
+</div>
+
+<!-- Elegir, ocultar y arrastrar los cuadros grandes de arriba -->
+<div class="modal" id="cuadrosResumenModal">
+    <div class="modal-card" id="cuadrosResumenModalContent">
+        <div class="modal-header">
+            <h3>⚙ Cuadros de arriba</h3>
+            <button class="modal-close" onclick="document.getElementById('cuadrosResumenModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div class="pm-paso">Marca los que quieras ver y arrástralos para ordenarlos.</div>
+            <div id="cuadrosResumenLista"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" onclick="app._cuadrosResumenPorDefecto()">Por defecto</button>
+            <button class="modal-btn modal-btn-confirm" onclick="document.getElementById('cuadrosResumenModal').classList.remove('show')">Listo</button>
         </div>
     </div>
 </div>

@@ -762,6 +762,7 @@ const app = {
 
     setupUI() {
         this._aplicarCuadros();
+        this._aplicarCuadrosResumen();
         this._renderLugarJornada();
         this.establecerFechaHoy();
         this.actualizarFecha();
@@ -3533,6 +3534,116 @@ const app = {
         localStorage.removeItem('cuadrosRegistro');
         this._aplicarCuadros();
         this._renderCuadros();
+    },
+
+    // ── Cuadros grandes de arriba ────────────────────────────────────────────
+    // Los seis de siempre, pero se pueden ocultar y arrastrar para ordenarlos:
+    // si solo hacen falta cuatro, los otros dos se quitan de en medio.
+    CUADROS_STATS: [
+        { id: 'restantes',  el: 'statCardRestantes',  nom: 'Restantes del año' },
+        { id: 'trabajadas', el: 'statCardTrabajadas', nom: 'Horas trabajadas' },
+        { id: 'mes',        el: 'statCardMes',        nom: 'Este mes' },
+        { id: 'noct',       el: 'statCardNoct',       nom: '🌙 Nocturnas' },
+        { id: 'festivos',   el: 'statCardFestivos',   nom: '🎉 Festivos' },
+        { id: 'extras',     el: 'statCardExtras',     nom: '⏱️ Horas extras' },
+    ],
+
+    _configCuadrosResumen() {
+        let c = null;
+        try { c = JSON.parse(localStorage.getItem('cuadrosResumen') || 'null'); } catch (_) {}
+        const todos = this.CUADROS_STATS.map(x => x.id);
+        const orden = [...(c?.orden || []).filter(id => todos.includes(id))];
+        todos.forEach(id => { if (!orden.includes(id)) orden.push(id); });
+        return { orden, ocultos: (c?.ocultos || []).filter(id => todos.includes(id)) };
+    },
+
+    _guardarCuadrosResumen(c) {
+        localStorage.setItem('cuadrosResumen', JSON.stringify(c));
+        this._aplicarCuadrosResumen();
+        this._renderCuadrosResumen();
+    },
+
+    _aplicarCuadrosResumen() {
+        const { orden, ocultos } = this._configCuadrosResumen();
+        orden.forEach((id, i) => {
+            const def = this.CUADROS_STATS.find(x => x.id === id);
+            const el = document.getElementById(def?.el) || document.querySelector(`[data-cuadro="${id}"]`);
+            if (!el) return;
+            el.style.order = i;
+            el.hidden = ocultos.includes(id);
+        });
+    },
+
+    mostrarCuadrosResumen() {
+        this._renderCuadrosResumen();
+        document.getElementById('cuadrosResumenModal').classList.add('show');
+        if (this.darkMode) document.getElementById('cuadrosResumenModalContent').classList.add('dark');
+    },
+
+    _renderCuadrosResumen() {
+        const { orden, ocultos } = this._configCuadrosResumen();
+        document.getElementById('cuadrosResumenLista').innerHTML = orden.map(id => {
+            const def = this.CUADROS_STATS.find(x => x.id === id);
+            const off = ocultos.includes(id);
+            return `<div class="cu-fila${off ? ' off' : ''}" draggable="true" data-id="${id}"
+                    ondragstart="app._cuadroResumenDragStart(event)" ondragend="app._cuadroResumenDragEnd(event)"
+                    ondragover="app._cuadroResumenDragOver(event)" ondragleave="app._cuadroResumenDragLeave(event)"
+                    ondrop="app._cuadroResumenDrop(event)">
+                <span class="cu-drag">⠿</span>
+                <input type="checkbox" ${off ? '' : 'checked'} onchange="app._verCuadroResumen('${id}',this.checked)">
+                <span class="cu-nom">${def.nom}</span>
+            </div>`;
+        }).join('');
+    },
+
+    _verCuadroResumen(id, visible) {
+        const c = this._configCuadrosResumen();
+        c.ocultos = visible ? c.ocultos.filter(x => x !== id) : [...new Set([...c.ocultos, id])];
+        this._guardarCuadrosResumen(c);
+    },
+
+    _cuadroResumenDragStart(e) {
+        this._dragSrcCuadroResumen = e.currentTarget;
+        e.currentTarget.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', e.currentTarget.dataset.id);
+    },
+
+    _cuadroResumenDragEnd(e) {
+        e.currentTarget.classList.remove('dragging');
+        document.querySelectorAll('#cuadrosResumenLista .cu-fila').forEach(f => f.classList.remove('drag-over'));
+    },
+
+    _cuadroResumenDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        e.currentTarget.classList.add('drag-over');
+    },
+
+    _cuadroResumenDragLeave(e) {
+        e.currentTarget.classList.remove('drag-over');
+    },
+
+    _cuadroResumenDrop(e) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-over');
+        const src = this._dragSrcCuadroResumen;
+        const dst = e.currentTarget;
+        if (!src || src === dst) return;
+        const cont = document.getElementById('cuadrosResumenLista');
+        const filas = [...cont.children];
+        const si = filas.indexOf(src), di = filas.indexOf(dst);
+        if (si < di) cont.insertBefore(src, dst.nextSibling);
+        else cont.insertBefore(src, dst);
+        const c = this._configCuadrosResumen();
+        c.orden = [...cont.querySelectorAll('.cu-fila')].map(f => f.dataset.id);
+        this._guardarCuadrosResumen(c);
+    },
+
+    _cuadrosResumenPorDefecto() {
+        localStorage.removeItem('cuadrosResumen');
+        this._aplicarCuadrosResumen();
+        this._renderCuadrosResumen();
     },
 
     // ── Baja (BE) ────────────────────────────────────────────────────────────
