@@ -2868,7 +2868,10 @@ const app = {
     // El convenio de partida, sacado de una nómina de media jornada. Todo es
     // editable: la completa cobra otra cosa, y el convenio se actualiza.
     CONVENIO: {
-        porDia: { base: 772.58 / 30, vacaciones: 375.66 / 14, asistencia: 4.19 },
+        // El de vacaciones va sin la antigüedad: esta se le suma aparte, que
+        // también sube el día de vacaciones y la hora extra. En la nómina de
+        // junio, 26,83 son estos 25,5551 con el 5 % encima.
+        porDia: { base: 772.58 / 30, vacaciones: 375.66 / 14 / 1.05, asistencia: 4.19 },
         delMes: { noAbsorbible: 136.21, transporte: 68.02, ajuste: 130.01,
                   ajuste2: 6.44, responsabilidad: 51.77 },
     },
@@ -2893,26 +2896,21 @@ const app = {
     // permiso retribuido y los días de asistencia. El salario base son los que
     // quedan del mes.
     _diasDeNomina(mes) {
-        const vac = new Set(), pr = new Set(), baja = new Set();
+        const vac = new Set(), pr = new Set(), baja = new Set(), trabajados = new Set();
         Object.entries(this._historialFull || {}).forEach(([id, r]) => {
             const f = this._fechaDeId(id);
             if (f.slice(0, 6) !== mes) return;
             if (r.vacaciones) vac.add(f);
             else if (r.pr)    pr.add(f);
             else if (r.be)    baja.add(f);
+            else if ((parseFloat(r.horas) || 0) > 0) trabajados.add(f);
         });
         const vacaciones = Math.min(this.DIAS_NOMINA, vac.size);
         const permiso    = Math.min(this.DIAS_NOMINA - vacaciones, pr.size);
-        // La asistencia se cobra todos los laborables salvo los de baja: no
-        // depende de los días que haya fichado.
-        let asistencia = 0;
-        const ultimo = new Date(+mes.slice(0, 4), +mes.slice(4, 6), 0).getDate();
-        for (let d = 1; d <= ultimo; d++) {
-            const dia = new Date(+mes.slice(0, 4), +mes.slice(4, 6) - 1, d, 12).getDay();
-            if (dia === 0 || dia === 6) continue;
-            if (baja.has(`${mes}${String(d).padStart(2, '0')}`)) continue;
-            asistencia++;
-        }
+        // El plus de asistencia se cobra por día efectivo: los que ha trabajado
+        // y los de permiso retribuido. Los de baja son día efectivo para el
+        // salario —por eso no se descuentan del base— pero no llevan plus.
+        const asistencia = trabajados.size + permiso;
         return { vacaciones, permiso, asistencia, baja: baja.size,
                  base: Math.max(0, this.DIAS_NOMINA - vacaciones - permiso) };
     },
@@ -2981,14 +2979,18 @@ const app = {
         const delMes = (c, i) => ({ c, d: D, p: r2(i / D), i: r2(i) });
 
         // El orden es el de la nómina en papel
+        const pctBienios = pctAnt !== null ? pctAnt
+            : Math.max(0, Math.min(60, Number(g.pctBienios ?? 0) || 0));
+
         const devengos = [porDia('Salario Base', dias.base, C.porDia.base)];
-        if (dias.vacaciones) devengos.push(porDia('Vacaciones', dias.vacaciones, C.porDia.vacaciones));
+        // La antigüedad sube el día de vacaciones y la hora extra, no solo el
+        // salario base.
+        const conAnt = v => v * (1 + pctBienios / 100);
+        if (dias.vacaciones) devengos.push(porDia('Vacaciones', dias.vacaciones, conAnt(C.porDia.vacaciones)));
         if (dias.permiso)    devengos.push(porDia('Permiso retribuido', dias.permiso, C.porDia.base));
         // Los bienios son un porcentaje del salario base del mes entero, no de
         // los días que haya trabajado: en junio, con catorce de vacaciones,
         // siguen siendo los mismos 38,63 que en julio.
-        const pctBienios = pctAnt !== null ? pctAnt
-            : Math.max(0, Math.min(60, Number(g.pctBienios ?? 0) || 0));
         if (pctBienios) devengos.push({
             ...delMes('Bienios', D * C.porDia.base * pctBienios / 100),
             pctBienios, anios: this._aniosEnLaEmpresa(g.desde, mes) });
@@ -3003,8 +3005,8 @@ const app = {
         if (diasAsist) devengos.push(porDia('Complemento Asistencia', diasAsist, C.porDia.asistencia));
         if (hNoct)     devengos.push({ c: 'Complemento horas nocturnas', d: hNoct, p: r2(pNoct),
                                        i: r2(hNoct * pNoct), horas: true });
-        if (hExtra)    devengos.push({ c: 'Horas extras', d: hExtra, p: r2(pExtra),
-                                       i: r2(hExtra * pExtra), horas: true });
+        if (hExtra)    devengos.push({ c: 'Horas extras', d: hExtra, p: r2(conAnt(pExtra)),
+                                       i: r2(hExtra * conAnt(pExtra)), horas: true });
         (g.extras || []).forEach(e => {
             if (e && String(e.c || '').trim()) devengos.push({ c: e.c, d: 0, p: 0, i: r2(Number(e.i) || 0) });
         });
@@ -3071,7 +3073,7 @@ const app = {
         const ajustes = !editando ? '' : `
             <div class="nom-sec">Tu convenio</div>
             ${campo('Salario base', P.porDia.base, 'precios.porDia.base', '€/día')}
-            ${campo('Vacaciones', P.porDia.vacaciones, 'precios.porDia.vacaciones', '€/día')}
+            ${campo('Vacaciones <small>sin antigüedad</small>', P.porDia.vacaciones, 'precios.porDia.vacaciones', '€/día')}
             ${campo('Asistencia', P.porDia.asistencia, 'precios.porDia.asistencia', '€/día')}
             ${campo('Comp. No Absorbible', P.delMes.noAbsorbible, 'precios.delMes.noAbsorbible', '€/mes')}
             ${campo('Plus Transporte', P.delMes.transporte, 'precios.delMes.transporte', '€/mes')}
@@ -3085,13 +3087,14 @@ const app = {
                        onchange="app._setMiFecha(this.value)"></div>
             ${c.pctAnt !== null
                 ? `<div class="nom-nota">Con ${c.anios} año${c.anios === 1 ? '' : 's'} en la empresa
-                     te toca un <b>${c.pctAnt} %</b> de antigüedad. Cambia solo cuando cumplas años.</div>`
+                     te toca un <b>${c.pctAnt} %</b> de antigüedad, que sube también el día de
+                     vacaciones y la hora extra. Cambia solo cuando cumplas años.</div>`
                 : campo('Antigüedad', c.pctBienios, 'pctBienios', '%')}
             <div class="nom-sec">Este mes</div>
             ${campo('Horas extras', c.hExtra, 'extra.h', 'horas')}
-            ${campo('Precio de la hora extra', c.pExtra, 'extra.p', '€/hora')}
+            ${campo('Hora extra <small>sin antigüedad</small>', c.pExtra, 'extra.p', '€/hora')}
             ${campo('Horas nocturnas', c.hNoct, 'noct.h', 'horas')}
-            ${campo('Precio de la hora nocturna', c.pNoct, 'noct.p', '€/hora')}
+            ${campo('Hora nocturna', c.pNoct, 'noct.p', '€/hora')}
             ${campo('Días de asistencia', c.diasAsist, 'dias.asistencia', 'días')}
             ${(n.extras || []).map((e, k) => `<div class="nom-edit">
                 <input type="text" style="flex:1" value="${esc(e.c)}" placeholder="Otro concepto"
