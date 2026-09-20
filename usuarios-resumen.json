@@ -2984,7 +2984,8 @@
     "jornadas": [],
     "email": "prueba-1789812576607@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:33:45.584Z"
+    "actualizado": "2026-09-20T15:33:52.661Z",
+    "oculto": true
   },
   "prueba-1789812974724@prueba.local": {
     "nombre": "Pepe Tur",
