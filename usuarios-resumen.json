@@ -2743,7 +2743,8 @@
     "jornadas": [],
     "email": "prueba-1789812365837@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:34:11.797Z"
+    "actualizado": "2026-09-20T15:34:15.358Z",
+    "oculto": true
   },
   "prueba-1789812576607@prueba.local": {
     "nombre": "Enrique",
