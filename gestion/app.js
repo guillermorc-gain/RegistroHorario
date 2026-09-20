@@ -2719,6 +2719,12 @@ const app = {
         this._renderNotasGestor();
         document.getElementById('hiloModal').classList.add('show');
         if (this.darkMode) document.getElementById('hiloModalContent').classList.add('dark');
+        // Igual que en WhatsApp: al abrir la conversación, si lo último no es
+        // mío y aún no está visto, se marca solo, sin tocar nada.
+        const ultimo = this._ultimoMensaje(n);
+        if (ultimo && !this._esMiMensaje(ultimo, n) && !this._estaVista(n)) {
+            this._marcarVisto(id, true, true);
+        }
     },
 
     _renderHilo() {
@@ -2770,17 +2776,14 @@ const app = {
     _renderPieHilo(n) {
         const pie = document.getElementById('hiloPie');
         if (!pie) return;
-        const esc = t => String(t || '').replace(/'/g, "\\'");
-        const visto = this._estaVista(n);
-        pie.innerHTML = `<button class="modal-btn modal-btn-cancel" style="flex:0 0 auto;padding:10px 12px;"
-                title="${visto ? 'Quitar el visto' : 'Darla por vista'}"
-                onclick="app._marcarVisto('${esc(n.id)}',${!visto})">${visto ? '✅' : '☑️'}</button>`
-            + `<button class="modal-btn modal-btn-confirm" onclick="app._responderHilo()">Enviar</button>`;
+        pie.innerHTML = `<button class="modal-btn modal-btn-confirm" onclick="app._responderHilo()">Enviar</button>`;
     },
 
-    _marcarVisto(id, visto) {
+    // El visto ya no lo da nadie a mano: se pone solo, como en WhatsApp, en
+    // cuanto se abre una conversación con algo nuevo del otro lado.
+    _marcarVisto(id, visto, silencioso) {
         return this._tocarConversacion(id, { visto, nombre: this._nombreGestor() },
-            visto ? '👁 Dada por vista' : 'Ya no está vista');
+            silencioso ? null : (visto ? '👁 Dada por vista' : 'Ya no está vista'));
     },
 
     async _responderHilo() {
@@ -2830,7 +2833,7 @@ const app = {
                 this._renderHilo();
             }
             this._renderNotasGestor();
-            this._mostrarToast(mensaje, 2500);
+            if (mensaje) this._mostrarToast(mensaje, 2500);
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
