@@ -10,7 +10,7 @@
     "diasMes": 14,
     "turno": "M",
     "puesto": "Control",
-    "actualizado": "2026-09-20T21:13:26.392Z",
+    "actualizado": "2026-09-20T21:14:02.167Z",
     "horaInicio": "09:00",
     "horaFin": "12:30",
     "horarioDe": "anterior",
@@ -1213,19 +1213,11 @@
         "hasta": "2026-06-14"
       },
       {
-        "desde": "2026-08-03",
-        "hasta": "2026-08-03"
-      },
-      {
-        "desde": "2026-08-24",
-        "hasta": "2026-08-24"
-      },
-      {
         "desde": "2026-12-01",
         "hasta": "2026-12-14"
       }
     ],
-    "vacacionesAt": 1789938800636,
+    "vacacionesAt": 1789938839011,
     "dias": [
       1,
       2,
