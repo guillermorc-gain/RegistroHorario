@@ -4217,6 +4217,9 @@ const app = {
 
     actualizarUI(datos) {
         this._historialFull = datos.historial || {};
+        // El aviso nativo corre con la app cerrada y no puede mirar aquí, así
+        // que se le deja escrito en qué lugares ya se ha registrado hoy.
+        this._publicarLugaresHoy();
         const t         = this._calcTotales(this._historialFull);
         const horas     = t.anual;
         const restantes = t.restantes;
@@ -4830,6 +4833,46 @@ const app = {
         this.mostrarModal('⚠️ Borrar datos', 'Se eliminarán todos tus registros de Drive y se cerrará la sesión.', this.borrarCuenta.bind(this));
     },
 
+    // Cuándo volver a avisar de que estás en el trabajo:
+    //   'cada' — en cada lugar del día, pero no otra vez donde ya registraste
+    //   'una'  — una sola vez al día, y solo en el lugar de siempre
+    avisoLugar: localStorage.getItem('avisoLugar') || 'cada',
+
+    // Los lugares en los que ya ha registrado hoy, por nombre. De aquí sale
+    // que no vuelva a avisar donde ya ha fichado pero sí en uno nuevo.
+    _lugaresRegistradosHoy() {
+        const hoy = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const sitios = new Set();
+        Object.entries(this._historialFull || {}).forEach(([id, r]) => {
+            if (this._fechaDeId(id) !== hoy) return;
+            if (r.puesto) sitios.add(this._clavePuesto(r.puesto));
+            (r.tramos || []).forEach(t => { if (t?.p) sitios.add(this._clavePuesto(t.p)); });
+        });
+        return sitios;
+    },
+
+    // ¿Toca avisar por este lugar? `i` es su sitio en la lista de ubicaciones.
+    _tocaAvisar(i) {
+        const hoy = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        if (this.avisoLugar === 'una') {
+            // Una vez al día y solo la primera ubicación, que es la de siempre
+            if (i !== 0) return false;
+            return localStorage.getItem('lastRegisteredDate') !== hoy
+                && !this._historialFull?.[hoy];
+        }
+        const loc = this._getWorkLocations()[i];
+        if (!loc) return false;
+        return !this._lugaresRegistradosHoy().has(this._clavePuesto(loc.name || ''));
+    },
+
+    // Lo mismo, para el aviso nativo que corre con la app cerrada
+    _publicarLugaresHoy() {
+        const hoy = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const sitios = [...this._lugaresRegistradosHoy()].join('|');
+        window.AndroidBridge?.saveToPrefs?.('avisoLugar', this.avisoLugar);
+        window.AndroidBridge?.saveToPrefs?.('lugaresHoy', `${hoy}~${sitios}`);
+    },
+
     _getWorkLocations() { return JSON.parse(localStorage.getItem('workLocations') || '[]'); },
     _saveWorkLocations(locs) { localStorage.setItem('workLocations', JSON.stringify(locs)); },
 
@@ -4935,16 +4978,12 @@ const app = {
         if (locs.length === 0 || !navigator.geolocation) return;
         if (this.gpsMode === 'off') return;
         if (this.gpsMode === 'schedule' && !this._isInGpsSchedule()) return;
-        const todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-        if (localStorage.getItem('lastRegisteredDate') === todayId) return;
-        if (this._historialFull[todayId]) return;
         navigator.geolocation.getCurrentPosition((pos) => {
-            const cercano = locs.some(loc =>
+            const i = locs.findIndex(loc =>
                 this.calcularDistancia(pos.coords.latitude, pos.coords.longitude, loc.lat, loc.lng) < 300);
-            if (cercano) {
-                document.getElementById('workBanner').classList.add('show');
-                this._enviarNotificacionTrabajo();
-            }
+            if (i === -1 || !this._tocaAvisar(i)) return;
+            document.getElementById('workBanner').classList.add('show');
+            this._enviarNotificacionTrabajo();
         }, () => {});
     },
 
@@ -5003,15 +5042,12 @@ const app = {
                 const ahora = Date.now();
                 if (ahora - this._lastGeoCheck < this.gpsInterval * 60 * 1000) return;
                 this._lastGeoCheck = ahora;
-                const todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-                if (localStorage.getItem('lastRegisteredDate') === todayId) return;
-                if (this._historialFull[todayId]) return;
                 const locs = this._getWorkLocations();
                 if (locs.length === 0) return;
-                const cercano = locs.some(loc =>
+                const cual = locs.findIndex(loc =>
                     this.calcularDistancia(location.latitude, location.longitude, loc.lat, loc.lng) < 300
                 );
-                if (cercano) {
+                if (cual !== -1 && this._tocaAvisar(cual)) {
                     this._notifEnviadaAt = ahora;
                     const inicio = localStorage.getItem('lastHoraInicio') || '';
                     const fin    = localStorage.getItem('lastHoraFin') || '';
@@ -5348,6 +5384,9 @@ const app = {
 
     guardarGpsConfig() {
         const mode = document.querySelector('input[name="gpsMode"]:checked')?.value || 'always';
+        const aviso = document.querySelector('input[name="avisoLugar"]:checked')?.value || 'cada';
+        this.avisoLugar = aviso;
+        localStorage.setItem('avisoLugar', aviso);
         const interval = parseInt(document.getElementById('gpsIntervalSelect')?.value || '60');
         const from = document.getElementById('gpsFrom')?.value || '07:00';
         const to = document.getElementById('gpsTo')?.value || '09:00';
@@ -5358,6 +5397,7 @@ const app = {
         localStorage.setItem('gpsScheduleFrom', from);
         localStorage.setItem('gpsScheduleTo', to);
         window.AndroidBridge?.saveToPrefs('gpsMode', mode);
+        this._publicarLugaresHoy();
         window.AndroidBridge?.saveToPrefs('gpsScheduleFrom', from);
         window.AndroidBridge?.saveToPrefs('gpsScheduleTo', to);
         this._renderGpsSettings();
@@ -5366,6 +5406,8 @@ const app = {
     },
 
     _renderGpsSettings() {
+        const av = document.querySelector(`input[name="avisoLugar"][value="${this.avisoLugar}"]`);
+        if (av) av.checked = true;
         const radio = document.querySelector(`input[name="gpsMode"][value="${this.gpsMode}"]`);
         if (radio) radio.checked = true;
         const sel = document.getElementById('gpsIntervalSelect');

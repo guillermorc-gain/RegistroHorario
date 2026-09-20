@@ -271,7 +271,11 @@ jobs:
                       public void scheduleWorkNotification(String horaInicio, String horaFin) {
                           SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
                           String today = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(new java.util.Date());
-                          if (today.equals(prefs.getString("lastRegisteredDate", ""))) return;
+                          // Con "cada lugar" la decisión ya la ha tomado la app,
+                          // que es la que sabe en cuál está; aquí solo se
+                          // comprueba el caso simple de una vez al día.
+                          if ("una".equals(prefs.getString("avisoLugar", "cada"))
+                              && today.equals(prefs.getString("lastRegisteredDate", ""))) return;
                           prefs.edit()
                               .putString("lastHoraInicio", horaInicio)
                               .putString("lastHoraFin", horaFin).apply();
@@ -620,6 +624,53 @@ jobs:
 
               // Native geofencing — fires when user enters a work location, even with app killed
               public static class GeofenceReceiver extends BroadcastReceiver {
+
+                  // El aro que ha saltado se llama work_0, work_1... y ese
+                  // número es su sitio en la lista de ubicaciones guardadas.
+                  private static int cualSalto(GeofencingEvent event) {
+                      try {
+                          java.util.List<Geofence> gs = event.getTriggeringGeofences();
+                          if (gs == null || gs.isEmpty()) return -1;
+                          String id = gs.get(0).getRequestId();
+                          if (id == null || !id.startsWith("work_")) return -1;
+                          return Integer.parseInt(id.substring(5));
+                      } catch (Exception e) { return -1; }
+                  }
+
+                  private static boolean esLaPrimera(GeofencingEvent event) {
+                      return cualSalto(event) == 0;
+                  }
+
+                  // ¿Ya registró hoy en ese mismo lugar? La app deja escrito
+                  // "yyyyMMdd~lugar|lugar" cada vez que guarda una jornada.
+                  private static boolean yaRegistradoAhi(Context ctx, SharedPreferences prefs,
+                                                        String today, GeofencingEvent event) {
+                      int i = cualSalto(event);
+                      if (i < 0) return today.equals(prefs.getString("lastRegisteredDate", ""));
+                      String nombre = "";
+                      try {
+                          org.json.JSONArray arr = new org.json.JSONArray(
+                              prefs.getString("geofenceLocations", "[]"));
+                          if (i < arr.length()) nombre = arr.getJSONObject(i).optString("name", "");
+                      } catch (Exception e) {}
+                      nombre = clave(nombre);
+                      if (nombre.isEmpty()) return false;
+                      String apuntado = prefs.getString("lugaresHoy", "");
+                      int corte = apuntado.indexOf('~');
+                      if (corte < 0 || !today.equals(apuntado.substring(0, corte))) return false;
+                      for (String x : apuntado.substring(corte + 1).split("\\|")) {
+                          if (clave(x).equals(nombre)) return true;
+                      }
+                      return false;
+                  }
+
+                  private static String clave(String s) {
+                      if (s == null) return "";
+                      String t = java.text.Normalizer.normalize(s.trim().toLowerCase(java.util.Locale.ROOT),
+                          java.text.Normalizer.Form.NFD);
+                      return t.replaceAll("[\\p{InCombiningDiacriticalMarks}]", "");
+                  }
+
                   @Override
                   public void onReceive(Context ctx, Intent intent) {
                       GeofencingEvent event = GeofencingEvent.fromIntent(intent);
@@ -641,7 +692,16 @@ jobs:
                           if (!ok) return;
                       }
                       String today = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(new java.util.Date());
-                      if (today.equals(prefs.getString("lastRegisteredDate", ""))) return;
+                      // Con "una vez al día" basta con saber si ya registró hoy.
+                      // Con "cada lugar" hay que mirar en cuál: no se repite
+                      // donde ya fichó, pero sí se avisa en uno nuevo.
+                      String modoAviso = prefs.getString("avisoLugar", "cada");
+                      if ("una".equals(modoAviso)) {
+                          if (today.equals(prefs.getString("lastRegisteredDate", ""))) return;
+                          if (!esLaPrimera(event)) return;
+                      } else if (yaRegistradoAhi(ctx, prefs, today, event)) {
+                          return;
+                      }
                       String inicio = prefs.getString("lastHoraInicio", "");
                       String fin    = prefs.getString("lastHoraFin", "");
                       NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
