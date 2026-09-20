@@ -82,9 +82,10 @@
   },
   "202606": {
     "guillermo.rc82@gmail.com": {
-      "bienios": 1,
+      "desde": "2023-06-06",
+      "pctBienios": 0,
       "sindicato": 0,
-      "prorrata": 135.2,
+      "prorrata": 0,
       "tipos": {
         "cc": 4.7,
         "desempleo": 1.55,
@@ -93,15 +94,17 @@
         "irpf": 15
       },
       "dias": {
-        "asistencia": 30
+        "asistencia": 0
       },
       "extra": {
-        "h": 7.5,
-        "p": 11
+        "p": 15.5
+      },
+      "noct": {
+        "p": 2.98
       },
       "extras": [],
       "nota": "",
-      "actualizado": "2026-09-20T09:41:04.248Z"
+      "actualizado": "2026-09-20T15:48:59.417Z"
     }
   },
   "202607": {
