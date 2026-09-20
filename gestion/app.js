@@ -5023,11 +5023,25 @@ const app = {
         const dePegaPuesto = p => p === SIN || p === SIN_SERVICIO;
         Object.keys(porPuesto).sort((a, b) =>
             (alFinal(a) - alFinal(b)) || a.localeCompare(b, 'es')).forEach(puesto => {
-            // Los días que ese lugar no abre no se enseña, salvo que alguien
-            // haya registrado jornada: un dato real no debe desaparecer.
+            // Los días que ese lugar no abre no hay turnos que cubrir, salvo
+            // que alguien haya registrado jornada: un dato real no desaparece.
+            // Antes el lugar se escondía del todo y no había forma de saber si
+            // estaba cubierto o es que ese día no abría, así que en "Todos"
+            // sale igual, apagado y diciéndolo.
             const dias = DIAS_POR_LUGAR[this._clavePuesto(puesto)];
-            if (dias && !dias.includes(diaSemana)
-                && !porPuesto[puesto].some(x => x.j && !x.j.v && !x.j.p)) return;
+            const cerradoHoy = !!dias && !dias.includes(diaSemana)
+                && !porPuesto[puesto].some(x => x.j && !x.j.v && !x.j.p);
+            if (cerradoHoy) {
+                if (filtro !== 'todos') return;
+                const DIA_PLURAL = ['los domingos', 'los lunes', 'los martes', 'los miércoles',
+                                    'los jueves', 'los viernes', 'los sábados'];
+                tarjetas.push(`<div class="pst-card cerrado">
+                    <div class="pst-head">
+                        <span class="pst-nombre">${esc(puesto)}</span>
+                        <span class="pst-cob">no abre ${DIA_PLURAL[diaSemana]}</span>
+                    </div></div>`);
+                return;
+            }
             // Ordenar por hora de entrada: así se ve de un vistazo si el relevo encaja
             const gente = porPuesto[puesto].slice().sort((a, b) => {
                 // El que viene de la víspera va primero: lleva dentro desde ayer
