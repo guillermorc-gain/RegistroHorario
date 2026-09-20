@@ -1341,11 +1341,7 @@
     "diasAt": 1789820835635,
     "horario": "",
     "grupo": null,
-    "lugares": {
-      "20260919": "Son Rossinyol",
-      "20260920": "Son Rossinyol",
-      "20260921": "Control de acceso"
-    },
+    "lugares": {},
     "horarios": {
       "202609": {
         "i": "05:30",
