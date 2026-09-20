@@ -1554,7 +1554,8 @@
     "jornadas": [],
     "email": "prueba-1789763845092@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:40:41.409Z"
+    "actualizado": "2026-09-20T15:40:46.035Z",
+    "oculto": true
   },
   "prueba-1789764004986@prueba.local": {
     "nombre": "Pepe",
