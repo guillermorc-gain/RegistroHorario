@@ -3427,6 +3427,97 @@ const app = {
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
+    // ── Enviar un export por email ───────────────────────────────────────────
+    // Un navegador no puede mandar un correo con adjunto por su cuenta: si el
+    // móvil sabe compartir archivos, se comparte a la app de correo que se
+    // elija con el fichero ya puesto; si no, se descarga y se abre el correo
+    // para adjuntarlo a mano. Los contactos son solo para no escribir el
+    // correo cada vez.
+    _contactosEmail() {
+        try {
+            const l = JSON.parse(localStorage.getItem('contactosEmail') || '[]');
+            return Array.isArray(l) ? l : [];
+        } catch (_) { return []; }
+    },
+
+    _guardarContactosEmail(lista) {
+        localStorage.setItem('contactosEmail', JSON.stringify([...new Set(lista)]));
+    },
+
+    prepararEmailRegistro() {
+        if (!this._hayColumnas()) return;
+        document.getElementById('expModal').classList.remove('show');
+        this.mostrarEnviarEmail(this._csvRegistro(), this._nombreExport('csv'),
+            'text/csv;charset=utf-8;', 'Mis jornadas');
+    },
+
+    prepararEmailNominas() {
+        if (!this._clavesNominasGuardadas().length) { this._mostrarToast('No hay nóminas que exportar', 3000); return; }
+        document.getElementById('expNomModal').classList.remove('show');
+        this.mostrarEnviarEmail(this._csvDe(this.CABECERAS_EXPORT_NOM, this._filasExportNom()),
+            this._nombreExport('csv').replace('jornadas', 'nominas'),
+            'text/csv;charset=utf-8;', 'Mis nóminas');
+    },
+
+    mostrarEnviarEmail(contenido, nombre, tipo, asunto) {
+        this._emailPendiente = { contenido, nombre, tipo, asunto };
+        this._renderContactosEmail();
+        document.getElementById('emailModal').classList.add('show');
+        if (this.darkMode) document.getElementById('emailModalContent').classList.add('dark');
+    },
+
+    _renderContactosEmail() {
+        const cont = document.getElementById('emailContactos');
+        if (!cont) return;
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const lista = this._contactosEmail();
+        cont.innerHTML = lista.length ? lista.map(email => `<div class="email-contacto">
+                <span onclick="app._enviarAContacto('${esc(email)}')">${esc(email)}</span>
+                <button onclick="app._borrarContactoEmail('${esc(email)}')" title="Quitar">×</button>
+            </div>`).join('')
+            : '<div class="ops-field-sub" style="padding:8px 16px;">Sin contactos guardados todavía.</div>';
+    },
+
+    _borrarContactoEmail(email) {
+        this._guardarContactosEmail(this._contactosEmail().filter(e => e !== email));
+        this._renderContactosEmail();
+    },
+
+    _nuevoContactoEmail() {
+        const input = document.getElementById('emailNuevo');
+        const email = (input?.value || '').trim();
+        if (!email || !email.includes('@')) { this._mostrarToast('Pon un correo válido', 2500); return; }
+        this._guardarContactosEmail([...this._contactosEmail(), email]);
+        input.value = '';
+        this._renderContactosEmail();
+    },
+
+    _enviarSoloEmail() {
+        const email = (document.getElementById('emailNuevo')?.value || '').trim();
+        if (!email || !email.includes('@')) { this._mostrarToast('Pon un correo válido', 2500); return; }
+        this._enviarAContacto(email);
+    },
+
+    async _enviarAContacto(email) {
+        const p = this._emailPendiente;
+        if (!p) return;
+        document.getElementById('emailModal').classList.remove('show');
+        try {
+            const blob = new Blob([p.contenido], { type: p.tipo });
+            const file = new File([blob], p.nombre, { type: p.tipo });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], title: p.asunto, text: `Para ${email}` });
+                return;
+            }
+        } catch (_) { return; }   // el usuario cerró la hoja de compartir: no pasa nada
+        // Sin compartir archivos: se descarga y se abre el correo para adjuntarlo a mano
+        this._descargar(p.contenido, p.nombre, p.tipo);
+        const asunto = encodeURIComponent(p.asunto);
+        const cuerpo = encodeURIComponent(`Te adjunto ${p.nombre}, que se acaba de descargar.`);
+        window.open(`mailto:${email}?subject=${asunto}&body=${cuerpo}`, '_blank');
+        this._mostrarToast('📎 Descargado — adjúntalo al correo que se ha abierto', 5000);
+    },
+
     // ── Lugar de trabajo de la jornada ───────────────────────────────────────
     // El lugar se elige aquí, y quien pasa por varios sitios en el día —los de
     // calle— puede apuntar cada uno con su horario. La primera entrada y la

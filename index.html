@@ -69,6 +69,15 @@
         .pm-op.sel{background:#eaf2fd;font-weight:700;color:var(--g1);}
         .modal-card.dark .pm-op.sel{background:#14283f;}
         .pm-turnos{font-size:10.5px;color:#95a5a6;font-weight:400;}
+        .email-contacto{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid #f2f2f2;}
+        .modal-card.dark .email-contacto{border-color:#2d3561;}
+        .email-contacto span{flex:1;font-size:13.5px;color:#2c3e50;cursor:pointer;}
+        .modal-card.dark .email-contacto span{color:#e0e0e0;}
+        .email-contacto button{border:none;background:transparent;color:#e74c3c;font-size:16px;cursor:pointer;padding:0 4px;}
+        .email-nuevo{display:flex;gap:8px;padding:10px 16px;}
+        .email-nuevo input{flex:1;min-width:0;padding:9px 11px;border:1.5px solid #e8eaf0;border-radius:8px;font-size:13.5px;font-family:inherit;background:white;color:#2c3e50;}
+        .modal-card.dark .email-nuevo input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
+        .email-nuevo button{flex-shrink:0;padding:9px 14px;border:none;border-radius:8px;background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;}
         .pm-check{margin-left:auto;color:var(--g1);font-weight:800;}
         .pm-paso{padding:11px 16px;font-size:12.5px;color:#2c3e50;background:#f4f6f9;border-bottom:1px solid #efefef;}
         .modal-card.dark .pm-nota{border-color:#2d3561;color:#a0a0a0;}
@@ -1570,6 +1579,9 @@
             <div class="pm-op" onclick="app.exportarCSV()">
                 <div style="flex:1;">CSV<br><span class="pm-turnos">Lo abre cualquier programa</span></div>
             </div>
+            <div class="pm-op" onclick="app.prepararEmailRegistro()">
+                <div style="flex:1;">✉️ Enviar por email<br><span class="pm-turnos">A un contacto guardado o a uno nuevo</span></div>
+            </div>
         </div>
     </div>
 </div>
@@ -1591,6 +1603,31 @@
             </div>
             <div class="pm-op" onclick="app.exportarNomCSV()">
                 <div style="flex:1;">CSV<br><span class="pm-turnos">Lo abre cualquier programa</span></div>
+            </div>
+            <div class="pm-op" onclick="app.prepararEmailNominas()">
+                <div style="flex:1;">✉️ Enviar por email<br><span class="pm-turnos">A un contacto guardado o a uno nuevo</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Enviar un export por email -->
+<div class="modal" id="emailModal">
+    <div class="modal-card" id="emailModalContent">
+        <div class="modal-header">
+            <h3>✉️ Enviar por email</h3>
+            <button class="modal-close" onclick="document.getElementById('emailModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div class="pm-quien">Tus contactos</div>
+            <div id="emailContactos"></div>
+            <div class="pm-quien">O uno nuevo</div>
+            <div class="email-nuevo">
+                <input type="email" id="emailNuevo" placeholder="correo@ejemplo.com">
+                <button onclick="app._nuevoContactoEmail()">Guardar</button>
+            </div>
+            <div class="pm-op" onclick="app._enviarSoloEmail()">
+                <div style="flex:1;">Enviar solo esta vez, sin guardar<span class="pm-turnos"></span></div>
             </div>
         </div>
     </div>
