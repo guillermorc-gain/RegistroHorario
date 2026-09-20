@@ -2868,169 +2868,28 @@
     "conductor": "4850-0",
     "puesto": "Son Rossinyol",
     "avatar": null,
-    "version": "build-97",
-    "horasMes": 45.5,
-    "horasTotales": 45.5,
-    "diasMes": 13,
-    "horaInicio": "05:30",
-    "horaFin": "09:00",
+    "version": "build-107",
+    "horasMes": 0,
+    "horasTotales": 0,
+    "diasMes": 0,
+    "horaInicio": "",
+    "horaFin": "",
     "horarioDe": "anterior",
-    "turno": "M",
+    "turno": "",
     "jornadaHoras": 3.5,
     "horasAnuales": 777,
     "ritmo": "lv",
     "dias": [
       1,
+      2,
       3,
+      4,
       5
     ],
-    "jornadas": [
-      {
-        "f": "20260902",
-        "i": "05:30",
-        "o": "09:00",
-        "h": 3.5,
-        "n": 0,
-        "pu": "Son Rossinyol"
-      },
-      {
-        "f": "20260904",
-        "i": "05:30",
-        "o": "09:00",
-        "h": 3.5,
-        "n": 0,
-        "pu": "Son Rossinyol"
-      },
-      {
-        "f": "20260907",
-        "i": "05:30",
-        "o": "09:00",
-        "h": 3.5,
-        "n": 0,
-        "pu": "Son Rossinyol"
-      },
-      {
-        "f": "20260909",
-        "i": "05:30",
-        "o": "09:00",
-        "h": 3.5,
-        "n": 0,
-        "pu": "Son Rossinyol"
-      },
-      {
-        "f": "20260911",
-        "i": "05:30",
-        "o": "09:00",
-        "h": 3.5,
-        "n": 0,
-        "pu": "Son Rossinyol"
-      },
-      {
-        "f": "20260914",
-        "i": "05:30",
-        "o": "09:00",
-        "h": 3.5,
-        "n": 0,
-        "pu": "Son Rossinyol"
-      },
-      {
-        "f": "20260916",
-        "i": "05:30",
-        "o": "09:00",
-        "h": 3.5,
-        "n": 0,
-        "pu": "Son Rossinyol"
-      },
-      {
-        "f": "20260918",
-        "i": "05:30",
-        "o": "09:00",
-        "h": 3.5,
-        "n": 0,
-        "pu": "Son Rossinyol"
-      },
-      {
-        "f": "20260921",
-        "i": "05:30",
-        "o": "09:00",
-        "h": 3.5,
-        "n": 0,
-        "pu": "Son Rossinyol"
-      },
-      {
-        "f": "20260923",
-        "i": "05:30",
-        "o": "09:00",
-        "h": 3.5,
-        "n": 0,
-        "pu": "Son Rossinyol"
-      },
-      {
-        "f": "20260925",
-        "i": "05:30",
-        "o": "09:00",
-        "h": 3.5,
-        "n": 0,
-        "pu": "Son Rossinyol"
-      },
-      {
-        "f": "20260928",
-        "i": "05:30",
-        "o": "09:00",
-        "h": 3.5,
-        "n": 0,
-        "pu": "Son Rossinyol"
-      },
-      {
-        "f": "20260930",
-        "i": "05:30",
-        "o": "09:00",
-        "h": 3.5,
-        "n": 0,
-        "pu": "Son Rossinyol"
-      }
-    ],
+    "jornadas": [],
     "email": "prueba-1789814286874@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T20:33:47.568Z",
-    "horarios": {
-      "202609": {
-        "i": "05:30",
-        "f": "09:00"
-      }
-    },
-    "lugares": {
-      "20260901": "Son Rossinyol",
-      "20260902": "Son Rossinyol",
-      "20260903": "Son Rossinyol",
-      "20260904": "Son Rossinyol",
-      "20260905": "Son Rossinyol",
-      "20260906": "Son Rossinyol",
-      "20260907": "Son Rossinyol",
-      "20260908": "Son Rossinyol",
-      "20260909": "Son Rossinyol",
-      "20260910": "Son Rossinyol",
-      "20260911": "Son Rossinyol",
-      "20260912": "Son Rossinyol",
-      "20260913": "Son Rossinyol",
-      "20260914": "Son Rossinyol",
-      "20260915": "Son Rossinyol",
-      "20260916": "Son Rossinyol",
-      "20260917": "Son Rossinyol",
-      "20260918": "Son Rossinyol",
-      "20260919": "Son Rossinyol",
-      "20260920": "Son Rossinyol",
-      "20260921": "Son Rossinyol",
-      "20260922": "Son Rossinyol",
-      "20260923": "Son Rossinyol",
-      "20260924": "Son Rossinyol",
-      "20260925": "Son Rossinyol",
-      "20260926": "Son Rossinyol",
-      "20260927": "Son Rossinyol",
-      "20260928": "Son Rossinyol",
-      "20260929": "Son Rossinyol",
-      "20260930": "Son Rossinyol"
-    }
+    "actualizado": "2026-09-20T00:09:15.748Z"
   },
   "prueba-1789850043571@prueba.local": {
     "nombre": "Buja",
