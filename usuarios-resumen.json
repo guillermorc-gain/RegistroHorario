@@ -1370,13 +1370,13 @@
     "nombre": "Guillermo Ríos Correa",
     "conductor": "1234-5",
     "avatar": null,
-    "version": "build-255",
+    "version": "build-257",
     "horasMes": 14,
     "horasTotales": 14,
     "diasMes": 3,
     "turno": "T",
     "puesto": "",
-    "actualizado": "2026-09-20T10:23:33.617Z",
+    "actualizado": "2026-09-20T17:21:01.182Z",
     "horaInicio": "18:00",
     "horaFin": "22:00",
     "horarioDe": "anterior",
@@ -1387,7 +1387,7 @@
         "i": "17:00",
         "o": "22:00",
         "n": 1,
-        "pu": "Son Rossinyol"
+        "pu": ""
       },
       {
         "f": "20260917",
@@ -1395,7 +1395,7 @@
         "i": "17:00",
         "o": "22:00",
         "n": 1,
-        "pu": "Son Rossinyol"
+        "pu": ""
       },
       {
         "f": "20260918",
@@ -1403,7 +1403,7 @@
         "i": "18:00",
         "o": "22:00",
         "n": 1,
-        "pu": "Son Rossinyol"
+        "pu": ""
       }
     ],
     "horasAnuales": 1700,
