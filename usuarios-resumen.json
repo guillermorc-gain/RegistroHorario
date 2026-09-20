@@ -1419,14 +1419,14 @@
     "conductor": "8955-6",
     "puesto": "Control de acceso",
     "avatar": null,
-    "version": "build-69",
-    "horasMes": 7,
-    "horasTotales": 7,
-    "diasMes": 1,
-    "horaInicio": "07:00",
-    "horaFin": "14:00",
+    "version": "build-119",
+    "horasMes": 0,
+    "horasTotales": 0,
+    "diasMes": 0,
+    "horaInicio": "",
+    "horaFin": "",
     "horarioDe": "anterior",
-    "turno": "M",
+    "turno": "",
     "jornadaHoras": 7,
     "horasAnuales": 1700,
     "ritmo": "lv",
@@ -1437,32 +1437,10 @@
       4,
       5
     ],
-    "jornadas": [
-      {
-        "f": "20260918",
-        "i": "07:00",
-        "o": "14:00",
-        "h": 7,
-        "n": 0
-      }
-    ],
+    "jornadas": [],
     "email": "prueba-1789759514777@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:36:22.536Z",
-    "bajas": [
-      {
-        "d": "20260918",
-        "h": "20260930"
-      }
-    ],
-    "baja": true,
-    "horarios": {
-      "202609": {
-        "i": "07:00",
-        "f": "14:00"
-      }
-    },
-    "oculto": false
+    "actualizado": "2026-09-20T15:36:25.920Z"
   },
   "prueba-1789759539366@prueba.local": {
     "nombre": "Juan",
