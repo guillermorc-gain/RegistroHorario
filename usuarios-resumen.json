@@ -10,7 +10,7 @@
     "diasMes": 14,
     "turno": "M",
     "puesto": "Control",
-    "actualizado": "2026-09-20T21:14:02.167Z",
+    "actualizado": "2026-09-20T21:15:32.406Z",
     "horaInicio": "09:00",
     "horaFin": "12:30",
     "horarioDe": "anterior",
@@ -895,15 +895,6 @@
         "o": "17:30",
         "n": 0,
         "pu": "Control"
-      },
-      {
-        "f": "20260824",
-        "h": 0,
-        "i": "09:00",
-        "o": "12:30",
-        "n": 0,
-        "pu": "Control",
-        "v": 1
       },
       {
         "f": "20260825",
