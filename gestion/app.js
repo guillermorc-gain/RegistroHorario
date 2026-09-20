@@ -4976,6 +4976,8 @@ const app = {
 
         // Contadores de la cabecera: quién ha trabajado ese día y quién está
         // dentro ahora mismo (esto último solo tiene sentido en el día de hoy).
+        const _ahora = new Date();
+        const ahoraMin = _ahora.getHours() * 60 + _ahora.getMinutes();
         let trabajaron = 0, ahoraMismo = 0;
         conPuesto.forEach(({ u, j, deAyer, enBaja, enVac }) => {
             if (enBaja || enVac || !j || j.v || j.p) return;
@@ -5051,9 +5053,23 @@ const app = {
                 if (mb === null) return -1;
                 return ma - mb;
             });
-            const trabajando = x => esHoy
-                ? this._estadoJornada(x.u, x.j, true, false, x.deAyer, x.enBaja, x.enVac).clase === 'verde'
-                : !!(x.j && !x.j.v && !x.j.p && !x.enBaja && !x.enVac);
+            // En jornada: el que está dentro de su turno ahora mismo. Cuenta lo
+            // que haya fichado y, si no ha fichado, lo que tenga asignado —que
+            // aquí es lo normal: el gestor pone el turno y el trabajador ficha
+            // al llegar—. Mirando solo lo fichado, el filtro salía a cero con
+            // media plantilla en la calle.
+            const trabajando = x => {
+                if (x.enBaja || x.enVac) return false;
+                if (x.j && !x.j.v && !x.j.p) {
+                    return esHoy
+                        ? this._estadoJornada(x.u, x.j, true, false, x.deAyer, false, false).clase === 'verde'
+                        : true;
+                }
+                if (!x.plan) return false;
+                return esHoy
+                    ? this._dentroDeFranja(ahoraMin, { desde: x.plan.i, hasta: x.plan.f }, 0)
+                    : true;
+            };
             const dentro = gente.filter(trabajando).length;
             const delDia = gente.filter(({ j, deAyer, enBaja, enVac }) =>
                 !enBaja && !enVac && j && !j.v && !j.p && !deAyer).length;
@@ -5068,8 +5084,8 @@ const app = {
                 .map(x => this._turnoDe(puesto, horaTurno(x)))
                 .filter(Boolean));
             const huecos = franjas.filter(f => !cubiertos.has(f.id));
-            // Los que tienen turno puesto ese día pero todavía no han entrado
-            const previstos = gente.filter(x => !x.j && x.plan).length;
+            // Los que tienen turno puesto ese día pero aún no les toca entrar
+            const previstos = gente.filter(x => !x.j && x.plan && !trabajando(x)).length;
 
             // Las cuentas van aquí, antes de descartar nada por el filtro, para
             // que cada botón diga lo suyo y no solo el que esté puesto.
@@ -5132,8 +5148,11 @@ const app = {
                 : dePega
                 ? `${visibles.length} ${visibles.length === 1 ? 'persona' : 'personas'}`
                 : esHoy
+                // Hoy, quien tiene turno puesto pero no está dentro puede ser
+                // que aún no haya entrado o que ya haya salido: "con turno"
+                // vale para los dos, "previsto" solo para el primero.
                 ? (dentro > 0 ? `${dentro} en turno`
-                   : previstos > 0 ? `${previstos} previsto${previstos === 1 ? '' : 's'}` : 'sin cubrir')
+                   : previstos > 0 ? `${previstos} con turno` : 'sin cubrir')
                 : (delDia + previstos > 0
                    ? `${delDia + previstos} ${esFuturo
                         ? `previsto${delDia + previstos === 1 ? '' : 's'}` : 'ese día'}`
@@ -5171,7 +5190,7 @@ const app = {
         const n = id => (cuenta && cuenta[id] !== undefined) ? ` ${cuenta[id]}` : '';
         cont.innerHTML = [
             ['todos', 'Todos'],
-            ['trabajando',  esHoy ? 'Trabajando' : 'En jornada'],
+            ['trabajando',  'En jornada'],
             ['sincubrir',   'Horarios sin cubrir'],
         ].map(([id, txt]) => `<button class="${sel === id ? 'activo' : ''}"
                 onclick="event.stopPropagation();app.filtrarLugares('${id}')">${
