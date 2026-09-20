@@ -2078,7 +2078,8 @@
     "jornadas": [],
     "email": "prueba-1789850043571@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:31:58.779Z",
-    "lugares": {}
+    "actualizado": "2026-09-20T15:46:19.655Z",
+    "lugares": {},
+    "oculto": true
   }
 }
