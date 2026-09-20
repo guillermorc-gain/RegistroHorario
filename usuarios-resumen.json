@@ -1646,7 +1646,17 @@
     ],
     "email": "prueba-1789766752991@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:38:40.357Z"
+    "actualizado": "2026-09-20T15:38:40.357Z",
+    "horariosDia": {
+      "20260919": {
+        "i": "06:00",
+        "f": "13:00"
+      }
+    },
+    "tramosDia": {},
+    "lugares": {
+      "20260919": "Calle"
+    }
   },
   "prueba-1789766856622@prueba.local": {
     "nombre": "Juan Valera",
