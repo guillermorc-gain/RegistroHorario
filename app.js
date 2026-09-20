@@ -2726,6 +2726,156 @@ const app = {
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
+    // ── Mi nómina ────────────────────────────────────────────────────────────
+    // La rellena el gestor y aquí solo se mira: lo que ha cobrado cada mes,
+    // con lo que ha trabajado al lado y la diferencia con el mes anterior.
+    // El servidor solo devuelve la de uno mismo; pedir la de otro no lleva a
+    // ninguna parte porque el correo sale del token, no de la petición.
+
+    NOMINAS_URL: 'https://registro-horario-emt.vercel.app/api/nominas',
+    _misNominas: null,
+    _miNomMes: null,
+
+    _mesDeHoy() {
+        const d = new Date();
+        return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+    },
+
+    _mesMas(mes, n) {
+        const d = new Date(+mes.slice(0, 4), +mes.slice(4, 6) - 1 + n, 1, 12);
+        return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+    },
+
+    _nombreMes(mes) {
+        return `${MESES_ES[+mes.slice(4, 6) - 1]} ${mes.slice(0, 4)}`;
+    },
+
+    _eur(n) {
+        return (Math.round((Number(n) || 0) * 100) / 100)
+            .toFixed(2).replace('.', ',') + ' €';
+    },
+
+    miNomMes(paso) {
+        this._miNomMes = this._mesMas(this._miNomMes || this._mesDeHoy(), paso);
+        this._renderMiNomina();
+    },
+
+    async _cargarMisNominas() {
+        this._miNomMes = this._miNomMes || this._mesDeHoy();
+        if (!this.usuarioActual?.email) return;
+        this._renderMiNomina();                 // lo que haya, ya
+        try {
+            const r = await fetch(
+                `${this.NOMINAS_URL}?mio=${encodeURIComponent(this.usuarioActual.email)}`,
+                { cache: 'no-store' });
+            if (!r.ok) throw new Error(r.status);
+            this._misNominas = await r.json() || {};
+            localStorage.setItem('misNominas', JSON.stringify(this._misNominas));
+        } catch (_) {
+            // Sin red vale lo último que se vio: una nómina no cambia sola
+            if (!this._misNominas) {
+                try { this._misNominas = JSON.parse(localStorage.getItem('misNominas') || 'null'); }
+                catch (__) { this._misNominas = null; }
+            }
+        }
+        this._renderMiNomina();
+    },
+
+    _totalNomina(n) {
+        if (!n) return null;
+        const suma = ls => (ls || []).reduce((t, l) => t + (Number(l.i) || 0), 0);
+        const bruto = suma(n.lineas), descuentos = suma(n.deducciones);
+        return { bruto, descuentos, liquido: Math.round((bruto - descuentos) * 100) / 100 };
+    },
+
+    // Lo que ha trabajado ese mes, de su propio historial
+    _miTrabajoDelMes(mes) {
+        let horas = 0, extras = 0, nocturnas = 0, festivos = 0;
+        const dias = new Set();
+        Object.entries(this._historialFull || {}).forEach(([id, r]) => {
+            if (this._fechaDeId(id).slice(0, 6) !== mes) return;
+            const h = parseFloat(r.horas) || 0;
+            dias.add(this._fechaDeId(id));
+            if (r.extraManual) extras += h; else horas += h;
+            nocturnas += parseFloat(r.horasNocturnas) || 0;
+            if (r.festivo && h > 0) festivos++;
+        });
+        const r1 = n => Math.round(n * 10) / 10;
+        return { dias: dias.size, horas: r1(horas), extras: r1(extras),
+                 nocturnas: r1(nocturnas), festivos };
+    },
+
+    _renderMiNomina() {
+        const cont = document.getElementById('miNomina');
+        if (!cont) return;
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const mes = this._miNomMes = this._miNomMes || this._mesDeHoy();
+        const titulo = document.getElementById('miNomMes');
+        if (titulo) titulo.textContent = this._nombreMes(mes);
+
+        const n = this._misNominas?.[mes];
+        const t = this._miTrabajoDelMes(mes);
+        const plural = (v, una, varias) => v === 1 ? una : varias;
+        const trabajo = `<div class="nom-datos">` + [
+            [plural(t.dias, 'día', 'días'), t.dias],
+            [plural(t.horas, 'hora', 'horas'), t.horas],
+            ['extras', t.extras], ['nocturnas', t.nocturnas],
+            [plural(t.festivos, 'festivo', 'festivos'), t.festivos],
+        ].map(([l, v]) => `<span class="nom-dato"><b>${String(v).replace('.', ',')}</b> ${l}</span>`)
+         .join('') + `</div>`;
+
+        if (!n) {
+            cont.innerHTML = `<div class="nom-tarjeta">
+                <div class="nom-sec">Lo que has trabajado</div>${trabajo}
+                <div class="nom-vacio">Todavía no hay nómina de ${esc(this._nombreMes(mes))}.<br>
+                    Cuando gestión la rellene, la verás aquí.</div></div>`;
+            return;
+        }
+
+        const linea = (l, resta) => `<div class="nom-l${resta ? ' resta' : ''}">
+            <span class="nom-l-c">${esc(l.c)}</span>
+            <span class="nom-l-i">${resta ? '−' : ''}${this._eur(l.i)}</span></div>`;
+        const tot = this._totalNomina(n);
+        cont.innerHTML = `<div class="nom-tarjeta">
+            <div class="nom-sec">Lo que has trabajado</div>${trabajo}
+            <div class="nom-sec">Devengos</div>
+            ${(n.lineas || []).map(l => linea(l, false)).join('') || '<div class="nom-l"><span class="nom-l-c">—</span></div>'}
+            ${(n.deducciones || []).length ? `<div class="nom-sec">Deducciones</div>`
+                + n.deducciones.map(l => linea(l, true)).join('') : ''}
+            <div class="nom-liquido">
+                <span class="nom-liquido-l">Líquido</span>
+                <span class="nom-liquido-v">${this._eur(tot.liquido)}</span></div>
+            ${n.nota ? `<div class="nom-sec">Nota de gestión</div>
+                <div class="nom-l"><span class="nom-l-c" style="white-space:normal;">${esc(n.nota)}</span></div>` : ''}
+            ${this._compararMiNomina(mes, n)}
+        </div>`;
+    },
+
+    // Frente al mes anterior, si lo hay
+    _compararMiNomina(mes, actual) {
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const anterior = this._mesMas(mes, -1);
+        const prev = this._misNominas?.[anterior];
+        if (!prev) return '';
+        const aMapa = ls => Object.fromEntries((ls || []).map(l => [l.c, Number(l.i) || 0]));
+        const ahoraD = aMapa(actual.lineas), ahoraR = aMapa(actual.deducciones);
+        const antesD = aMapa(prev.lineas),   antesR = aMapa(prev.deducciones);
+        const conceptos = [...new Set([...Object.keys(ahoraD), ...Object.keys(antesD),
+                                       ...Object.keys(ahoraR), ...Object.keys(antesR)])];
+        const fila = (c, d) => {
+            const clase = d > 0 ? 'sube' : d < 0 ? 'baja' : 'igual';
+            return `<div class="nom-cmp"><span class="nom-cmp-c">${esc(c)}</span>
+                <span class="nom-cmp-v ${clase}">${d > 0 ? '+' : ''}${this._eur(d)}</span></div>`;
+        };
+        const tA = this._totalNomina(actual), tB = this._totalNomina(prev);
+        return `<div class="nom-sec">Frente a ${esc(this._nombreMes(anterior))}</div>`
+            + fila(`Líquido (antes ${this._eur(tB.liquido)})`,
+                   Math.round((tA.liquido - tB.liquido) * 100) / 100)
+            + conceptos.map(c => fila(c, Math.round((
+                ((ahoraD[c] ?? 0) - (ahoraR[c] ?? 0)) - ((antesD[c] ?? 0) - (antesR[c] ?? 0))
+              ) * 100) / 100)).join('');
+    },
+
     // ── Lugar de trabajo de la jornada ───────────────────────────────────────
     // El lugar se elige aquí, y quien pasa por varios sitios en el día —los de
     // calle— puede apuntar cada uno con su horario. La primera entrada y la
@@ -3413,6 +3563,7 @@ const app = {
         localStorage.setItem('activeTab', String(idx));
         if (idx === 1) this._cargarCuadrante();
         if (idx === 2) { this._pintarDestino(); this._cargarNotas(); }
+        if (idx === 3) this._cargarMisNominas();
     },
 
     _tabDragStart(e) {
