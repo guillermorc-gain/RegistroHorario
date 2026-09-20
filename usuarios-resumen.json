@@ -2728,57 +2728,22 @@
     "conductor": "8952-6",
     "puesto": "Calle",
     "avatar": null,
-    "version": "build-69",
-    "horasMes": 7,
-    "horasTotales": 7,
-    "diasMes": 1,
-    "horaInicio": "06:00",
-    "horaFin": "13:00",
-    "horarioDe": "hoy",
-    "turno": "M",
+    "version": "build-119",
+    "horasMes": 0,
+    "horasTotales": 0,
+    "diasMes": 0,
+    "horaInicio": "",
+    "horaFin": "",
+    "horarioDe": "anterior",
+    "turno": "",
     "jornadaHoras": 7,
     "horasAnuales": 1700,
     "ritmo": "6y2",
     "dias": null,
-    "jornadas": [
-      {
-        "f": "20260919",
-        "i": "06:00",
-        "o": "13:00",
-        "h": 7,
-        "n": 0
-      }
-    ],
+    "jornadas": [],
     "email": "prueba-1789812365837@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:34:02.485Z",
-    "horariosDia": {
-      "20260918": {
-        "i": "14:00",
-        "f": "21:00"
-      },
-      "20260922": {
-        "i": "21:00",
-        "f": "00:00"
-      }
-    },
-    "lugares": {
-      "20260918": "Calle",
-      "20260920": "Son Rossinyol",
-      "20260921": "Calle",
-      "20260922": "Calle"
-    },
-    "horarios": {
-      "202609": {
-        "i": "13:00",
-        "f": "21:00"
-      }
-    },
-    "revisiones": {
-      "20260919": "plan"
-    },
-    "tramosDia": {},
-    "oculto": false
+    "actualizado": "2026-09-20T15:34:11.797Z"
   },
   "prueba-1789812576607@prueba.local": {
     "nombre": "Enrique",
