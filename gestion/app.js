@@ -4541,13 +4541,33 @@ const app = {
             return;
         }
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-        cont.innerHTML = fict.map(u => `<div class="pr-item">
+        cont.innerHTML = fict.map(u => `<div class="pr-item${u.oculto ? ' pr-oculto' : ''}">
             <span class="pr-item-t"><b>${esc(u.conductor) || '—'}</b> ${esc(u.nombre)}
                 ${u.puesto ? `<span class="cond-puesto">· ${esc(u.puesto)}</span>` : ''}
+                ${u.oculto ? '<span class="cond-puesto">· oculto</span>' : ''}
                 <br><span class="ops-field-sub">${(u.jornadas || []).length} jornadas · ${u.horasTotales || 0}h</span></span>
+            <button class="pr-ed" title="${u.oculto ? 'Mostrar' : 'Ocultar'}"
+                onclick="app._toggleOcultoFicticio('${esc(u.email)}')">${u.oculto ? '🙈' : '👁️'}</button>
             <button class="pr-ed"  onclick="app._nuevoFicticio('${esc(u.email)}')">✏️</button>
             <button class="pr-del" onclick="app._borrarFicticio('${esc(u.email)}')">×</button>
         </div>`).join('');
+    },
+
+    async _toggleOcultoFicticio(email) {
+        const u = (this._conductores || {})[email];
+        if (!u) return;
+        const ficticio = { ...u, oculto: !u.oculto };
+        try {
+            const resp = await fetch(this.USUARIOS_URL, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ email, ficticio })
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._conductores = data;
+            this._renderConductores(); this._renderPrueba();
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
     // Los lugares definidos más los que ya estén en uso
@@ -5445,7 +5465,7 @@ const app = {
         const fecha = this._fechaOffset(this._puestosOffset);
         const esHoy = this._puestosOffset === 0;
         const orden = localStorage.getItem('ordenTrabajadores') || 'nombre';
-        const todos = Object.values(this._conductores || {});
+        const todos = Object.values(this._conductores || {}).filter(u => !u.oculto);
         const filtro = localStorage.getItem('filtroTrabajadores') || 'todos';
         this._renderFiltrosCond(todos, fecha);
         const lista = todos
