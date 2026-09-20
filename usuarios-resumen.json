@@ -2460,7 +2460,8 @@
     "jornadas": [],
     "email": "prueba-1789812974724@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:35:15.525Z"
+    "actualizado": "2026-09-20T15:35:18.397Z",
+    "oculto": true
   },
   "prueba-1789814286874@prueba.local": {
     "nombre": "Manolo Rodríguez",
