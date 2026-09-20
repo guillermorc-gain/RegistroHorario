@@ -1335,17 +1335,8 @@
     ],
     "horasAnuales": 1700,
     "jornadaHoras": 7,
-    "vacaciones": [
-      {
-        "desde": "2026-09-21",
-        "hasta": "2026-09-30"
-      },
-      {
-        "desde": "2026-09-24",
-        "hasta": "2026-09-30"
-      }
-    ],
-    "vacacionesAt": 1789820850269,
+    "vacaciones": [],
+    "vacacionesAt": 1789917551384,
     "dias": null,
     "diasAt": 1789820835635,
     "horario": "",
