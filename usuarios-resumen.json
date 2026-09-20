@@ -2688,7 +2688,9 @@
       "20260917": "ok",
       "20260918": "ok"
     },
-    "oculto": true
+    "oculto": true,
+    "horariosDia": {},
+    "tramosDia": {}
   },
   "prueba-1789766365436@prueba.local": {
     "nombre": "Toni Valverde",
