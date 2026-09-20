@@ -80,10 +80,31 @@ function limpiarLineas(ls) {
     .map(l => ({ c: texto(l.c), i: euros(l.i) }));
 }
 
+// De la nómina solo se guarda lo que hay que decidir: los porcentajes, los
+// bienios y el sindicato. Los precios del convenio y los días salen del
+// convenio y de lo que haya registrado el trabajador, así que no se copian
+// aquí —copiarlos sería tener dos versiones de la misma verdad—.
+const numero = (v, max) => {
+  const n = Number(String(v ?? '').replace(',', '.'));
+  return isFinite(n) ? Math.min(max, Math.max(0, Math.round(n * 100) / 100)) : 0;
+};
+
 function limpiarNomina(n) {
+  const t = n?.tipos || {};
   return {
-    lineas:      limpiarLineas(n?.lineas),
-    deducciones: limpiarLineas(n?.deducciones),
+    bienios:   numero(n?.bienios, 999),
+    sindicato: numero(n?.sindicato, 9999),
+    prorrata:  numero(n?.prorrata, 99999),
+    tipos: {
+      cc:        numero(t.cc, 100),
+      desempleo: numero(t.desempleo, 100),
+      fp:        numero(t.fp, 100),
+      mei:       numero(t.mei, 100),
+      irpf:      numero(t.irpf, 100),
+    },
+    dias:            { asistencia: numero(n?.dias?.asistencia, 31) },
+    responsabilidad: !!n?.responsabilidad,
+    extras:      limpiarLineas(n?.extras),
     nota:        String(n?.nota ?? '').trim().slice(0, 300),
     actualizado: new Date().toISOString(),
   };
