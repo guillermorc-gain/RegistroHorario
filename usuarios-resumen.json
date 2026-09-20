@@ -1647,12 +1647,7 @@
     "email": "prueba-1789766752991@prueba.local",
     "ficticio": true,
     "actualizado": "2026-09-20T15:38:40.357Z",
-    "horariosDia": {
-      "20260919": {
-        "i": "13:00",
-        "f": "21:00"
-      }
-    },
+    "horariosDia": {},
     "tramosDia": {},
     "lugares": {
       "20260919": "Calle"
