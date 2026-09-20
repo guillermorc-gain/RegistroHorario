@@ -972,6 +972,10 @@
                 <button class="nom-mes-btn" onclick="app.miNomMes(1)">›</button>
             </div>
             <div class="nom-extra-barra" id="miNomExtraBarra"></div>
+            <div class="nom-extra-barra">
+                <button class="nom-extra-btn" onclick="app.mostrarCompararNominas()">⚖️ Comparar nóminas</button>
+                <button class="nom-extra-btn" onclick="app.mostrarExportarNominas()">📊 Exportar</button>
+            </div>
             <div id="miNomina"></div>
         </div>
 
@@ -1566,6 +1570,46 @@
             <div class="pm-op" onclick="app.exportarCSV()">
                 <div style="flex:1;">CSV<br><span class="pm-turnos">Lo abre cualquier programa</span></div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Exportar las nóminas -->
+<div class="modal" id="expNomModal">
+    <div class="modal-card" id="expNomModalContent">
+        <div class="modal-header">
+            <h3>📊 Exportar mis nóminas</h3>
+            <button class="modal-close" onclick="document.getElementById('expNomModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div class="pm-quien">Formato</div>
+            <div class="pm-op" onclick="app.exportarNomSheets()">
+                <div style="flex:1;">Google Sheets<br><span class="pm-turnos">Crea la hoja en tu Drive y la abre</span></div>
+            </div>
+            <div class="pm-op" onclick="app.exportarNomXLS()">
+                <div style="flex:1;">Excel (.xlsx)<br><span class="pm-turnos">Con la cabecera resaltada</span></div>
+            </div>
+            <div class="pm-op" onclick="app.exportarNomCSV()">
+                <div style="flex:1;">CSV<br><span class="pm-turnos">Lo abre cualquier programa</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Comparar dos nóminas cualquiera -->
+<div class="modal" id="compararNomModal">
+    <div class="modal-card" id="compararNomModalContent">
+        <div class="modal-header">
+            <h3>⚖️ Comparar nóminas</h3>
+            <button class="modal-close" onclick="document.getElementById('compararNomModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div class="pm-quien">Nóminas a comparar</div>
+            <div class="nom-edit"><span>Esta</span>
+                <select id="cmpNomA" class="lugar-sel" onchange="app._renderCompararNominas()"></select></div>
+            <div class="nom-edit"><span>Frente a</span>
+                <select id="cmpNomB" class="lugar-sel" onchange="app._renderCompararNominas()"></select></div>
+            <div id="compararNomResultado" style="padding:6px 16px 16px;"></div>
         </div>
     </div>
 </div>

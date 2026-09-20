@@ -2045,12 +2045,17 @@ const app = {
     },
 
     _xlsxRegistro() {
-        const esc = v => String(v ?? '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))
-            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
-        const cabeceras = this.CABECERAS_EXPORT;
         const filasDatos = this._filasExport().map(f => this._valoresFila(f));
         const filas = (this._hayColSumable() && filasDatos.length)
             ? [...filasDatos, this._filaTotales()] : filasDatos;
+        return this._xlsxDe('Registro', this.CABECERAS_EXPORT, filas);
+    },
+
+    // La misma hoja para cualquier tabla: el registro y las nóminas salen de
+    // aquí, que no tiene sentido tener dos veces el mismo ZIP escrito a mano.
+    _xlsxDe(hoja, cabeceras, filas) {
+        const esc = v => String(v ?? '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
 
         const celda = (v, col, fila, estilo) => {
             const ref = `${this._colExcel(col)}${fila}`;
@@ -2089,7 +2094,7 @@ const app = {
             + `</Relationships>` },
             { nombre: 'xl/workbook.xml', texto: X
             + `<workbook xmlns="${NS}" xmlns:r="${DOC}">`
-            + `<sheets><sheet name="Registro" sheetId="1" r:id="rId1"/></sheets></workbook>` },
+            + `<sheets><sheet name="${esc(hoja).slice(0, 31)}" sheetId="1" r:id="rId1"/></sheets></workbook>` },
             { nombre: 'xl/_rels/workbook.xml.rels', texto: X
             + `<Relationships xmlns="${REL}">`
             + `<Relationship Id="rId1" Type="${DOC}/worksheet" Target="worksheets/sheet1.xml"/>`
@@ -2133,17 +2138,21 @@ const app = {
 
     // Separador ; y coma decimal: es lo que espera Excel en español.
     // El BOM hace que reconozca los acentos.
-    _csvRegistro() {
+    _csvDe(cabeceras, filas) {
         const esc = v => {
             const t = String(v ?? '');
             return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
         };
-        const lineas = [this.CABECERAS_EXPORT.join(';')];
-        const filasDatos = this._filasExport();
         const filaCsv = vals => vals.map(v => esc(typeof v === 'number' ? String(v).replace('.', ',') : v)).join(';');
-        filasDatos.forEach(f => lineas.push(filaCsv(this._valoresFila(f))));
-        if (this._hayColSumable() && filasDatos.length) lineas.push(filaCsv(this._filaTotales()));
+        const lineas = [cabeceras.join(';'), ...filas.map(filaCsv)];
         return '﻿' + lineas.join('\r\n') + '\r\n';
+    },
+
+    _csvRegistro() {
+        const filasDatos = this._filasExport();
+        const filas = filasDatos.map(f => this._valoresFila(f));
+        if (this._hayColSumable() && filasDatos.length) filas.push(this._filaTotales());
+        return this._csvDe(this.CABECERAS_EXPORT, filas);
     },
 
     exportarCSV() {
@@ -2953,6 +2962,27 @@ const app = {
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
+    // Borrarla no borra las jornadas: solo lo que se escribió a mano. Si hace
+    // falta otra vez, "Rellenarla" vuelve a partir de los registros.
+    async eliminarMiNomina() {
+        const mes = this._miNomMes;
+        if (!confirm(`¿Eliminar la nómina de ${this._nombreMes(mes)}?\n\nLas jornadas no se tocan; si la quieres otra vez, pulsa "Rellenarla".`)) return;
+        try {
+            const r = await fetch(this.NOMINAS_URL, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mes, email: this.usuarioActual?.email }),
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return; }
+            if (this._misNominas) delete this._misNominas[mes];
+            localStorage.setItem('misNominas', JSON.stringify(this._misNominas || {}));
+            this._nomEditando = null;
+            this._renderMiNomina();
+            this._mostrarToast('🗑️ Nómina eliminada', 2500);
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
+    },
+
     // El mismo convenio y el mismo cálculo que en gestión: si cada app hiciera
     // sus cuentas, tarde o temprano dirían cosas distintas.
     // El convenio de partida, sacado de una nómina de media jornada. Todo es
@@ -3225,6 +3255,8 @@ const app = {
             <div class="edit-field" style="margin-top:10px;"><label>Nota</label>
                 <input type="text" id="miNomNota" value="${esc(n.nota || '')}"
                        placeholder="Lo que quieras recordar"></div>
+            ${this._misNominas?.[mes] ? `<button class="nom-mas" style="color:#e74c3c;border-color:#e74c3c;"
+                onclick="app.eliminarMiNomina()">🗑️ Eliminar esta nómina</button>` : ''}
             <div class="nom-botones">
                 <button class="nom-cancel" onclick="app.cancelarMiNomina()">Cancelar</button>
                 <button class="btn-main" onclick="app._guardarMiNomina()">Guardar</button>
@@ -3263,6 +3295,28 @@ const app = {
         </div>`;
     },
 
+    // La diferencia entre dos nóminas, concepto a concepto. La usan tanto el
+    // "frente al mes anterior" de siempre como el comparador manual.
+    _diffNominas(claveA, A, claveB, B) {
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const aMapa = c => {
+            const m = {};
+            c.devengos.forEach(l => { m[l.c] = (m[l.c] || 0) + l.i; });
+            c.deducciones.forEach(l => { m[l.c] = (m[l.c] || 0) - l.i; });
+            return m;
+        };
+        const MA = aMapa(A), MB = aMapa(B);
+        const fila = (c, d) => {
+            const clase = d > 0 ? 'sube' : d < 0 ? 'baja' : 'igual';
+            return `<div class="nom-cmp"><span class="nom-cmp-c">${esc(c)}</span>
+                <span class="nom-cmp-v ${clase}">${d > 0 ? '+' : ''}${this._eur(d)}</span></div>`;
+        };
+        return fila(`Líquido (${esc(this._nombreMes(claveB))}: ${this._eur(B.liquido)})`,
+                   Math.round((A.liquido - B.liquido) * 100) / 100)
+            + [...new Set([...Object.keys(MA), ...Object.keys(MB)])]
+                .map(c => fila(c, Math.round(((MA[c] ?? 0) - (MB[c] ?? 0)) * 100) / 100)).join('');
+    },
+
     // Frente al mes anterior, si lo hay (o la misma paga extra del año antes)
     _compararMiNomina(mes, ahora) {
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
@@ -3272,23 +3326,105 @@ const app = {
         const prev = this._misNominas?.[anterior];
         if (!prev) return '';
         const antes = this._calcNomina(anterior, prev);
-        const aMapa = c => {
-            const m = {};
-            c.devengos.forEach(l => { m[l.c] = (m[l.c] || 0) + l.i; });
-            c.deducciones.forEach(l => { m[l.c] = (m[l.c] || 0) - l.i; });
-            return m;
-        };
-        const A = aMapa(ahora), B = aMapa(antes);
-        const fila = (c, d) => {
-            const clase = d > 0 ? 'sube' : d < 0 ? 'baja' : 'igual';
-            return `<div class="nom-cmp"><span class="nom-cmp-c">${esc(c)}</span>
-                <span class="nom-cmp-v ${clase}">${d > 0 ? '+' : ''}${this._eur(d)}</span></div>`;
-        };
         return `<div class="nom-sec">Frente a ${esc(this._nombreMes(anterior))}</div>`
-            + fila(`Líquido (antes ${this._eur(antes.liquido)})`,
-                   Math.round((ahora.liquido - antes.liquido) * 100) / 100)
-            + [...new Set([...Object.keys(A), ...Object.keys(B)])]
-                .map(c => fila(c, Math.round(((A[c] ?? 0) - (B[c] ?? 0)) * 100) / 100)).join('');
+            + this._diffNominas(mes, ahora, anterior, antes);
+    },
+
+    // ── Comparar dos nóminas cualquiera ─────────────────────────────────────
+    mostrarCompararNominas() {
+        this._renderSelectoresComparar();
+        document.getElementById('compararNomModal').classList.add('show');
+        if (this.darkMode) document.getElementById('compararNomModalContent').classList.add('dark');
+    },
+
+    _clavesNominasGuardadas() {
+        return Object.keys(this._misNominas || {}).sort();
+    },
+
+    _renderSelectoresComparar() {
+        const claves = this._clavesNominasGuardadas();
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const opciones = claves.map(k => `<option value="${k}">${esc(this._nombreMes(k))}</option>`).join('');
+        const selA = document.getElementById('cmpNomA');
+        const selB = document.getElementById('cmpNomB');
+        if (!selA || !selB) return;
+        selA.innerHTML = opciones;
+        selB.innerHTML = opciones;
+        if (claves.length)     selA.value = claves[claves.length - 1];
+        if (claves.length > 1) selB.value = claves[claves.length - 2];
+        this._renderCompararNominas();
+    },
+
+    _renderCompararNominas() {
+        const cont = document.getElementById('compararNomResultado');
+        if (!cont) return;
+        const claveA = document.getElementById('cmpNomA')?.value;
+        const claveB = document.getElementById('cmpNomB')?.value;
+        if (!claveA || !claveB) { cont.innerHTML = ''; return; }
+        if (claveA === claveB) { cont.innerHTML = '<div class="nom-vacio">Elige dos nóminas distintas.</div>'; return; }
+        const A = this._calcNomina(claveA, this._misNominas[claveA]);
+        const B = this._calcNomina(claveB, this._misNominas[claveB]);
+        cont.innerHTML = this._diffNominas(claveA, A, claveB, B);
+    },
+
+    // ── Exportar las nóminas ─────────────────────────────────────────────────
+    CABECERAS_EXPORT_NOM: ['Nómina', 'Devengado', 'Deducciones', 'Líquido', 'Base de cotización',
+        'Salario base €/día', 'Antigüedad %', 'Horas extra', 'Horas nocturnas', 'Sindicato €'],
+
+    _filasExportNom() {
+        return this._clavesNominasGuardadas().map(clave => {
+            const c = this._calcNomina(clave, this._misNominas[clave]);
+            return [this._nombreMes(clave), c.devengado, c.aDeducir, c.liquido, c.base,
+                c.precios.porDia.base, c.pctBienios, c.hExtra, c.hNoct, c.sindicato];
+        });
+    },
+
+    mostrarExportarNominas() {
+        if (!this._clavesNominasGuardadas().length) { this._mostrarToast('No hay nóminas que exportar', 3000); return; }
+        document.getElementById('expNomModal').classList.add('show');
+        if (this.darkMode) document.getElementById('expNomModalContent').classList.add('dark');
+    },
+
+    exportarNomCSV() {
+        document.getElementById('expNomModal').classList.remove('show');
+        this._descargar(this._csvDe(this.CABECERAS_EXPORT_NOM, this._filasExportNom()),
+            this._nombreExport('csv').replace('jornadas', 'nominas'), 'text/csv;charset=utf-8;');
+        this._mostrarToast('📊 Nóminas exportadas en CSV', 4000);
+    },
+
+    exportarNomXLS() {
+        document.getElementById('expNomModal').classList.remove('show');
+        const ok = this._descargarBinario(this._xlsxDe('Nóminas', this.CABECERAS_EXPORT_NOM, this._filasExportNom()),
+            this._nombreExport('xlsx').replace('jornadas', 'nominas'),
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        if (!ok) { this._mostrarToast('Actualiza la app para exportar a Excel; de momento usa CSV', 4500); return; }
+        this._mostrarToast('📗 Nóminas exportadas en Excel', 4000);
+    },
+
+    async exportarNomSheets() {
+        document.getElementById('expNomModal').classList.remove('show');
+        this._mostrarToast('☁️ Creando hoja en Drive...', 3000);
+        try {
+            if (!await this._ensureToken()) throw new Error('Sin sesión de Google');
+            const frontera = '-------emt' + Date.now();
+            const meta = JSON.stringify({
+                name: `Mis nóminas EMT ${new Date().toISOString().slice(0,10)}`,
+                mimeType: 'application/vnd.google-apps.spreadsheet',
+            });
+            const cuerpo = `\r\n--${frontera}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}`
+                + `\r\n--${frontera}\r\nContent-Type: text/csv; charset=UTF-8\r\n\r\n${this._csvDe(this.CABECERAS_EXPORT_NOM, this._filasExportNom())}`
+                + `\r\n--${frontera}--`;
+            const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${this.accessToken}`,
+                           'Content-Type': `multipart/related; boundary=${frontera}` },
+                body: cuerpo,
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.error?.message || resp.status);
+            this._mostrarToast('☁️ Hoja creada en Drive', 3000);
+            if (data.webViewLink) window.open(data.webViewLink, '_blank');
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
     // ── Lugar de trabajo de la jornada ───────────────────────────────────────
