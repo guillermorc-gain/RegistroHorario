@@ -2792,6 +2792,15 @@ const app = {
     PRORRATA_EXTRAS: 135.20,
     TIPOS_NOMINA: { cc: 4.70, desempleo: 1.55, fp: 0.10, mei: 0.15, irpf: 15.00 },
 
+    // Horas extras que registró ese mes
+    _horasExtraDelMes(mes) {
+        let h = 0;
+        Object.entries(this._historialFull || {}).forEach(([id, r]) => {
+            if (this._fechaDeId(id).slice(0, 6) === mes && r.extraManual) h += parseFloat(r.horas) || 0;
+        });
+        return Math.round(h * 100) / 100;
+    },
+
     // Días de vacaciones y de permiso de ese mes, de lo que él registró
     _diasDeNomina(mes) {
         const vac = new Set(), pr = new Set();
@@ -2818,9 +2827,14 @@ const app = {
         const porDia = (c, d, p) => ({ c, d, p: r2(p), i: r2(d * p) });
         const delMes = (c, i) => ({ c, d: D, p: r2(i / D), i: r2(i) });
 
+        const hExtra = Number(g.extra?.h ?? this._horasExtraDelMes(mes)) || 0;
+        const pExtra = Number(g.extra?.p ?? 0) || 0;
+
         const devengos = [porDia('Salario Base', dias.base, C.porDia.base)];
         if (dias.vacaciones) devengos.push(porDia('Vacaciones', dias.vacaciones, C.porDia.vacaciones));
         if (dias.permiso)    devengos.push(porDia('Permiso retribuido', dias.permiso, C.porDia.base));
+        if (hExtra)          devengos.push({ c: 'Horas extras', d: hExtra, p: r2(pExtra),
+                                             i: r2(hExtra * pExtra), horas: true });
         if (bienios)         devengos.push(delMes('Bienios', bienios));
         devengos.push(delMes('Comp. No Absorbible', C.delMes.noAbsorbible));
         devengos.push(delMes('Plus Transporte', C.delMes.transporte));
@@ -2868,7 +2882,7 @@ const app = {
         const c = this._calcNomina(mes, n);
         const num = v => String(v).replace('.', ',');
         const linea = (l, resta) => `<div class="nom-l${resta ? ' resta' : ''}">
-            <span class="nom-l-c">${esc(l.c)}${l.d ? ` <small>${num(l.d)} × ${num(l.p)}</small>`
+            <span class="nom-l-c">${esc(l.c)}${l.d ? ` <small>${num(l.d)}${l.horas ? 'h' : ''} × ${num(l.p)}</small>`
                 : l.pct ? ` <small>${num(l.pct)} %</small>` : ''}</span>
             <span class="nom-l-i">${resta ? '−' : ''}${this._eur(l.i)}</span></div>`;
 

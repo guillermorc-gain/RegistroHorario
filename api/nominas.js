@@ -103,6 +103,13 @@ function limpiarNomina(n) {
       irpf:      numero(t.irpf, 100),
     },
     dias:            { asistencia: numero(n?.dias?.asistencia, 31) },
+    // Las horas extras salen de lo que registró; solo se guardan si se le
+    // ponen otras a mano. El precio de la hora sí, que no está en el convenio.
+    extra: {
+      ...(n?.extra?.h === undefined || n?.extra?.h === null || n?.extra?.h === ''
+          ? {} : { h: numero(n.extra.h, 999) }),
+      p: numero(n?.extra?.p, 999),
+    },
     responsabilidad: !!n?.responsabilidad,
     extras:      limpiarLineas(n?.extras),
     nota:        String(n?.nota ?? '').trim().slice(0, 300),
