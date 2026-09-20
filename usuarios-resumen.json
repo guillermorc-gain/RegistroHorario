@@ -2312,7 +2312,7 @@
     ],
     "email": "prueba-1789760248885@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T20:32:44.113Z",
+    "actualizado": "2026-09-20T15:01:38.249Z",
     "horarios": {
       "202609": {
         "i": "06:00",
@@ -2333,7 +2333,8 @@
       "20260925": "plan",
       "20260928": "plan",
       "20260930": "plan"
-    }
+    },
+    "oculto": true
   },
   "prueba-1789760390735@prueba.local": {
     "nombre": "Miguel Moyà",
