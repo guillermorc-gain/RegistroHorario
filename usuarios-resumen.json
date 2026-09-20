@@ -2445,81 +2445,22 @@
     "conductor": "1070-8",
     "puesto": "Calle",
     "avatar": null,
-    "version": "build-69",
-    "horasMes": 7,
-    "horasTotales": 7,
-    "diasMes": 1,
-    "horaInicio": "06:00",
-    "horaFin": "13:00",
-    "horarioDe": "hoy",
-    "turno": "M",
+    "version": "build-119",
+    "horasMes": 0,
+    "horasTotales": 0,
+    "diasMes": 0,
+    "horaInicio": "",
+    "horaFin": "",
+    "horarioDe": "anterior",
+    "turno": "",
     "jornadaHoras": 7,
     "horasAnuales": 1700,
     "ritmo": "6y2",
     "dias": null,
-    "jornadas": [
-      {
-        "f": "20260919",
-        "i": "06:00",
-        "o": "13:00",
-        "h": 7,
-        "n": 0
-      }
-    ],
+    "jornadas": [],
     "email": "prueba-1789812974724@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:35:04.727Z",
-    "lugares": {
-      "20260901": "Calle",
-      "20260902": "Calle",
-      "20260903": "Calle",
-      "20260904": "Calle",
-      "20260905": "Calle",
-      "20260906": "Calle",
-      "20260907": "Calle",
-      "20260908": "Calle",
-      "20260909": "Calle",
-      "20260910": "Calle",
-      "20260911": "Calle",
-      "20260912": "Calle",
-      "20260913": "Calle",
-      "20260914": "Calle",
-      "20260915": "Calle",
-      "20260916": "Calle",
-      "20260917": "Calle",
-      "20260918": "Calle",
-      "20260919": "Calle",
-      "20260920": "Calle",
-      "20260921": "Calle",
-      "20260922": "Calle",
-      "20260923": "Calle",
-      "20260924": "Calle",
-      "20260925": "Calle",
-      "20260926": "Calle",
-      "20260927": "Calle",
-      "20260928": "Calle",
-      "20260929": "Calle",
-      "20260930": "Calle"
-    },
-    "horario": "",
-    "horariosDia": {
-      "20260918": {
-        "i": "06:00",
-        "f": "13:00"
-      },
-      "20260922": {
-        "i": "06:00",
-        "f": "13:00"
-      }
-    },
-    "horarios": {
-      "202609": {
-        "i": "06:00",
-        "f": "13:00"
-      }
-    },
-    "tramosDia": {},
-    "oculto": false
+    "actualizado": "2026-09-20T15:35:15.525Z"
   },
   "prueba-1789814286874@prueba.local": {
     "nombre": "Manolo Rodríguez",
