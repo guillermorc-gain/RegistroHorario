@@ -1312,7 +1312,8 @@
     "horario": "",
     "grupo": null,
     "lugares": {
-      "20260919": "Son Rossinyol"
+      "20260919": "Son Rossinyol",
+      "20260920": "Son Rossinyol"
     },
     "horarios": {
       "202609": {
@@ -1325,7 +1326,12 @@
       "20260917": "plan",
       "20260918": "plan"
     },
-    "horariosDia": {}
+    "horariosDia": {
+      "20260920": {
+        "i": "05:30",
+        "f": "12:00"
+      }
+    }
   },
   "prueba-1789758756867@prueba.local": {
     "nombre": "Toni Rodríguez",
