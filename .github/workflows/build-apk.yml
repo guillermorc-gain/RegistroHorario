@@ -85,6 +85,19 @@ jobs:
           </paths>
           XMLEOF
 
+      - name: Create chat notification icon
+        run: |
+          mkdir -p android/app/src/main/res/drawable
+          cat > android/app/src/main/res/drawable/ic_stat_chat.xml << 'XMLEOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp" android:height="24dp"
+              android:viewportWidth="24" android:viewportHeight="24">
+              <path
+                  android:fillColor="#FFFFFFFF"
+                  android:pathData="M20,2H4C2.9,2 2,2.9 2,4v18l4,-4h14c1.1,0 2,-0.9 2,-2V4C22,2.9 21.1,2 20,2z"/>
+          </vector>
+          XMLEOF
+
       - name: Patch MainActivity — OAuth + file downloads + BroadcastReceiver
         run: |
           cat > android/app/src/main/java/com/guillermorc/horasemt/MainActivity.java << 'JAVAEOF'
@@ -784,7 +797,12 @@ jobs:
                       | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
                   Intent i = new Intent(ctx, ChatReceiver.class);
                   PendingIntent pi = PendingIntent.getBroadcast(ctx, 7777, i, flags);
-                  long cuando = System.currentTimeMillis() + 10 * 60 * 1000L;
+                  // Cinco minutos: más rápido que antes, pero setAndAllowWhileIdle
+                  // no da minuto a minuto con la pantalla apagada un rato — en Doze
+                  // profundo Android igual la retrasa a su ventana de mantenimiento,
+                  // pase lo que pase aquí. Con la app abierta sí se mira cada minuto,
+                  // eso lo hace el sondeo de la propia app.
+                  long cuando = System.currentTimeMillis() + 5 * 60 * 1000L;
                   // Inexacta y tolerada en Doze: no hace falta permiso especial y
                   // Android la entrega en sus ventanas de mantenimiento.
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -857,7 +875,7 @@ jobs:
                       oi.putExtra("abrirNotas", true);
                       PendingIntent pi = PendingIntent.getActivity(ctx, 2, oi, flags);
                       nm.notify(1002, new NotificationCompat.Builder(ctx, CHAT_CHANNEL)
-                          .setSmallIcon(android.R.drawable.ic_dialog_email)
+                          .setSmallIcon(R.drawable.ic_stat_chat)
                           .setContentTitle(nuevos == 1 ? "Tienes un mensaje" : "Tienes " + nuevos + " mensajes")
                           .setContentText("Toca para leerlo en la aplicación")
                           .setPriority(NotificationCompat.PRIORITY_HIGH)

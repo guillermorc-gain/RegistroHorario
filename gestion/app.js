@@ -2454,7 +2454,7 @@ const app = {
     // hora del último mensaje de cada conversación—, que ocupa nada. Los
     // mensajes enteros, con sus fotos, solo se bajan si algo ha cambiado.
 
-    SONDEO_CHAT: 45 * 1000,
+    SONDEO_CHAT: 60 * 1000,
     _timerChat: null,
     _huellaChat: null,
 
@@ -2604,6 +2604,7 @@ const app = {
                 body: ultimo.texto || '📎 Adjunto',
                 actionTypeId: 'CHAT_MENSAJE',
                 extra: { conv: n.id },
+                smallIcon: 'ic_stat_chat',
                 ...(this.notifSoundChat && this.notifSoundChat !== 'ninguno'
                     && this.notifSoundChat !== 'default'
                     ? { channelId: this.notifSoundChat } : {}),
