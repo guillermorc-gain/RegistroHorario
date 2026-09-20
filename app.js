@@ -1051,12 +1051,14 @@ const app = {
             datos.horasTrabajadas = parseFloat(datos.horasTrabajadas) || 0;
             if (!datos.historial) datos.historial = {};
 
-            if (this.editingId && datos.historial[this.editingId]) {
-                delete datos.historial[this.editingId];
-            }
+            // Este botón siempre añade una jornada. Editar es cosa del cuadro de
+            // editar, que guarda por su cuenta: mientras esto miraba editingId,
+            // abrir el lápiz de una jornada, cerrarlo sin guardar y registrar
+            // otra del mismo día borraba la primera y la dejaba en una sola,
+            // sin aviso ni rastro.
             const fechaFormato = new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const fechaKey     = fecha.replace(/-/g, '');
-            const registroId   = this.editingId || this._nuevoRegistroId(datos.historial, fechaKey);
+            const registroId   = this._nuevoRegistroId(datos.historial, fechaKey);
             datos.historial[registroId] = {
                 fecha: fechaFormato, horas,
                 timestamp: new Date(fecha + 'T12:00:00').getTime(),
@@ -1100,6 +1102,13 @@ const app = {
             this.cancelarEdicion();
             this._publicarResumen();
             this._comprobarLugarPorUbicacion();
+            // Decir qué ha quedado: con dos jornadas en un día es la única
+            // forma de saber si se han guardado las dos.
+            const delDia = Object.keys(datos.historial)
+                .filter(id => this._fechaDeId(id) === fechaKey).length;
+            this._mostrarToast(delDia > 1
+                ? `✅ Guardada · ${delDia} jornadas ese día`
+                : '✅ Jornada guardada', 3000);
         } catch(e) {
             alert('❌ Error al guardar: ' + e.message);
         }
@@ -3740,6 +3749,12 @@ const app = {
         } catch (e) {
             this._mostrarToast('❌ Error al guardar la nota', 3000);
         }
+    },
+
+    // Cerrar el cuadro sin guardar deja de contar como editar
+    cerrarEdicion() {
+        this.editingId = null;
+        document.getElementById('editModal').classList.remove('show');
     },
 
     editarRegistro(id) {
