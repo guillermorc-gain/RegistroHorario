@@ -2754,7 +2754,26 @@ const app = {
     },
 
     _nombreMes(mes) {
-        return `${MESES_ES[+mes.slice(4, 6) - 1]} ${mes.slice(0, 4)}`;
+        const m = String(mes || '');
+        if (/^\d{4}EJ$/.test(m)) return `Paga extra de julio ${m.slice(0, 4)}`;
+        if (/^\d{4}ED$/.test(m)) return `Paga extra de diciembre ${m.slice(0, 4)}`;
+        return `${MESES_ES[+m.slice(4, 6) - 1]} ${m.slice(0, 4)}`;
+    },
+
+    // Las pagas extra no son un mes del calendario: son dos nóminas aparte al
+    // año, sin prorratear. Se guardan con la clave AAAAEJ (julio) / AAAAED
+    // (diciembre) en vez de AAAAMM, así reutilizan el mismo almacén.
+    _esExtra(mes) { return /^\d{4}(EJ|ED)$/.test(String(mes || '')); },
+
+    verPagaExtra(tipo) {
+        const actual = this._miNomMes || this._mesDeHoy();
+        this._miNomMes = actual.slice(0, 4) + tipo;
+        this._renderMiNomina();
+    },
+
+    volverAMesNormal() {
+        this._miNomMes = this._mesDeHoy();
+        this._renderMiNomina();
     },
 
     _eur(n) {
@@ -2763,7 +2782,10 @@ const app = {
     },
 
     miNomMes(paso) {
-        this._miNomMes = this._mesMas(this._miNomMes || this._mesDeHoy(), paso);
+        const actual = this._miNomMes || this._mesDeHoy();
+        this._miNomMes = this._esExtra(actual)
+            ? String(Number(actual.slice(0, 4)) + paso) + actual.slice(4)
+            : this._mesMas(actual, paso);
         this._renderMiNomina();
     },
 
@@ -2796,8 +2818,13 @@ const app = {
 
     editarMiNomina() {
         const mes = this._miNomMes;
-        const g = this._misNominas?.[mes]
-            || this._misNominas?.[this._mesMas(mes, -1)] || {};
+        const esExtra = this._esExtra(mes);
+        // La paga extra parte de la misma paga del año anterior, no del mes
+        // de antes; un mes normal parte del mes de antes.
+        const anterior = esExtra
+            ? String(Number(mes.slice(0, 4)) - 1) + mes.slice(4)
+            : this._mesMas(mes, -1);
+        const g = this._misNominas?.[mes] || this._misNominas?.[anterior] || {};
         const C = this.CONVENIO;
         this._nomEditando = {
             precios: {
@@ -2809,10 +2836,12 @@ const app = {
             // todas las nóminas.
             desde:     g.desde || this.fechaAltaDefault || '',
             pctBienios: Number(g.pctBienios ?? this.pctBieniosDefault ?? 0),
-            // El sindicato se paga siempre, 12 € por defecto; si se deja de
-            // pagar se pone a 0 a mano y ese 0 es lo que sigue arrastrándose.
-            sindicato: Number(g.sindicato ?? 12),
-            prorrata:  Number(g.prorrata ?? this.PRORRATA_EXTRAS),
+            // El sindicato se paga siempre, 12 € por defecto en la nómina
+            // normal (0 en la paga extra); si se deja de pagar se pone a 0 a
+            // mano y ese 0 es lo que sigue arrastrándose.
+            sindicato: Number(g.sindicato ?? (esExtra ? 0 : 12)),
+            // Las pagas extra no se prorratean: son estas dos nóminas aparte.
+            prorrata:  Number(g.prorrata ?? 0),
             tipos:     { ...this.TIPOS_NOMINA, ...(g.tipos || {}) },
             // Sin nada guardado se quedan a undefined y los pone el cálculo a
             // partir de los registros; en cuanto se escriben, mandan.
@@ -2886,7 +2915,6 @@ const app = {
     // El complemento de responsabilidad/calidad es nuevo: se empieza a cobrar
     // en la nómina de julio de 2026, y antes de esa no aparece.
     DESDE_RESPONSABILIDAD: '202607',
-    PRORRATA_EXTRAS: 135.20,
     TIPOS_NOMINA: { cc: 4.70, desempleo: 1.55, fp: 0.10, mei: 0.15, irpf: 15.00 },
 
     // Horas extras que registró ese mes
@@ -2962,21 +2990,23 @@ const app = {
     _calcNomina(mes, n) {
         const D = this.DIAS_NOMINA;
         const g = n || {};
+        const esExtra = this._esExtra(mes);
         // Los precios guardados mandan sobre los de partida
         const C = {
             porDia: { ...this.CONVENIO.porDia, ...(g.precios?.porDia || {}) },
             delMes: { ...this.CONVENIO.delMes, ...(g.precios?.delMes || {}) },
         };
         const dias = this._diasDeNomina(mes);
-        // Asistencia y horas extras salen de los registros, y se pueden
-        // corregir a mano el mes que no cuadren.
-        const diasAsist = Number(g.dias?.asistencia ?? dias.asistencia) || 0;
-        const hExtra    = Number(g.extra?.h ?? this._horasExtraDelMes(mes)) || 0;
+        // La paga extra es solo salario base y antigüedad: sin plus de
+        // asistencia, sin horas extras ni nocturnas, sin los complementos que
+        // ya se cobran cada mes.
+        const diasAsist = esExtra ? 0 : Number(g.dias?.asistencia ?? dias.asistencia) || 0;
+        const hExtra    = esExtra ? 0 : Number(g.extra?.h ?? this._horasExtraDelMes(mes)) || 0;
         // El precio de la hora extra y de la nocturna salen de Ajustes › Trabajo,
         // así no hay que volver a escribirlos en cada nómina.
-        const pExtra    = Number(g.extra?.p ?? this.precioExtraDefault ?? 0) || 0;
-        const hNoct     = Number(g.noct?.h ?? this._horasNocturnasDelMes(mes)) || 0;
-        const pNoct     = Number(g.noct?.p ?? this.precioNocheDefault ?? 0) || 0;
+        const pExtra    = esExtra ? 0 : Number(g.extra?.p ?? this.precioExtraDefault ?? 0) || 0;
+        const hNoct     = esExtra ? 0 : Number(g.noct?.h ?? this._horasNocturnasDelMes(mes)) || 0;
+        const pNoct     = esExtra ? 0 : Number(g.noct?.p ?? this.precioNocheDefault ?? 0) || 0;
         // Con la fecha de entrada puesta manda la antigüedad; si no, lo que
         // se haya escrito a mano. Ambas salen del perfil si la nómina no
         // guarda las suyas propias.
@@ -2996,35 +3026,41 @@ const app = {
         // La antigüedad sube el día de vacaciones y la hora extra, no solo el
         // salario base.
         const conAnt = v => v * (1 + pctBienios / 100);
-        if (dias.vacaciones) devengos.push(porDia('Vacaciones', dias.vacaciones, conAnt(C.porDia.vacaciones)));
-        if (dias.permiso)    devengos.push(porDia('Permiso retribuido', dias.permiso, C.porDia.base));
+        if (!esExtra && dias.vacaciones) devengos.push(porDia('Vacaciones', dias.vacaciones, conAnt(C.porDia.vacaciones)));
+        if (!esExtra && dias.permiso)    devengos.push(porDia('Permiso retribuido', dias.permiso, C.porDia.base));
         // Los bienios son un porcentaje del salario base del mes entero, no de
         // los días que haya trabajado: en junio, con catorce de vacaciones,
-        // siguen siendo los mismos 38,63 que en julio.
+        // siguen siendo los mismos 38,63 que en julio. En la paga extra, del
+        // salario base entero igual que en cualquier mes.
         if (pctBienios) devengos.push({
             ...delMes('Bienios', D * C.porDia.base * pctBienios / 100),
             pctBienios, anios: this._aniosEnLaEmpresa(desde, mes) });
-        devengos.push(delMes('Comp. No Absorbible', C.delMes.noAbsorbible));
-        devengos.push(delMes('Plus Transporte', C.delMes.transporte));
-        devengos.push(delMes('Complemento Ajuste convenio', C.delMes.ajuste));
-        devengos.push(delMes('Complemento convenio', C.delMes.ajuste2));
-        // Fijo, pero solo desde que existe
-        if (mes >= this.DESDE_RESPONSABILIDAD) {
-            devengos.push(delMes('Compl. Responsabilidad/Calidad', C.delMes.responsabilidad));
+        if (!esExtra) {
+            devengos.push(delMes('Comp. No Absorbible', C.delMes.noAbsorbible));
+            devengos.push(delMes('Plus Transporte', C.delMes.transporte));
+            devengos.push(delMes('Complemento Ajuste convenio', C.delMes.ajuste));
+            devengos.push(delMes('Complemento convenio', C.delMes.ajuste2));
+            // Fijo, pero solo desde que existe
+            if (mes >= this.DESDE_RESPONSABILIDAD) {
+                devengos.push(delMes('Compl. Responsabilidad/Calidad', C.delMes.responsabilidad));
+            }
+            if (diasAsist) devengos.push(porDia('Complemento Asistencia', diasAsist, C.porDia.asistencia));
+            if (hNoct)     devengos.push({ c: 'Complemento horas nocturnas', d: hNoct, p: r2(pNoct),
+                                           i: r2(hNoct * pNoct), horas: true });
+            if (hExtra)    devengos.push({ c: 'Horas extras', d: hExtra, p: r2(conAnt(pExtra)),
+                                           i: r2(hExtra * conAnt(pExtra)), horas: true });
         }
-        if (diasAsist) devengos.push(porDia('Complemento Asistencia', diasAsist, C.porDia.asistencia));
-        if (hNoct)     devengos.push({ c: 'Complemento horas nocturnas', d: hNoct, p: r2(pNoct),
-                                       i: r2(hNoct * pNoct), horas: true });
-        if (hExtra)    devengos.push({ c: 'Horas extras', d: hExtra, p: r2(conAnt(pExtra)),
-                                       i: r2(hExtra * conAnt(pExtra)), horas: true });
         (g.extras || []).forEach(e => {
             if (e && String(e.c || '').trim()) devengos.push({ c: e.c, d: 0, p: 0, i: r2(Number(e.i) || 0) });
         });
 
         const devengado = r2(devengos.reduce((t, l) => t + l.i, 0));
-        const prorrata  = r2(Number(g.prorrata ?? this.PRORRATA_EXTRAS));
+        // Las pagas extra no se prorratean: son estas dos nóminas aparte, así
+        // que aquí la prorrata siempre es 0 salvo que quede una guardada de
+        // antes de cambiarlo.
+        const prorrata  = r2(Number(g.prorrata ?? 0));
         const base      = r2(devengado + prorrata);
-        const sindicato = r2(Number(g.sindicato ?? 12));
+        const sindicato = r2(Number(g.sindicato ?? (esExtra ? 0 : 12)));
         const pct = (c, sobre, p) => ({ c, base: sobre, pct: p, i: r2(sobre * p / 100) });
         const deducciones = [
             pct('Aportac. Contingencias Comunes', base, tipos.cc),
@@ -3038,7 +3074,7 @@ const app = {
         return { dias, devengos, deducciones, devengado, prorrata, base, aDeducir,
                  liquido: r2(devengado - aDeducir), precios: C, tipos, sindicato,
                  pctBienios, pctAnt, anios: this._aniosEnLaEmpresa(desde, mes), desde,
-                 hExtra, pExtra, hNoct, pNoct, diasAsist };
+                 hExtra, pExtra, hNoct, pNoct, diasAsist, esExtra };
     },
 
     _renderMiNomina() {
@@ -3048,6 +3084,13 @@ const app = {
         const mes = this._miNomMes = this._miNomMes || this._mesDeHoy();
         const titulo = document.getElementById('miNomMes');
         if (titulo) titulo.textContent = this._nombreMes(mes);
+        const barraExtra = document.getElementById('miNomExtraBarra');
+        if (barraExtra) {
+            barraExtra.innerHTML = this._esExtra(mes)
+                ? `<button class="nom-extra-btn" onclick="app.volverAMesNormal()">📅 Volver al mes</button>`
+                : `<button class="nom-extra-btn" onclick="app.verPagaExtra('EJ')">🎁 Paga extra julio</button>
+                   <button class="nom-extra-btn" onclick="app.verPagaExtra('ED')">🎁 Paga extra diciembre</button>`;
+        }
 
         const editando = this._nomEditando;
         const n = editando || this._misNominas?.[mes];
@@ -3083,14 +3126,14 @@ const app = {
         const ajustes = !editando ? '' : `
             <div class="nom-sec">Tu convenio</div>
             ${campo('Salario base', P.porDia.base, 'precios.porDia.base', '€/día')}
+            ${c.esExtra ? '' : `
             ${campo('Vacaciones <small>sin antigüedad</small>', P.porDia.vacaciones, 'precios.porDia.vacaciones', '€/día')}
             ${campo('Asistencia', P.porDia.asistencia, 'precios.porDia.asistencia', '€/día')}
             ${campo('Comp. No Absorbible', P.delMes.noAbsorbible, 'precios.delMes.noAbsorbible', '€/mes')}
             ${campo('Plus Transporte', P.delMes.transporte, 'precios.delMes.transporte', '€/mes')}
             ${campo('Ajuste convenio', P.delMes.ajuste, 'precios.delMes.ajuste', '€/mes')}
             ${campo('Complemento convenio', P.delMes.ajuste2, 'precios.delMes.ajuste2', '€/mes')}
-            ${campo('Responsabilidad/Calidad', P.delMes.responsabilidad, 'precios.delMes.responsabilidad', '€/mes')}
-            ${campo('Prorrata pagas extra', c.prorrata, 'prorrata', '€/mes')}
+            ${campo('Responsabilidad/Calidad', P.delMes.responsabilidad, 'precios.delMes.responsabilidad', '€/mes')}`}
             <div class="nom-sec">Antigüedad</div>
             ${c.desde
                 ? `<div class="nom-nota">Entraste en la empresa el <b>${esc(c.desde)}</b>
@@ -3101,6 +3144,7 @@ const app = {
                 : `<div class="nom-nota">Sin fecha de alta puesta en Opciones › Perfil, la
                      antigüedad se aplica con el <b>${num(c.pctBienios)} %</b> manual que
                      hayas puesto allí.</div>`}
+            ${c.esExtra ? '' : `
             <div class="nom-sec">Este mes</div>
             ${campo('Horas extras', c.hExtra, 'extra.h', 'horas')}
             <div class="nom-nota">Hora extra a <b>${num(c.pExtra)} €</b>, el precio que hay
@@ -3108,7 +3152,7 @@ const app = {
             ${campo('Horas nocturnas', c.hNoct, 'noct.h', 'horas')}
             <div class="nom-nota">Hora nocturna a <b>${num(c.pNoct)} €</b>, el precio que hay
                 puesto en Ajustes › Trabajo.</div>
-            ${campo('Días de asistencia', c.diasAsist, 'dias.asistencia', 'días')}
+            ${campo('Días de asistencia', c.diasAsist, 'dias.asistencia', 'días')}`}
             ${(n.extras || []).map((e, k) => `<div class="nom-edit">
                 <input type="text" style="flex:1" value="${esc(e.c)}" placeholder="Otro concepto"
                        onchange="app._setMiExtra(${k},'c',this.value)">
@@ -3152,7 +3196,8 @@ const app = {
                 <span class="nom-liquido-l">Líquido</span>
                 <span class="nom-liquido-v">${this._eur(c.liquido)}</span></div>
             <div class="nom-sec">Base de cotización</div>
-            <div class="nom-l"><span class="nom-l-c">Devengado + prorrata de pagas extra</span>
+            <div class="nom-l"><span class="nom-l-c">${c.prorrata
+                ? 'Devengado + prorrata de pagas extra' : 'Devengado'}</span>
                 <span class="nom-l-i">${this._eur(c.base)}</span></div>
             ${!editando && n.nota ? `<div class="nom-sec">Nota</div>
                 <div class="nom-l"><span class="nom-l-c" style="white-space:normal;">${esc(n.nota)}</span></div>` : ''}
@@ -3163,10 +3208,12 @@ const app = {
         </div>`;
     },
 
-    // Frente al mes anterior, si lo hay
+    // Frente al mes anterior, si lo hay (o la misma paga extra del año antes)
     _compararMiNomina(mes, ahora) {
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-        const anterior = this._mesMas(mes, -1);
+        const anterior = this._esExtra(mes)
+            ? String(Number(mes.slice(0, 4)) - 1) + mes.slice(4)
+            : this._mesMas(mes, -1);
         const prev = this._misNominas?.[anterior];
         if (!prev) return '';
         const antes = this._calcNomina(anterior, prev);
