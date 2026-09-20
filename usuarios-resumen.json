@@ -1381,26 +1381,8 @@
       "20260917": "plan",
       "20260918": "plan"
     },
-    "horariosDia": {
-      "20260920": {
-        "i": "09:00",
-        "f": "12:30"
-      }
-    },
-    "tramosDia": {
-      "20260920": [
-        {
-          "p": "Son Rossinyol",
-          "i": "09:00",
-          "o": "11:00"
-        },
-        {
-          "p": "Control",
-          "i": "11:00",
-          "o": "12:30"
-        }
-      ]
-    }
+    "horariosDia": {},
+    "tramosDia": {}
   },
   "prueba-1789758756867@prueba.local": {
     "nombre": "Toni Rodríguez",
