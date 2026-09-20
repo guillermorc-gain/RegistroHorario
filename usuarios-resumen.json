@@ -2746,58 +2746,22 @@
     "conductor": "1246-0",
     "puesto": "Calle",
     "avatar": null,
-    "version": "build-69",
-    "horasMes": 21,
-    "horasTotales": 21,
-    "diasMes": 3,
-    "horaInicio": "14:00",
-    "horaFin": "21:00",
-    "horarioDe": "hoy",
-    "turno": "T",
+    "version": "build-119",
+    "horasMes": 0,
+    "horasTotales": 0,
+    "diasMes": 0,
+    "horaInicio": "",
+    "horaFin": "",
+    "horarioDe": "anterior",
+    "turno": "",
     "jornadaHoras": 7,
     "horasAnuales": 1700,
     "ritmo": "6y2",
     "dias": null,
-    "jornadas": [
-      {
-        "f": "20260918",
-        "i": "14:00",
-        "o": "21:00",
-        "h": 7,
-        "n": 0
-      },
-      {
-        "f": "20260917",
-        "i": "14:00",
-        "o": "21:00",
-        "h": 7,
-        "n": 0
-      },
-      {
-        "f": "20260919",
-        "i": "14:00",
-        "o": "21:00",
-        "h": 7,
-        "n": 0
-      }
-    ],
+    "jornadas": [],
     "email": "prueba-1789766752991@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:32:11.535Z",
-    "lugares": {
-      "20260919": "Son Rossinyol",
-      "20260920": "Calle",
-      "20260921": "Calle",
-      "20260922": "Calle"
-    },
-    "horariosDia": {
-      "20260922": {
-        "i": "13:00",
-        "f": "21:00"
-      }
-    },
-    "tramosDia": {},
-    "oculto": false
+    "actualizado": "2026-09-20T15:32:18.304Z"
   },
   "prueba-1789766856622@prueba.local": {
     "nombre": "Juan Valera",
