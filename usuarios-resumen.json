@@ -1962,7 +1962,7 @@
     ],
     "email": "prueba-1789759514777@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T10:02:51.200Z",
+    "actualizado": "2026-09-20T15:01:43.718Z",
     "bajas": [
       {
         "d": "20260918",
@@ -1975,7 +1975,8 @@
         "i": "07:00",
         "f": "14:00"
       }
-    }
+    },
+    "oculto": true
   },
   "prueba-1789759539366@prueba.local": {
     "nombre": "Juan",
