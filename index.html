@@ -1283,7 +1283,7 @@
     <div class="modal-card" id="editModalContent">
         <div class="modal-header">
             <h3>✏️ Editar jornada</h3>
-            <button class="modal-close" onclick="document.getElementById('editModal').classList.remove('show')">×</button>
+            <button class="modal-close" onclick="app.cerrarEdicion()">×</button>
         </div>
         <div class="modal-body">
             <div class="edit-field">
@@ -1327,7 +1327,7 @@
             </div>
         </div>
         <div class="modal-footer">
-            <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('editModal').classList.remove('show')">Cancelar</button>
+            <button class="modal-btn modal-btn-cancel" onclick="app.cerrarEdicion()">Cancelar</button>
             <button class="modal-btn modal-btn-confirm" onclick="app._guardarDesdeModal()">Guardar</button>
         </div>
     </div>
