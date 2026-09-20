@@ -1180,6 +1180,20 @@
                             </label>
                         </div>
                     </div>
+                    <!-- Cuándo avisar -->
+                    <div class="ops-field" style="gap:10px;padding-top:4px;">
+                        <span class="ops-field-label">Cuándo avisar</span>
+                        <div style="display:flex;flex-direction:column;gap:8px;">
+                            <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;">
+                                <input type="radio" name="avisoLugar" value="cada" onchange="app.guardarGpsConfig()" style="accent-color:var(--primary);margin-top:2px;">
+                                <span><strong>Cada lugar de trabajo</strong> — avisa en cada sitio nuevo del día, pero no repite en uno donde ya has registrado</span>
+                            </label>
+                            <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;">
+                                <input type="radio" name="avisoLugar" value="una" onchange="app.guardarGpsConfig()" style="accent-color:var(--primary);margin-top:2px;">
+                                <span><strong>Una vez al día</strong> — solo al llegar a tu lugar de siempre</span>
+                            </label>
+                        </div>
+                    </div>
                     <!-- Intervalo -->
                     <div id="gpsIntervalRow" class="ops-field">
                         <span class="ops-field-label">Intervalo de búsqueda</span>
