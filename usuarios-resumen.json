@@ -1361,12 +1361,7 @@
       "20260917": "plan",
       "20260918": "plan"
     },
-    "horariosDia": {
-      "20260921": {
-        "i": "07:00",
-        "f": "14:00"
-      }
-    },
+    "horariosDia": {},
     "tramosDia": {}
   },
   "prueba-1789758756867@prueba.local": {
