@@ -2756,7 +2756,7 @@
     ],
     "email": "prueba-1789766752991@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T09:51:11.961Z",
+    "actualizado": "2026-09-20T15:01:26.722Z",
     "lugares": {
       "20260919": "Son Rossinyol",
       "20260920": "Calle",
@@ -2773,7 +2773,8 @@
         "f": "21:00"
       }
     },
-    "tramosDia": {}
+    "tramosDia": {},
+    "oculto": true
   },
   "prueba-1789766856622@prueba.local": {
     "nombre": "Juan Valera",
