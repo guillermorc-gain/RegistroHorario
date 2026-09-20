@@ -1264,7 +1264,7 @@
     "diasMes": 3,
     "turno": "T",
     "puesto": "Son Rossinyol",
-    "actualizado": "2026-09-19T19:01:16.032Z",
+    "actualizado": "2026-09-20T07:49:23.870Z",
     "horaInicio": "18:00",
     "horaFin": "22:00",
     "horarioDe": "anterior",
@@ -1324,7 +1324,8 @@
       "20260915": "plan",
       "20260917": "plan",
       "20260918": "plan"
-    }
+    },
+    "horariosDia": {}
   },
   "prueba-1789758756867@prueba.local": {
     "nombre": "Toni Rodríguez",
