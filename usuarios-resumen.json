@@ -2018,7 +2018,8 @@
     "jornadas": [],
     "email": "prueba-1789759539366@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:33:58.277Z"
+    "actualizado": "2026-09-20T15:34:01.341Z",
+    "oculto": true
   },
   "prueba-1789760248885@prueba.local": {
     "nombre": "Timi",
