@@ -2872,7 +2872,11 @@ const app = {
         delMes: { noAbsorbible: 136.21, transporte: 68.02, ajuste: 130.01,
                   ajuste2: 6.44, responsabilidad: 51.77 },
     },
+    // La nómina va a meses de 30 días, no a los del calendario
     DIAS_NOMINA: 30,
+    // El complemento de responsabilidad/calidad es nuevo: se empieza a cobrar
+    // en la nómina de julio de 2026, y antes de esa no aparece.
+    DESDE_RESPONSABILIDAD: '202607',
     PRORRATA_EXTRAS: 135.20,
     TIPOS_NOMINA: { cc: 4.70, desempleo: 1.55, fp: 0.10, mei: 0.15, irpf: 15.00 },
 
@@ -2992,8 +2996,10 @@ const app = {
         devengos.push(delMes('Plus Transporte', C.delMes.transporte));
         devengos.push(delMes('Complemento Ajuste convenio', C.delMes.ajuste));
         devengos.push(delMes('Complemento convenio', C.delMes.ajuste2));
-        // El de responsabilidad es fijo: va siempre
-        devengos.push(delMes('Compl. Responsabilidad/Calidad', C.delMes.responsabilidad));
+        // Fijo, pero solo desde que existe
+        if (mes >= this.DESDE_RESPONSABILIDAD) {
+            devengos.push(delMes('Compl. Responsabilidad/Calidad', C.delMes.responsabilidad));
+        }
         if (diasAsist) devengos.push(porDia('Complemento Asistencia', diasAsist, C.porDia.asistencia));
         if (hNoct)     devengos.push({ c: 'Complemento horas nocturnas', d: hNoct, p: r2(pNoct),
                                        i: r2(hNoct * pNoct), horas: true });
