@@ -1534,13 +1534,13 @@
     "puesto": "Control",
     "avatar": null,
     "version": "build-119",
-    "horasMes": 8,
-    "horasTotales": 8,
-    "diasMes": 1,
-    "horaInicio": "06:00",
-    "horaFin": "14:00",
-    "horarioDe": "hoy",
-    "turno": "M",
+    "horasMes": 0,
+    "horasTotales": 0,
+    "diasMes": 0,
+    "horaInicio": "",
+    "horaFin": "",
+    "horarioDe": "anterior",
+    "turno": "",
     "jornadaHoras": 3.5,
     "horasAnuales": 777,
     "ritmo": "lv",
@@ -1551,19 +1551,10 @@
       4,
       5
     ],
-    "jornadas": [
-      {
-        "f": "20260920",
-        "i": "06:00",
-        "o": "14:00",
-        "h": 8,
-        "n": 0,
-        "pu": ""
-      }
-    ],
+    "jornadas": [],
     "email": "prueba-1789763845092@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:41:15.098Z"
+    "actualizado": "2026-09-20T15:41:19.507Z"
   },
   "prueba-1789764004986@prueba.local": {
     "nombre": "Pepe",
