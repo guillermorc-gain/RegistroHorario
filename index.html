@@ -402,6 +402,33 @@
         .hm-stripe-noche{border-left:4px solid #9b59b6!important;padding-left:10px!important;}
         .hm-stripe-extra{border-left:4px solid #8e44ad!important;padding-left:10px!important;}
         .hm-stripe-vacaciones{border-left:4px solid #16a085!important;padding-left:10px!important;}
+        .nom-barra{display:flex;align-items:center;gap:8px;padding:2px;}
+        .nom-mes-btn{background:#eef2f7;border:none;border-radius:9px;width:34px;height:32px;font-size:16px;font-weight:800;color:#5a6b7d;cursor:pointer;font-family:inherit;flex-shrink:0;}
+        .app-content.dark .nom-mes-btn{background:#232b45;color:#c8cfe0;}
+        .nom-titulo{flex:1;text-align:center;font-size:12.5px;font-weight:800;color:#7f8c8d;text-transform:uppercase;letter-spacing:.5px;}
+        .nom-tarjeta{background:white;border-radius:14px;padding:14px;box-shadow:0 1px 5px rgba(0,0,0,0.08);}
+        .app-content.dark .nom-tarjeta{background:#1e2a3a;}
+        .nom-sec{font-size:10px;font-weight:800;color:var(--g1);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 6px;}
+        .nom-sec:first-child{margin-top:0;}
+        .nom-l{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid #f4f4f4;font-size:13px;}
+        .app-content.dark .nom-l{border-color:#2d3561;}
+        .nom-l-c{color:#5a6b7d;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .app-content.dark .nom-l-c{color:#c8cfe0;}
+        .nom-l-i{font-weight:800;color:#2c3e50;flex-shrink:0;}
+        .app-content.dark .nom-l-i{color:#e0e0e0;}
+        .nom-l.resta .nom-l-i{color:#e74c3c;}
+        .nom-liquido{margin-top:12px;background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;border-radius:12px;padding:13px 15px;display:flex;justify-content:space-between;align-items:center;}
+        .nom-liquido-l{font-size:11px;font-weight:700;opacity:.9;text-transform:uppercase;letter-spacing:.5px;}
+        .nom-liquido-v{font-size:20px;font-weight:800;}
+        .nom-datos{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;}
+        .nom-dato{background:#f4f6f9;border-radius:9px;padding:6px 10px;font-size:11.5px;font-weight:700;color:#5a6b7d;}
+        .app-content.dark .nom-dato{background:#232b45;color:#c8cfe0;}
+        .nom-dato b{color:var(--g1);font-size:12.5px;}
+        .nom-cmp{display:flex;justify-content:space-between;gap:8px;padding:5px 0;font-size:12px;}
+        .nom-cmp-c{color:#7f8c8d;font-weight:700;}
+        .nom-cmp-v{font-weight:800;flex-shrink:0;}
+        .nom-cmp-v.sube{color:#27ae60;} .nom-cmp-v.baja{color:#e74c3c;} .nom-cmp-v.igual{color:#95a5a6;}
+        .nom-vacio{padding:26px 16px;text-align:center;font-size:13px;color:#95a5a6;}
         .hm-tramos{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:3px;}
         .hm-tramos span{font-size:10px;font-weight:700;color:var(--g1);}
         .hm-nota-txt{font-size:10.5px;color:#b9770e;font-weight:600;margin-top:2px;word-break:break-word;}
@@ -910,6 +937,16 @@
             <div id="ntLista" class="nt-lista"></div>
         </div>
 
+        <!-- ── TAB: Mi nómina ── -->
+        <div class="tab-panel" id="tabPanel3">
+            <div class="nom-barra">
+                <button class="nom-mes-btn" onclick="app.miNomMes(-1)">‹</button>
+                <span class="nom-titulo" id="miNomMes"></span>
+                <button class="nom-mes-btn" onclick="app.miNomMes(1)">›</button>
+            </div>
+            <div id="miNomina"></div>
+        </div>
+
         </div><!-- end appContent -->
 
         <!-- ── BOTTOM TAB BAR ── -->
@@ -934,6 +971,13 @@
                     ondragover="app._tabDragOver(event)" ondragleave="app._tabDragLeave(event)"
                     ondrop="app._tabDrop(event)">
                 <span class="tab-ico">📝</span><span class="tab-lbl">Notas</span>
+            </button>
+            <button class="tab-btn" data-tab="3" draggable="true"
+                    onclick="app.switchTab(3)"
+                    ondragstart="app._tabDragStart(event)" ondragend="app._tabDragEnd(event)"
+                    ondragover="app._tabDragOver(event)" ondragleave="app._tabDragLeave(event)"
+                    ondrop="app._tabDrop(event)">
+                <span class="tab-ico">💶</span><span class="tab-lbl">Nómina</span>
             </button>
         </div>
     </div>

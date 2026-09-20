@@ -8,7 +8,7 @@
 // Los datos del trabajo (días, horas, extras, nocturnas) no se guardan aquí:
 // salen de las jornadas que ya hay, que es su sitio. Aquí solo van los
 // importes, que son lo que el gestor escribe a mano.
-import { exigirAdmin } from './_auth.js';
+import { exigirAdmin, emailDelToken, tokenDe } from './_auth.js';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO         = 'guillermorc-gain/RegistroHorario';
@@ -105,6 +105,23 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
+    // Cada uno puede leer la suya y nada más. El correo sale del token, no de
+    // lo que diga la petición, así que pedir la de otro no lleva a ninguna
+    // parte. Escribirlas sigue siendo solo del gestor.
+    if (req.method === 'GET' && req.query?.mio !== undefined) {
+      const quien = String(req.query.mio || '').toLowerCase().trim();
+      const delToken = await emailDelToken(tokenDe(req));
+      if (!delToken) return res.status(401).json({ error: 'Vuelve a entrar en la app' });
+      if (delToken !== quien && delToken !== ADMIN_EMAIL) {
+        return res.status(403).json({ error: 'Esa nómina no es tuya' });
+      }
+      const { data } = await getFile();
+      res.setHeader('Cache-Control', 'no-store');
+      const out = {};
+      Object.entries(data).forEach(([m, del]) => { if (del?.[quien]) out[m] = del[quien]; });
+      return res.status(200).json(out);
+    }
+
     // Lo que cobra la gente no lo lee nadie más que el gestor
     if (!await exigirAdmin(req, res, ADMIN_EMAIL)) return;
 
