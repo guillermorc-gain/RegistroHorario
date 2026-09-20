@@ -2033,7 +2033,7 @@
     ],
     "email": "prueba-1789759539366@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:01:28.907Z",
+    "actualizado": "2026-09-20T15:33:54.301Z",
     "lugares": {
       "20260901": "Taller",
       "20260902": "Taller",
@@ -2197,7 +2197,7 @@
         "f": "03:00"
       }
     },
-    "oculto": true
+    "oculto": false
   },
   "prueba-1789760248885@prueba.local": {
     "nombre": "Timi",
