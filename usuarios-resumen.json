@@ -1918,13 +1918,14 @@
     ],
     "email": "prueba-1789759132382@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T00:14:19.352Z",
+    "actualizado": "2026-09-20T15:01:37.432Z",
     "horarios": {
       "202609": {
         "i": "12:00",
         "f": "19:00"
       }
-    }
+    },
+    "oculto": true
   },
   "prueba-1789759514777@prueba.local": {
     "nombre": "Xisca",
