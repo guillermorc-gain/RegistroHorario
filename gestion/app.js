@@ -2454,7 +2454,7 @@ const app = {
     // hora del último mensaje de cada conversación—, que ocupa nada. Los
     // mensajes enteros, con sus fotos, solo se bajan si algo ha cambiado.
 
-    SONDEO_CHAT: 45 * 1000,
+    SONDEO_CHAT: 60 * 1000,
     _timerChat: null,
     _huellaChat: null,
 
@@ -2604,6 +2604,7 @@ const app = {
                 body: ultimo.texto || '📎 Adjunto',
                 actionTypeId: 'CHAT_MENSAJE',
                 extra: { conv: n.id },
+                smallIcon: 'ic_stat_chat',
                 ...(this.notifSoundChat && this.notifSoundChat !== 'ninguno'
                     && this.notifSoundChat !== 'default'
                     ? { channelId: this.notifSoundChat } : {}),
@@ -2718,6 +2719,12 @@ const app = {
         this._renderNotasGestor();
         document.getElementById('hiloModal').classList.add('show');
         if (this.darkMode) document.getElementById('hiloModalContent').classList.add('dark');
+        // Igual que en WhatsApp: al abrir la conversación, si lo último no es
+        // mío y aún no está visto, se marca solo, sin tocar nada.
+        const ultimo = this._ultimoMensaje(n);
+        if (ultimo && !this._esMiMensaje(ultimo, n) && !this._estaVista(n)) {
+            this._marcarVisto(id, true, true);
+        }
     },
 
     _renderHilo() {
@@ -2769,17 +2776,14 @@ const app = {
     _renderPieHilo(n) {
         const pie = document.getElementById('hiloPie');
         if (!pie) return;
-        const esc = t => String(t || '').replace(/'/g, "\\'");
-        const visto = this._estaVista(n);
-        pie.innerHTML = `<button class="modal-btn modal-btn-cancel" style="flex:0 0 auto;padding:10px 12px;"
-                title="${visto ? 'Quitar el visto' : 'Darla por vista'}"
-                onclick="app._marcarVisto('${esc(n.id)}',${!visto})">${visto ? '✅' : '☑️'}</button>`
-            + `<button class="modal-btn modal-btn-confirm" onclick="app._responderHilo()">Enviar</button>`;
+        pie.innerHTML = `<button class="modal-btn modal-btn-confirm" onclick="app._responderHilo()">Enviar</button>`;
     },
 
-    _marcarVisto(id, visto) {
+    // El visto ya no lo da nadie a mano: se pone solo, como en WhatsApp, en
+    // cuanto se abre una conversación con algo nuevo del otro lado.
+    _marcarVisto(id, visto, silencioso) {
         return this._tocarConversacion(id, { visto, nombre: this._nombreGestor() },
-            visto ? '👁 Dada por vista' : 'Ya no está vista');
+            silencioso ? null : (visto ? '👁 Dada por vista' : 'Ya no está vista'));
     },
 
     async _responderHilo() {
@@ -2829,7 +2833,7 @@ const app = {
                 this._renderHilo();
             }
             this._renderNotasGestor();
-            this._mostrarToast(mensaje, 2500);
+            if (mensaje) this._mostrarToast(mensaje, 2500);
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
@@ -3910,7 +3914,11 @@ const app = {
                     puesto: lugar, turno: { M:'Mañana', T:'Tarde', N:'Noche' }[t] || '',
                     ini: j.i || '', fin: j.o || '',
                     horas: j.h || 0, noct: j.n || 0,
-                    extra: j.x === 1 ? 'Sí' : '', festivo: j.fe ? 'Sí' : '',
+                    // Horas, no un "Sí"/"": si no, la columna no se puede sumar en la
+                    // hoja. Un día marcado a mano como extra cuenta sus horas enteras;
+                    // el resto no se sabe aquí si pasó del tope anual —eso solo lo
+                    // sabe la app del trabajador, con todo su historial a mano.
+                    extra: j.x === 1 ? (j.h || 0) : 0, festivo: j.fe ? 'Sí' : '',
                     vac: j.v ? 'Sí' : '', pr: j.p ? 'Sí' : '',
                     be: u.baja ? 'Sí' : '',
                     prueba: u.ficticio ? 'Sí' : '',
@@ -3966,9 +3974,9 @@ const app = {
         { id:'turno',      etiqueta:'Mañana, tarde o noche', cabeceras:['Turno'],                  valores:f => [f.turno] },
         { id:'lugar',      etiqueta:'Lugar de trabajo',      cabeceras:['Lugar de trabajo'],       valores:f => [f.puesto] },
         { id:'horarios',   etiqueta:'Horarios',              cabeceras:['Entrada','Salida'],       valores:f => [f.ini, f.fin] },
-        { id:'horas',      etiqueta:'Horas',                 cabeceras:['Horas'],                  valores:f => [f.horas] },
-        { id:'nocturnas',  etiqueta:'Horas nocturnas',       cabeceras:['Nocturnas'],              valores:f => [f.noct] },
-        { id:'extras',     etiqueta:'Horas extras',          cabeceras:['Extra'],                  valores:f => [f.extra] },
+        { id:'horas',      etiqueta:'Horas',                 cabeceras:['Horas'],                  valores:f => [f.horas], sumable:true },
+        { id:'nocturnas',  etiqueta:'Horas nocturnas',       cabeceras:['Nocturnas'],              valores:f => [f.noct],  sumable:true },
+        { id:'extras',     etiqueta:'Horas extras',          cabeceras:['Extra'],                  valores:f => [f.extra], sumable:true },
         { id:'festivos',   etiqueta:'Festivos',              cabeceras:['Festivo'],                valores:f => [f.festivo] },
         { id:'vacaciones', etiqueta:'Vacaciones',            cabeceras:['Vacaciones'],             valores:f => [f.vac] },
         { id:'pr',         etiqueta:'PR',                    cabeceras:['PR'],                     valores:f => [f.pr] },
@@ -3994,6 +4002,23 @@ const app = {
     get CABECERAS_EXPORT() { return this._colsActivas().flatMap(c => c.cabeceras); },
 
     _valoresFila(f) { return this._colsActivas().flatMap(c => c.valores(f)); },
+
+    // Fila de totales al final de la hoja: suma horas, nocturnas y extras si
+    // están elegidas.
+    _hayColSumable() { return this._colsActivas().some(c => c.sumable); },
+
+    _filaTotales() {
+        const filas = this._filasExport();
+        let puestaEtiqueta = false;
+        return this._colsActivas().flatMap(c => {
+            if (c.sumable) {
+                const total = filas.reduce((s, f) => s + (Number(c.valores(f)[0]) || 0), 0);
+                return [Math.round(total * 100) / 100];
+            }
+            if (!puestaEtiqueta) { puestaEtiqueta = true; return ['Total', ...c.cabeceras.slice(1).map(() => '')]; }
+            return c.cabeceras.map(() => '');
+        });
+    },
 
     // Los tres filtros comparten estructura: cabecera plegable con un resumen
     // de lo elegido, y dentro las opciones.
@@ -4215,8 +4240,10 @@ const app = {
     },
 
     _xlsxRegistro() {
-        return this._xlsxDe('Registro', this.CABECERAS_EXPORT,
-            this._filasExport().map(f => this._valoresFila(f)));
+        const filasDatos = this._filasExport().map(f => this._valoresFila(f));
+        const filas = (this._hayColSumable() && filasDatos.length)
+            ? [...filasDatos, this._filaTotales()] : filasDatos;
+        return this._xlsxDe('Registro', this.CABECERAS_EXPORT, filas);
     },
 
     // La misma hoja para cualquier tabla: el registro y las nóminas salen de
@@ -4312,8 +4339,10 @@ const app = {
             return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
         };
         const lineas = [this.CABECERAS_EXPORT.join(';')];
-        this._filasExport().forEach(f => lineas.push(
-            this._valoresFila(f).map(v => esc(typeof v === 'number' ? String(v).replace('.', ',') : v)).join(';')));
+        const filasDatos = this._filasExport();
+        const filaCsv = vals => vals.map(v => esc(typeof v === 'number' ? String(v).replace('.', ',') : v)).join(';');
+        filasDatos.forEach(f => lineas.push(filaCsv(this._valoresFila(f))));
+        if (this._hayColSumable() && filasDatos.length) lineas.push(filaCsv(this._filaTotales()));
         return '﻿' + lineas.join('\r\n') + '\r\n';
     },
 
@@ -4367,6 +4396,89 @@ const app = {
         } catch (e) {
             this._mostrarToast('❌ No se pudo crear la hoja: ' + e.message, 4500);
         }
+    },
+
+    // ── Enviar un export por email ───────────────────────────────────────────
+    // Un navegador no puede mandar un correo con adjunto por su cuenta: si el
+    // móvil sabe compartir archivos, se comparte a la app de correo que se
+    // elija con el fichero ya puesto; si no, se descarga y se abre el correo
+    // para adjuntarlo a mano. Los contactos son solo para no escribir el
+    // correo cada vez.
+    _contactosEmail() {
+        try {
+            const l = JSON.parse(localStorage.getItem('contactosEmail') || '[]');
+            return Array.isArray(l) ? l : [];
+        } catch (_) { return []; }
+    },
+
+    _guardarContactosEmail(lista) {
+        localStorage.setItem('contactosEmail', JSON.stringify([...new Set(lista)]));
+    },
+
+    prepararEmailRegistro() {
+        if (!this._hayColumnas()) return;
+        document.getElementById('expModal').classList.remove('show');
+        this.mostrarEnviarEmail(this._csvRegistro(), this._nombreExport('csv'),
+            'text/csv;charset=utf-8;', 'Registro');
+    },
+
+    mostrarEnviarEmail(contenido, nombre, tipo, asunto) {
+        this._emailPendiente = { contenido, nombre, tipo, asunto };
+        this._renderContactosEmail();
+        document.getElementById('emailModal').classList.add('show');
+        if (this.darkMode) document.getElementById('emailModalContent').classList.add('dark');
+    },
+
+    _renderContactosEmail() {
+        const cont = document.getElementById('emailContactos');
+        if (!cont) return;
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const lista = this._contactosEmail();
+        cont.innerHTML = lista.length ? lista.map(email => `<div class="email-contacto">
+                <span onclick="app._enviarAContacto('${esc(email)}')">${esc(email)}</span>
+                <button onclick="app._borrarContactoEmail('${esc(email)}')" title="Quitar">×</button>
+            </div>`).join('')
+            : '<div class="ops-field-sub" style="padding:8px 16px;">Sin contactos guardados todavía.</div>';
+    },
+
+    _borrarContactoEmail(email) {
+        this._guardarContactosEmail(this._contactosEmail().filter(e => e !== email));
+        this._renderContactosEmail();
+    },
+
+    _nuevoContactoEmail() {
+        const input = document.getElementById('emailNuevo');
+        const email = (input?.value || '').trim();
+        if (!email || !email.includes('@')) { this._mostrarToast('Pon un correo válido', 2500); return; }
+        this._guardarContactosEmail([...this._contactosEmail(), email]);
+        input.value = '';
+        this._renderContactosEmail();
+    },
+
+    _enviarSoloEmail() {
+        const email = (document.getElementById('emailNuevo')?.value || '').trim();
+        if (!email || !email.includes('@')) { this._mostrarToast('Pon un correo válido', 2500); return; }
+        this._enviarAContacto(email);
+    },
+
+    async _enviarAContacto(email) {
+        const p = this._emailPendiente;
+        if (!p) return;
+        document.getElementById('emailModal').classList.remove('show');
+        try {
+            const blob = new Blob([p.contenido], { type: p.tipo });
+            const file = new File([blob], p.nombre, { type: p.tipo });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], title: p.asunto, text: `Para ${email}` });
+                return;
+            }
+        } catch (_) { return; }   // el usuario cerró la hoja de compartir: no pasa nada
+        // Sin compartir archivos: se descarga y se abre el correo para adjuntarlo a mano
+        this._descargar(p.contenido, p.nombre, p.tipo);
+        const asunto = encodeURIComponent(p.asunto);
+        const cuerpo = encodeURIComponent(`Te adjunto ${p.nombre}, que se acaba de descargar.`);
+        window.open(`mailto:${email}?subject=${asunto}&body=${cuerpo}`, '_blank');
+        this._mostrarToast('📎 Descargado — adjúntalo al correo que se ha abierto', 5000);
     },
 
     ordenarRegistro(modo) {
@@ -4516,13 +4628,33 @@ const app = {
             return;
         }
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-        cont.innerHTML = fict.map(u => `<div class="pr-item">
+        cont.innerHTML = fict.map(u => `<div class="pr-item${u.oculto ? ' pr-oculto' : ''}">
             <span class="pr-item-t"><b>${esc(u.conductor) || '—'}</b> ${esc(u.nombre)}
                 ${u.puesto ? `<span class="cond-puesto">· ${esc(u.puesto)}</span>` : ''}
+                ${u.oculto ? '<span class="cond-puesto">· oculto</span>' : ''}
                 <br><span class="ops-field-sub">${(u.jornadas || []).length} jornadas · ${u.horasTotales || 0}h</span></span>
+            <button class="pr-ed" title="${u.oculto ? 'Mostrar' : 'Ocultar'}"
+                onclick="app._toggleOcultoFicticio('${esc(u.email)}')">${u.oculto ? '🙈' : '👁️'}</button>
             <button class="pr-ed"  onclick="app._nuevoFicticio('${esc(u.email)}')">✏️</button>
             <button class="pr-del" onclick="app._borrarFicticio('${esc(u.email)}')">×</button>
         </div>`).join('');
+    },
+
+    async _toggleOcultoFicticio(email) {
+        const u = (this._conductores || {})[email];
+        if (!u) return;
+        const ficticio = { ...u, oculto: !u.oculto };
+        try {
+            const resp = await fetch(this.USUARIOS_URL, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ email, ficticio })
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._conductores = data;
+            this._renderConductores(); this._renderPrueba();
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
     // Los lugares definidos más los que ya estén en uso
@@ -5420,7 +5552,7 @@ const app = {
         const fecha = this._fechaOffset(this._puestosOffset);
         const esHoy = this._puestosOffset === 0;
         const orden = localStorage.getItem('ordenTrabajadores') || 'nombre';
-        const todos = Object.values(this._conductores || {});
+        const todos = Object.values(this._conductores || {}).filter(u => !u.oculto);
         const filtro = localStorage.getItem('filtroTrabajadores') || 'todos';
         this._renderFiltrosCond(todos, fecha);
         const lista = todos

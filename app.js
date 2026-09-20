@@ -79,6 +79,9 @@ const app = {
     precioNocheDefault: parseFloat(localStorage.getItem('precioNoche')) || 0,
     precioExtraDefault: parseFloat(localStorage.getItem('precioExtra')) || 0,
     precioFestivoDefault: parseFloat(localStorage.getItem('precioFestivo')) || 0,
+    // Antigüedad: se fija una vez en el perfil y de ahí la coge cada nómina.
+    fechaAltaDefault: localStorage.getItem('fechaAlta') || '',
+    pctBieniosDefault: parseFloat(localStorage.getItem('pctBieniosManual')) || 0,
     modalCallback: null,
     editingId: null,
     prActivo: false,
@@ -759,6 +762,7 @@ const app = {
 
     setupUI() {
         this._aplicarCuadros();
+        this._aplicarCuadrosResumen();
         this._renderLugarJornada();
         this.establecerFechaHoy();
         this.actualizarFecha();
@@ -769,6 +773,10 @@ const app = {
         if (this.precioNocheDefault > 0) {
             document.getElementById('precioNocheGlobal').value = this.precioNocheDefault;
         }
+        const fa = document.getElementById('fechaAltaGlobal');
+        if (fa) fa.value = this.fechaAltaDefault || '';
+        const pb = document.getElementById('pctBieniosGlobal');
+        if (pb && this.pctBieniosDefault) pb.value = this.pctBieniosDefault;
         this.actualizarEstadoGPS();
         const lastInicio = localStorage.getItem('lastHoraInicio');
         if (lastInicio) document.getElementById('horaInicio').value = lastInicio;
@@ -1117,9 +1125,15 @@ const app = {
     async _guardarDesdeModal() {
         if (!this.usuarioActual || !this.editingId) return;
         const fecha     = document.getElementById('editModalFecha').value;
-        const horas     = parseFloat(document.getElementById('editModalHoras').value);
+        let   horas     = parseFloat(document.getElementById('editModalHoras').value);
         const horaInicio= document.getElementById('editModalInicio').value;
-        const horaFin   = document.getElementById('editModalFin').value;
+        let   horaFin   = document.getElementById('editModalFin').value;
+        const puesto    = document.getElementById('editModalLugar')?.value || '';
+        // Los lugares de abajo, igual que al registrar: si hay más de uno, la
+        // jornada va de la primera entrada a la última salida.
+        const tramos    = this._tramosDelDiaDe(this._tramosEdit, puesto, horaInicio, horaFin);
+        const total     = this._jornadaDeLosTramos(tramos);
+        if (total) { horaFin = total.fin; horas = total.horas; }
         const horasN    = parseFloat(document.getElementById('editModalNocturnas').value) || 0;
         const precioN   = parseFloat(document.getElementById('editModalPrecioN').value) || 0;
         const esPR      = document.getElementById('editModalPR').checked;
@@ -1143,12 +1157,15 @@ const app = {
             ...(horasN > 0 ? { horasNocturnas: horasN, precioNoche: precioN, extraNoche: Math.round(horasN * precioN * 100) / 100 } : {}),
             ...(esPR ? { pr: true } : {}),
             ...(esFestivo ? { festivo: true } : {}),
+            ...(puesto ? { puesto } : {}),
+            ...(tramos.length ? { tramos } : {}),
             ...(prev.extraManual ? { extraManual: true, extraDestino: prev.extraDestino } : {})
         };
         datos.horasTrabajadas = this._calcTotales(datos.historial).anualReal;
 
         await this._writeDriveFile(datos);
         this.editingId = null;
+        this._tramosEdit = [];
         document.getElementById('editModal').classList.remove('show');
         this.actualizarUI(datos);
         this._publicarResumen();
@@ -1683,9 +1700,32 @@ const app = {
     },
 
     // ── Exportar mis jornadas ────────────────────────────────────────────────
+    // Las horas extra de cada jornada, calculadas igual que en el resumen: en
+    // orden cronológico, lo que pasa del tope anual (o lo marcado a mano).
+    // Sin esto, la columna de horas extra del informe no traía horas —traía
+    // un "Sí"/"" que no había forma de sumar en la hoja.
+    _extrasPorRegistro(historial) {
+        const orden = Object.entries(historial || {})
+            .filter(([, r]) => r.timestamp)
+            .sort((a, b) => a[1].timestamp - b[1].timestamp);
+        const tope = this.horasAnualesCustom;
+        let acumulado = 0;
+        const out = {};
+        orden.forEach(([id, r]) => {
+            const h = parseFloat(r.horas) || 0;
+            if (r.extraDestino === 'extras') { out[id] = h; return; }
+            const efectivas = this._horasEfectivas(this._fechaDeId(id), r);
+            const cabe = Math.max(0, tope - acumulado);
+            out[id] = Math.round(Math.max(0, efectivas - cabe) * 100) / 100;
+            acumulado += efectivas;
+        });
+        return out;
+    },
+
     // Solo las jornadas de quien usa la app: aquí no hay nadie más
     _filasExport() {
         const filas = [];
+        const extrasPorId = this._extrasPorRegistro(this._historialFull);
         Object.entries(this._historialFull || {}).forEach(([id, r]) => {
             const f = this._fechaDeId(id);
             const lugar = r.puesto || this.puestoTrabajo || '';
@@ -1697,7 +1737,7 @@ const app = {
                 puesto: lugar, turno: { M:'Mañana', T:'Tarde', N:'Noche' }[t] || '',
                 ini: r.horaInicio || '', fin: r.horaFin || '',
                 horas: parseFloat(r.horas) || 0, noct: r.horasNocturnas || 0,
-                extra: r.extraDestino === 'extras' ? 'Sí' : '', festivo: r.festivo ? 'Sí' : '',
+                extra: extrasPorId[id] || 0, festivo: r.festivo ? 'Sí' : '',
                 vac: r.vacaciones ? 'Sí' : '', pr: r.pr ? 'Sí' : '',
                 be: r.be ? 'Sí' : '',
                 nota: r.nota || '',
@@ -1748,9 +1788,9 @@ const app = {
         { id:'turno',      etiqueta:'Mañana, tarde o noche', cabeceras:['Turno'],                  valores:f => [f.turno] },
         { id:'lugar',      etiqueta:'Lugar de trabajo',      cabeceras:['Lugar de trabajo'],       valores:f => [f.puesto] },
         { id:'horarios',   etiqueta:'Horarios',              cabeceras:['Entrada','Salida'],       valores:f => [f.ini, f.fin] },
-        { id:'horas',      etiqueta:'Horas',                 cabeceras:['Horas'],                  valores:f => [f.horas] },
-        { id:'nocturnas',  etiqueta:'Horas nocturnas',       cabeceras:['Nocturnas'],              valores:f => [f.noct] },
-        { id:'extras',     etiqueta:'Horas extras',          cabeceras:['Extra'],                  valores:f => [f.extra] },
+        { id:'horas',      etiqueta:'Horas',                 cabeceras:['Horas'],                  valores:f => [f.horas],  sumable:true },
+        { id:'nocturnas',  etiqueta:'Horas nocturnas',       cabeceras:['Nocturnas'],              valores:f => [f.noct],   sumable:true },
+        { id:'extras',     etiqueta:'Horas extras',          cabeceras:['Extra'],                  valores:f => [f.extra],  sumable:true },
         { id:'festivos',   etiqueta:'Festivos',              cabeceras:['Festivo'],                valores:f => [f.festivo] },
         { id:'vacaciones', etiqueta:'Vacaciones',            cabeceras:['Vacaciones'],             valores:f => [f.vac] },
         { id:'pr',         etiqueta:'PR',                    cabeceras:['PR'],                     valores:f => [f.pr] },
@@ -1776,6 +1816,24 @@ const app = {
     get CABECERAS_EXPORT() { return this._colsActivas().flatMap(c => c.cabeceras); },
 
     _valoresFila(f) { return this._colsActivas().flatMap(c => c.valores(f)); },
+
+    // Fila de totales al final de la hoja: suma horas, nocturnas y extras si
+    // están elegidas, para no tener que sumarlas a mano ni fiarse de que la
+    // hoja las sume bien sola.
+    _hayColSumable() { return this._colsActivas().some(c => c.sumable); },
+
+    _filaTotales() {
+        const filas = this._filasExport();
+        let puestaEtiqueta = false;
+        return this._colsActivas().flatMap(c => {
+            if (c.sumable) {
+                const total = filas.reduce((s, f) => s + (Number(c.valores(f)[0]) || 0), 0);
+                return [Math.round(total * 100) / 100];
+            }
+            if (!puestaEtiqueta) { puestaEtiqueta = true; return ['Total', ...c.cabeceras.slice(1).map(() => '')]; }
+            return c.cabeceras.map(() => '');
+        });
+    },
 
     // Los tres filtros comparten estructura: cabecera plegable con un resumen
     // de lo elegido, y dentro las opciones.
@@ -1987,10 +2045,17 @@ const app = {
     },
 
     _xlsxRegistro() {
+        const filasDatos = this._filasExport().map(f => this._valoresFila(f));
+        const filas = (this._hayColSumable() && filasDatos.length)
+            ? [...filasDatos, this._filaTotales()] : filasDatos;
+        return this._xlsxDe('Registro', this.CABECERAS_EXPORT, filas);
+    },
+
+    // La misma hoja para cualquier tabla: el registro y las nóminas salen de
+    // aquí, que no tiene sentido tener dos veces el mismo ZIP escrito a mano.
+    _xlsxDe(hoja, cabeceras, filas) {
         const esc = v => String(v ?? '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))
             .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
-        const cabeceras = this.CABECERAS_EXPORT;
-        const filas = this._filasExport().map(f => this._valoresFila(f));
 
         const celda = (v, col, fila, estilo) => {
             const ref = `${this._colExcel(col)}${fila}`;
@@ -2029,7 +2094,7 @@ const app = {
             + `</Relationships>` },
             { nombre: 'xl/workbook.xml', texto: X
             + `<workbook xmlns="${NS}" xmlns:r="${DOC}">`
-            + `<sheets><sheet name="Registro" sheetId="1" r:id="rId1"/></sheets></workbook>` },
+            + `<sheets><sheet name="${esc(hoja).slice(0, 31)}" sheetId="1" r:id="rId1"/></sheets></workbook>` },
             { nombre: 'xl/_rels/workbook.xml.rels', texto: X
             + `<Relationships xmlns="${REL}">`
             + `<Relationship Id="rId1" Type="${DOC}/worksheet" Target="worksheets/sheet1.xml"/>`
@@ -2073,15 +2138,21 @@ const app = {
 
     // Separador ; y coma decimal: es lo que espera Excel en español.
     // El BOM hace que reconozca los acentos.
-    _csvRegistro() {
+    _csvDe(cabeceras, filas) {
         const esc = v => {
             const t = String(v ?? '');
             return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
         };
-        const lineas = [this.CABECERAS_EXPORT.join(';')];
-        this._filasExport().forEach(f => lineas.push(
-            this._valoresFila(f).map(v => esc(typeof v === 'number' ? String(v).replace('.', ',') : v)).join(';')));
+        const filaCsv = vals => vals.map(v => esc(typeof v === 'number' ? String(v).replace('.', ',') : v)).join(';');
+        const lineas = [cabeceras.join(';'), ...filas.map(filaCsv)];
         return '﻿' + lineas.join('\r\n') + '\r\n';
+    },
+
+    _csvRegistro() {
+        const filasDatos = this._filasExport();
+        const filas = filasDatos.map(f => this._valoresFila(f));
+        if (this._hayColSumable() && filasDatos.length) filas.push(this._filaTotales());
+        return this._csvDe(this.CABECERAS_EXPORT, filas);
     },
 
     exportarCSV() {
@@ -2309,7 +2380,7 @@ const app = {
     // hora del último mensaje de cada conversación—, que ocupa nada. Los
     // mensajes enteros, con sus fotos, solo se bajan si algo ha cambiado.
 
-    SONDEO_CHAT: 45 * 1000,
+    SONDEO_CHAT: 60 * 1000,
     _timerChat: null,
     _huellaChat: null,
 
@@ -2459,6 +2530,7 @@ const app = {
                 body: ultimo.texto || '📎 Adjunto',
                 actionTypeId: 'CHAT_MENSAJE',
                 extra: { conv: n.id },
+                smallIcon: 'ic_stat_chat',
                 ...(this.notifSoundChat && this.notifSoundChat !== 'ninguno'
                     && this.notifSoundChat !== 'default'
                     ? { channelId: this.notifSoundChat } : {}),
@@ -2573,6 +2645,12 @@ const app = {
         this._renderNotas();
         document.getElementById('hiloModal').classList.add('show');
         if (this.darkMode) document.getElementById('hiloModalContent').classList.add('dark');
+        // Igual que en WhatsApp: al abrir la conversación, si lo último no es
+        // mío y aún no está visto, se marca solo, sin tocar nada.
+        const ultimo = this._ultimoMensaje(n);
+        if (ultimo && !this._esMiMensaje(ultimo, n) && !this._estaVista(n)) {
+            this._marcarVisto(id, true, true);
+        }
     },
 
     _renderHilo() {
@@ -2624,17 +2702,14 @@ const app = {
     _renderPieHilo(n) {
         const pie = document.getElementById('hiloPie');
         if (!pie) return;
-        const esc = t => String(t || '').replace(/'/g, "\\'");
-        const visto = this._estaVista(n);
-        pie.innerHTML = `<button class="modal-btn modal-btn-cancel" style="flex:0 0 auto;padding:10px 12px;"
-                title="${visto ? 'Quitar el visto' : 'Darla por vista'}"
-                onclick="app._marcarVisto('${esc(n.id)}',${!visto})">${visto ? '✅' : '☑️'}</button>`
-            + `<button class="modal-btn modal-btn-confirm" onclick="app._responderHilo()">Enviar</button>`;
+        pie.innerHTML = `<button class="modal-btn modal-btn-confirm" onclick="app._responderHilo()">Enviar</button>`;
     },
 
-    _marcarVisto(id, visto) {
+    // El visto ya no lo da nadie a mano: se pone solo, como en WhatsApp, en
+    // cuanto se abre una conversación con algo nuevo del otro lado.
+    _marcarVisto(id, visto, silencioso) {
         return this._tocarConversacion(id, { visto, nombre: this.usuarioActual?.name || '' },
-            visto ? '👁 Dada por vista' : 'Ya no está vista');
+            silencioso ? null : (visto ? '👁 Dada por vista' : 'Ya no está vista'));
     },
 
     async _responderHilo() {
@@ -2684,7 +2759,7 @@ const app = {
                 this._renderHilo();
             }
             this._renderNotas();
-            this._mostrarToast(mensaje, 2500);
+            if (mensaje) this._mostrarToast(mensaje, 2500);
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
@@ -2747,7 +2822,26 @@ const app = {
     },
 
     _nombreMes(mes) {
-        return `${MESES_ES[+mes.slice(4, 6) - 1]} ${mes.slice(0, 4)}`;
+        const m = String(mes || '');
+        if (/^\d{4}EJ$/.test(m)) return `Paga extra de julio ${m.slice(0, 4)}`;
+        if (/^\d{4}ED$/.test(m)) return `Paga extra de diciembre ${m.slice(0, 4)}`;
+        return `${MESES_ES[+m.slice(4, 6) - 1]} ${m.slice(0, 4)}`;
+    },
+
+    // Las pagas extra no son un mes del calendario: son dos nóminas aparte al
+    // año, sin prorratear. Se guardan con la clave AAAAEJ (julio) / AAAAED
+    // (diciembre) en vez de AAAAMM, así reutilizan el mismo almacén.
+    _esExtra(mes) { return /^\d{4}(EJ|ED)$/.test(String(mes || '')); },
+
+    verPagaExtra(tipo) {
+        const actual = this._miNomMes || this._mesDeHoy();
+        this._miNomMes = actual.slice(0, 4) + tipo;
+        this._renderMiNomina();
+    },
+
+    volverAMesNormal() {
+        this._miNomMes = this._mesDeHoy();
+        this._renderMiNomina();
     },
 
     _eur(n) {
@@ -2756,7 +2850,10 @@ const app = {
     },
 
     miNomMes(paso) {
-        this._miNomMes = this._mesMas(this._miNomMes || this._mesDeHoy(), paso);
+        const actual = this._miNomMes || this._mesDeHoy();
+        this._miNomMes = this._esExtra(actual)
+            ? String(Number(actual.slice(0, 4)) + paso) + actual.slice(4)
+            : this._mesMas(actual, paso);
         this._renderMiNomina();
     },
 
@@ -2789,24 +2886,36 @@ const app = {
 
     editarMiNomina() {
         const mes = this._miNomMes;
-        const g = this._misNominas?.[mes]
-            || this._misNominas?.[this._mesMas(mes, -1)] || {};
+        const esExtra = this._esExtra(mes);
+        // La paga extra parte de la misma paga del año anterior, no del mes
+        // de antes; un mes normal parte del mes de antes.
+        const anterior = esExtra
+            ? String(Number(mes.slice(0, 4)) - 1) + mes.slice(4)
+            : this._mesMas(mes, -1);
+        const g = this._misNominas?.[mes] || this._misNominas?.[anterior] || {};
         const C = this.CONVENIO;
         this._nomEditando = {
             precios: {
                 porDia: { ...C.porDia, ...(g.precios?.porDia || {}) },
                 delMes: { ...C.delMes, ...(g.precios?.delMes || {}) },
             },
-            desde:     g.desde || '',
-            pctBienios: Number(g.pctBienios ?? 0),
-            sindicato: Number(g.sindicato ?? 0),
-            prorrata:  Number(g.prorrata ?? this.PRORRATA_EXTRAS),
+            // La fecha de alta y, si no hay fecha, el % manual salen del
+            // perfil (Opciones › Perfil) — se ponen una vez y valen para
+            // todas las nóminas.
+            desde:     g.desde || this.fechaAltaDefault || '',
+            pctBienios: Number(g.pctBienios ?? this.pctBieniosDefault ?? 0),
+            // El sindicato se paga siempre, 12 € por defecto en la nómina
+            // normal (0 en la paga extra); si se deja de pagar se pone a 0 a
+            // mano y ese 0 es lo que sigue arrastrándose.
+            sindicato: Number(g.sindicato ?? (esExtra ? 0 : 12)),
+            // Las pagas extra no se prorratean: son estas dos nóminas aparte.
+            prorrata:  Number(g.prorrata ?? 0),
             tipos:     { ...this.TIPOS_NOMINA, ...(g.tipos || {}) },
             // Sin nada guardado se quedan a undefined y los pone el cálculo a
             // partir de los registros; en cuanto se escriben, mandan.
             dias:      { asistencia: g.dias?.asistencia },
-            extra:     { h: g.extra?.h, p: Number(g.extra?.p ?? 0) },
-            noct:      { h: g.noct?.h,  p: Number(g.noct?.p ?? 0) },
+            extra:     { h: g.extra?.h, p: Number(g.extra?.p ?? this.precioExtraDefault ?? 0) },
+            noct:      { h: g.noct?.h,  p: Number(g.noct?.p ?? this.precioNocheDefault ?? 0) },
             extras:    (g.extras || []).map(e => ({ ...e })),
             nota:      g.nota || '',
         };
@@ -2822,12 +2931,6 @@ const app = {
         if (partes.length > 1 && !o[partes[0]]) o[partes[0]] = {};
         while (partes.length > 1) o = o[partes.shift()];
         o[partes[0]] = n;
-        this._renderMiNomina();
-    },
-
-    // La fecha de entrada no es un número, así que va por su cuenta
-    _setMiFecha(valor) {
-        this._nomEditando.desde = valor || '';
         this._renderMiNomina();
     },
 
@@ -2863,6 +2966,27 @@ const app = {
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
+    // Borrarla no borra las jornadas: solo lo que se escribió a mano. Si hace
+    // falta otra vez, "Rellenarla" vuelve a partir de los registros.
+    async eliminarMiNomina() {
+        const mes = this._miNomMes;
+        if (!confirm(`¿Eliminar la nómina de ${this._nombreMes(mes)}?\n\nLas jornadas no se tocan; si la quieres otra vez, pulsa "Rellenarla".`)) return;
+        try {
+            const r = await fetch(this.NOMINAS_URL, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mes, email: this.usuarioActual?.email }),
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return; }
+            if (this._misNominas) delete this._misNominas[mes];
+            localStorage.setItem('misNominas', JSON.stringify(this._misNominas || {}));
+            this._nomEditando = null;
+            this._renderMiNomina();
+            this._mostrarToast('🗑️ Nómina eliminada', 2500);
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
+    },
+
     // El mismo convenio y el mismo cálculo que en gestión: si cada app hiciera
     // sus cuentas, tarde o temprano dirían cosas distintas.
     // El convenio de partida, sacado de una nómina de media jornada. Todo es
@@ -2880,7 +3004,6 @@ const app = {
     // El complemento de responsabilidad/calidad es nuevo: se empieza a cobrar
     // en la nómina de julio de 2026, y antes de esa no aparece.
     DESDE_RESPONSABILIDAD: '202607',
-    PRORRATA_EXTRAS: 135.20,
     TIPOS_NOMINA: { cc: 4.70, desempleo: 1.55, fp: 0.10, mei: 0.15, irpf: 15.00 },
 
     // Horas extras que registró ese mes
@@ -2956,22 +3079,28 @@ const app = {
     _calcNomina(mes, n) {
         const D = this.DIAS_NOMINA;
         const g = n || {};
+        const esExtra = this._esExtra(mes);
         // Los precios guardados mandan sobre los de partida
         const C = {
             porDia: { ...this.CONVENIO.porDia, ...(g.precios?.porDia || {}) },
             delMes: { ...this.CONVENIO.delMes, ...(g.precios?.delMes || {}) },
         };
         const dias = this._diasDeNomina(mes);
-        // Asistencia y horas extras salen de los registros, y se pueden
-        // corregir a mano el mes que no cuadren.
-        const diasAsist = Number(g.dias?.asistencia ?? dias.asistencia) || 0;
-        const hExtra    = Number(g.extra?.h ?? this._horasExtraDelMes(mes)) || 0;
-        const pExtra    = Number(g.extra?.p ?? 0) || 0;
-        const hNoct     = Number(g.noct?.h ?? this._horasNocturnasDelMes(mes)) || 0;
-        const pNoct     = Number(g.noct?.p ?? 0) || 0;
+        // La paga extra es solo salario base y antigüedad: sin plus de
+        // asistencia, sin horas extras ni nocturnas, sin los complementos que
+        // ya se cobran cada mes.
+        const diasAsist = esExtra ? 0 : Number(g.dias?.asistencia ?? dias.asistencia) || 0;
+        const hExtra    = esExtra ? 0 : Number(g.extra?.h ?? this._horasExtraDelMes(mes)) || 0;
+        // El precio de la hora extra y de la nocturna salen de Ajustes › Trabajo,
+        // así no hay que volver a escribirlos en cada nómina.
+        const pExtra    = esExtra ? 0 : Number(g.extra?.p ?? this.precioExtraDefault ?? 0) || 0;
+        const hNoct     = esExtra ? 0 : Number(g.noct?.h ?? this._horasNocturnasDelMes(mes)) || 0;
+        const pNoct     = esExtra ? 0 : Number(g.noct?.p ?? this.precioNocheDefault ?? 0) || 0;
         // Con la fecha de entrada puesta manda la antigüedad; si no, lo que
-        // se haya escrito a mano.
-        const pctAnt    = this._pctAntiguedad(g.desde, mes);
+        // se haya escrito a mano. Ambas salen del perfil si la nómina no
+        // guarda las suyas propias.
+        const desde     = g.desde || this.fechaAltaDefault || '';
+        const pctAnt    = this._pctAntiguedad(desde, mes);
         const tipos     = { ...this.TIPOS_NOMINA, ...(g.tipos || {}) };
         const r2 = v => Math.round(v * 100) / 100;
 
@@ -2980,41 +3109,47 @@ const app = {
 
         // El orden es el de la nómina en papel
         const pctBienios = pctAnt !== null ? pctAnt
-            : Math.max(0, Math.min(60, Number(g.pctBienios ?? 0) || 0));
+            : Math.max(0, Math.min(60, Number(g.pctBienios ?? this.pctBieniosDefault ?? 0) || 0));
 
         const devengos = [porDia('Salario Base', dias.base, C.porDia.base)];
         // La antigüedad sube el día de vacaciones y la hora extra, no solo el
         // salario base.
         const conAnt = v => v * (1 + pctBienios / 100);
-        if (dias.vacaciones) devengos.push(porDia('Vacaciones', dias.vacaciones, conAnt(C.porDia.vacaciones)));
-        if (dias.permiso)    devengos.push(porDia('Permiso retribuido', dias.permiso, C.porDia.base));
+        if (!esExtra && dias.vacaciones) devengos.push(porDia('Vacaciones', dias.vacaciones, conAnt(C.porDia.vacaciones)));
+        if (!esExtra && dias.permiso)    devengos.push(porDia('Permiso retribuido', dias.permiso, C.porDia.base));
         // Los bienios son un porcentaje del salario base del mes entero, no de
         // los días que haya trabajado: en junio, con catorce de vacaciones,
-        // siguen siendo los mismos 38,63 que en julio.
+        // siguen siendo los mismos 38,63 que en julio. En la paga extra, del
+        // salario base entero igual que en cualquier mes.
         if (pctBienios) devengos.push({
             ...delMes('Bienios', D * C.porDia.base * pctBienios / 100),
-            pctBienios, anios: this._aniosEnLaEmpresa(g.desde, mes) });
-        devengos.push(delMes('Comp. No Absorbible', C.delMes.noAbsorbible));
-        devengos.push(delMes('Plus Transporte', C.delMes.transporte));
-        devengos.push(delMes('Complemento Ajuste convenio', C.delMes.ajuste));
-        devengos.push(delMes('Complemento convenio', C.delMes.ajuste2));
-        // Fijo, pero solo desde que existe
-        if (mes >= this.DESDE_RESPONSABILIDAD) {
-            devengos.push(delMes('Compl. Responsabilidad/Calidad', C.delMes.responsabilidad));
+            pctBienios, anios: this._aniosEnLaEmpresa(desde, mes) });
+        if (!esExtra) {
+            devengos.push(delMes('Comp. No Absorbible', C.delMes.noAbsorbible));
+            devengos.push(delMes('Plus Transporte', C.delMes.transporte));
+            devengos.push(delMes('Complemento Ajuste convenio', C.delMes.ajuste));
+            devengos.push(delMes('Complemento convenio', C.delMes.ajuste2));
+            // Fijo, pero solo desde que existe
+            if (mes >= this.DESDE_RESPONSABILIDAD) {
+                devengos.push(delMes('Compl. Responsabilidad/Calidad', C.delMes.responsabilidad));
+            }
+            if (diasAsist) devengos.push(porDia('Complemento Asistencia', diasAsist, C.porDia.asistencia));
+            if (hNoct)     devengos.push({ c: 'Complemento horas nocturnas', d: hNoct, p: r2(pNoct),
+                                           i: r2(hNoct * pNoct), horas: true });
+            if (hExtra)    devengos.push({ c: 'Horas extras', d: hExtra, p: r2(conAnt(pExtra)),
+                                           i: r2(hExtra * conAnt(pExtra)), horas: true });
         }
-        if (diasAsist) devengos.push(porDia('Complemento Asistencia', diasAsist, C.porDia.asistencia));
-        if (hNoct)     devengos.push({ c: 'Complemento horas nocturnas', d: hNoct, p: r2(pNoct),
-                                       i: r2(hNoct * pNoct), horas: true });
-        if (hExtra)    devengos.push({ c: 'Horas extras', d: hExtra, p: r2(conAnt(pExtra)),
-                                       i: r2(hExtra * conAnt(pExtra)), horas: true });
         (g.extras || []).forEach(e => {
             if (e && String(e.c || '').trim()) devengos.push({ c: e.c, d: 0, p: 0, i: r2(Number(e.i) || 0) });
         });
 
         const devengado = r2(devengos.reduce((t, l) => t + l.i, 0));
-        const prorrata  = r2(Number(g.prorrata ?? this.PRORRATA_EXTRAS));
+        // Las pagas extra no se prorratean: son estas dos nóminas aparte, así
+        // que aquí la prorrata siempre es 0 salvo que quede una guardada de
+        // antes de cambiarlo.
+        const prorrata  = r2(Number(g.prorrata ?? 0));
         const base      = r2(devengado + prorrata);
-        const sindicato = r2(Number(g.sindicato ?? 0));
+        const sindicato = r2(Number(g.sindicato ?? (esExtra ? 0 : 12)));
         const pct = (c, sobre, p) => ({ c, base: sobre, pct: p, i: r2(sobre * p / 100) });
         const deducciones = [
             pct('Aportac. Contingencias Comunes', base, tipos.cc),
@@ -3027,8 +3162,8 @@ const app = {
         const aDeducir = r2(deducciones.reduce((t, l) => t + l.i, 0));
         return { dias, devengos, deducciones, devengado, prorrata, base, aDeducir,
                  liquido: r2(devengado - aDeducir), precios: C, tipos, sindicato,
-                 pctBienios, pctAnt, anios: this._aniosEnLaEmpresa(g.desde, mes),
-                 hExtra, pExtra, hNoct, pNoct, diasAsist };
+                 pctBienios, pctAnt, anios: this._aniosEnLaEmpresa(desde, mes), desde,
+                 hExtra, pExtra, hNoct, pNoct, diasAsist, esExtra };
     },
 
     _renderMiNomina() {
@@ -3038,6 +3173,13 @@ const app = {
         const mes = this._miNomMes = this._miNomMes || this._mesDeHoy();
         const titulo = document.getElementById('miNomMes');
         if (titulo) titulo.textContent = this._nombreMes(mes);
+        const barraExtra = document.getElementById('miNomExtraBarra');
+        if (barraExtra) {
+            barraExtra.innerHTML = this._esExtra(mes)
+                ? `<button class="nom-extra-btn" onclick="app.volverAMesNormal()">📅 Volver al mes</button>`
+                : `<button class="nom-extra-btn" onclick="app.verPagaExtra('EJ')">🎁 Paga extra julio</button>
+                   <button class="nom-extra-btn" onclick="app.verPagaExtra('ED')">🎁 Paga extra diciembre</button>`;
+        }
 
         const editando = this._nomEditando;
         const n = editando || this._misNominas?.[mes];
@@ -3073,29 +3215,33 @@ const app = {
         const ajustes = !editando ? '' : `
             <div class="nom-sec">Tu convenio</div>
             ${campo('Salario base', P.porDia.base, 'precios.porDia.base', '€/día')}
+            ${c.esExtra ? '' : `
             ${campo('Vacaciones <small>sin antigüedad</small>', P.porDia.vacaciones, 'precios.porDia.vacaciones', '€/día')}
             ${campo('Asistencia', P.porDia.asistencia, 'precios.porDia.asistencia', '€/día')}
             ${campo('Comp. No Absorbible', P.delMes.noAbsorbible, 'precios.delMes.noAbsorbible', '€/mes')}
             ${campo('Plus Transporte', P.delMes.transporte, 'precios.delMes.transporte', '€/mes')}
             ${campo('Ajuste convenio', P.delMes.ajuste, 'precios.delMes.ajuste', '€/mes')}
             ${campo('Complemento convenio', P.delMes.ajuste2, 'precios.delMes.ajuste2', '€/mes')}
-            ${campo('Responsabilidad/Calidad', P.delMes.responsabilidad, 'precios.delMes.responsabilidad', '€/mes')}
-            ${campo('Prorrata pagas extra', c.prorrata, 'prorrata', '€/mes')}
+            ${campo('Responsabilidad/Calidad', P.delMes.responsabilidad, 'precios.delMes.responsabilidad', '€/mes')}`}
             <div class="nom-sec">Antigüedad</div>
-            <div class="nom-edit"><span>Entré en la empresa el</span>
-                <input type="date" value="${esc(n.desde || '')}" style="flex:0 0 138px;"
-                       onchange="app._setMiFecha(this.value)"></div>
-            ${c.pctAnt !== null
-                ? `<div class="nom-nota">Con ${c.anios} año${c.anios === 1 ? '' : 's'} en la empresa
-                     te toca un <b>${c.pctAnt} %</b> de antigüedad, que sube también el día de
-                     vacaciones y la hora extra. Cambia solo cuando cumplas años.</div>`
-                : campo('Antigüedad', c.pctBienios, 'pctBienios', '%')}
+            ${c.desde
+                ? `<div class="nom-nota">Entraste en la empresa el <b>${esc(c.desde)}</b>
+                     (Opciones › Perfil).${c.pctAnt !== null
+                     ? ` Con ${c.anios} año${c.anios === 1 ? '' : 's'} te toca un
+                        <b>${c.pctAnt} %</b> de antigüedad, que sube también el día de
+                        vacaciones y la hora extra. Cambia solo cuando cumplas años.` : ''}</div>`
+                : `<div class="nom-nota">Sin fecha de alta puesta en Opciones › Perfil, la
+                     antigüedad se aplica con el <b>${num(c.pctBienios)} %</b> manual que
+                     hayas puesto allí.</div>`}
+            ${c.esExtra ? '' : `
             <div class="nom-sec">Este mes</div>
             ${campo('Horas extras', c.hExtra, 'extra.h', 'horas')}
-            ${campo('Hora extra <small>sin antigüedad</small>', c.pExtra, 'extra.p', '€/hora')}
+            <div class="nom-nota">Hora extra a <b>${num(c.pExtra)} €</b>, el precio que hay
+                puesto en Ajustes › Trabajo.</div>
             ${campo('Horas nocturnas', c.hNoct, 'noct.h', 'horas')}
-            ${campo('Hora nocturna', c.pNoct, 'noct.p', '€/hora')}
-            ${campo('Días de asistencia', c.diasAsist, 'dias.asistencia', 'días')}
+            <div class="nom-nota">Hora nocturna a <b>${num(c.pNoct)} €</b>, el precio que hay
+                puesto en Ajustes › Trabajo.</div>
+            ${campo('Días de asistencia', c.diasAsist, 'dias.asistencia', 'días')}`}
             ${(n.extras || []).map((e, k) => `<div class="nom-edit">
                 <input type="text" style="flex:1" value="${esc(e.c)}" placeholder="Otro concepto"
                        onchange="app._setMiExtra(${k},'c',this.value)">
@@ -3113,6 +3259,8 @@ const app = {
             <div class="edit-field" style="margin-top:10px;"><label>Nota</label>
                 <input type="text" id="miNomNota" value="${esc(n.nota || '')}"
                        placeholder="Lo que quieras recordar"></div>
+            ${this._misNominas?.[mes] ? `<button class="nom-mas" style="color:#e74c3c;border-color:#e74c3c;"
+                onclick="app.eliminarMiNomina()">🗑️ Eliminar esta nómina</button>` : ''}
             <div class="nom-botones">
                 <button class="nom-cancel" onclick="app.cancelarMiNomina()">Cancelar</button>
                 <button class="btn-main" onclick="app._guardarMiNomina()">Guardar</button>
@@ -3139,7 +3287,8 @@ const app = {
                 <span class="nom-liquido-l">Líquido</span>
                 <span class="nom-liquido-v">${this._eur(c.liquido)}</span></div>
             <div class="nom-sec">Base de cotización</div>
-            <div class="nom-l"><span class="nom-l-c">Devengado + prorrata de pagas extra</span>
+            <div class="nom-l"><span class="nom-l-c">${c.prorrata
+                ? 'Devengado + prorrata de pagas extra' : 'Devengado'}</span>
                 <span class="nom-l-i">${this._eur(c.base)}</span></div>
             ${!editando && n.nota ? `<div class="nom-sec">Nota</div>
                 <div class="nom-l"><span class="nom-l-c" style="white-space:normal;">${esc(n.nota)}</span></div>` : ''}
@@ -3150,30 +3299,227 @@ const app = {
         </div>`;
     },
 
-    // Frente al mes anterior, si lo hay
-    _compararMiNomina(mes, ahora) {
+    // La diferencia entre dos nóminas, concepto a concepto. La usan tanto el
+    // "frente al mes anterior" de siempre como el comparador manual.
+    _diffNominas(claveA, A, claveB, B) {
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-        const anterior = this._mesMas(mes, -1);
-        const prev = this._misNominas?.[anterior];
-        if (!prev) return '';
-        const antes = this._calcNomina(anterior, prev);
         const aMapa = c => {
             const m = {};
             c.devengos.forEach(l => { m[l.c] = (m[l.c] || 0) + l.i; });
             c.deducciones.forEach(l => { m[l.c] = (m[l.c] || 0) - l.i; });
             return m;
         };
-        const A = aMapa(ahora), B = aMapa(antes);
+        const MA = aMapa(A), MB = aMapa(B);
         const fila = (c, d) => {
             const clase = d > 0 ? 'sube' : d < 0 ? 'baja' : 'igual';
             return `<div class="nom-cmp"><span class="nom-cmp-c">${esc(c)}</span>
                 <span class="nom-cmp-v ${clase}">${d > 0 ? '+' : ''}${this._eur(d)}</span></div>`;
         };
+        return fila(`Líquido (${esc(this._nombreMes(claveB))}: ${this._eur(B.liquido)})`,
+                   Math.round((A.liquido - B.liquido) * 100) / 100)
+            + [...new Set([...Object.keys(MA), ...Object.keys(MB)])]
+                .map(c => fila(c, Math.round(((MA[c] ?? 0) - (MB[c] ?? 0)) * 100) / 100)).join('');
+    },
+
+    // Frente al mes anterior, si lo hay (o la misma paga extra del año antes)
+    _compararMiNomina(mes, ahora) {
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const anterior = this._esExtra(mes)
+            ? String(Number(mes.slice(0, 4)) - 1) + mes.slice(4)
+            : this._mesMas(mes, -1);
+        const prev = this._misNominas?.[anterior];
+        if (!prev) return '';
+        const antes = this._calcNomina(anterior, prev);
         return `<div class="nom-sec">Frente a ${esc(this._nombreMes(anterior))}</div>`
-            + fila(`Líquido (antes ${this._eur(antes.liquido)})`,
-                   Math.round((ahora.liquido - antes.liquido) * 100) / 100)
-            + [...new Set([...Object.keys(A), ...Object.keys(B)])]
-                .map(c => fila(c, Math.round(((A[c] ?? 0) - (B[c] ?? 0)) * 100) / 100)).join('');
+            + this._diffNominas(mes, ahora, anterior, antes);
+    },
+
+    // ── Comparar dos nóminas cualquiera ─────────────────────────────────────
+    mostrarCompararNominas() {
+        this._renderSelectoresComparar();
+        document.getElementById('compararNomModal').classList.add('show');
+        if (this.darkMode) document.getElementById('compararNomModalContent').classList.add('dark');
+    },
+
+    _clavesNominasGuardadas() {
+        return Object.keys(this._misNominas || {}).sort();
+    },
+
+    _renderSelectoresComparar() {
+        const claves = this._clavesNominasGuardadas();
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const opciones = claves.map(k => `<option value="${k}">${esc(this._nombreMes(k))}</option>`).join('');
+        const selA = document.getElementById('cmpNomA');
+        const selB = document.getElementById('cmpNomB');
+        if (!selA || !selB) return;
+        selA.innerHTML = opciones;
+        selB.innerHTML = opciones;
+        if (claves.length)     selA.value = claves[claves.length - 1];
+        if (claves.length > 1) selB.value = claves[claves.length - 2];
+        this._renderCompararNominas();
+    },
+
+    _renderCompararNominas() {
+        const cont = document.getElementById('compararNomResultado');
+        if (!cont) return;
+        const claveA = document.getElementById('cmpNomA')?.value;
+        const claveB = document.getElementById('cmpNomB')?.value;
+        if (!claveA || !claveB) { cont.innerHTML = ''; return; }
+        if (claveA === claveB) { cont.innerHTML = '<div class="nom-vacio">Elige dos nóminas distintas.</div>'; return; }
+        const A = this._calcNomina(claveA, this._misNominas[claveA]);
+        const B = this._calcNomina(claveB, this._misNominas[claveB]);
+        cont.innerHTML = this._diffNominas(claveA, A, claveB, B);
+    },
+
+    // ── Exportar las nóminas ─────────────────────────────────────────────────
+    CABECERAS_EXPORT_NOM: ['Nómina', 'Devengado', 'Deducciones', 'Líquido', 'Base de cotización',
+        'Salario base €/día', 'Antigüedad %', 'Horas extra', 'Horas nocturnas', 'Sindicato €'],
+
+    _filasExportNom() {
+        return this._clavesNominasGuardadas().map(clave => {
+            const c = this._calcNomina(clave, this._misNominas[clave]);
+            return [this._nombreMes(clave), c.devengado, c.aDeducir, c.liquido, c.base,
+                c.precios.porDia.base, c.pctBienios, c.hExtra, c.hNoct, c.sindicato];
+        });
+    },
+
+    mostrarExportarNominas() {
+        if (!this._clavesNominasGuardadas().length) { this._mostrarToast('No hay nóminas que exportar', 3000); return; }
+        document.getElementById('expNomModal').classList.add('show');
+        if (this.darkMode) document.getElementById('expNomModalContent').classList.add('dark');
+    },
+
+    exportarNomCSV() {
+        document.getElementById('expNomModal').classList.remove('show');
+        this._descargar(this._csvDe(this.CABECERAS_EXPORT_NOM, this._filasExportNom()),
+            this._nombreExport('csv').replace('jornadas', 'nominas'), 'text/csv;charset=utf-8;');
+        this._mostrarToast('📊 Nóminas exportadas en CSV', 4000);
+    },
+
+    exportarNomXLS() {
+        document.getElementById('expNomModal').classList.remove('show');
+        const ok = this._descargarBinario(this._xlsxDe('Nóminas', this.CABECERAS_EXPORT_NOM, this._filasExportNom()),
+            this._nombreExport('xlsx').replace('jornadas', 'nominas'),
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        if (!ok) { this._mostrarToast('Actualiza la app para exportar a Excel; de momento usa CSV', 4500); return; }
+        this._mostrarToast('📗 Nóminas exportadas en Excel', 4000);
+    },
+
+    async exportarNomSheets() {
+        document.getElementById('expNomModal').classList.remove('show');
+        this._mostrarToast('☁️ Creando hoja en Drive...', 3000);
+        try {
+            if (!await this._ensureToken()) throw new Error('Sin sesión de Google');
+            const frontera = '-------emt' + Date.now();
+            const meta = JSON.stringify({
+                name: `Mis nóminas EMT ${new Date().toISOString().slice(0,10)}`,
+                mimeType: 'application/vnd.google-apps.spreadsheet',
+            });
+            const cuerpo = `\r\n--${frontera}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}`
+                + `\r\n--${frontera}\r\nContent-Type: text/csv; charset=UTF-8\r\n\r\n${this._csvDe(this.CABECERAS_EXPORT_NOM, this._filasExportNom())}`
+                + `\r\n--${frontera}--`;
+            const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${this.accessToken}`,
+                           'Content-Type': `multipart/related; boundary=${frontera}` },
+                body: cuerpo,
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.error?.message || resp.status);
+            this._mostrarToast('☁️ Hoja creada en Drive', 3000);
+            if (data.webViewLink) window.open(data.webViewLink, '_blank');
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
+    },
+
+    // ── Enviar un export por email ───────────────────────────────────────────
+    // Un navegador no puede mandar un correo con adjunto por su cuenta: si el
+    // móvil sabe compartir archivos, se comparte a la app de correo que se
+    // elija con el fichero ya puesto; si no, se descarga y se abre el correo
+    // para adjuntarlo a mano. Los contactos son solo para no escribir el
+    // correo cada vez.
+    _contactosEmail() {
+        try {
+            const l = JSON.parse(localStorage.getItem('contactosEmail') || '[]');
+            return Array.isArray(l) ? l : [];
+        } catch (_) { return []; }
+    },
+
+    _guardarContactosEmail(lista) {
+        localStorage.setItem('contactosEmail', JSON.stringify([...new Set(lista)]));
+    },
+
+    prepararEmailRegistro() {
+        if (!this._hayColumnas()) return;
+        document.getElementById('expModal').classList.remove('show');
+        this.mostrarEnviarEmail(this._csvRegistro(), this._nombreExport('csv'),
+            'text/csv;charset=utf-8;', 'Mis jornadas');
+    },
+
+    prepararEmailNominas() {
+        if (!this._clavesNominasGuardadas().length) { this._mostrarToast('No hay nóminas que exportar', 3000); return; }
+        document.getElementById('expNomModal').classList.remove('show');
+        this.mostrarEnviarEmail(this._csvDe(this.CABECERAS_EXPORT_NOM, this._filasExportNom()),
+            this._nombreExport('csv').replace('jornadas', 'nominas'),
+            'text/csv;charset=utf-8;', 'Mis nóminas');
+    },
+
+    mostrarEnviarEmail(contenido, nombre, tipo, asunto) {
+        this._emailPendiente = { contenido, nombre, tipo, asunto };
+        this._renderContactosEmail();
+        document.getElementById('emailModal').classList.add('show');
+        if (this.darkMode) document.getElementById('emailModalContent').classList.add('dark');
+    },
+
+    _renderContactosEmail() {
+        const cont = document.getElementById('emailContactos');
+        if (!cont) return;
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const lista = this._contactosEmail();
+        cont.innerHTML = lista.length ? lista.map(email => `<div class="email-contacto">
+                <span onclick="app._enviarAContacto('${esc(email)}')">${esc(email)}</span>
+                <button onclick="app._borrarContactoEmail('${esc(email)}')" title="Quitar">×</button>
+            </div>`).join('')
+            : '<div class="ops-field-sub" style="padding:8px 16px;">Sin contactos guardados todavía.</div>';
+    },
+
+    _borrarContactoEmail(email) {
+        this._guardarContactosEmail(this._contactosEmail().filter(e => e !== email));
+        this._renderContactosEmail();
+    },
+
+    _nuevoContactoEmail() {
+        const input = document.getElementById('emailNuevo');
+        const email = (input?.value || '').trim();
+        if (!email || !email.includes('@')) { this._mostrarToast('Pon un correo válido', 2500); return; }
+        this._guardarContactosEmail([...this._contactosEmail(), email]);
+        input.value = '';
+        this._renderContactosEmail();
+    },
+
+    _enviarSoloEmail() {
+        const email = (document.getElementById('emailNuevo')?.value || '').trim();
+        if (!email || !email.includes('@')) { this._mostrarToast('Pon un correo válido', 2500); return; }
+        this._enviarAContacto(email);
+    },
+
+    async _enviarAContacto(email) {
+        const p = this._emailPendiente;
+        if (!p) return;
+        document.getElementById('emailModal').classList.remove('show');
+        try {
+            const blob = new Blob([p.contenido], { type: p.tipo });
+            const file = new File([blob], p.nombre, { type: p.tipo });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], title: p.asunto, text: `Para ${email}` });
+                return;
+            }
+        } catch (_) { return; }   // el usuario cerró la hoja de compartir: no pasa nada
+        // Sin compartir archivos: se descarga y se abre el correo para adjuntarlo a mano
+        this._descargar(p.contenido, p.nombre, p.tipo);
+        const asunto = encodeURIComponent(p.asunto);
+        const cuerpo = encodeURIComponent(`Te adjunto ${p.nombre}, que se acaba de descargar.`);
+        window.open(`mailto:${email}?subject=${asunto}&body=${cuerpo}`, '_blank');
+        this._mostrarToast('📎 Descargado — adjúntalo al correo que se ha abierto', 5000);
     },
 
     // ── Lugar de trabajo de la jornada ───────────────────────────────────────
@@ -3182,11 +3528,13 @@ const app = {
     // última salida no hace falta escribirlas: son las de la jornada.
 
     _tramos: [],
+    _tramosEdit: [],
 
     _lugaresConocidos() {
         const cat = Object.values(LUGARES_CATALOGO || {}).map(l => l?.nombre).filter(Boolean);
         const todos = [...cat];
-        [this.puestoTrabajo, this._lugarDeHoy(), ...this._tramos.map(t => t.p)].forEach(p => {
+        [this.puestoTrabajo, this._lugarDeHoy(),
+         ...this._tramos.map(t => t.p), ...this._tramosEdit.map(t => t.p)].forEach(p => {
             if (p && !todos.some(x => this._clavePuesto(x) === this._clavePuesto(p))) todos.push(p);
         });
         return todos;
@@ -3251,14 +3599,17 @@ const app = {
     // si no se le pone hora, donde acabó el anterior: el de arriba para el
     // primero. La salida siempre se escribe, porque entre un tramo y el
     // siguiente puede haber un hueco sin trabajar y nadie puede adivinarlo.
-    _tramosConHoras() {
-        const fin = document.getElementById('horaFin')?.value || '';
-        let antes = fin;
-        return this._tramos.map(t => {
+    _tramosConHorasDe(tramosArr, finPrincipal) {
+        let antes = finPrincipal;
+        return tramosArr.map(t => {
             const con = { ...t, i: t.i || antes, o: t.o || '' };
             if (con.o) antes = con.o;
             return con;
         });
+    },
+
+    _tramosConHoras() {
+        return this._tramosConHorasDe(this._tramos, document.getElementById('horaFin')?.value || '');
     },
 
     // Todos los sitios del día, el de arriba incluido.
@@ -3268,21 +3619,24 @@ const app = {
     // de un día repartido solo viajaban los sitios de abajo y la primera
     // parte —la que casi siempre es la más larga— no aparecía en ningún lado:
     // ni en las jornadas anteriores, ni en el cuadro de lugares de gestión.
-    _tramosDelDia() {
-        const ini = document.getElementById('horaInicio')?.value || '';
-        const fin = document.getElementById('horaFin')?.value || '';
+    _tramosDelDiaDe(tramosArr, puestoPrincipal, iniPrincipal, finPrincipal) {
         // Con las horas basta. Un tramo sin lugar es un rato trabajado que aún
         // no se sabe dónde va, no un tramo a medias: pidiéndole también el
         // lugar se tiraba sin avisar y esas horas no aparecían en ningún sitio.
-        const extras = this._tramosConHoras().filter(t => t.i && t.o && t.i !== t.o);
+        const extras = this._tramosConHorasDe(tramosArr, finPrincipal).filter(t => t.i && t.o && t.i !== t.o);
         if (!extras.length) return [];
         // El de arriba va de su entrada a su salida, ni un minuto más. Antes
         // se estiraba hasta que empezaba el siguiente tramo, así que un día
         // partido —mañana, comer, tarde— cobraba también las horas de en
         // medio: de 9 a 12:30 y de 15:30 a 19 salían 10 horas en vez de 7.
-        return [{ p: this.puestoTrabajo || '', i: ini, o: fin }, ...extras]
+        return [{ p: puestoPrincipal || '', i: iniPrincipal, o: finPrincipal }, ...extras]
             .filter(t => t.i && t.o && t.i !== t.o)
             .map(t => ({ p: t.p || '', i: t.i, o: t.o }));
+    },
+
+    _tramosDelDia() {
+        return this._tramosDelDiaDe(this._tramos, this.puestoTrabajo,
+            document.getElementById('horaInicio')?.value || '', document.getElementById('horaFin')?.value || '');
     },
 
     // Con el día repartido, la jornada va de la primera entrada a la última
@@ -3332,6 +3686,48 @@ const app = {
             // deja registrar porque cree que no hay horas.
             if (horasInput) horasInput.value = String(total.horas);
         }
+    },
+
+    // Los mismos tramos de arriba, pero para el cuadro de editar una jornada
+    // ya guardada: antes se abría sin ellos y guardar la dejaba con un solo
+    // lugar, aunque tuviera dos o más.
+    _nuevoTramoEdit() {
+        const puesto = document.getElementById('editModalLugar')?.value || '';
+        this._tramosEdit.push({ p: puesto, i: '', o: '' });
+        this._renderTramosEdit();
+    },
+
+    _setTramoEdit(k, campo, valor) {
+        if (!this._tramosEdit[k]) return;
+        this._tramosEdit[k][campo] = valor;
+        this._renderTramosEdit();
+    },
+
+    _quitarTramoEdit(k) { this._tramosEdit.splice(k, 1); this._renderTramosEdit(); },
+
+    _renderTramosEdit() {
+        const cont = document.getElementById('editModalTramosLista');
+        if (!cont) return;
+        cont.innerHTML = this._tramosEdit.map((t, k) => `<div class="tramo">
+            <select onchange="app._setTramoEdit(${k},'p',this.value)">${this._opcionesLugar(t.p)}</select>
+            <input type="time" value="${t.i}" placeholder="entrada"
+                onchange="app._setTramoEdit(${k},'i',this.value)" title="En blanco: donde acabó el anterior">
+            <input type="time" value="${t.o}"
+                onchange="app._setTramoEdit(${k},'o',this.value)" title="La hora a la que se sale de este sitio">
+            <button class="tramo-x" onclick="app._quitarTramoEdit(${k})">×</button>
+        </div>`).join('');
+        const resto = document.getElementById('editModalLugarResto');
+        if (!resto) return;
+        if (!this._tramosEdit.length) { resto.textContent = ''; return; }
+        const puesto = document.getElementById('editModalLugar')?.value || '';
+        const ini    = document.getElementById('editModalInicio')?.value || '';
+        const fin    = document.getElementById('editModalFin')?.value || '';
+        const todos  = this._tramosDelDiaDe(this._tramosEdit, puesto, ini, fin);
+        const total  = this._jornadaDeLosTramos(todos);
+        const h = n => String(Math.round(n * 100) / 100).replace('.', ',') + 'h';
+        const sitios = todos.map(t => `${h(this._horasEntre(t.i, t.o))}${
+            t.p ? ' en ' + t.p : ' sin lugar'}`).join(' · ');
+        resto.textContent = total ? `${sitios} · ${h(total.horas)} en total` : sitios;
     },
 
     // ── Cuadros del registro ─────────────────────────────────────────────────
@@ -3414,6 +3810,116 @@ const app = {
         localStorage.removeItem('cuadrosRegistro');
         this._aplicarCuadros();
         this._renderCuadros();
+    },
+
+    // ── Cuadros grandes de arriba ────────────────────────────────────────────
+    // Los seis de siempre, pero se pueden ocultar y arrastrar para ordenarlos:
+    // si solo hacen falta cuatro, los otros dos se quitan de en medio.
+    CUADROS_STATS: [
+        { id: 'restantes',  el: 'statCardRestantes',  nom: 'Restantes del año' },
+        { id: 'trabajadas', el: 'statCardTrabajadas', nom: 'Horas trabajadas' },
+        { id: 'mes',        el: 'statCardMes',        nom: 'Este mes' },
+        { id: 'noct',       el: 'statCardNoct',       nom: '🌙 Nocturnas' },
+        { id: 'festivos',   el: 'statCardFestivos',   nom: '🎉 Festivos' },
+        { id: 'extras',     el: 'statCardExtras',     nom: '⏱️ Horas extras' },
+    ],
+
+    _configCuadrosResumen() {
+        let c = null;
+        try { c = JSON.parse(localStorage.getItem('cuadrosResumen') || 'null'); } catch (_) {}
+        const todos = this.CUADROS_STATS.map(x => x.id);
+        const orden = [...(c?.orden || []).filter(id => todos.includes(id))];
+        todos.forEach(id => { if (!orden.includes(id)) orden.push(id); });
+        return { orden, ocultos: (c?.ocultos || []).filter(id => todos.includes(id)) };
+    },
+
+    _guardarCuadrosResumen(c) {
+        localStorage.setItem('cuadrosResumen', JSON.stringify(c));
+        this._aplicarCuadrosResumen();
+        this._renderCuadrosResumen();
+    },
+
+    _aplicarCuadrosResumen() {
+        const { orden, ocultos } = this._configCuadrosResumen();
+        orden.forEach((id, i) => {
+            const def = this.CUADROS_STATS.find(x => x.id === id);
+            const el = document.getElementById(def?.el) || document.querySelector(`[data-cuadro="${id}"]`);
+            if (!el) return;
+            el.style.order = i;
+            el.hidden = ocultos.includes(id);
+        });
+    },
+
+    mostrarCuadrosResumen() {
+        this._renderCuadrosResumen();
+        document.getElementById('cuadrosResumenModal').classList.add('show');
+        if (this.darkMode) document.getElementById('cuadrosResumenModalContent').classList.add('dark');
+    },
+
+    _renderCuadrosResumen() {
+        const { orden, ocultos } = this._configCuadrosResumen();
+        document.getElementById('cuadrosResumenLista').innerHTML = orden.map(id => {
+            const def = this.CUADROS_STATS.find(x => x.id === id);
+            const off = ocultos.includes(id);
+            return `<div class="cu-fila${off ? ' off' : ''}" draggable="true" data-id="${id}"
+                    ondragstart="app._cuadroResumenDragStart(event)" ondragend="app._cuadroResumenDragEnd(event)"
+                    ondragover="app._cuadroResumenDragOver(event)" ondragleave="app._cuadroResumenDragLeave(event)"
+                    ondrop="app._cuadroResumenDrop(event)">
+                <span class="cu-drag">⠿</span>
+                <input type="checkbox" ${off ? '' : 'checked'} onchange="app._verCuadroResumen('${id}',this.checked)">
+                <span class="cu-nom">${def.nom}</span>
+            </div>`;
+        }).join('');
+    },
+
+    _verCuadroResumen(id, visible) {
+        const c = this._configCuadrosResumen();
+        c.ocultos = visible ? c.ocultos.filter(x => x !== id) : [...new Set([...c.ocultos, id])];
+        this._guardarCuadrosResumen(c);
+    },
+
+    _cuadroResumenDragStart(e) {
+        this._dragSrcCuadroResumen = e.currentTarget;
+        e.currentTarget.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', e.currentTarget.dataset.id);
+    },
+
+    _cuadroResumenDragEnd(e) {
+        e.currentTarget.classList.remove('dragging');
+        document.querySelectorAll('#cuadrosResumenLista .cu-fila').forEach(f => f.classList.remove('drag-over'));
+    },
+
+    _cuadroResumenDragOver(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        e.currentTarget.classList.add('drag-over');
+    },
+
+    _cuadroResumenDragLeave(e) {
+        e.currentTarget.classList.remove('drag-over');
+    },
+
+    _cuadroResumenDrop(e) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-over');
+        const src = this._dragSrcCuadroResumen;
+        const dst = e.currentTarget;
+        if (!src || src === dst) return;
+        const cont = document.getElementById('cuadrosResumenLista');
+        const filas = [...cont.children];
+        const si = filas.indexOf(src), di = filas.indexOf(dst);
+        if (si < di) cont.insertBefore(src, dst.nextSibling);
+        else cont.insertBefore(src, dst);
+        const c = this._configCuadrosResumen();
+        c.orden = [...cont.querySelectorAll('.cu-fila')].map(f => f.dataset.id);
+        this._guardarCuadrosResumen(c);
+    },
+
+    _cuadrosResumenPorDefecto() {
+        localStorage.removeItem('cuadrosResumen');
+        this._aplicarCuadrosResumen();
+        this._renderCuadrosResumen();
     },
 
     // ── Baja (BE) ────────────────────────────────────────────────────────────
@@ -4005,6 +4511,7 @@ const app = {
         if (nocturnas > 0 && this.precioNocheDefault > 0 && !document.getElementById('editModalPrecioN').value)
             document.getElementById('editModalPrecioN').value = this.precioNocheDefault;
         this.calcularExtraModal();
+        this._renderTramosEdit();
     },
 
     guardarUltimaHoraInicio() { const val = document.getElementById('horaInicio').value; if (val) { localStorage.setItem('lastHoraInicio', val); this._guardarPreferencias(); } },
@@ -4248,6 +4755,7 @@ const app = {
     // Cerrar el cuadro sin guardar deja de contar como editar
     cerrarEdicion() {
         this.editingId = null;
+        this._tramosEdit = [];
         document.getElementById('editModal').classList.remove('show');
     },
 
@@ -4267,8 +4775,71 @@ const app = {
             reg.horasNocturnas ? `+${(reg.extraNoche || 0).toFixed(2)}€ extra nocturno` : '';
         document.getElementById('editModalPR').checked = !!reg.pr;
         document.getElementById('editModalFestivo').checked = !!reg.festivo;
+        const selLugar = document.getElementById('editModalLugar');
+        if (selLugar) selLugar.innerHTML = this._opcionesLugar(reg.puesto || '');
+        // Si la jornada tenía más de un lugar, aquí es donde se pierdían al
+        // editar: el cuadro no los pintaba y guardar los borraba.
+        this._tramosEdit = Array.isArray(reg.tramos) ? reg.tramos.map(t => ({ ...t })) : [];
+        this._renderTramosEdit();
         document.getElementById('editModal').classList.add('show');
         if (this.darkMode) document.getElementById('editModalContent').classList.add('dark');
+    },
+
+    // El cuadro de horas extras empieza mirando el año, y el de nocturnas el
+    // mes; tocarlos alterna al otro periodo, y vuelve a tocarlos, al de antes.
+    _vistaStatExtra: 'anio',
+    _vistaStatNoct: 'mes',
+
+    _toggleStatExtra() {
+        this._vistaStatExtra = this._vistaStatExtra === 'anio' ? 'mes' : 'anio';
+        this._renderStatsExtraNoct();
+    },
+
+    _toggleStatNoct() {
+        this._vistaStatNoct = this._vistaStatNoct === 'mes' ? 'anio' : 'mes';
+        this._renderStatsExtraNoct();
+    },
+
+    _horasNocturnasAnuales(historial) {
+        let h = 0;
+        Object.values(historial || {}).forEach(r => { h += parseFloat(r.horasNocturnas) || 0; });
+        return Math.round(h * 10) / 10;
+    },
+
+    _renderStatsExtraNoct() {
+        const historial = this._historialFull || {};
+        const t = this._calcTotales(historial);
+        const ahora = new Date();
+        const key = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}`;
+        const mes = this._calcTodosMeses(historial)[key] || { nocturnas: 0, horasExtras: 0 };
+
+        const elE  = document.getElementById('statExtras');
+        const elES = document.getElementById('statExtrasSub');
+        if (this._vistaStatExtra === 'anio') {
+            if (elE) elE.textContent = t.extras.toFixed(1);
+            if (elES) {
+                const importe = this.precioExtraDefault > 0
+                    ? ` · ${(t.extras * this.precioExtraDefault).toFixed(2)}€` : '';
+                elES.textContent = `de ${t.topeExtras.toFixed(1)}h${importe}`;
+            }
+        } else {
+            if (elE) elE.textContent = mes.horasExtras.toFixed(1);
+            if (elES) {
+                const importe = this.precioExtraDefault > 0
+                    ? ` · ${(mes.horasExtras * this.precioExtraDefault).toFixed(2)}€` : '';
+                elES.textContent = `este mes${importe}`;
+            }
+        }
+
+        const elN  = document.getElementById('statMesNoche');
+        const elNS = document.getElementById('statMesNocheSub');
+        if (this._vistaStatNoct === 'mes') {
+            if (elN) elN.textContent = mes.nocturnas.toFixed(1);
+            if (elNS) elNS.textContent = 'horas este mes';
+        } else {
+            if (elN) elN.textContent = this._horasNocturnasAnuales(historial).toFixed(1);
+            if (elNS) elNS.textContent = 'horas del año';
+        }
     },
 
     _calcMesStats(historial, año, mes) {
@@ -4338,24 +4909,16 @@ const app = {
         document.getElementById('porcentaje').textContent = Math.min(Math.round(pct), 100);
         document.getElementById('progressFill').style.width = Math.min(pct, 100) + '%';
         if (pct >= 100) document.getElementById('progressFill').style.background = 'linear-gradient(90deg,#27ae60,#229954)';
-        // Festivos + horas extras
+        // Festivos
         const pctExt = t.topeExtras > 0 ? (t.extras / t.topeExtras) * 100 : 0;
         const elF = document.getElementById('statFestivos');
         const elFS= document.getElementById('statFestivosSub');
-        const elE = document.getElementById('statExtras');
-        const elES= document.getElementById('statExtrasSub');
         if (elF)  elF.textContent  = t.festivo.toFixed(1);
         if (elFS) {
             const dias = t.diasFestivos === 1 ? '1 día festivo' : `${t.diasFestivos} días festivos`;
             elFS.textContent = t.importeDiasExtra > 0
                 ? `${dias} · ${t.diasExtra} día${t.diasExtra === 1 ? '' : 's'} extra: ${t.importeDiasExtra.toFixed(2)}€`
                 : dias;
-        }
-        if (elE)  elE.textContent  = t.extras.toFixed(1);
-        if (elES) {
-            const importe = this.precioExtraDefault > 0
-                ? ` · ${(t.extras * this.precioExtraDefault).toFixed(2)}€` : '';
-            elES.textContent = `de ${t.topeExtras.toFixed(1)}h${importe}`;
         }
         const barExt = document.getElementById('progressFillExtra');
         if (barExt) barExt.style.width = Math.min(pctExt, 100) + '%';
@@ -4365,9 +4928,8 @@ const app = {
         const ahora = new Date();
         const mesStats = this._calcMesStats(this._historialFull, ahora.getFullYear(), ahora.getMonth() + 1);
         const elMesH = document.getElementById('statMesHoras');
-        const elMesN = document.getElementById('statMesNoche');
         if (elMesH) elMesH.textContent = mesStats.horas.toFixed(1);
-        if (elMesN) elMesN.textContent = mesStats.nocturnas.toFixed(1);
+        this._renderStatsExtraNoct();
         this._renderMensual(this._historialFull);
         this.actualizarHistorial(datos.historial || {});
         if (datos.prefs?.horaInicio && !localStorage.getItem('lastHoraInicio')) {
@@ -4888,6 +5450,22 @@ const app = {
         await this._guardarPreferencias(true);
     },
 
+    async guardarFechaAlta() {
+        const valor = document.getElementById('fechaAltaGlobal')?.value || '';
+        this.fechaAltaDefault = valor;
+        localStorage.setItem('fechaAlta', valor);
+        this._renderMiNomina();
+        await this._guardarPreferencias(true);
+    },
+
+    async guardarPctBieniosManual() {
+        const pct = this._leerDecimal(document.getElementById('pctBieniosGlobal').value) || 0;
+        this.pctBieniosDefault = pct;
+        localStorage.setItem('pctBieniosManual', String(pct));
+        this._renderMiNomina();
+        await this._guardarPreferencias(true);
+    },
+
     mostrarCambiarAnuales() {
         document.querySelectorAll('#anualesModal .jm-op').forEach(op => {
             const c = op.querySelector('.jm-check');
@@ -5355,6 +5933,8 @@ const app = {
             precioNocheDefault: this.precioNocheDefault,
             precioExtraDefault: this.precioExtraDefault,
             precioFestivoDefault: this.precioFestivoDefault,
+            fechaAltaDefault: this.fechaAltaDefault,
+            pctBieniosDefault: this.pctBieniosDefault,
             horasAnualesCustom: this.horasAnualesCustom,
             jornadaHoras: this.jornadaHoras,
             diasSemana: this.diasSemana || null,
@@ -5409,6 +5989,18 @@ const app = {
             localStorage.setItem('precioExtra', String(prefs.precioExtraDefault));
             const el = document.getElementById('precioExtraGlobal');
             if (el) el.value = prefs.precioExtraDefault;
+        }
+        if (prefs.fechaAltaDefault !== undefined && prefs.fechaAltaDefault !== null) {
+            this.fechaAltaDefault = prefs.fechaAltaDefault;
+            localStorage.setItem('fechaAlta', prefs.fechaAltaDefault);
+            const el = document.getElementById('fechaAltaGlobal');
+            if (el) el.value = prefs.fechaAltaDefault;
+        }
+        if (prefs.pctBieniosDefault !== undefined && prefs.pctBieniosDefault !== null) {
+            this.pctBieniosDefault = prefs.pctBieniosDefault;
+            localStorage.setItem('pctBieniosManual', String(prefs.pctBieniosDefault));
+            const el = document.getElementById('pctBieniosGlobal');
+            if (el) el.value = prefs.pctBieniosDefault;
         }
         if (Array.isArray(prefs.vacaciones)) {
             localStorage.setItem('vacaciones', JSON.stringify(prefs.vacaciones));

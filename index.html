@@ -32,6 +32,13 @@
         body.dark{background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);}
         .container{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:500px;height:100%;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:white;display:flex;flex-direction:column;overflow:hidden;}
         .container.dark{background:#111827;color:#e0e0e0;}
+        /* En una tablet 500px se queda en medio de la pantalla con los
+           laterales en blanco; a partir de cierto ancho se deja crecer, sin
+           llegar a ir de borde a borde porque las líneas de texto muy largas
+           se leen peor. */
+        @media (min-width:700px){.container{max-width:640px;}}
+        @media (min-width:1000px){.container{max-width:820px;}}
+        @media (min-width:1400px){.container{max-width:960px;}}
 
         /* ── AUTH ── */
         .auth-screen{display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;padding:20px;gap:18px;background:white;}
@@ -69,6 +76,15 @@
         .pm-op.sel{background:#eaf2fd;font-weight:700;color:var(--g1);}
         .modal-card.dark .pm-op.sel{background:#14283f;}
         .pm-turnos{font-size:10.5px;color:#95a5a6;font-weight:400;}
+        .email-contacto{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid #f2f2f2;}
+        .modal-card.dark .email-contacto{border-color:#2d3561;}
+        .email-contacto span{flex:1;font-size:13.5px;color:#2c3e50;cursor:pointer;}
+        .modal-card.dark .email-contacto span{color:#e0e0e0;}
+        .email-contacto button{border:none;background:transparent;color:#e74c3c;font-size:16px;cursor:pointer;padding:0 4px;}
+        .email-nuevo{display:flex;gap:8px;padding:10px 16px;}
+        .email-nuevo input{flex:1;min-width:0;padding:9px 11px;border:1.5px solid #e8eaf0;border-radius:8px;font-size:13.5px;font-family:inherit;background:white;color:#2c3e50;}
+        .modal-card.dark .email-nuevo input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
+        .email-nuevo button{flex-shrink:0;padding:9px 14px;border:none;border-radius:8px;background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;}
         .pm-check{margin-left:auto;color:var(--g1);font-weight:800;}
         .pm-paso{padding:11px 16px;font-size:12.5px;color:#2c3e50;background:#f4f6f9;border-bottom:1px solid #efefef;}
         .modal-card.dark .pm-nota{border-color:#2d3561;color:#a0a0a0;}
@@ -192,25 +208,24 @@
         .modal-card.dark .responder textarea{background:#16202e;border-color:#2d3561;color:#e0e0e0;}
         .nt-vacio{padding:26px 16px;text-align:center;font-size:12.5px;color:#95a5a6;}
         .lugar-box{border:1.5px solid #dfe4ea;border-radius:10px;padding:9px 10px;margin-bottom:7px;display:flex;flex-direction:column;gap:7px;}
-        .app-content.dark .lugar-box{border-color:#2d3561;}
+        .app-content.dark .lugar-box,.modal-card.dark .lugar-box{border-color:#2d3561;}
         .lugar-head{display:flex;align-items:center;gap:8px;}
         .lugar-lbl{font-size:10px;font-weight:800;color:#7f8c8d;text-transform:uppercase;letter-spacing:.5px;flex-shrink:0;}
         .lugar-sel{flex:1;min-width:0;border:1.5px solid #dfe4ea;border-radius:8px;padding:6px 7px;font-family:inherit;font-size:12.5px;font-weight:700;color:#2c3e50;background:#fff;}
-        .app-content.dark .lugar-sel{background:#16202e;border-color:#2d3561;color:#e0e0e0;}
+        .app-content.dark .lugar-sel,.modal-card.dark .lugar-sel{background:#16202e;border-color:#2d3561;color:#e0e0e0;}
         .tramo{display:flex;align-items:center;gap:5px;}
         .tramo select{flex:1.4;min-width:0;border:1.5px solid #dfe4ea;border-radius:8px;padding:5px 6px;font-family:inherit;font-size:12px;color:#2c3e50;background:#fff;}
         .tramo input{flex:1;min-width:0;border:1.5px solid #dfe4ea;border-radius:8px;padding:5px 6px;font-family:inherit;font-size:12px;color:#2c3e50;background:#fff;}
-        .app-content.dark .tramo select,.app-content.dark .tramo input{background:#16202e;border-color:#2d3561;color:#e0e0e0;}
+        .app-content.dark .tramo select,.app-content.dark .tramo input,
+        .modal-card.dark .tramo select,.modal-card.dark .tramo input{background:#16202e;border-color:#2d3561;color:#e0e0e0;}
         .tramo-x{flex-shrink:0;border:none;background:transparent;color:#e74c3c;font-size:17px;cursor:pointer;font-family:inherit;padding:0 3px;}
         .lugar-add{border:1.5px dashed #dfe4ea;background:transparent;color:#7f8c8d;border-radius:8px;padding:6px;font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer;}
-        .app-content.dark .lugar-add{border-color:#2d3561;}
+        .app-content.dark .lugar-add,.modal-card.dark .lugar-add{border-color:#2d3561;}
         .lugar-resto{font-size:11px;font-weight:700;color:#95a5a6;}
         .lugar-resto.falta{color:#e67e22;}
         .be-compact{display:flex;align-items:center;gap:5px;padding:7px 9px;border:1.5px solid #dfe4ea;border-radius:9px;cursor:pointer;font-size:13px;font-weight:700;color:#7f8c8d;background:transparent;}
         .app-content.dark .be-compact{border-color:#2d3561;}
         .be-compact.active{background:#7f8c8d;border-color:#7f8c8d;color:#fff;}
-        .cuadros-btn{order:99;margin-left:auto;flex-shrink:0;border:1.5px dashed #dfe4ea;background:transparent;color:#95a5a6;border-radius:9px;padding:7px 10px;font-size:13px;cursor:pointer;font-family:inherit;}
-        .app-content.dark .cuadros-btn{border-color:#2d3561;}
         .cu-fila{display:flex;align-items:center;gap:9px;padding:11px 16px;border-bottom:1px solid #f2f2f2;}
         .modal-card.dark .cu-fila{border-color:#2d3561;}
         .cu-nom{flex:1;min-width:0;font-size:13.5px;font-weight:700;color:#2c3e50;}
@@ -219,6 +234,10 @@
         .cu-mov{border:1.5px solid #dfe4ea;background:transparent;color:#7f8c8d;border-radius:7px;width:28px;height:28px;font-size:13px;cursor:pointer;font-family:inherit;flex-shrink:0;}
         .modal-card.dark .cu-mov{border-color:#2d3561;}
         .cu-mov:disabled{opacity:.3;}
+        .cu-drag{cursor:grab;color:#bbb;flex-shrink:0;font-size:15px;touch-action:none;}
+        .cu-fila.dragging{opacity:0.4;}
+        .cu-fila.drag-over{position:relative;}
+        .cu-fila.drag-over::before{content:'';position:absolute;inset:1px 4px;border-radius:8px;background:rgba(21,101,192,0.14);}
         /* Debajo del número: lo que le toca hoy, a qué hora y dónde */
         .app-header-hoy{font-size:11px;font-weight:700;opacity:0.9;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
         .app-header-hoy:empty{display:none;}
@@ -256,6 +275,7 @@
 
         /* ── STATS ROW ── */
         .stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;flex-shrink:0;}
+        @media (min-width:700px){.stats-grid{grid-template-columns:repeat(3,1fr);}}
         .stat-card{background:white;border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
         .app-content.dark .stat-card{background:#1e2a3a;}
         .stat-card.accent{background:linear-gradient(135deg,var(--g1) 0%,var(--g2) 100%);color:white;}
@@ -406,6 +426,10 @@
         .nom-mes-btn{background:#eef2f7;border:none;border-radius:9px;width:34px;height:32px;font-size:16px;font-weight:800;color:#5a6b7d;cursor:pointer;font-family:inherit;flex-shrink:0;}
         .app-content.dark .nom-mes-btn{background:#232b45;color:#c8cfe0;}
         .nom-titulo{flex:1;text-align:center;font-size:12.5px;font-weight:800;color:#7f8c8d;text-transform:uppercase;letter-spacing:.5px;}
+        .nom-extra-barra{display:flex;gap:8px;padding:0 2px 8px;flex-wrap:wrap;}
+        .nom-extra-btn{flex:1;min-width:120px;background:#eef2f7;border:none;border-radius:9px;padding:8px 10px;font-size:12px;font-weight:700;color:#5a6b7d;cursor:pointer;font-family:inherit;}
+        .nom-extra-btn.activo{background:linear-gradient(135deg,var(--g1),var(--g2));color:white;}
+        .app-content.dark .nom-extra-btn{background:#232b45;color:#c8cfe0;}
         .nom-tarjeta{background:white;border-radius:14px;padding:14px;box-shadow:0 1px 5px rgba(0,0,0,0.08);}
         .app-content.dark .nom-tarjeta{background:#1e2a3a;}
         .nom-sec{font-size:10px;font-weight:800;color:var(--g1);text-transform:uppercase;letter-spacing:.6px;margin:12px 0 6px;}
@@ -672,6 +696,9 @@
 
         /* ── INSTALL BANNER ── */
         .install-banner{display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:500px;z-index:9997;background:#0052CC;color:white;padding:12px 15px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));align-items:center;gap:10px;box-shadow:0 -2px 10px rgba(0,0,0,0.3);}
+        @media (min-width:700px){.install-banner{max-width:640px;}}
+        @media (min-width:1000px){.install-banner{max-width:820px;}}
+        @media (min-width:1400px){.install-banner{max-width:960px;}}
         .install-banner.show{display:flex;}
         .install-banner-close{background:transparent;color:white;border:none;font-size:22px;cursor:pointer;padding:0 4px;line-height:1;opacity:0.8;}
 
@@ -759,33 +786,33 @@
             </div>
 
             <!-- Stats 2x2 -->
-            <div class="stats-grid">
-                <div class="stat-card accent">
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card accent" id="statCardRestantes" data-cuadro="restantes">
                     <div class="stat-label">Restantes</div>
                     <div class="stat-value" id="horasRestantes">777</div>
                     <div class="stat-sub">horas del año</div>
                 </div>
-                <div class="stat-card accent">
+                <div class="stat-card accent" id="statCardTrabajadas" data-cuadro="trabajadas">
                     <div class="stat-label">Trabajadas</div>
                     <div class="stat-value" id="horasTrabajadas">0</div>
                     <div class="stat-sub">horas totales</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" id="statCardMes" data-cuadro="mes">
                     <div class="stat-label">Este mes</div>
                     <div class="stat-value" id="statMesHoras">0</div>
                     <div class="stat-sub">horas trabajadas</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" id="statCardNoct" data-cuadro="noct" style="cursor:pointer;" onclick="app._toggleStatNoct()" title="Toca para ver el mes o el año">
                     <div class="stat-label">🌙 Nocturnas</div>
                     <div class="stat-value" id="statMesNoche">0</div>
-                    <div class="stat-sub">horas este mes</div>
+                    <div class="stat-sub" id="statMesNocheSub">horas este mes</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" id="statCardFestivos" data-cuadro="festivos">
                     <div class="stat-label" id="statFestivosLabel">🎉 Festivos</div>
                     <div class="stat-value" id="statFestivos">0</div>
                     <div class="stat-sub" id="statFestivosSub">horas del año</div>
                 </div>
-                <div class="stat-card">
+                <div class="stat-card" id="statCardExtras" data-cuadro="extras" style="cursor:pointer;" onclick="app._toggleStatExtra()" title="Toca para ver el mes o el año">
                     <div class="stat-label">⏱️ Horas extras</div>
                     <div class="stat-value" id="statExtras">0</div>
                     <div class="stat-sub" id="statExtrasSub">de 0h</div>
@@ -865,7 +892,6 @@
                         <span>🩺</span>
                         <input type="checkbox" id="beToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#7f8c8d;cursor:pointer;">
                     </div>
-                    <button class="cuadros-btn" onclick="app.mostrarCuadros()" title="Elegir los cuadros">⚙</button>
                 </div>
                 <div class="lugar-box" id="lugarBox">
                     <div class="lugar-head">
@@ -965,6 +991,11 @@
                 <span class="nom-titulo" id="miNomMes"></span>
                 <button class="nom-mes-btn" onclick="app.miNomMes(1)">›</button>
             </div>
+            <div class="nom-extra-barra" id="miNomExtraBarra"></div>
+            <div class="nom-extra-barra">
+                <button class="nom-extra-btn" onclick="app.mostrarCompararNominas()">⚖️ Comparar nóminas</button>
+                <button class="nom-extra-btn" onclick="app.mostrarExportarNominas()">📊 Exportar</button>
+            </div>
             <div id="miNomina"></div>
         </div>
 
@@ -1025,6 +1056,17 @@
                         <span class="ops-arrow">›</span>
                     </button>
                     <div class="ops-field">
+                        <span class="ops-field-label">📅 Fecha de entrada en la empresa</span>
+                        <input type="date" class="ops-night-input" id="fechaAltaGlobal" onchange="app.guardarFechaAlta()">
+                        <span class="ops-field-sub">La antigüedad y el % que le corresponde se calculan
+                            solos con esta fecha, y se reflejan en todas las nóminas.</span>
+                    </div>
+                    <div class="ops-field">
+                        <span class="ops-field-label">% Antigüedad manual</span>
+                        <input type="text" inputmode="decimal" class="ops-night-input" id="pctBieniosGlobal" placeholder="ej: 10" onchange="app.guardarPctBieniosManual()">
+                        <span class="ops-field-sub">Solo se usa si no pones la fecha de entrada de arriba.</span>
+                    </div>
+                    <div class="ops-field">
                         <span class="ops-field-label">Cuenta Google</span>
                         <div id="perfilNombre" style="font-size:14px;font-weight:600;color:#2c3e50;padding:2px 0;"></div>
                         <div id="perfilEmail" style="font-size:12px;color:#7f8c8d;padding:2px 0;"></div>
@@ -1053,6 +1095,10 @@
                             <div class="tema-dot" id="dot-rojo"  style="background:linear-gradient(135deg,#E53935,#B71C1C);" onclick="app.seleccionarTema('rojo')"  title="Rojo"></div>
                         </div>
                     </div>
+                    <button class="ops-btn" onclick="app.mostrarCuadros()">⚙ Cuadros del registro
+                        <span class="ops-arrow">›</span></button>
+                    <button class="ops-btn" onclick="app.mostrarCuadrosResumen()">⚙ Cuadros de arriba
+                        <span class="ops-arrow">›</span></button>
                 </div>
             </div>
 
@@ -1394,6 +1440,15 @@
                 </div>
             </div>
             <div class="extra-label" id="editModalExtraLabel"></div>
+            <div class="lugar-box" id="editModalLugarBox">
+                <div class="lugar-head">
+                    <span class="lugar-lbl">📍 Lugar de trabajo</span>
+                    <select id="editModalLugar" class="lugar-sel" onchange="app._renderTramosEdit()"></select>
+                </div>
+                <div id="editModalTramosLista"></div>
+                <button class="lugar-add" onclick="app._nuevoTramoEdit()">➕ Añadir otro lugar del día</button>
+                <div class="lugar-resto" id="editModalLugarResto"></div>
+            </div>
             <div style="display:flex;align-items:center;gap:16px;margin-top:6px;flex-wrap:wrap;">
                 <div style="display:flex;align-items:center;gap:6px;">
                     <input type="checkbox" id="editModalPR" style="width:16px;height:16px;accent-color:#3498db;cursor:pointer;">
@@ -1494,6 +1549,24 @@
     </div>
 </div>
 
+<!-- Elegir, ocultar y arrastrar los cuadros grandes de arriba -->
+<div class="modal" id="cuadrosResumenModal">
+    <div class="modal-card" id="cuadrosResumenModalContent">
+        <div class="modal-header">
+            <h3>⚙ Cuadros de arriba</h3>
+            <button class="modal-close" onclick="document.getElementById('cuadrosResumenModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div class="pm-paso">Marca los que quieras ver y arrástralos para ordenarlos.</div>
+            <div id="cuadrosResumenLista"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" onclick="app._cuadrosResumenPorDefecto()">Por defecto</button>
+            <button class="modal-btn modal-btn-confirm" onclick="document.getElementById('cuadrosResumenModal').classList.remove('show')">Listo</button>
+        </div>
+    </div>
+</div>
+
 <!-- Elegir formato de exportación -->
 <div class="modal" id="expModal">
     <div class="modal-card" id="expModalContent">
@@ -1517,6 +1590,74 @@
             <div class="pm-op" onclick="app.exportarCSV()">
                 <div style="flex:1;">CSV<br><span class="pm-turnos">Lo abre cualquier programa</span></div>
             </div>
+            <div class="pm-op" onclick="app.prepararEmailRegistro()">
+                <div style="flex:1;">✉️ Enviar por email<br><span class="pm-turnos">A un contacto guardado o a uno nuevo</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Exportar las nóminas -->
+<div class="modal" id="expNomModal">
+    <div class="modal-card" id="expNomModalContent">
+        <div class="modal-header">
+            <h3>📊 Exportar mis nóminas</h3>
+            <button class="modal-close" onclick="document.getElementById('expNomModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div class="pm-quien">Formato</div>
+            <div class="pm-op" onclick="app.exportarNomSheets()">
+                <div style="flex:1;">Google Sheets<br><span class="pm-turnos">Crea la hoja en tu Drive y la abre</span></div>
+            </div>
+            <div class="pm-op" onclick="app.exportarNomXLS()">
+                <div style="flex:1;">Excel (.xlsx)<br><span class="pm-turnos">Con la cabecera resaltada</span></div>
+            </div>
+            <div class="pm-op" onclick="app.exportarNomCSV()">
+                <div style="flex:1;">CSV<br><span class="pm-turnos">Lo abre cualquier programa</span></div>
+            </div>
+            <div class="pm-op" onclick="app.prepararEmailNominas()">
+                <div style="flex:1;">✉️ Enviar por email<br><span class="pm-turnos">A un contacto guardado o a uno nuevo</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Enviar un export por email -->
+<div class="modal" id="emailModal">
+    <div class="modal-card" id="emailModalContent">
+        <div class="modal-header">
+            <h3>✉️ Enviar por email</h3>
+            <button class="modal-close" onclick="document.getElementById('emailModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div class="pm-quien">Tus contactos</div>
+            <div id="emailContactos"></div>
+            <div class="pm-quien">O uno nuevo</div>
+            <div class="email-nuevo">
+                <input type="email" id="emailNuevo" placeholder="correo@ejemplo.com">
+                <button onclick="app._nuevoContactoEmail()">Guardar</button>
+            </div>
+            <div class="pm-op" onclick="app._enviarSoloEmail()">
+                <div style="flex:1;">Enviar solo esta vez, sin guardar<span class="pm-turnos"></span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Comparar dos nóminas cualquiera -->
+<div class="modal" id="compararNomModal">
+    <div class="modal-card" id="compararNomModalContent">
+        <div class="modal-header">
+            <h3>⚖️ Comparar nóminas</h3>
+            <button class="modal-close" onclick="document.getElementById('compararNomModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body" style="padding:0;">
+            <div class="pm-quien">Nóminas a comparar</div>
+            <div class="nom-edit"><span>Esta</span>
+                <select id="cmpNomA" class="lugar-sel" onchange="app._renderCompararNominas()"></select></div>
+            <div class="nom-edit"><span>Frente a</span>
+                <select id="cmpNomB" class="lugar-sel" onchange="app._renderCompararNominas()"></select></div>
+            <div id="compararNomResultado" style="padding:6px 16px 16px;"></div>
         </div>
     </div>
 </div>

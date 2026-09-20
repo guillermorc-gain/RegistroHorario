@@ -18,6 +18,9 @@ const ADMIN_EMAIL  = 'g.rioscorrea@gmail.com';
 const MAX_MESES    = 36;      // tres años; más no se mira nunca
 const MAX_LINEAS   = 30;
 const MAX_TEXTO    = 60;
+// Un mes normal es AAAAMM; las pagas extra son AAAAEJ (julio) y AAAAED
+// (diciembre) — no son un mes del calendario, así que van con su propia clave.
+const MES_RE       = /^(\d{6}|\d{4}(?:EJ|ED))$/;
 
 const ghHeaders = () => ({
   'User-Agent': 'horasemt-app',
@@ -126,7 +129,7 @@ function limpiarNomina(n) {
 
 // Solo los MAX_MESES más recientes, para que el fichero no crezca sin fin
 function recortarMeses(data) {
-  const meses = Object.keys(data).filter(m => /^\d{6}$/.test(m)).sort();
+  const meses = Object.keys(data).filter(m => MES_RE.test(m)).sort();
   if (meses.length <= MAX_MESES) return data;
   const out = {};
   meses.slice(-MAX_MESES).forEach(m => { out[m] = data[m]; });
@@ -173,7 +176,7 @@ export default async function handler(req, res) {
       res.setHeader('Cache-Control', 'no-store');
       // Con ?mes= se devuelve solo ese, que es lo que pinta la pantalla
       const mes = String(req.query?.mes || '');
-      if (/^\d{6}$/.test(mes)) return res.status(200).json({ [mes]: data[mes] || {} });
+      if (MES_RE.test(mes)) return res.status(200).json({ [mes]: data[mes] || {} });
       return res.status(200).json(data);
     }
 
@@ -188,7 +191,7 @@ export default async function handler(req, res) {
 async function guardar(req, res, quien) {
   try {
     const mes = String(req.body?.mes || '');
-    if (!/^\d{6}$/.test(mes)) return res.status(400).json({ error: 'Falta el mes' });
+    if (!MES_RE.test(mes)) return res.status(400).json({ error: 'Falta el mes' });
 
     for (let intento = 0; intento < 3; intento++) {
       const { data, sha } = await getFile();
