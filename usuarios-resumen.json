@@ -2703,7 +2703,7 @@
     ],
     "email": "prueba-1789766365436@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T09:33:58.155Z",
+    "actualizado": "2026-09-20T15:01:42.596Z",
     "lugares": {
       "20260921": "Anselmo Clavé"
     },
@@ -2718,7 +2718,8 @@
         "i": "07:00",
         "f": "14:00"
       }
-    }
+    },
+    "oculto": true
   },
   "prueba-1789766752991@prueba.local": {
     "nombre": "Emilio Espadas",
