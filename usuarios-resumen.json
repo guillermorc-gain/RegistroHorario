@@ -1589,7 +1589,7 @@
   "prueba-1789766365436@prueba.local": {
     "nombre": "Toni Valverde",
     "conductor": "1100-5",
-    "puesto": "Anselmo Clavé",
+    "puesto": "",
     "avatar": null,
     "version": "build-119",
     "horasMes": 0,
@@ -1612,10 +1612,7 @@
     "jornadas": [],
     "email": "prueba-1789766365436@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:40:10.916Z",
-    "oculto": false,
-    "horariosDia": {},
-    "tramosDia": {}
+    "actualizado": "2026-09-20T15:40:17.878Z"
   },
   "prueba-1789766752991@prueba.local": {
     "nombre": "Emilio Espadas",
