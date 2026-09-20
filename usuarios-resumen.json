@@ -2045,7 +2045,8 @@
     "jornadas": [],
     "email": "prueba-1789760248885@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:35:25.219Z"
+    "actualizado": "2026-09-20T15:35:28.870Z",
+    "oculto": true
   },
   "prueba-1789760390735@prueba.local": {
     "nombre": "Miguel Moyà",
