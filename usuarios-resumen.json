@@ -1526,7 +1526,7 @@
     ],
     "email": "prueba-1789758756867@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:01:41.856Z",
+    "actualizado": "2026-09-20T15:26:29.969Z",
     "horarios": {
       "202609": {
         "i": "20:00",
@@ -1546,7 +1546,7 @@
       "20260914": "plan",
       "20260915": "plan"
     },
-    "oculto": true,
+    "oculto": false,
     "horariosDia": {},
     "tramosDia": {}
   },
