@@ -3007,7 +3007,7 @@
     ],
     "email": "prueba-1789812576607@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-19T10:10:09.081Z",
+    "actualizado": "2026-09-20T15:01:28.172Z",
     "bajas": [
       {
         "d": "20260917",
@@ -3023,7 +3023,8 @@
     },
     "lugares": {
       "20260922": "Control de acceso"
-    }
+    },
+    "oculto": true
   },
   "prueba-1789812974724@prueba.local": {
     "nombre": "Pepe Tur",
