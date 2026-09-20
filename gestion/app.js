@@ -3110,6 +3110,14 @@ const app = {
     // Lo único que hay que tocar, junto con los bienios y el sindicato
     TIPOS_NOMINA: { cc: 4.70, desempleo: 1.55, fp: 0.10, mei: 0.15, irpf: 15.00 },
 
+    // Horas extras que registró ese mes. El precio lo pone el gestor: no sale
+    // del convenio y cambia, así que se guarda con la nómina.
+    _horasExtraDelMes(u, mes) {
+        const h = (u?.jornadas || []).reduce((t, j) =>
+            (j && j.x === 1 && String(j.f || '').slice(0, 6) === mes) ? t + (Number(j.h) || 0) : t, 0);
+        return Math.round(h * 100) / 100;
+    },
+
     // Cuántos días de cada cosa lleva ese mes. Vacaciones y permiso salen de
     // lo que él mismo registró, y el resto del mes son días de salario base.
     _diasDeNomina(u, mes) {
@@ -3147,9 +3155,15 @@ const app = {
         const porDia = (c, d, p) => ({ c, d, p: r2(p), i: r2(d * p) });
         const delMes = (c, i) => ({ c, d: D, p: r2(i / D), i: r2(i) });
 
+        // Horas extras: las que registró, salvo que se le pongan otras a mano
+        const hExtra = Number(g.extra?.h ?? this._horasExtraDelMes(u, mes)) || 0;
+        const pExtra = Number(g.extra?.p ?? 0) || 0;
+
         const devengos = [porDia('Salario Base', dias.base, C.porDia.base)];
         if (dias.vacaciones) devengos.push(porDia('Vacaciones', dias.vacaciones, C.porDia.vacaciones));
         if (dias.permiso)    devengos.push(porDia('Permiso retribuido', dias.permiso, C.porDia.base));
+        if (hExtra)          devengos.push({ c: 'Horas extras', d: hExtra, p: r2(pExtra),
+                                             i: r2(hExtra * pExtra), horas: true });
         if (bienios)         devengos.push(delMes('Bienios', bienios));
         devengos.push(delMes('Comp. No Absorbible', C.delMes.noAbsorbible));
         devengos.push(delMes('Plus Transporte', C.delMes.transporte));
@@ -3179,7 +3193,31 @@ const app = {
         const aDeducir = r2(deducciones.reduce((t, l) => t + l.i, 0));
         return { dias, devengos, deducciones, devengado, prorrata, base, aDeducir,
                  liquido: r2(devengado - aDeducir), tipos, bienios, sindicato, diasAsist,
-                 responsabilidad: !!g.responsabilidad };
+                 hExtra, pExtra, responsabilidad: !!g.responsabilidad };
+    },
+
+    _mesDeHoy() {
+        const d = new Date();
+        return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+    },
+
+    _mesMas(mes, n) {
+        const d = new Date(+mes.slice(0, 4), +mes.slice(4, 6) - 1 + n, 1, 12);
+        return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+    },
+
+    _nombreMes(mes) {
+        return `${MESES_ES[+mes.slice(4, 6) - 1]} ${mes.slice(0, 4)}`;
+    },
+
+    _eur(n) {
+        return (Math.round((Number(n) || 0) * 100) / 100)
+            .toFixed(2).replace('.', ',') + ' €';
+    },
+
+    nomMes(paso) {
+        this._nomMes = this._mesMas(this._nomMes || this._mesDeHoy(), paso);
+        this._cargarNominas();
     },
 
     async _cargarNominas() {
@@ -3289,7 +3327,11 @@ const app = {
         const u = (this._conductores || {})[email];
         if (!u) return;
         this._nomEditando = email;
-        const g = this._nominaDe(email, this._nomMes) || {};
+        // Un mes nuevo parte de lo que había el mes anterior: los porcentajes,
+        // los bienios y el sindicato son casi siempre los mismos, y volver a
+        // escribirlos cada mes es justo lo que se quería evitar.
+        const g = this._nominaDe(email, this._nomMes)
+            || this._nominaDe(email, this._mesMas(this._nomMes, -1)) || {};
         // Lo único que se guarda, y lo único que hay que tocar
         this._nom = {
             bienios:   Number(g.bienios ?? 0),
@@ -3299,6 +3341,7 @@ const app = {
             dias:      { asistencia: Number(g.dias?.asistencia ?? this.DIAS_NOMINA) },
             responsabilidad: !!g.responsabilidad,
             extras:    (g.extras || []).map(e => ({ ...e })),
+            extra:     { h: undefined, p: Number(g.extra?.p ?? 0) },
             nota:      g.nota || '',
         };
         document.getElementById('nomNota').value = this._nom.nota;
@@ -3327,11 +3370,15 @@ const app = {
         document.getElementById('nomLineas').innerHTML =
             c.devengos.map(l => `<div class="nom-cmp">
                 <span class="nom-cmp-c">${esc(l.c)}${l.d ? ` <small>${
-                    String(l.d).replace('.', ',')} × ${String(l.p).replace('.', ',')}</small>` : ''}</span>
+                    String(l.d).replace('.', ',')}${l.horas ? 'h' : ''} × ${
+                    String(l.p).replace('.', ',')}</small>` : ''}</span>
                 <span class="nom-cmp-v">${this._eur(l.i)}</span></div>`).join('')
             + `<div class="nom-linea" style="margin-top:8px;">
                 <span class="nom-l-c" style="flex:1;font-size:12.5px;font-weight:700;color:#5a6b7d;">Bienios (€ del mes)</span>
                 ${num(this._nom.bienios, 'bienios')}</div>`
+            + `<div class="nom-linea">
+                <span class="nom-l-c" style="flex:1;font-size:12.5px;font-weight:700;color:#5a6b7d;">Horas extras · € la hora</span>
+                ${num(c.hExtra, 'extra.h', 60)}${num(this._nom.extra.p, 'extra.p', 66)}</div>`
             + `<div class="nom-linea">
                 <span class="nom-l-c" style="flex:1;font-size:12.5px;font-weight:700;color:#5a6b7d;">Días de asistencia</span>
                 ${num(this._nom.dias.asistencia, 'dias.asistencia')}</div>`
@@ -3381,6 +3428,7 @@ const app = {
         const n = Number(String(valor).replace(',', '.')) || 0;
         if (campo.startsWith('tipos.')) this._nom.tipos[campo.slice(6)] = n;
         else if (campo.startsWith('dias.')) this._nom.dias[campo.slice(5)] = n;
+        else if (campo.startsWith('extra.')) this._nom.extra[campo.slice(6)] = n;
         else this._nom[campo] = n;
         this._renderNominaModal();
     },
