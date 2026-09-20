@@ -1700,9 +1700,32 @@ const app = {
     },
 
     // ── Exportar mis jornadas ────────────────────────────────────────────────
+    // Las horas extra de cada jornada, calculadas igual que en el resumen: en
+    // orden cronológico, lo que pasa del tope anual (o lo marcado a mano).
+    // Sin esto, la columna de horas extra del informe no traía horas —traía
+    // un "Sí"/"" que no había forma de sumar en la hoja.
+    _extrasPorRegistro(historial) {
+        const orden = Object.entries(historial || {})
+            .filter(([, r]) => r.timestamp)
+            .sort((a, b) => a[1].timestamp - b[1].timestamp);
+        const tope = this.horasAnualesCustom;
+        let acumulado = 0;
+        const out = {};
+        orden.forEach(([id, r]) => {
+            const h = parseFloat(r.horas) || 0;
+            if (r.extraDestino === 'extras') { out[id] = h; return; }
+            const efectivas = this._horasEfectivas(this._fechaDeId(id), r);
+            const cabe = Math.max(0, tope - acumulado);
+            out[id] = Math.round(Math.max(0, efectivas - cabe) * 100) / 100;
+            acumulado += efectivas;
+        });
+        return out;
+    },
+
     // Solo las jornadas de quien usa la app: aquí no hay nadie más
     _filasExport() {
         const filas = [];
+        const extrasPorId = this._extrasPorRegistro(this._historialFull);
         Object.entries(this._historialFull || {}).forEach(([id, r]) => {
             const f = this._fechaDeId(id);
             const lugar = r.puesto || this.puestoTrabajo || '';
@@ -1714,7 +1737,7 @@ const app = {
                 puesto: lugar, turno: { M:'Mañana', T:'Tarde', N:'Noche' }[t] || '',
                 ini: r.horaInicio || '', fin: r.horaFin || '',
                 horas: parseFloat(r.horas) || 0, noct: r.horasNocturnas || 0,
-                extra: r.extraDestino === 'extras' ? 'Sí' : '', festivo: r.festivo ? 'Sí' : '',
+                extra: extrasPorId[id] || 0, festivo: r.festivo ? 'Sí' : '',
                 vac: r.vacaciones ? 'Sí' : '', pr: r.pr ? 'Sí' : '',
                 be: r.be ? 'Sí' : '',
                 nota: r.nota || '',
@@ -1765,9 +1788,9 @@ const app = {
         { id:'turno',      etiqueta:'Mañana, tarde o noche', cabeceras:['Turno'],                  valores:f => [f.turno] },
         { id:'lugar',      etiqueta:'Lugar de trabajo',      cabeceras:['Lugar de trabajo'],       valores:f => [f.puesto] },
         { id:'horarios',   etiqueta:'Horarios',              cabeceras:['Entrada','Salida'],       valores:f => [f.ini, f.fin] },
-        { id:'horas',      etiqueta:'Horas',                 cabeceras:['Horas'],                  valores:f => [f.horas] },
-        { id:'nocturnas',  etiqueta:'Horas nocturnas',       cabeceras:['Nocturnas'],              valores:f => [f.noct] },
-        { id:'extras',     etiqueta:'Horas extras',          cabeceras:['Extra'],                  valores:f => [f.extra] },
+        { id:'horas',      etiqueta:'Horas',                 cabeceras:['Horas'],                  valores:f => [f.horas],  sumable:true },
+        { id:'nocturnas',  etiqueta:'Horas nocturnas',       cabeceras:['Nocturnas'],              valores:f => [f.noct],   sumable:true },
+        { id:'extras',     etiqueta:'Horas extras',          cabeceras:['Extra'],                  valores:f => [f.extra],  sumable:true },
         { id:'festivos',   etiqueta:'Festivos',              cabeceras:['Festivo'],                valores:f => [f.festivo] },
         { id:'vacaciones', etiqueta:'Vacaciones',            cabeceras:['Vacaciones'],             valores:f => [f.vac] },
         { id:'pr',         etiqueta:'PR',                    cabeceras:['PR'],                     valores:f => [f.pr] },
@@ -1793,6 +1816,24 @@ const app = {
     get CABECERAS_EXPORT() { return this._colsActivas().flatMap(c => c.cabeceras); },
 
     _valoresFila(f) { return this._colsActivas().flatMap(c => c.valores(f)); },
+
+    // Fila de totales al final de la hoja: suma horas, nocturnas y extras si
+    // están elegidas, para no tener que sumarlas a mano ni fiarse de que la
+    // hoja las sume bien sola.
+    _hayColSumable() { return this._colsActivas().some(c => c.sumable); },
+
+    _filaTotales() {
+        const filas = this._filasExport();
+        let puestaEtiqueta = false;
+        return this._colsActivas().flatMap(c => {
+            if (c.sumable) {
+                const total = filas.reduce((s, f) => s + (Number(c.valores(f)[0]) || 0), 0);
+                return [Math.round(total * 100) / 100];
+            }
+            if (!puestaEtiqueta) { puestaEtiqueta = true; return ['Total', ...c.cabeceras.slice(1).map(() => '')]; }
+            return c.cabeceras.map(() => '');
+        });
+    },
 
     // Los tres filtros comparten estructura: cabecera plegable con un resumen
     // de lo elegido, y dentro las opciones.
@@ -2007,7 +2048,9 @@ const app = {
         const esc = v => String(v ?? '').replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))
             .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
         const cabeceras = this.CABECERAS_EXPORT;
-        const filas = this._filasExport().map(f => this._valoresFila(f));
+        const filasDatos = this._filasExport().map(f => this._valoresFila(f));
+        const filas = (this._hayColSumable() && filasDatos.length)
+            ? [...filasDatos, this._filaTotales()] : filasDatos;
 
         const celda = (v, col, fila, estilo) => {
             const ref = `${this._colExcel(col)}${fila}`;
@@ -2096,8 +2139,10 @@ const app = {
             return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
         };
         const lineas = [this.CABECERAS_EXPORT.join(';')];
-        this._filasExport().forEach(f => lineas.push(
-            this._valoresFila(f).map(v => esc(typeof v === 'number' ? String(v).replace('.', ',') : v)).join(';')));
+        const filasDatos = this._filasExport();
+        const filaCsv = vals => vals.map(v => esc(typeof v === 'number' ? String(v).replace('.', ',') : v)).join(';');
+        filasDatos.forEach(f => lineas.push(filaCsv(this._valoresFila(f))));
+        if (this._hayColSumable() && filasDatos.length) lineas.push(filaCsv(this._filaTotales()));
         return '﻿' + lineas.join('\r\n') + '\r\n';
     },
 

@@ -3910,7 +3910,11 @@ const app = {
                     puesto: lugar, turno: { M:'Mañana', T:'Tarde', N:'Noche' }[t] || '',
                     ini: j.i || '', fin: j.o || '',
                     horas: j.h || 0, noct: j.n || 0,
-                    extra: j.x === 1 ? 'Sí' : '', festivo: j.fe ? 'Sí' : '',
+                    // Horas, no un "Sí"/"": si no, la columna no se puede sumar en la
+                    // hoja. Un día marcado a mano como extra cuenta sus horas enteras;
+                    // el resto no se sabe aquí si pasó del tope anual —eso solo lo
+                    // sabe la app del trabajador, con todo su historial a mano.
+                    extra: j.x === 1 ? (j.h || 0) : 0, festivo: j.fe ? 'Sí' : '',
                     vac: j.v ? 'Sí' : '', pr: j.p ? 'Sí' : '',
                     be: u.baja ? 'Sí' : '',
                     prueba: u.ficticio ? 'Sí' : '',
@@ -3966,9 +3970,9 @@ const app = {
         { id:'turno',      etiqueta:'Mañana, tarde o noche', cabeceras:['Turno'],                  valores:f => [f.turno] },
         { id:'lugar',      etiqueta:'Lugar de trabajo',      cabeceras:['Lugar de trabajo'],       valores:f => [f.puesto] },
         { id:'horarios',   etiqueta:'Horarios',              cabeceras:['Entrada','Salida'],       valores:f => [f.ini, f.fin] },
-        { id:'horas',      etiqueta:'Horas',                 cabeceras:['Horas'],                  valores:f => [f.horas] },
-        { id:'nocturnas',  etiqueta:'Horas nocturnas',       cabeceras:['Nocturnas'],              valores:f => [f.noct] },
-        { id:'extras',     etiqueta:'Horas extras',          cabeceras:['Extra'],                  valores:f => [f.extra] },
+        { id:'horas',      etiqueta:'Horas',                 cabeceras:['Horas'],                  valores:f => [f.horas], sumable:true },
+        { id:'nocturnas',  etiqueta:'Horas nocturnas',       cabeceras:['Nocturnas'],              valores:f => [f.noct],  sumable:true },
+        { id:'extras',     etiqueta:'Horas extras',          cabeceras:['Extra'],                  valores:f => [f.extra], sumable:true },
         { id:'festivos',   etiqueta:'Festivos',              cabeceras:['Festivo'],                valores:f => [f.festivo] },
         { id:'vacaciones', etiqueta:'Vacaciones',            cabeceras:['Vacaciones'],             valores:f => [f.vac] },
         { id:'pr',         etiqueta:'PR',                    cabeceras:['PR'],                     valores:f => [f.pr] },
@@ -3994,6 +3998,23 @@ const app = {
     get CABECERAS_EXPORT() { return this._colsActivas().flatMap(c => c.cabeceras); },
 
     _valoresFila(f) { return this._colsActivas().flatMap(c => c.valores(f)); },
+
+    // Fila de totales al final de la hoja: suma horas, nocturnas y extras si
+    // están elegidas.
+    _hayColSumable() { return this._colsActivas().some(c => c.sumable); },
+
+    _filaTotales() {
+        const filas = this._filasExport();
+        let puestaEtiqueta = false;
+        return this._colsActivas().flatMap(c => {
+            if (c.sumable) {
+                const total = filas.reduce((s, f) => s + (Number(c.valores(f)[0]) || 0), 0);
+                return [Math.round(total * 100) / 100];
+            }
+            if (!puestaEtiqueta) { puestaEtiqueta = true; return ['Total', ...c.cabeceras.slice(1).map(() => '')]; }
+            return c.cabeceras.map(() => '');
+        });
+    },
 
     // Los tres filtros comparten estructura: cabecera plegable con un resumen
     // de lo elegido, y dentro las opciones.
@@ -4215,8 +4236,10 @@ const app = {
     },
 
     _xlsxRegistro() {
-        return this._xlsxDe('Registro', this.CABECERAS_EXPORT,
-            this._filasExport().map(f => this._valoresFila(f)));
+        const filasDatos = this._filasExport().map(f => this._valoresFila(f));
+        const filas = (this._hayColSumable() && filasDatos.length)
+            ? [...filasDatos, this._filaTotales()] : filasDatos;
+        return this._xlsxDe('Registro', this.CABECERAS_EXPORT, filas);
     },
 
     // La misma hoja para cualquier tabla: el registro y las nóminas salen de
@@ -4312,8 +4335,10 @@ const app = {
             return /[;"\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
         };
         const lineas = [this.CABECERAS_EXPORT.join(';')];
-        this._filasExport().forEach(f => lineas.push(
-            this._valoresFila(f).map(v => esc(typeof v === 'number' ? String(v).replace('.', ',') : v)).join(';')));
+        const filasDatos = this._filasExport();
+        const filaCsv = vals => vals.map(v => esc(typeof v === 'number' ? String(v).replace('.', ',') : v)).join(';');
+        filasDatos.forEach(f => lineas.push(filaCsv(this._valoresFila(f))));
+        if (this._hayColSumable() && filasDatos.length) lineas.push(filaCsv(this._filaTotales()));
         return '﻿' + lineas.join('\r\n') + '\r\n';
     },
 
