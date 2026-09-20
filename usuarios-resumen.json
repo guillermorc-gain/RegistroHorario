@@ -2176,7 +2176,12 @@
     "revisiones": {
       "20260919": "real"
     },
-    "horarios": {}
+    "horarios": {
+      "202609": {
+        "i": "20:00",
+        "f": "03:00"
+      }
+    }
   },
   "prueba-1789760248885@prueba.local": {
     "nombre": "Timi",
