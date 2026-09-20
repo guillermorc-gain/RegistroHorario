@@ -146,6 +146,18 @@ function limpiarHorariosDia(hs) {
   return out;
 }
 
+// Un día repartido entre varios lugares: [{p:'Calle', i:'06:00', o:'10:00'}, …].
+// Es la misma forma que usan las jornadas que registra el trabajador, para que
+// las dos apps lo lean igual.
+const MAX_TRAMOS_DIA = 6;
+function limpiarTramosDia(ts) {
+  if (!Array.isArray(ts)) return [];
+  return ts
+    .filter(t => t && typeof t === 'object' && limpiarHorario({ i: t.i, f: t.o }))
+    .slice(0, MAX_TRAMOS_DIA)
+    .map(t => ({ p: String(t.p || '').slice(0, 40), i: t.i, o: t.o }));
+}
+
 function recortarLugares(lugares) {
   const claves = Object.keys(lugares).sort();
   if (claves.length <= MAX_LUGARES) return lugares;
@@ -408,6 +420,7 @@ export default async function handler(req, res) {
           horario:      previo.horario || '',
           horarios:     previo.horarios || {},
           horariosDia:  previo.horariosDia || {},
+          tramosDia:    previo.tramosDia || {},
           revisiones:   previo.revisiones || {},
           grupo:        previo.grupo ?? null,
           actualizado:  new Date().toISOString(),
@@ -481,6 +494,15 @@ export default async function handler(req, res) {
             if (limpio) hs[f] = limpio; else delete hs[f];
           }
           data[clave].horariosDia = limpiarHorariosDia(hs);
+          // El día puede ir repartido entre varios lugares. Se guarda aparte y
+          // además se deja la hora de entrada y el primer lugar arriba, que es
+          // lo que leen la cabecera del trabajador y el resto del cuadro.
+          const trs = limpiarTramosDia(req.body?.tramos);
+          const td = { ...(data[clave].tramosDia || {}) };
+          for (const f of diasEntre(desde, hasta)) {
+            if (trs.length > 1) td[f] = trs; else delete td[f];
+          }
+          data[clave].tramosDia = td;
           // Y el lugar del tramo, si viene en la misma petición: asignar la
           // jornada es decir a qué hora y dónde, y son un solo gesto.
           if (puesto !== undefined) {

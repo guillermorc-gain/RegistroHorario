@@ -2868,8 +2868,18 @@ const app = {
         // Los grupos de pega del cuadro no son lugares de verdad
         if (['Sin asignar', 'Sin servicio'].includes(this._jorLugar)) this._jorLugar = '';
         this._jorAlcance = 'dia';
-        document.getElementById('jorEntrada').value = h?.i || '';
-        document.getElementById('jorSalida').value  = h?.f || '';
+        // Un día puede ir repartido entre varios lugares. Mientras solo haya
+        // uno, el cuadro se ve como siempre; el segundo aparece al pedirlo.
+        const yaRepartido = this._tramosPlan(u, this._jorFecha);
+        this._jorExtras = yaRepartido ? yaRepartido.slice(1).map(t => ({ ...t })) : [];
+        if (yaRepartido) {
+            this._jorLugar = yaRepartido[0].p || '';
+            document.getElementById('jorEntrada').value = yaRepartido[0].i || '';
+            document.getElementById('jorSalida').value  = yaRepartido[0].o || '';
+        } else {
+            document.getElementById('jorEntrada').value = h?.i || '';
+            document.getElementById('jorSalida').value  = h?.f || '';
+        }
         document.getElementById('jorQuien').textContent = this._quienEs(u, email)
             + ` · ${this._jorFecha.slice(6,8)}/${this._jorFecha.slice(4,6)}/${this._jorFecha.slice(0,4)}`;
         this._renderJornadaModal();
@@ -2897,7 +2907,7 @@ const app = {
         const franjas = TURNOS_POR_PUESTO[this._clavePuesto(this._jorLugar)] || [];
         const NOMBRE = { M: 'Mañana', T: 'Tarde', N: 'Noche' };
         const turnos = document.getElementById('jorTurnos');
-        turnos.innerHTML = franjas.length
+        turnos.innerHTML = (this._jorExtras || []).length ? '' : franjas.length
             ? franjas.map(f => {
                 const on = document.getElementById('jorEntrada').value === f.desde
                         && document.getElementById('jorSalida').value === f.hasta;
@@ -2917,6 +2927,27 @@ const app = {
         }).join('')
         + `<button class="jor-lugar${this._jorLugar ? '' : ' on'}"
                 onclick="app._lugarDeLaJornada('')">${this._jorLugar ? '' : '✓ '}Sin lugar</button>`;
+
+        // Los demás lugares del día, si los hay
+        const extras = document.getElementById('jorExtras');
+        if (extras) {
+            extras.innerHTML = (this._jorExtras || []).map((t, k) => `<div class="jor-extra">
+                <div class="edit-field"><label>Desde</label>
+                    <input type="time" value="${esc(t.i || '')}"
+                           onchange="app._setJorExtra(${k},'i',this.value)"></div>
+                <div class="edit-field"><label>Hasta</label>
+                    <input type="time" value="${esc(t.o || '')}"
+                           onchange="app._setJorExtra(${k},'o',this.value)"></div>
+                <div class="edit-field"><label>Lugar</label>
+                    <select onchange="app._setJorExtra(${k},'p',this.value)">
+                        <option value="">Sin lugar</option>
+                        ${this._lugaresTodos().map(p =>
+                            `<option${this._clavePuesto(p) === this._clavePuesto(t.p) ? ' selected' : ''}>${esc(p)}</option>`).join('')}
+                    </select></div>
+                <button class="jor-quitar" onclick="app._quitarJorExtra(${k})" title="Quitar">✕</button>
+            </div>`).join('')
+            + `<button class="jor-mas" onclick="app._nuevoJorExtra()">➕ Añadir otro lugar del día</button>`;
+        }
 
         document.getElementById('jorTramos').innerHTML = this._tramosJornada().map(t => {
             const on = this._jorAlcance === t.id;
@@ -2938,6 +2969,35 @@ const app = {
         return tramos;
     },
 
+    _nuevoJorExtra() {
+        this._jorExtras = this._jorExtras || [];
+        // Empieza donde acaba lo anterior: es lo que pasa casi siempre
+        const ultimo = this._jorExtras.length
+            ? this._jorExtras[this._jorExtras.length - 1].o
+            : document.getElementById('jorSalida').value;
+        this._jorExtras.push({ p: '', i: ultimo || '', o: '' });
+        this._renderJornadaModal();
+    },
+
+    _setJorExtra(k, campo, valor) {
+        if (!this._jorExtras?.[k]) return;
+        this._jorExtras[k][campo] = valor;
+        this._renderJornadaModal();
+    },
+
+    _quitarJorExtra(k) {
+        this._jorExtras.splice(k, 1);
+        this._renderJornadaModal();
+    },
+
+    // Todos los lugares del día, el primero y los que se hayan añadido
+    _jorTodosLosTramos() {
+        const i = document.getElementById('jorEntrada').value;
+        const f = document.getElementById('jorSalida').value;
+        return [{ p: this._jorLugar || '', i, o: f },
+                ...(this._jorExtras || [])].filter(t => t.i && t.o);
+    },
+
     _turnoAlHorario(id, desde, hasta) {
         document.getElementById('jorEntrada').value = desde;
         document.getElementById('jorSalida').value  = hasta;
@@ -2955,19 +3015,25 @@ const app = {
     },
 
     _resumenJornada() {
-        const i = document.getElementById('jorEntrada').value;
-        const f = document.getElementById('jorSalida').value;
         const tramo = this._tramosJornada().find(t => t.id === this._jorAlcance);
         const el = document.getElementById('jorResumen');
         if (!el || !tramo) return;
-        if (!i || !f) {
+        const sitios = this._jorTodosLosTramos();
+        if (!sitios.length) {
             el.textContent = 'Pon la hora de entrada y la de salida.';
             return;
         }
         const dias = this._diasDelTramo(tramo);
-        el.textContent = `${i}–${f} (${this._enHoras(this._duracion(i, f))})`
-            + `${this._jorLugar ? ' en ' + this._jorLugar : ''}`
-            + ` · ${dias} día${dias === 1 ? '' : 's'}, ${tramo.detalle}.`;
+        const cola = ` · ${dias} día${dias === 1 ? '' : 's'}, ${tramo.detalle}.`;
+        if (sitios.length === 1) {
+            const t = sitios[0];
+            el.textContent = `${t.i}–${t.o} (${this._enHoras(this._duracion(t.i, t.o))})`
+                + `${t.p ? ' en ' + t.p : ''}` + cola;
+            return;
+        }
+        const total = sitios.reduce((n, t) => n + this._duracion(t.i, t.o), 0);
+        el.textContent = sitios.map(t => `${t.i}–${t.o}${t.p ? ' ' + t.p : ''}`).join('  ·  ')
+            + ` (${this._enHoras(total)})` + cola;
     },
 
     _diasDelTramo(tramo) {
@@ -2976,16 +3042,21 @@ const app = {
     },
 
     async _guardarJornada() {
-        const i = document.getElementById('jorEntrada').value;
-        const f = document.getElementById('jorSalida').value;
-        if (!i || !f) { this._mostrarToast('Pon la hora de entrada y la de salida', 3000); return; }
+        const sitios = this._jorTodosLosTramos();
+        if (!sitios.length) { this._mostrarToast('Pon la hora de entrada y la de salida', 3000); return; }
         const tramo = this._tramosJornada().find(t => t.id === this._jorAlcance);
         if (!tramo) return;
         document.getElementById('jornadaModal').classList.remove('show');
         const dias = this._diasDelTramo(tramo);
+        // Arriba va lo que abarca el día entero —de la primera entrada a la
+        // última salida— y el reparto por lugares viaja aparte.
+        const primero = sitios[0], ultimo = sitios[sitios.length - 1];
+        const cuantos = sitios.length > 1
+            ? `${sitios.length} lugares` : (primero.p ? `en ${primero.p}` : '');
         await this._guardarCampoTrab(this._jorEditando,
-            { horario: { i, f }, desde: tramo.desde, hasta: tramo.hasta, puesto: this._jorLugar },
-            `✅ ${i}–${f}${this._jorLugar ? ' en ' + this._jorLugar : ''} · ${dias} día${dias === 1 ? '' : 's'}`);
+            { horario: { i: primero.i, f: ultimo.o }, tramos: sitios,
+              desde: tramo.desde, hasta: tramo.hasta, puesto: primero.p },
+            `✅ ${primero.i}–${ultimo.o} ${cuantos} · ${dias} día${dias === 1 ? '' : 's'}`);
         this._renderPuestos();
     },
 
@@ -3021,6 +3092,12 @@ const app = {
         if (delMes && delMes.i && delMes.f) return delMes;
         const suelto = u?.horario;
         return (suelto && typeof suelto === 'object' && suelto.i && suelto.f) ? suelto : null;
+    },
+
+    // Los lugares en que le toca repartir el día, si se le han puesto varios
+    _tramosPlan(u, fecha) {
+        const t = u?.tramosDia?.[fecha];
+        return Array.isArray(t) && t.length > 1 ? t : null;
     },
 
     // El horario que le toca ese día. Manda lo que se le haya puesto para esa
@@ -4951,6 +5028,7 @@ const app = {
                      // fichado: de hoy en adelante eso ya cubre el turno, así
                      // que el lugar no sale como vacío teniendo gente puesta.
                      plan: (esHoy || esFuturo) && !v.j ? this._horasPlan(u, fecha) : null,
+                     planTramos: (esHoy || esFuturo) && !v.j ? this._tramosPlan(u, fecha) : null,
                      lugar: this._lugarDe(u, fecha, v.j).trim() || SIN };
         // Quien está de vacaciones o de baja no ocupa lugar ese día, así que no
         // sale en el cuadro. Sigue en la lista de trabajadores, con su botón.
@@ -4960,6 +5038,13 @@ const app = {
         // las horas del día que no haya repartido caen en "Sin servicio".
         const SIN_SERVICIO = 'Sin servicio';
         const porLugares = conPuesto.flatMap(x => {
+            // Sin fichar todavía, vale lo que le haya repartido el gestor: sale
+            // en cada lugar con sus horas, como si ya lo hubiera registrado.
+            if (!x.j && x.planTramos) {
+                return x.planTramos.map(t => ({ ...x, tramo: true,
+                    plan: { i: t.i, f: t.o },
+                    lugar: String(t.p).trim() || SIN }));
+            }
             const tr = (Array.isArray(x.j?.tr) ? x.j.tr : [])
                 .filter(t => t && t.p && t.i && t.o);
             if (!tr.length) return [x];
