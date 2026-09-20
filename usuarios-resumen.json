@@ -1531,7 +1531,7 @@
   "prueba-1789763845092@prueba.local": {
     "nombre": "Toni Sánchez",
     "conductor": "1086-5",
-    "puesto": "Control",
+    "puesto": "",
     "avatar": null,
     "version": "build-119",
     "horasMes": 0,
@@ -1554,8 +1554,7 @@
     "jornadas": [],
     "email": "prueba-1789763845092@prueba.local",
     "ficticio": true,
-    "actualizado": "2026-09-20T15:40:35.360Z",
-    "oculto": false
+    "actualizado": "2026-09-20T15:40:41.409Z"
   },
   "prueba-1789764004986@prueba.local": {
     "nombre": "Pepe",
