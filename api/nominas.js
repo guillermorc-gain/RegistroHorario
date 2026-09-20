@@ -92,7 +92,8 @@ const numero = (v, max) => {
 function limpiarNomina(n) {
   const t = n?.tipos || {};
   return {
-    bienios:   numero(n?.bienios, 999),
+    // Los bienios son cuántos tiene, no euros: cada uno vale un 5 %
+    bienios:   Math.round(numero(n?.bienios, 12)),
     sindicato: numero(n?.sindicato, 9999),
     prorrata:  numero(n?.prorrata, 99999),
     tipos: {
@@ -110,7 +111,6 @@ function limpiarNomina(n) {
           ? {} : { h: numero(n.extra.h, 999) }),
       p: numero(n?.extra?.p, 999),
     },
-    responsabilidad: !!n?.responsabilidad,
     extras:      limpiarLineas(n?.extras),
     nota:        String(n?.nota ?? '').trim().slice(0, 300),
     actualizado: new Date().toISOString(),
