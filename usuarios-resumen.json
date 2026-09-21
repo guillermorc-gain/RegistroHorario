@@ -1429,7 +1429,7 @@
     "horario": "",
     "grupo": null,
     "lugares": {
-      "20260921": "Son Rossinyol",
+      "20260921": "Control",
       "20260922": "Anselmo Clavé",
       "20260923": "Anselmo Clavé",
       "20260924": "Anselmo Clavé",
@@ -1450,8 +1450,8 @@
     },
     "horariosDia": {
       "20260921": {
-        "i": "06:00",
-        "f": "13:00"
+        "i": "13:00",
+        "f": "20:00"
       }
     },
     "tramosDia": {}
