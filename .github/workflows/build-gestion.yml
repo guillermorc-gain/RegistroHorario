@@ -37,6 +37,8 @@ jobs:
             bg: "108,52,131"
             chapa: "108,52,131"
             icono: "icons/icon-192.png"
+            iconoApk: "icons/icon-512.png"
+            iconoFg: "icons/icon-fg-512.png"
             rotulo: Gestión
             tag: gestion-build-
             apk: gestion-emt
@@ -47,6 +49,8 @@ jobs:
             bg: "44,62,80"
             chapa: "232,89,12"
             icono: "icons/icon-dev-192.png"
+            iconoApk: "icons/icon-dev-512.png"
+            iconoFg: "icons/icon-dev-fg-512.png"
             rotulo: Desarrollador
             tag: dev-build-
             apk: desarrollador-emt
@@ -1572,20 +1576,17 @@ jobs:
 
       - name: Set Android launcher icon
         run: |
-          sudo apt-get install -y -qq fonts-noto-color-emoji || true
           pip install Pillow -q
-          EMOJI='${{ matrix.emoji }}' CHAPA_BG='${{ matrix.chapa }}' ICON_BG='${{ matrix.bg }}' python3 << 'PYEOF'
-          from PIL import Image, ImageDraw, ImageFont
-          import os, glob
+          ICONO='www-gestion/${{ matrix.iconoApk }}' ICONO_FG='www-gestion/${{ matrix.iconoFg }}' ICON_BG='${{ matrix.bg }}' python3 << 'PYEOF'
+          from PIL import Image
+          import os
 
-          # El logo es el mismo reloj en las tres aplicaciones, con una chapita
-          # abajo a la derecha que dice cuál es: el brazo en la de trabajador,
-          # el lápiz en gestión y el engranaje en la de desarrollador. Son tres
-          # iconos parecidos en el mismo móvil y eso es lo único que se mira
-          # para abrir una u otra.
-          EMOJI = os.environ.get('EMOJI', '')
-          BG    = tuple(int(x) for x in os.environ.get('ICON_BG', '21,101,192').split(',')[:3])
-          CHAPA = tuple(int(x) for x in os.environ.get('CHAPA_BG', '21,101,192').split(',')[:3])
+          # El icono del móvil es exactamente el mismo fichero que usa la web:
+          # uno solo para las dos formas de instalarla. Antes se dibujaba aquí
+          # con la fuente de emojis y salía parecido, pero no igual.
+          BG   = tuple(int(x) for x in os.environ['ICON_BG'].split(',')[:3])
+          full = Image.open(os.environ['ICONO']).convert('RGB')
+          fg   = Image.open(os.environ['ICONO_FG']).convert('RGBA')
           res_base = 'android/app/src/main/res'
 
           sizes = {
@@ -1596,84 +1597,22 @@ jobs:
               'mipmap-xxxhdpi': (192, 432),
           }
 
-          # El reloj limpio, sin la chapita que ya trae pegada el de gestión.
-          # Las esquinas del PNG llevan un cuadriculado gris de los de "esto es
-          # transparente", así que se recorta en redondo y se tira lo de fuera.
-          src = Image.open('icons/icon-512.png').convert('RGBA')
-          sw, sh = src.size
-          ins = int(min(sw, sh) * 0.045)
-          m = Image.new('L', (sw, sh), 0)
-          ImageDraw.Draw(m).ellipse([ins, ins, sw-1-ins, sh-1-ins], fill=255)
-          src.putalpha(m)
-          src = src.crop((ins, ins, sw-ins, sh-ins))
-
-          def la_chapa():
-              # Noto Color Emoji solo trae un tamaño de mapa de bits, 109, y
-              # pedirle otro es un error; se dibuja en ese y luego se escala.
-              rutas = ['/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf']
-              rutas += glob.glob('/usr/share/fonts/**/NotoColorEmoji*.ttf', recursive=True)
-              for ruta in rutas:
-                  try:
-                      f = ImageFont.truetype(ruta, 109)
-                      im = Image.new('RGBA', (240, 240), (0, 0, 0, 0))
-                      ImageDraw.Draw(im).text((40, 40), EMOJI, font=f, embedded_color=True)
-                      caja = im.getbbox()
-                      if caja:
-                          return im.crop(caja)
-                  except Exception as e:
-                      print('emoji:', ruta, e)
-              return None
-
-          chapa = la_chapa()
-          if chapa is None:
-              # Antes se seguía sin chapita y el icono salía igual en las tres.
-              # Mejor que reviente aquí, que se arregla en un minuto, a que se
-              # instalen tres aplicaciones que no se distinguen.
-              raise SystemExit('No se pudo dibujar la chapita del icono: falta la fuente de emojis')
-
-          def logo(lado):
-              im = src.resize((lado, lado), Image.LANCZOS)
-              if chapa is None:
-                  return im
-              # Medido en el icono de gestión, que ya llevaba una: el aro
-              # blanco ocupa un cuarto del icono, el disco de color un 22,9%,
-              # y va centrado en el 76%. El color del disco es el que hace que
-              # se vea de lejos, así que es el que más contrasta con su dibujo.
-              aro = max(10, int(lado * 0.25))
-              dia = max(8,  int(lado * 0.229))
-              cx = cy = int(lado * 0.763)
-              capa = Image.new('RGBA', (lado, lado), (0, 0, 0, 0))
-              dr = ImageDraw.Draw(capa)
-              dr.ellipse([cx - aro//2, cy - aro//2, cx + aro//2, cy + aro//2],
-                         fill=(255, 255, 255, 255))
-              dr.ellipse([cx - dia//2, cy - dia//2, cx + dia//2, cy + dia//2],
-                         fill=(*CHAPA, 255))
-              im.alpha_composite(capa)
-              g = max(6, int(dia * 0.72))
-              l = max(chapa.size)
-              c = Image.new('RGBA', (l, l), (0, 0, 0, 0))
-              c.paste(chapa, ((l - chapa.size[0])//2, (l - chapa.size[1])//2), chapa)
-              c = c.resize((g, g), Image.LANCZOS)
-              im.paste(c, (cx - g//2, cy - g//2), c)
-              return im
-
           for dir_name, (size, asize) in sizes.items():
               path = f'{res_base}/{dir_name}'
               os.makedirs(path, exist_ok=True)
 
-              # Icono de toda la vida: el logo llenando el cuadro
-              fondo = Image.new('RGBA', (size, size), (*BG, 255))
-              fondo.alpha_composite(logo(size))
-              fondo.convert('RGB').save(f'{path}/ic_launcher.png')
-              fondo.convert('RGB').save(f'{path}/ic_launcher_round.png')
+              cuadro = full.resize((size, size), Image.LANCZOS)
+              cuadro.save(f'{path}/ic_launcher.png')
+              cuadro.save(f'{path}/ic_launcher_round.png')
 
-              # Adaptativo: el sistema recorta por donde quiera, así que el
-              # logo va al 66% y centrado
-              fg_sz = asize * 2 // 3
+              # Adaptativo: el sistema recorta a dos tercios del lienzo, así que
+              # el dibujo va justo a ese tamaño y centrado. El fondo, del color
+              # de la aplicación, es lo único que asoma por las esquinas.
+              d = asize * 2 // 3
               adapt = Image.new('RGBA', (asize, asize), (*BG, 255))
-              d = logo(fg_sz)
-              off = (asize - fg_sz) // 2
-              adapt.paste(d, (off, off), d)
+              chico = fg.resize((d, d), Image.LANCZOS)
+              off = (asize - d) // 2
+              adapt.paste(chico, (off, off), chico)
               adapt.convert('RGB').save(f'{path}/ic_launcher_foreground.png')
 
               Image.new('RGB', (asize, asize), BG).save(f'{path}/ic_launcher_background.png')
