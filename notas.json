@@ -54,17 +54,19 @@
         "texto": "Hg",
         "adjuntos": [],
         "en": "2026-09-21T19:32:16.578Z"
+      },
+      {
+        "de": "guillermo.rcxx@gmail.com",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Ff",
+        "adjuntos": [],
+        "en": "2026-09-21T19:32:50.332Z"
       }
     ],
     "archivada": false,
     "de": "gestor",
     "tipo": "gestion",
     "gestor": "Guillermo Ríos Correa",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "guillermo.rcxx@gmail.com",
-      "nombre": "Guillermo Ríos Correa",
-      "en": "2026-09-21T19:32:27.651Z"
-    }
+    "estado": "pendiente"
   }
 }
