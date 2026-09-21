@@ -1385,15 +1385,15 @@
     "conductor": "1234-5",
     "avatar": null,
     "version": "build-270",
-    "horasMes": 16,
-    "horasTotales": 16,
-    "diasMes": 4,
+    "horasMes": 14,
+    "horasTotales": 14,
+    "diasMes": 3,
     "turno": "T",
     "puesto": "",
-    "actualizado": "2026-09-21T12:51:04.209Z",
-    "horaInicio": "19:00",
-    "horaFin": "21:00",
-    "horarioDe": "hoy",
+    "actualizado": "2026-09-21T12:55:12.880Z",
+    "horaInicio": "18:00",
+    "horaFin": "22:00",
+    "horarioDe": "anterior",
     "jornadas": [
       {
         "f": "20260915",
@@ -1418,14 +1418,6 @@
         "o": "22:00",
         "n": 1,
         "pu": ""
-      },
-      {
-        "f": "20260921",
-        "h": 2,
-        "i": "19:00",
-        "o": "21:00",
-        "n": 0,
-        "pu": "Calle"
       }
     ],
     "horasAnuales": 1700,
