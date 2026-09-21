@@ -5115,7 +5115,6 @@ const app = {
         document.querySelectorAll('.tab-panel').forEach(panel => {
             panel.classList.toggle('active', panel.id === 'tabPanel' + idx);
         });
-        localStorage.setItem('activeTab', String(idx));
         if (idx === 1) { this._cargarCuadrante(); this._renderHistorialModal(); }
         if (idx === 2) { this._pintarDestino(); this._cargarNotas(); }
         if (idx === 3) this._cargarMisNominas();
@@ -5178,8 +5177,11 @@ const app = {
                 });
             }
         } catch(_) {}
-        const activa = parseInt(localStorage.getItem('activeTab') || '0', 10);
-        this.switchTab(Number.isInteger(activa) ? activa : 0);
+        // Al abrir la app se empieza siempre en Registro, que es a lo que se
+        // entra. Se guardaba la última pestaña y se volvía a ella, así que
+        // quien había mirado la nómina o el historial se encontraba eso al
+        // abrir y tenía que ir a buscar el registro.
+        this.switchTab(0);
     },
 
     _tabDragOver(e) {
