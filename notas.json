@@ -108,31 +108,5 @@
       "nombre": "Guillermo Ríos Correa",
       "en": "2026-09-21T19:36:49.952Z"
     }
-  },
-  "20260921193621574-pfg86-0": {
-    "id": "20260921193621574-pfg86-0",
-    "email": "guillermo.rc82@gmail.com",
-    "creado": "2026-09-21T19:36:21.574Z",
-    "nombre": "Guillermo Ríos Correa",
-    "conductor": "1418-3",
-    "mensajes": [
-      {
-        "de": "gestor",
-        "autor": "Guillermo Rios",
-        "texto": "Fff",
-        "adjuntos": [],
-        "en": "2026-09-21T19:36:21.574Z"
-      }
-    ],
-    "archivada": false,
-    "de": "gestor",
-    "tipo": "gestion",
-    "gestor": "Guillermo Rios",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "guillermo.rc82@gmail.com",
-      "nombre": "Guillermo Ríos Correa",
-      "en": "2026-09-21T19:37:03.071Z"
-    }
   }
 }
