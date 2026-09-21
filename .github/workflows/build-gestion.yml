@@ -1027,6 +1027,11 @@ jobs:
                   @Override
                   public void onReceive(Context ctx, Intent intent) {
                       if (intent == null || !Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) return;
+                      // Al reiniciar el móvil, Android borra las alarmas. La de
+                      // mirar si hay mensajes se reprogramaba sola cada vez que
+                      // saltaba, así que al perderse no volvía nunca: hasta que
+                      // alguien abría la app no llegaba un solo aviso.
+                      try { programarAvisoChat(ctx); } catch (Exception ignored) {}
                       SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
                       String locJson = prefs.getString("geofenceLocations", null);
                       String gpsMode = prefs.getString("gpsMode", "always");
