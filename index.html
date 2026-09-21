@@ -340,7 +340,7 @@
         .input-group input{width:100%;padding:8px;border:1.5px solid #e8eaf0;border-radius:7px;font-size:13px;font-family:inherit;background:white;color:#2c3e50;}
         .app-content.dark .input-group input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
         .input-group input:focus{outline:none;border-color:var(--g1);}
-        .fecha-rango-toggle{font-size:11px;font-weight:700;color:var(--g1);text-align:right;margin-top:6px;cursor:pointer;user-select:none;}
+        .fecha-rango-toggle{font-size:11px;font-weight:700;color:var(--g1);text-align:right;margin-top:2px;margin-bottom:8px;cursor:pointer;user-select:none;}
         /* ── TAB BAR ── */
         /* ── BOTTOM TAB BAR (iOS style) ── */
         .tab-bar{display:flex;align-items:stretch;flex-shrink:0;background:rgba(255,255,255,0.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:0.5px solid rgba(0,0,0,0.14);padding-bottom:env(safe-area-inset-bottom,0px);}
@@ -919,21 +919,6 @@
                 </div>
             </div>
 
-            <!-- Fecha del registro -->
-            <div class="input-section" id="fechaSection">
-                <div class="input-row" id="fechaRow" style="margin-bottom:0;">
-                    <div class="input-group" style="flex:1;">
-                        <label>Fecha <span id="festivoHint" style="display:none;color:#e67e22;font-weight:800;"></span></label>
-                        <input type="date" id="fechaInput" oninput="app.calcularHorasPorTiempo();app.comprobarFestivo();app._sincronizarHastaMin()" onchange="app.calcularHorasPorTiempo();app.comprobarFestivo();app._sincronizarHastaMin()">
-                    </div>
-                    <div class="input-group" style="flex:1;display:none;" id="fechaHastaGroup">
-                        <label>Hasta</label>
-                        <input type="date" id="fechaHastaInput">
-                    </div>
-                </div>
-                <div class="fecha-rango-toggle" id="fechaRangoToggle" onclick="app._toggleRangoFechas()">📅 Registrar varios días</div>
-            </div>
-
             <!-- Progress -->
             <div class="progress-section">
                 <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
@@ -961,6 +946,22 @@
             <!-- Input -->
             <div class="input-section" id="inputSection">
                 <div id="editLabel" class="edit-label" style="display:none;">✏️ Editando en pantalla</div>
+                <!-- La fecha, dentro del propio formulario y encima de las horas:
+                     se sacó a un cuadro aparte encima de las barras y allí
+                     quedaba lejos de lo que se está rellenando. -->
+                <div id="fechaSection">
+                    <div class="input-row" id="fechaRow">
+                        <div class="input-group" style="flex:1;">
+                            <label>Fecha <span id="festivoHint" style="display:none;color:#e67e22;font-weight:800;"></span></label>
+                            <input type="date" id="fechaInput" oninput="app.calcularHorasPorTiempo();app.comprobarFestivo();app._sincronizarHastaMin()" onchange="app.calcularHorasPorTiempo();app.comprobarFestivo();app._sincronizarHastaMin()">
+                        </div>
+                        <div class="input-group" style="flex:1;display:none;" id="fechaHastaGroup">
+                            <label>Hasta</label>
+                            <input type="date" id="fechaHastaInput">
+                        </div>
+                    </div>
+                    <div class="fecha-rango-toggle" id="fechaRangoToggle" onclick="app._toggleRangoFechas()">📅 Registrar varios días</div>
+                </div>
                 <div class="input-row">
                     <div class="input-group">
                         <label>Inicio</label>
