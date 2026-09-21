@@ -12,17 +12,19 @@
         "texto": "Hju",
         "adjuntos": [],
         "en": "2026-09-21T19:25:59.171Z"
+      },
+      {
+        "de": "guillermo.rcxx@gmail.com",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Err",
+        "adjuntos": [],
+        "en": "2026-09-21T19:28:20.993Z"
       }
     ],
     "archivada": false,
     "de": "gestor",
     "tipo": "gestion",
     "gestor": "Guillermo Ríos Correa",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "guillermo.rcxx@gmail.com",
-      "nombre": "Guillermo Ríos Correa",
-      "en": "2026-09-21T19:28:18.287Z"
-    }
+    "estado": "pendiente"
   }
 }
