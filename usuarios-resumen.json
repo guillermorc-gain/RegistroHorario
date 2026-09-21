@@ -1385,13 +1385,13 @@
     "nombre": "Guillermo Ríos Correa",
     "conductor": "1234-5",
     "avatar": null,
-    "version": "build-276",
+    "version": "build-278",
     "horasMes": 14,
     "horasTotales": 14,
     "diasMes": 3,
     "turno": "T",
     "puesto": "",
-    "actualizado": "2026-09-21T18:03:17.126Z",
+    "actualizado": "2026-09-21T18:42:50.343Z",
     "horaInicio": "18:00",
     "horaFin": "22:00",
     "horarioDe": "anterior",
@@ -1453,9 +1453,9 @@
     "horariosDia": {},
     "tramosDia": {},
     "avisoVisto": {
-      "clave": "20260921|Son Rossinyol|20:00–03:00",
-      "texto": "Ahora te toca en Son Rossinyol",
-      "en": "2026-09-21T18:03:17.126Z"
+      "clave": "20260921|Son Rossinyol|05:30–13:00",
+      "texto": "Se te asigna este servicio y horario: 05:30–13:00. Confirma como leído. Gracias.",
+      "en": "2026-09-21T18:42:50.343Z"
     },
     "oculto": false
   },
