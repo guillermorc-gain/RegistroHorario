@@ -463,6 +463,15 @@ const app = {
             this._cargarAsignacion();
             setTimeout(() => this._autoRellenarFormulario(), 50);
             this._scheduleTokenRefresh();
+            // Los mensajes arrancan por su cuenta, antes y fuera de la carga
+            // de datos. Esa empieza leyendo la copia de Drive, y si eso falla
+            // o tarda se lleva por delante todo lo que viene detrás —incluidos
+            // el sondeo cada minuto y el aviso con la app cerrada, que se
+            // ponen en marcha desde ahí dentro—. El resultado era que quien no
+            // abría la pestaña de notas no recibía un solo aviso, y los
+            // mensajes no tienen nada que ver con Drive.
+            this._iniciarSondeoChat();
+            this._cargarNotas();
             this.cargarDatos();
         } catch(e) {
             this.mostrarAuth();
@@ -1132,7 +1141,6 @@ const app = {
             this._updateGpsState();
             this._exportarMesesPendientes();
             this._publicarResumen();
-            this._cargarNotas();
             this._cargarLugares();
             this._pedirPermisosIniciales();
             if (this._pendingNotifAction === 'registro-rapido') {
