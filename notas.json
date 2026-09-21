@@ -31,5 +31,28 @@
       "nombre": "Guillermo Ríos Correa",
       "en": "2026-09-21T18:39:21.991Z"
     }
+  },
+  "20260921184335805-s5i0j-0": {
+    "id": "20260921184335805-s5i0j-0",
+    "email": "g.rioscorrea@gmail.com",
+    "creado": "2026-09-21T18:43:35.805Z",
+    "nombre": "Desarrollador",
+    "conductor": "💻",
+    "mensajes": [
+      {
+        "de": "guillermo.rcxx@gmail.com",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Ggg",
+        "adjuntos": [],
+        "en": "2026-09-21T18:43:35.805Z"
+      }
+    ],
+    "archivada": false,
+    "de": "trabajador",
+    "tipo": "companero",
+    "deEmail": "guillermo.rcxx@gmail.com",
+    "deNombre": "Guillermo Ríos Correa",
+    "deConductor": "1234-5",
+    "estado": "pendiente"
   }
 }
