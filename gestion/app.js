@@ -433,6 +433,7 @@ const app = {
                 return;
             }
             this.mostrarApp();
+            this._pedirBateriaSiHaceFalta();
             this.actualizarBotonesPerfil();
             this._actualizarCabeceraUsuario();
             this._aplicarPermisosGestor();
@@ -1723,12 +1724,25 @@ const app = {
         });
     },
 
+    // La misma huella que se guarda el trabajador al dar un cambio por leído:
+    // día, lugar y horas, y con el mismo orden de preferencias que usa el
+    // servidor para decirle lo que le toca.
+    _claveJornadaDe(u, fecha) {
+        const lugar = (u?.lugares?.[fecha] || u?.puesto || '');
+        const h = this._horasPlan(u, fecha);
+        const horas = (h?.i && h?.f) ? `${h.i}\u2013${h.f}` : '';
+        return `${fecha}|${lugar}|${horas}`;
+    },
+
     // El visto del trabajador: sale cuando ha dado por leído un cambio de ese
     // día. Lo que confirma es la jornada de un día concreto, así que la marca
     // solo vale para ese día y no se arrastra al siguiente.
     _vistoDe(u, fecha) {
         const v = u?.avisoVisto;
-        if (!v?.clave || !String(v.clave).startsWith(fecha)) return '';
+        // Tiene que cuadrar con lo que le toca ahora mismo, no solo con el
+        // día: si se le vuelve a cambiar el lugar o la hora, lo que dio por
+        // leído ya no es lo que le toca y el visto se cae solo.
+        if (!v?.clave || v.clave !== this._claveJornadaDe(u, fecha)) return '';
         let hora = '';
         try {
             hora = new Date(v.en).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -2821,6 +2835,33 @@ const app = {
 
     _totalSinLeer() {
         return (this._notas || []).filter(n => !n.archivada && this._sinLeer(n)).length;
+    },
+
+    // Los avisos con la app cerrada van con una alarma que el ahorro de batería
+    // se lleva por delante en bastantes móviles, y entonces no llega nada y no
+    // hay forma de saber por qué. Se pide una sola vez, recién instalada, que
+    // es cuando se entiende para qué es.
+    _pedirBateriaSiHaceFalta() {
+        if (!window.AndroidBridge?.pedirBateriaSinRestriccion) return;
+        if (localStorage.getItem('bateriaPedida')) return;
+        try {
+            if (window.AndroidBridge.bateriaSinRestriccion?.() !== false) {
+                localStorage.setItem('bateriaPedida', '1');
+                return;
+            }
+        } catch (_) { return; }
+        // Con un respiro: recién abierta la app hay bastante en pantalla ya
+        setTimeout(() => {
+            if (localStorage.getItem('bateriaPedida')) return;
+            localStorage.setItem('bateriaPedida', '1');
+            if (confirm('Para que te lleguen los avisos con la aplicación cerrada '
+                + '—los mensajes y los cambios de jornada— el móvil tiene que dejarla '
+                + 'funcionar en segundo plano. Por defecto no la deja.\n\n'
+                + '¿Lo permites ahora? Es un toque, y no gasta apenas: la aplicación '
+                + 'solo mira cada cinco minutos.')) {
+                try { window.AndroidBridge.pedirBateriaSinRestriccion(); } catch (_) {}
+            }
+        }, 3000);
     },
 
     _pintarCampana() {

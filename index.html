@@ -374,15 +374,19 @@
         .app-content.dark .noasist-compact.active{background:#6d4c41;border-color:#8d6e63;}
         .noasist-compact span{font-size:15px;line-height:1;pointer-events:none;}
         .noasist-compact input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#8d6e63;}
-        .pr-compact{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 8px;background:#e8f4fd;border-radius:8px;border:1.5px solid #3498db;cursor:pointer;flex-shrink:0;touch-action:manipulation;user-select:none;}
+        .pr-compact{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 8px;background:#e8f4fd;border-radius:8px;border:1.5px solid #3498db;cursor:pointer;flex-shrink:0;touch-action:manipulation;user-select:none;}
         .pr-compact.active{background:#3498db;border-color:#2980b9;}
         .pr-compact.active span{color:white;}
         .app-content.dark .pr-compact{background:#0a1929;border-color:#2980b9;}
         .app-content.dark .pr-compact.active{background:#2980b9;}
-        .pr-compact span{font-size:11px;font-weight:800;color:#2980b9;line-height:1;letter-spacing:0.5px;pointer-events:none;}
+        /* Las letras al mismo tamaño que los emojis de los otros cinco, que
+           si no este cuadro se veía más pequeño que el resto de la fila. */
+        .pr-compact span{font-size:15px;font-weight:800;color:#2980b9;line-height:1;letter-spacing:0.5px;pointer-events:none;}
         .pr-compact input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#3498db;}
         .pr-badge{display:inline-block;background:#3498db;color:white;font-size:9px;font-weight:800;padding:2px 6px;border-radius:10px;letter-spacing:0.5px;vertical-align:middle;}
-        .pr-restantes{font-size:9px;font-weight:800;color:#2980b9;background:rgba(41,128,185,0.16);border-radius:8px;padding:0 5px;line-height:13px;pointer-events:none;}
+        /* Los días que quedan van en la esquina, fuera de la fila: ocupando
+           sitio dejaban el cuadro más estrecho por dentro que los demás. */
+        .pr-restantes{position:absolute;top:1px;right:3px;font-size:9px;font-weight:800;color:#2980b9;background:rgba(41,128,185,0.16);border-radius:8px;padding:0 4px;line-height:12px;pointer-events:none;}
         .pr-compact.active .pr-restantes{background:rgba(255,255,255,0.28);color:#fff;}
         .pr-compact.agotado{opacity:0.45;}
         /* ── FESTIVO ── */
