@@ -2377,6 +2377,7 @@ const app = {
     _destinatariosVisibles() {
         const q = (document.getElementById('destBuscar')?.value || '').toLowerCase().trim();
         return Object.values(this._conductores || {})
+            .filter(u => !u.oculto)
             .filter(u => !q || `${u.conductor || ''} ${u.nombre || ''} ${u.email}`.toLowerCase().includes(q))
             .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
     },
@@ -3936,7 +3937,7 @@ const app = {
 
     _filasExport() {
         const filas = [];
-        Object.values(this._conductores || {}).forEach(u => {
+        Object.values(this._conductores || {}).filter(u => !u.oculto).forEach(u => {
             (u.jornadas || []).forEach(j => {
                 const lugar = this._lugarDe(u, j.f, j);
                 const t = this._turnoDe(lugar, j.i) || '';

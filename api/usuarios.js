@@ -317,7 +317,7 @@ function quienHayEn(data, lugar, fecha) {
     : `${hoy.getFullYear()}${String(hoy.getMonth() + 1).padStart(2, '0')}${String(hoy.getDate()).padStart(2, '0')}`;
   const clave = clavePuesto(lugar);
   const gente = Object.values(data || {})
-    .filter(u => u && !u.ficticio)
+    .filter(u => u && !u.ficticio && !u.oculto)
     .filter(u => clavePuesto((u.lugares || {})[f] || u.puesto) === clave && clave)
     .filter(u => !deBajaEse(u, f) && !deVacacionesEse(u, f) && leTocaEse(u, f))
     .map(u => ({
@@ -370,7 +370,7 @@ export default async function handler(req, res) {
       // un compañero sin bajarse las jornadas de toda la plantilla.
       if (directorio !== undefined) {
         return res.status(200).json(Object.values(data)
-          .filter(u => u && u.email && !u.ficticio)
+          .filter(u => u && u.email && !u.ficticio && !u.oculto)
           .map(u => ({ email: u.email, nombre: u.nombre || '', conductor: u.conductor || '' }))
           .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es')));
       }
