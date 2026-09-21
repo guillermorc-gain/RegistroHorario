@@ -1749,7 +1749,8 @@ const app = {
         if (btn) btn.classList.toggle('agotado', restantes === 0 && !this.prActivo);
     },
 
-    clickPrCompact() {
+    clickPrCompact(auto = false) {
+        if (!auto && this.sinAsistenciaActivo) return;
         if (!this.prActivo && this._prRestantes() === 0) {
             alert(`❌ Ya has usado los ${this.PR_ANUALES} permisos retribuidos de este año`);
             return;
@@ -1760,7 +1761,8 @@ const app = {
         this._actualizarPrUI();
     },
 
-    clickFestivo() {
+    clickFestivo(auto = false) {
+        if (!auto && this.sinAsistenciaActivo) return;
         this.festivoActivo = !this.festivoActivo;
         document.getElementById('festivoCompact').classList.toggle('active', this.festivoActivo);
         document.getElementById('festivoToggle').checked = this.festivoActivo;
@@ -2630,6 +2632,8 @@ const app = {
         // De paso, por dónde preguntar por la jornada de hoy: el mismo aviso
         // nativo mira también si le han cambiado el sitio o la hora.
         window.AndroidBridge?.saveToPrefs?.('asignacionUrl', this.USUARIOS_URL);
+        // Y con qué nombre firma el visto que se dé desde el propio aviso
+        window.AndroidBridge?.saveToPrefs?.('chatNombre', this.usuarioActual.name || '');
     },
 
     // Hasta dónde he leído, para que el aviso nativo no repita lo ya visto
@@ -2798,6 +2802,10 @@ const app = {
         const n = (this._notas || []).find(x => x.id === id);
         const ultimo = this._ultimoMensaje(n);
         if (!ultimo) return;
+        // Leído es leído: además de apuntarlo aquí, se le dice al otro. Antes
+        // "marcar leído" desde el aviso solo se lo guardaba el móvil y quien
+        // había escrito no se enteraba de nada.
+        if (!this._estaVista(n)) this._marcarVisto(id, true, true);
         const l = this._leidas();
         l[id] = ultimo.en || new Date().toISOString();
         localStorage.setItem('convLeidas', JSON.stringify(l));
@@ -2809,10 +2817,17 @@ const app = {
         return (this._notas || []).filter(n => !n.archivada && this._sinLeer(n)).length;
     },
 
+    _hayCambioSinLeer() {
+        try { return !!JSON.parse(localStorage.getItem('cambioJornadaPend') || 'null')?.texto; }
+        catch (_) { return false; }
+    },
+
     _pintarCampana() {
         const el = document.getElementById('campanaN');
         if (!el) return;
-        const n = this._totalSinLeer();
+        // El cambio de jornada sin dar por leído es un aviso más: la campana
+        // decía cero teniendo eso ahí esperando.
+        const n = this._totalSinLeer() + (this._hayCambioSinLeer() ? 1 : 0);
         el.textContent = n > 99 ? '99+' : String(n);
         el.classList.toggle('hay', n > 0);
     },
@@ -4330,7 +4345,8 @@ const app = {
         return this._esJornadaCompleta() ? (this.jornadaHoras || 7) : this.HORAS_BAJA;
     },
 
-    clickBe() {
+    clickBe(auto = false) {
+        if (!auto && this.sinAsistenciaActivo) return;
         this.bajaActiva = !this.bajaActiva;
         document.getElementById('beCompact').classList.toggle('active', this.bajaActiva);
         document.getElementById('beToggle').checked = this.bajaActiva;
@@ -4340,7 +4356,8 @@ const app = {
         }
     },
 
-    clickVacaciones() {
+    clickVacaciones(auto = false) {
+        if (!auto && this.sinAsistenciaActivo) return;
         this.vacacionesActivo = !this.vacacionesActivo;
         document.getElementById('vacacionesCompact').classList.toggle('active', this.vacacionesActivo);
         document.getElementById('vacacionesToggle').checked = this.vacacionesActivo;
@@ -4348,7 +4365,8 @@ const app = {
         if (this.vacacionesActivo) document.getElementById('horasInput').value = '0';
     },
 
-    clickExtra() {
+    clickExtra(auto = false) {
+        if (!auto && this.sinAsistenciaActivo) return;
         this.extraActivo = !this.extraActivo;
         document.getElementById('extraCompact').classList.toggle('active', this.extraActivo);
         document.getElementById('extraToggle').checked = this.extraActivo;
@@ -4595,6 +4613,8 @@ const app = {
     },
 
     _pintarAvisoCambio() {
+        // La campana cuenta esto también, así que se repinta con el aviso
+        this._pintarCampana();
         const el = document.getElementById('cambioJornadaAviso');
         if (!el) return;
         let pend = null;
@@ -4856,9 +4876,9 @@ const app = {
         // Un día de baja sin horas cuenta como jornada hecha contra el objetivo
         if (reg.be && h === 0) return this._horasBaja();
         if (reg.festivo && h === 0) return this.jornadaHoras;
-        // Las vacaciones no restan del objetivo anual: cuentan como jornada
-        // hecha, igual que un festivo no trabajado.
-        if (reg.vacaciones && h === 0) return this.jornadaHoras;
+        // Las vacaciones no cuentan como jornada hecha: no acercan al tope
+        // anual. Un día de vacaciones sin horas suma cero, que es lo que hace
+        // este return de aquí abajo; si además se trabajó, cuentan esas horas.
         return h;
     },
 
@@ -4955,7 +4975,16 @@ const app = {
             hint.textContent = nombre ? `· 🎉 ${nombre}` : '';
             hint.style.display = nombre ? 'inline' : 'none';
         }
-        if (nombre && !this.festivoActivo) this.clickFestivo();
+        if (nombre && !this.festivoActivo) this.clickFestivo(true);
+    },
+
+    // Lo mismo en el cuadro de editar: si ese día es festivo, queda marcado
+    // solo. Que un día lo sea no depende de acordarse de marcarlo.
+    _comprobarFestivoEdit() {
+        const f = document.getElementById('editModalFecha')?.value;
+        if (!f || !this._nombreFestivo(f)) return;
+        const cb = document.getElementById('editModalFestivo');
+        if (cb && !cb.checked) { cb.checked = true; this._pintarTogglesEdit(); }
     },
 
 
@@ -5104,7 +5133,23 @@ const app = {
             const h = document.getElementById('horasInput');
             if (h) h.value = '0';
             this.calcularExtra?.();
+            // Y no es un día de PR, ni de vacaciones, ni de baja, ni de horas
+            // extras: lo que estuviera marcado se quita y lo demás se apaga.
+            if (this.prActivo)        this.clickPrCompact(true);
+            if (this.extraActivo)     this.clickExtra(true);
+            if (this.vacacionesActivo) this.clickVacaciones(true);
+            if (this.bajaActiva)      this.clickBe(true);
         }
+        this._pintarBloqueoToggles();
+    },
+
+    // El festivo sigue marcándose solo cuando la fecha lo es, así que los
+    // apagados solo valen para los toques a mano: el que llama desde dentro
+    // pasa `auto` y no se le bloquea.
+    _pintarBloqueoToggles() {
+        const no = !!this.sinAsistenciaActivo;
+        ['prCompact', 'festivoCompact', 'extraCompact', 'vacacionesCompact', 'beCompact']
+            .forEach(id => document.getElementById(id)?.classList.toggle('bloqueado', no));
     },
 
     calcularExtraModal() {
@@ -5190,9 +5235,10 @@ const app = {
     },
 
     limpiarInput() {
-        // Limpiar desmarca todo menos el festivo, y recupera el horario del día
-        // anterior. No debe reabrir el cajón nocturno aunque ese horario lo sea.
-        const manteniaFestivo = this.festivoActivo;
+        // Limpiar desmarca todo y recupera el horario del día anterior. No debe
+        // reabrir el cajón nocturno aunque ese horario lo sea. El festivo se
+        // desmarca como los demás; si la fecha es festiva de verdad, vuelve a
+        // marcarse solo un poco más abajo.
         this.establecerFechaHoy();
         this._ocultarRangoFechas();
         const lastInicio = localStorage.getItem('lastHoraInicio') || '';
@@ -5230,7 +5276,7 @@ const app = {
         document.getElementById('festivoCompact').classList.remove('active');
         document.getElementById('festivoToggle').checked = false;
         this.comprobarFestivo();                 // vuelve a marcarlo si la fecha es festiva
-        if (manteniaFestivo && !this.festivoActivo) this.clickFestivo();
+        this._pintarBloqueoToggles();
     },
 
     _horasEntre(inicio, fin) {
@@ -5394,7 +5440,16 @@ const app = {
     _toggleEdit(nombre) {
         const el = document.getElementById('editModal' + nombre);
         if (!el) return;
+        // Igual que al registrar: si no se fue a trabajar, lo demás no se toca
+        const noFue = document.getElementById('editModalSinAsistencia')?.checked;
+        if (noFue && nombre !== 'SinAsistencia') return;
         el.checked = !el.checked;
+        if (nombre === 'SinAsistencia' && el.checked) {
+            ['PR', 'Extra', 'Vacaciones', 'Be'].forEach(n => {
+                const otro = document.getElementById('editModal' + n);
+                if (otro) otro.checked = false;
+            });
+        }
         // Vacaciones y baja son días sin jornada: se ponen las horas a cero,
         // igual que al registrar.
         if (el.checked && (nombre === 'Vacaciones' || nombre === 'Be' || nombre === 'SinAsistencia')) {
@@ -5405,10 +5460,13 @@ const app = {
     },
 
     _pintarTogglesEdit() {
+        const noFue = !!document.getElementById('editModalSinAsistencia')?.checked;
         this._CUADROS_EDIT.forEach(([nombre, cuadro]) => {
             const el = document.getElementById('editModal' + nombre);
             const c  = document.getElementById(cuadro);
-            if (el && c) c.classList.toggle('active', el.checked);
+            if (!el || !c) return;
+            c.classList.toggle('active', el.checked);
+            c.classList.toggle('bloqueado', noFue && nombre !== 'SinAsistencia');
         });
         const extra = document.getElementById('editModalExtra')?.checked;
         document.getElementById('editExtraPanel')?.classList.toggle('visible', !!extra);
@@ -5439,6 +5497,7 @@ const app = {
         const dest = document.querySelector(
             `input[name="editExtraDestino"][value="${reg.extraDestino === 'extras' ? 'extras' : 'anual'}"]`);
         if (dest) dest.checked = true;
+        this._comprobarFestivoEdit();
         this._pintarTogglesEdit();
         const selLugar = document.getElementById('editModalLugar');
         if (selLugar) selLugar.innerHTML = this._opcionesLugar(reg.puesto || '');

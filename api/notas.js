@@ -229,12 +229,20 @@ function tocarNota(nota, { visto, archivada, quien, nombre }) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Email, X-User-Email, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Email, X-User-Email, X-Metodo, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
+
+  // El aviso de la barra de Android marca la conversación como leída sin
+  // abrir la app, y desde ahí no se puede mandar un PATCH: la clase que trae
+  // Android para hacer peticiones no admite ese método. Así que va un POST
+  // diciendo en una cabecera lo que de verdad quiere hacer. Solo se acepta
+  // PATCH, que borrar por ese camino no se le pide a nadie.
+  const metodo = String(req.headers['x-metodo'] || '').toUpperCase() === 'PATCH'
+    ? 'PATCH' : req.method;
 
   try {
     // Con ?email= se devuelven solo las suyas, que es lo que pide su app.
-    if (req.method === 'GET') {
+    if (metodo === 'GET') {
       res.setHeader('Cache-Control', 'no-store');
       const quien = String(req.query?.email || '').toLowerCase().trim();
       // Con ?resumen=1 solo se devuelve una huella por conversación: es lo que
@@ -267,7 +275,7 @@ export default async function handler(req, res) {
 
     // El trabajador escribe las suyas. El correo sale del token; la cabecera
     // solo vale mientras queden apps antiguas sin mandarlo.
-    if (req.method === 'POST') {
+    if (metodo === 'POST') {
       const delToken = await emailDelToken(tokenDe(req));
       const quien = delToken || (req.headers['x-user-email'] || '').toLowerCase().trim();
       if (!quien || !quien.includes('@')) return res.status(400).json({ error: 'Falta el usuario' });
@@ -378,7 +386,7 @@ export default async function handler(req, res) {
 
     // Dar el visto, archivar y borrar. Cada uno manda en sus conversaciones:
     // el visto lo da cualquiera de los dos y el otro lo ve.
-    if (req.method === 'PATCH' || req.method === 'DELETE') {
+    if (metodo === 'PATCH' || metodo === 'DELETE') {
       const delToken = await emailDelToken(tokenDe(req));
       const quien = delToken || (req.headers['x-admin-email'] || req.headers['x-user-email'] || '')
         .toLowerCase().trim();
@@ -393,7 +401,7 @@ export default async function handler(req, res) {
       if (hayBaseDeDatos()) {
         const n = await leerNota(id);
         if (!puedeTocar(n, quien, deGestion)) return res.status(404).json({ error: 'Esa conversación no es tuya' });
-        if (req.method === 'DELETE') {
+        if (metodo === 'DELETE') {
           await borrarNota(id);
           return res.status(200).json({ id, borrada: true });
         }
@@ -405,9 +413,9 @@ export default async function handler(req, res) {
       const nuevo = await guardarConReintento(data => {
         if (!data[id]) return null;
         if (!puedeTocar(data[id], quien, deGestion)) { prohibido = true; return null; }
-        if (req.method === 'DELETE') { const out = { ...data }; delete out[id]; return out; }
+        if (metodo === 'DELETE') { const out = { ...data }; delete out[id]; return out; }
         return acotarAdjuntos({ ...data, [id]: tocarNota(data[id], quita) });
-      }, req.method === 'DELETE' ? `Quitar conversación ${id}` : `Cambio en ${id}`);
+      }, metodo === 'DELETE' ? `Quitar conversación ${id}` : `Cambio en ${id}`);
       if (!nuevo) {
         return res.status(prohibido ? 403 : 404)
           .json({ error: prohibido ? 'Esa conversación no es tuya' : 'No se pudo actualizar' });
