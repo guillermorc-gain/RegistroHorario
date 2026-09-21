@@ -6901,6 +6901,19 @@ const app = {
             L.push(listo ? '✅ El aviso con la app cerrada está armado'
                          : '❌ El aviso con la app cerrada no está armado'
                          + '\n   → Cierra la app del todo y vuelve a abrirla');
+            // Lo que de verdad dice si esto funciona: cuándo miró por última
+            // vez sin que nadie abriera la app. Si es "nunca" o hace horas,
+            // el móvil no la está dejando trabajar de fondo.
+            let ultimo = 0;
+            try { ultimo = Number(window.AndroidBridge?.ultimoAvisoFondo?.() || 0); } catch (_) {}
+            if (!ultimo) {
+                L.push('❌ Todavía no ha mirado ni una vez con la app cerrada'
+                     + '\n   → Déjala cerrada un cuarto de hora y vuelve a este repaso');
+            } else {
+                const min = Math.round((Date.now() - ultimo) / 60000);
+                L.push((min <= 30 ? '✅' : '⚠️') + ` Última comprobación de fondo: hace ${min} min`
+                     + (min > 30 ? '\n   → El móvil la está parando: quítale el ahorro de batería' : ''));
+            }
         }
 
         const sinLeer = this._totalSinLeer();

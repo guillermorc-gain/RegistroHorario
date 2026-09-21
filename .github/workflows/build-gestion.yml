@@ -69,7 +69,7 @@ jobs:
           sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>|' "$MANIFEST"
           sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
           sed -i 's|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />|' "$MANIFEST"
-          sed -i 's|</application>|    <receiver android:name=".MainActivity$GeofenceReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$ChatReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$LeidoReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$BootReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/></intent-filter></receiver>\n    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.gestionemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
+          sed -i 's|</application>|    <receiver android:name=".MainActivity$GeofenceReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$ChatReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$LeidoReceiver" android:exported="false" />\n    <service android:name=".MainActivity$ChatJob" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="false" />\n    <receiver android:name=".MainActivity$BootReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/></intent-filter></receiver>\n    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.gestionemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
 
       - name: Create FileProvider paths config
         run: |
@@ -259,6 +259,7 @@ jobs:
                               .putString("chatUrl", url == null ? "" : url)
                               .apply();
                           programarAvisoChat(ctx);
+                          asegurarAvisoDeFondo(ctx);
                       }
 
                       @JavascriptInterface
@@ -268,6 +269,14 @@ jobs:
                           NotificationManager nm = (NotificationManager)
                               ctx.getSystemService(Context.NOTIFICATION_SERVICE);
                           if (nm != null) nm.cancel(1002);
+                      }
+
+                      // Cuándo miró por última vez con la app cerrada. Es lo que
+                      // distingue "no hay avisos" de "esto lleva parado desde el martes".
+                      @JavascriptInterface
+                      public String ultimoAvisoFondo() {
+                          return String.valueOf(ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                              .getLong("avisoFondoUltimo", 0L));
                       }
 
                       @JavascriptInterface
@@ -874,17 +883,84 @@ jobs:
                   }
               }
 
+              // La cadena de arriba se sostiene sola: cada despertar deja puesto el
+              // siguiente. Pero basta con que se pierda uno —el móvil apagado, la app
+              // parada por el sistema, un fallo al programar— para que la cadena se
+              // rompa y no vuelva a llegar nada hasta que alguien abra la app. Que es
+              // justo lo que pasaba. Así que por debajo van dos redes que mantiene el
+              // propio Android: una alarma repetida y un trabajo periódico que
+              // sobrevive al reinicio y a que la app lleve días sin abrirse.
+              public static void asegurarAvisoDeFondo(Context ctx) {
+                  SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                  if (prefs.getString("chatEmail", "").isEmpty()) return;
+                  try {
+                      android.app.AlarmManager am =
+                          (android.app.AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+                      if (am != null) {
+                          int flags = PendingIntent.FLAG_UPDATE_CURRENT
+                              | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
+                          PendingIntent pi = PendingIntent.getBroadcast(ctx, 7778,
+                              new Intent(ctx, ChatReceiver.class), flags);
+                          am.setInexactRepeating(android.app.AlarmManager.RTC_WAKEUP,
+                              System.currentTimeMillis() + 15 * 60 * 1000L,
+                              android.app.AlarmManager.INTERVAL_FIFTEEN_MINUTES, pi);
+                      }
+                  } catch (Exception ignored) {}
+                  try {
+                      android.app.job.JobScheduler js = (android.app.job.JobScheduler)
+                          ctx.getSystemService(Context.JOB_SCHEDULER_SERVICE);
+                      if (js == null) return;
+                      // Si ya está puesto se deja: volver a programarlo le reinicia el
+                      // reloj, y a base de reinicios no llegaría a correr nunca.
+                      for (android.app.job.JobInfo j : js.getAllPendingJobs()) {
+                          if (j.getId() == 7779) return;
+                      }
+                      js.schedule(new android.app.job.JobInfo.Builder(7779,
+                          new android.content.ComponentName(ctx, ChatJob.class))
+                          .setRequiredNetworkType(android.app.job.JobInfo.NETWORK_TYPE_ANY)
+                          .setPersisted(true)
+                          .setPeriodic(15 * 60 * 1000L)
+                          .build());
+                  } catch (Exception ignored) {}
+              }
+
+              // El mismo repaso que hace la alarma, pero lanzado por el planificador
+              // de Android, que es quien lo mantiene cuando la app no está delante.
+              public static class ChatJob extends android.app.job.JobService {
+                  @Override
+                  public boolean onStartJob(final android.app.job.JobParameters params) {
+                      final Context app = getApplicationContext();
+                      new Thread(() -> {
+                          try { ChatReceiver.repasar(app); } catch (Exception ignored) {}
+                          jobFinished(params, false);
+                      }).start();
+                      return true;          // sigue trabajando en ese hilo
+                  }
+                  @Override
+                  public boolean onStopJob(android.app.job.JobParameters params) { return true; }
+              }
+
               public static class ChatReceiver extends BroadcastReceiver {
                   @Override
                   public void onReceive(Context ctx, Intent intent) {
                       final Context app = ctx.getApplicationContext();
                       new Thread(() -> {
-                          try { mirarChat(app); } catch (Exception ignored) {}
+                          try { repasar(app); } catch (Exception ignored) {}
                           programarAvisoChat(app);     // se vuelve a poner siempre
                       }).start();
                   }
 
-                  private void mirarChat(Context ctx) throws Exception {
+                  // Lo que hay que mirar cada vez, venga de la alarma o del
+                  // planificador. Deja apuntada la hora: sin esto no había forma de
+                  // saber si el repaso de fondo corría o estaba parado desde hacía
+                  // días, que es la diferencia entre un fallo de avisos y otro.
+                  static void repasar(Context ctx) {
+                      ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                          .putLong("avisoFondoUltimo", System.currentTimeMillis()).apply();
+                      try { mirarChat(ctx); } catch (Exception ignored) {}
+                  }
+
+                  static void mirarChat(Context ctx) throws Exception {
                       SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
                       String email = prefs.getString("chatEmail", "");
                       if (email.isEmpty()) return;
@@ -917,6 +993,11 @@ jobs:
                           if (n.optBoolean("archivada", false)) continue;
                           String en = n.optString("en", "");
                           String de = n.optString("de", "");
+                          // Al gestor le llega el resumen entero, y ahí van también las
+                          // conversaciones entre compañeros —las que le escriben al
+                          // desarrollador, por ejemplo—. Esas no son suyas: ni salen en
+                          // su bandeja ni le tienen que sonar en el móvil.
+                          if (esGestor && "companero".equals(n.optString("tipo", ""))) continue;
                           // Lo que he escrito yo no me lo tiene que avisar nadie
                           boolean mio = esGestor ? "gestor".equals(de)
                                                  : (email.equalsIgnoreCase(de) || "trabajador".equals(de));
@@ -1032,6 +1113,7 @@ jobs:
                       // saltaba, así que al perderse no volvía nunca: hasta que
                       // alguien abría la app no llegaba un solo aviso.
                       try { programarAvisoChat(ctx); } catch (Exception ignored) {}
+                      try { asegurarAvisoDeFondo(ctx); } catch (Exception ignored) {}
                       SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
                       String locJson = prefs.getString("geofenceLocations", null);
                       String gpsMode = prefs.getString("gpsMode", "always");
