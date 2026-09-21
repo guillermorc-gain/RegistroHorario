@@ -23,14 +23,18 @@
 'use strict';
 
 const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.googleusercontent.com';
-// Se probó a quitar los permisos "sensibles" para librarse del aviso de
-// aplicación no verificada, y no sirvió: ese aviso sale mientras la app esté
-// "En pruebas" en la consola de Google, se pida lo que se pida. Lo que sí hizo
-// fue dejar sin jornadas a todo el mundo, porque el historial vive justo en la
-// carpeta oculta de Drive que se había quitado. Así que vuelve.
-// drive.file va además de appdata: appdata solo escribe en la carpeta oculta,
-// y el resumen mensual necesita crear una "Movilidad Emt" que se vea.
-const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send profile email';
+// Al entrar solo se piden permisos de los que Google llama corrientes. Con
+// uno solo de los "sensibles" sale el aviso de aplicación no verificada, el de
+// Configuración avanzada, y ahí se atasca cualquiera. Eran dos: la carpeta
+// oculta de Drive, donde vivía el historial, y enviar correo.
+//
+// La carpeta oculta ya no hace falta: la copia se mudó a un archivo normal
+// dentro de "Movilidad Emt", y a eso llega drive.file, que da acceso a lo que
+// crea la propia app. Se hizo en dos pasos y no de golpe, porque quitarlo
+// antes de mudar la copia deja sin historial a quien no haya actualizado.
+const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.file profile email';
+// Enviar el correo sin salir de la app sí es sensible, así que no se le pide a
+// todo el mundo al entrar: se pide aparte, y solo a quien vaya a usarlo.
 const GMAIL_SCOPE      = 'https://www.googleapis.com/auth/gmail.send';
 const AUTH_SCOPE       = 'profile email';
 // Turnos de cada puesto. La hora de entrada registrada decide en cuál cae.
@@ -162,13 +166,20 @@ const app = {
     },
 
     _migrarUbicacionAntigua() {
-        // La versión anterior guardó la copia fuera de la carpeta oculta, y
-        // pudo dejar apuntado ese archivo nuevo, que está vacío. Se olvida una
-        // sola vez para que la búsqueda vuelva a dar con la copia de siempre.
-        if (!localStorage.getItem('copiaDriveOculta')) {
-            localStorage.setItem('copiaDriveOculta', '1');
-            localStorage.removeItem('driveFileId');
-            this.driveFileId = null;
+        // La copia ya no está en la carpeta oculta de Drive sino en un
+        // archivo normal, el que la versión anterior venía dejando ahí. Se
+        // apunta a ese, una sola vez; si este móvil no tiene guardado cuál es,
+        // se olvida el viejo y se busca por nombre.
+        if (!localStorage.getItem('copiaDriveNormal')) {
+            localStorage.setItem('copiaDriveNormal', '1');
+            const normal = localStorage.getItem('driveFileIdVisible');
+            if (normal) localStorage.setItem('driveFileId', normal);
+            else localStorage.removeItem('driveFileId');
+            this.driveFileId = localStorage.getItem('driveFileId') || null;
+            // Lo mismo donde lo busca el móvil: el registro rápido lo usa con
+            // la app cerrada, y se quedaría apuntando a la copia vieja.
+            if (this.driveFileId) window.AndroidBridge?.saveToPrefs?.('driveFileId', this.driveFileId);
+            else window.AndroidBridge?.removePref?.('driveFileId');
         }
         const old = localStorage.getItem('workLocation');
         if (old && !localStorage.getItem('workLocations')) {
@@ -831,10 +842,18 @@ const app = {
         });
     },
 
+    // La copia vive dentro de "Movilidad Emt", junto a los resúmenes. Si la
+    // carpeta no se deja crear no se pierde la copia: se guarda suelta en
+    // Drive, que es mejor que quedarse sin ella.
+    async _carpetaCopias() {
+        try { return await this._carpetaDrive('Movilidad Emt', null); }
+        catch (_) { return null; }
+    },
+
     async _getDriveFileId() {
         if (this.driveFileId) return this.driveFileId;
         const resp = await this._driveGet(
-            `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D'${DRIVE_FILE_NAME}'&fields=files(id)`
+            `https://www.googleapis.com/drive/v3/files?q=name%3D'${DRIVE_FILE_NAME}'%20and%20trashed%3Dfalse&fields=files(id)`
         );
         const data = await resp.json();
         if (data.files && data.files.length > 0) {
@@ -863,7 +882,8 @@ const app = {
 
         if (!fileId) {
             const boundary = '-------314159265358979323846';
-            const meta     = JSON.stringify({ name: DRIVE_FILE_NAME, parents: ['appDataFolder'] });
+            const carpeta  = await this._carpetaCopias();
+            const meta     = JSON.stringify({ name: DRIVE_FILE_NAME, ...(carpeta ? { parents: [carpeta] } : {}) });
             const body     = `\r\n--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${json}\r\n--${boundary}--`;
             const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
                 method: 'POST',
@@ -891,58 +911,6 @@ const app = {
             if (!resp.ok) { const t = await resp.text(); throw new Error('Drive actualizar: ' + resp.status + ' ' + t.slice(0,120)); }
         }
         localStorage.setItem('lastBackupTime', Date.now().toString());
-        this._espejarCopia(json);
-    },
-
-    // ── Preparando la mudanza de la copia ────────────────────────────────
-    // El historial vive en la carpeta oculta de Drive, y pedir esa carpeta es
-    // uno de los permisos que hacen salir el aviso de "aplicación no
-    // verificada". Para poder dejar de pedirlo hay que sacar los datos de ahí
-    // antes, y no de golpe: quien no haya actualizado se quedaría sin
-    // historial. Así que de momento la copia buena sigue donde estaba y aquí
-    // se va dejando la misma, tal cual, como archivo normal dentro de
-    // "Movilidad Emt". Cuando todos tengan esta versión, la app podrá leer de
-    // ahí y quitar el permiso.
-    //
-    // Va sin esperar y sin quejarse: es una copia de más. Si falla, la buena
-    // ya está guardada y no cambia nada.
-    async _espejarCopia(json) {
-        if (!json || this._espejoEnCurso) return;
-        if (!this.accessToken || Date.now() >= this.tokenExpiry) return;
-        this._espejoEnCurso = true;
-        try {
-            let id = localStorage.getItem('driveFileIdVisible');
-            if (!id) {
-                const carpeta = await this._carpetaDrive('Movilidad Emt', null);
-                // Puede existir ya de una versión anterior, y entonces hay que
-                // escribir encima en vez de dejar dos copias con el mismo
-                // nombre, que es como se parte un historial en dos.
-                const q = `name='${DRIVE_FILE_NAME}' and trashed=false and '${carpeta}' in parents`;
-                const r = await this._driveGet(
-                    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`);
-                if (r.ok) {
-                    const d = await r.json();
-                    if (d.files?.length) id = d.files[0].id;
-                }
-                if (!id) {
-                    const creado = await this._subirJsonADrive(DRIVE_FILE_NAME, json, carpeta);
-                    if (creado?.id) localStorage.setItem('driveFileIdVisible', creado.id);
-                    return;
-                }
-                localStorage.setItem('driveFileIdVisible', id);
-            }
-            const resp = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`, {
-                method: 'PATCH',
-                headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
-                body: json
-            });
-            // Si ese archivo ya no está, se olvida el id y la próxima vez se
-            // crea de nuevo.
-            if (resp.status === 404) localStorage.removeItem('driveFileIdVisible');
-        } catch (_) {
-        } finally {
-            this._espejoEnCurso = false;
-        }
     },
 
     async _autoBackup() {
@@ -1015,10 +983,13 @@ const app = {
         if (!this.usuarioActual) return;
         try {
             const data = await this._readDriveFile();
+            // Que no aparezca copia teniendo este móvil una guardada antes no
+            // es "no hay copia": es que no se ha llegado a ella, y pintar el
+            // historial vacío haría creer que se ha perdido todo.
+            if (!data && localStorage.getItem('lastBackupTime')) {
+                throw new Error('no aparece tu copia en Drive');
+            }
             if (data?.preferencias) this._aplicarPreferenciasDesde(data.preferencias);
-            // Al abrir también, que si no solo se mudaría la copia de quien
-            // llegue a guardar algo.
-            if (data) this._espejarCopia(JSON.stringify({ ...data, preferencias: this._getPreferencias() }));
             this.actualizarUI(data || { horasTrabajadas: 0, historial: {} });
             this._renderGpsSettings();
             this._startScheduleTimer();
@@ -1033,7 +1004,12 @@ const app = {
             }
         } catch(e) {
             console.error('Error cargando datos:', e);
-            this.actualizarUI({ horasTrabajadas: 0, historial: {} });
+            // Sin lectura no se pinta un historial vacío: parecería que se ha
+            // perdido todo. Solo se pinta si de verdad no hay nada cargado.
+            if (!this._historialFull || !Object.keys(this._historialFull).length) {
+                this.actualizarUI({ horasTrabajadas: 0, historial: {} });
+            }
+            this._mostrarToast('⚠️ No se ha podido leer tu copia: ' + e.message, 6000);
         }
     },
 
@@ -4699,13 +4675,15 @@ const app = {
             return;
         } catch (e) {
             console.error('Gmail API:', e.message);
-            // Quien entró en la app antes de que existiera el envío por Gmail
-            // tiene un token sin ese permiso, y no hay forma de dárselo en
-            // silencio (renovarlo por detrás no amplía lo que ya se concedió):
-            // solo lo consigue volviendo a entrar y aceptándolo.
+            // El permiso de Gmail no se pide al entrar, a propósito: es de los
+            // que hacen salir el aviso de aplicación no verificada, y no tiene
+            // sentido que lo vea todo el mundo por algo que casi nadie usa. Se
+            // pide aquí, cuando de verdad hace falta. Ampliarlo en silencio no
+            // se puede: renovar el token por detrás no añade permisos.
             if (/insufficient|permission/i.test(e.message || '')) {
                 if (confirm('Para enviar el correo sin salir de la app hace falta darle '
-                    + 'permiso de Gmail, y tu sesión es de antes de que existiera eso.\n\n'
+                    + 'permiso de Gmail, y no se pide al entrar: Google avisa de '
+                    + 'aplicación no verificada a quien se lo concede.\n\n'
                     + '¿Vuelves a entrar ahora para dárselo? De momento se comparte '
                     + 'el archivo de otra forma.')) {
                     this.login(false, GMAIL_SCOPE);
