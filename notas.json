@@ -93,16 +93,18 @@
         "texto": "✅ He leído el cambio de jornada: Se te asigna este servicio y horario: 05:30–13:00. Confirma como leído. Gracias.",
         "adjuntos": [],
         "en": "2026-09-21T18:07:05.456Z"
+      },
+      {
+        "de": "gestor",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Ji",
+        "adjuntos": [],
+        "en": "2026-09-21T18:25:48.196Z"
       }
     ],
     "archivada": false,
     "de": "trabajador",
     "tipo": "gestion",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "guillermo.rcvpn@gmail.com",
-      "nombre": "Guillermo Rios",
-      "en": "2026-09-21T18:07:29.901Z"
-    }
+    "estado": "pendiente"
   }
 }
