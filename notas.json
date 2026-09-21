@@ -27,55 +27,6 @@
     "gestor": "Guillermo Ríos Correa",
     "estado": "pendiente"
   },
-  "20260921192925971-tuisg-0": {
-    "id": "20260921192925971-tuisg-0",
-    "email": "guillermo.rcxx@gmail.com",
-    "creado": "2026-09-21T19:29:25.971Z",
-    "nombre": "Guillermo Ríos Correa",
-    "conductor": "1234-5",
-    "mensajes": [
-      {
-        "de": "gestor",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Ffr",
-        "adjuntos": [],
-        "en": "2026-09-21T19:29:25.971Z"
-      },
-      {
-        "de": "guillermo.rcxx@gmail.com",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Dddd",
-        "adjuntos": [],
-        "en": "2026-09-21T19:30:32.802Z"
-      },
-      {
-        "de": "gestor",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Hg",
-        "adjuntos": [],
-        "en": "2026-09-21T19:32:16.578Z"
-      },
-      {
-        "de": "guillermo.rcxx@gmail.com",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Ff",
-        "adjuntos": [],
-        "en": "2026-09-21T19:32:50.332Z"
-      },
-      {
-        "de": "gestor",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Rr",
-        "adjuntos": [],
-        "en": "2026-09-21T19:36:41.659Z"
-      }
-    ],
-    "archivada": false,
-    "de": "gestor",
-    "tipo": "gestion",
-    "gestor": "Guillermo Ríos Correa",
-    "estado": "pendiente"
-  },
   "20260921193532538-95u5i-0": {
     "id": "20260921193532538-95u5i-0",
     "email": "g.rioscorrea@gmail.com",
