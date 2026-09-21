@@ -151,7 +151,26 @@ const app = {
     notifSound: localStorage.getItem('notifSound') || 'default',
     _updateApkUrl: null,
 
+    // Las dos aplicaciones son el mismo código, así que hay que decir cuál es
+    // antes de que se vea nada: en la entrada, en la bienvenida y en el
+    // logotipo, con la misma chapita que lleva el icono del móvil.
+    _pintarIdentidadApp() {
+        if (ROL_APP !== 'desarrollador') return;
+        const poner = (id, texto) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = texto;
+        };
+        poner('authTitulo', 'Desarrollador EMT - Movilidad');
+        poner('authSub', 'Pruebas y mantenimiento · EMT Palma');
+        poner('logoChapaIco', '⚙️');
+        poner('splashRol', '⚙️ Desarrollador');
+        const chapa = document.getElementById('logoChapa');
+        if (chapa) chapa.setAttribute('fill', '#E8590C');
+        document.title = 'Desarrollador Movilidad EMT';
+    },
+
     async init() {
+        this._pintarIdentidadApp();
         this._instalarFirmaApi();
         // The update check must run even if any earlier step throws, otherwise a
         // single bug anywhere above strands the user on an old build forever.

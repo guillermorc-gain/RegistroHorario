@@ -957,10 +957,16 @@
             <line x1="256" y1="224" x2="322" y2="178" stroke="white" stroke-width="12" stroke-linecap="round"/>
             <circle cx="256" cy="224" r="11" fill="white"/>
             <text x="256" y="464" font-family="Arial Black,Arial,sans-serif" font-size="86" font-weight="900" text-anchor="middle" fill="white" letter-spacing="5">EMT</text>
+            <!-- La misma chapita que lleva el icono del móvil, para saber en
+                 cuál de las dos aplicaciones se está entrando -->
+            <circle cx="398" cy="388" r="84" fill="#fff"/>
+            <circle id="logoChapa" cx="398" cy="388" r="76" fill="#6C3483"/>
+            <text id="logoChapaIco" x="398" y="388" font-size="92" text-anchor="middle"
+                  dominant-baseline="central">✏️</text>
         </svg>
         <div style="text-align:center;">
-            <h1 style="color:#2c3e50;font-size:22px;margin-bottom:4px;">Gestión EMT - Movilidad</h1>
-            <p style="color:#7f8c8d;font-size:13px;">Panel de gestión · EMT Palma</p>
+            <h1 id="authTitulo" style="color:#2c3e50;font-size:22px;margin-bottom:4px;">Gestión EMT - Movilidad</h1>
+            <p id="authSub" style="color:#7f8c8d;font-size:13px;">Panel de gestión · EMT Palma</p>
         </div>
         <div id="authError" class="msg error"></div>
         <div id="authSuccess" class="msg success"></div>

@@ -1714,7 +1714,10 @@ jobs:
 
           chapa = la_chapa()
           if chapa is None:
-              print('Sin emoji: el logo se queda sin chapita')
+              # Antes se seguía sin chapita y el icono salía igual en las tres.
+              # Mejor que reviente aquí, que se arregla en un minuto, a que se
+              # instalen tres aplicaciones que no se distinguen.
+              raise SystemExit('No se pudo dibujar la chapita del icono: falta la fuente de emojis')
 
           def logo(lado):
               im = src.resize((lado, lado), Image.LANCZOS)
