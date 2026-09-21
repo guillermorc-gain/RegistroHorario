@@ -25,7 +25,7 @@
 const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.googleusercontent.com';
 // drive.file is needed on top of appdata: appdata can only write to a hidden
 // folder, so the monthly export could not create a visible "Movilidad Emt".
-const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file profile email';
+const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send profile email';
 const AUTH_SCOPE       = 'profile email';
 // Turnos de cada puesto. La hora de entrada registrada decide en cuál cae.
 let PUESTOS_DEFINIDOS = ['Son Rossinyol', 'Control', 'Calle', 'Taller', 'Anselmo Clavé'];
@@ -4461,10 +4461,62 @@ const app = {
         this._enviarAContacto(email);
     },
 
+    // Un MIME de verdad con el adjunto dentro, codificado en base64url como
+    // pide la API de Gmail.
+    _base64(datos) {
+        if (typeof datos === 'string') return btoa(unescape(encodeURIComponent(datos)));
+        let bin = '';
+        for (let i = 0; i < datos.length; i += 8192) bin += String.fromCharCode.apply(null, datos.subarray(i, i + 8192));
+        return btoa(bin);
+    },
+
+    _base64Url(texto) {
+        return btoa(unescape(encodeURIComponent(texto)))
+            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    },
+
+    async _enviarGmailApi(destino, asunto, cuerpoTexto, archivo) {
+        if (!await this._ensureToken()) throw new Error('Sin sesión de Google');
+        const boundary = 'mixed_' + Date.now();
+        const asuntoCod = `=?UTF-8?B?${this._base64(asunto)}?=`;
+        const mime = `To: ${destino}\r\n`
+            + `Subject: ${asuntoCod}\r\n`
+            + `MIME-Version: 1.0\r\n`
+            + `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`
+            + `--${boundary}\r\n`
+            + `Content-Type: text/plain; charset="UTF-8"\r\n\r\n`
+            + `${cuerpoTexto}\r\n\r\n`
+            + `--${boundary}\r\n`
+            + `Content-Type: ${archivo.tipo}; name="${archivo.nombre}"\r\n`
+            + `Content-Disposition: attachment; filename="${archivo.nombre}"\r\n`
+            + `Content-Transfer-Encoding: base64\r\n\r\n`
+            + `${this._base64(archivo.contenido)}\r\n`
+            + `--${boundary}--`;
+        const resp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ raw: this._base64Url(mime) }),
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.error?.message || String(resp.status));
+        }
+    },
+
     async _enviarAContacto(email) {
         const p = this._emailPendiente;
         if (!p) return;
         document.getElementById('emailModal').classList.remove('show');
+        this._mostrarToast('✉️ Enviando...', 2000);
+        try {
+            await this._enviarGmailApi(email,
+                p.asunto, `Te adjunto ${p.nombre}.`,
+                { nombre: p.nombre, tipo: p.tipo, contenido: p.contenido });
+            this._mostrarToast(`✅ Enviado a ${email}`, 3000);
+            return;
+        } catch (e) {
+            console.error('Gmail API:', e.message);
+        }
         try {
             const blob = new Blob([p.contenido], { type: p.tipo });
             const file = new File([blob], p.nombre, { type: p.tipo });
@@ -4478,7 +4530,7 @@ const app = {
         const asunto = encodeURIComponent(p.asunto);
         const cuerpo = encodeURIComponent(`Te adjunto ${p.nombre}, que se acaba de descargar.`);
         window.open(`mailto:${email}?subject=${asunto}&body=${cuerpo}`, '_blank');
-        this._mostrarToast('📎 Descargado — adjúntalo al correo que se ha abierto', 5000);
+        this._mostrarToast('📎 No se pudo enviar solo — descargado, adjúntalo al correo que se ha abierto', 5500);
     },
 
     ordenarRegistro(modo) {
