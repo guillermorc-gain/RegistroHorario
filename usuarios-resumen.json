@@ -1385,13 +1385,13 @@
     "nombre": "Guillermo Ríos Correa",
     "conductor": "1234-5",
     "avatar": null,
-    "version": "build-270",
+    "version": "build-272",
     "horasMes": 21,
     "horasTotales": 21,
     "diasMes": 4,
     "turno": "T",
     "puesto": "",
-    "actualizado": "2026-09-21T12:55:48.230Z",
+    "actualizado": "2026-09-21T13:06:55.330Z",
     "horaInicio": "14:00",
     "horaFin": "21:00",
     "horarioDe": "hoy",
@@ -1402,7 +1402,7 @@
         "i": "17:00",
         "o": "22:00",
         "n": 1,
-        "pu": ""
+        "pu": "Calle"
       },
       {
         "f": "20260917",
@@ -1410,7 +1410,7 @@
         "i": "17:00",
         "o": "22:00",
         "n": 1,
-        "pu": ""
+        "pu": "Calle"
       },
       {
         "f": "20260918",
@@ -1418,7 +1418,7 @@
         "i": "18:00",
         "o": "22:00",
         "n": 1,
-        "pu": ""
+        "pu": "Calle"
       },
       {
         "f": "20260921",
@@ -1426,7 +1426,7 @@
         "i": "14:00",
         "o": "21:00",
         "n": 0,
-        "pu": ""
+        "pu": "Calle"
       }
     ],
     "horasAnuales": 1700,
@@ -1464,7 +1464,8 @@
         "f": "13:00"
       }
     },
-    "tramosDia": {}
+    "tramosDia": {},
+    "avisoVisto": null
   },
   "prueba-1789758756867@prueba.local": {
     "nombre": "Toni Rodríguez",
