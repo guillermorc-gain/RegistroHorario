@@ -1723,6 +1723,20 @@ const app = {
         });
     },
 
+    // El visto del trabajador: sale cuando ha dado por leído un cambio de ese
+    // día. Lo que confirma es la jornada de un día concreto, así que la marca
+    // solo vale para ese día y no se arrastra al siguiente.
+    _vistoDe(u, fecha) {
+        const v = u?.avisoVisto;
+        if (!v?.clave || !String(v.clave).startsWith(fecha)) return '';
+        let hora = '';
+        try {
+            hora = new Date(v.en).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        } catch (_) {}
+        const t = String(v.texto || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        return `<span class="cond-visto" title="${t}${hora ? ' · ' + hora : ''}">✓✓ visto${hora ? ' ' + hora : ''}</span>`;
+    },
+
     // Los conductores que se ven: nunca los ocultos, y los de prueba solo
     // para el gestor.
     _conductoresVisibles() {
@@ -3289,12 +3303,23 @@ const app = {
     // vale mientras no haya fichado ese día. Salvo que al revisar el día el
     // gestor haya dicho que el bueno era el suyo, y entonces manda ese.
     _horasDelDia(u, fecha, j) {
+        // Lo primero, si al revisar el día se dijo cuál de los dos era el
+        // bueno: eso manda sobre todo lo demás.
         if (u?.revisiones?.[fecha] === 'plan') {
             const h = this._horasPlan(u, fecha);
             if (h) return { ...h, real: false, elegido: true };
         }
-        if (j?.i) return { i: j.i, f: j.o || '', real: true,
-                           elegido: u?.revisiones?.[fecha] === 'real' };
+        if (u?.revisiones?.[fecha] === 'real' && j?.i)
+            return { i: j.i, f: j.o || '', real: true, elegido: true };
+        // Un horario puesto para ese día concreto es una excepción que ha
+        // puesto gestión a mano, así que manda sobre lo que fichara. Antes no:
+        // cambiarle el horario a un día que ya tenía jornada registrada no se
+        // notaba en ninguna parte, seguía saliendo el de siempre. El del mes
+        // no cuenta para esto, que ese es el de fondo y ahí sí manda lo que
+        // fichó de verdad.
+        const delDia = u?.horariosDia?.[fecha];
+        if (delDia?.i && delDia?.f) return { ...delDia, delDia: true, real: false };
+        if (j?.i) return { i: j.i, f: j.o || '', real: true };
         const h = this._horasPlan(u, fecha);
         return h ? { ...h, real: false } : null;
     },
@@ -6025,6 +6050,8 @@ const app = {
                                 onclick="event.stopPropagation();app.revisarHorarios('${esc(u.email)}')">❗${
                                 this._desviaciones(u)}</span>` : ''}
                             <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app.ponerJornada('${esc(u.email)}','${esc(fecha)}','${esc(lugarHoy)}')">· ${esc(lugarHoy) || 'asignar lugar'}${excepcion ? ' ·' : ''} ✎</span>${
+                            // Lo ha dado por leído él: el cambio le ha llegado
+                            this._vistoDe(u, fecha)}${
                             // Con lugar pero sin hora tampoco tiene servicio, y
                             // sin decirlo no hay manera de saber por qué sale
                             // en el filtro.

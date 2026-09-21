@@ -73,6 +73,18 @@ function limpiarHorario(h) {
   return { i: h.i, f: h.f };
 }
 
+// Lo último que el trabajador ha dado por leído. La hora la pone el servidor,
+// no el móvil, y solo cambia cuando cambia lo confirmado: si no, cada
+// publicación del resumen movería la hora del visto y dejaría de decir cuándo
+// se enteró de verdad.
+function nuevoVisto(previo, dado) {
+  if (!dado || typeof dado !== 'object') return previo || null;
+  const clave = String(dado.clave || '').slice(0, 120);
+  if (!clave) return previo || null;
+  if (previo && previo.clave === clave) return previo;
+  return { clave, texto: String(dado.texto || '').slice(0, 200), en: new Date().toISOString() };
+}
+
 // Los horarios se asignan mes a mes: { '202609': {i,f}, ... }. Se guardan los
 // MAX_MESES_HORARIO más recientes para que el fichero no crezca sin fin.
 const MAX_MESES_HORARIO = 36;
@@ -421,6 +433,7 @@ export default async function handler(req, res) {
           horariosDia:  previo.horariosDia || {},
           tramosDia:    previo.tramosDia || {},
           revisiones:   previo.revisiones || {},
+          avisoVisto:   nuevoVisto(previo.avisoVisto, b.avisoVisto),
           grupo:        previo.grupo ?? null,
           actualizado:  new Date().toISOString(),
         };
