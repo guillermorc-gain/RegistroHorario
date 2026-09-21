@@ -1,10 +1,13 @@
-const CACHE_NAME = 'horas-v32';
+const CACHE_NAME = 'horas-v33';
 // Detect base path dynamically so this works on GitHub Pages subdirectories
 // e.g. /Registro-horario-emt/ instead of just /
 const BASE_PATH = self.location.pathname.replace('service-worker.js', '');
 
 // These files are always fetched from network (never stale)
-const NETWORK_FIRST_FILES = ['', 'index.html', 'app.js'];
+// El manifiesto está aquí porque de él depende que Chrome pueda o no
+// instalar la web como aplicación suya: servido de la caché, el
+// navegador se quedaba con el de antes.
+const NETWORK_FIRST_FILES = ['', 'index.html', 'app.js', 'manifest.json'];
 
 // These are cached and served from cache (change rarely)
 const urlsToCache = [

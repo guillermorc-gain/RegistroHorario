@@ -8060,8 +8060,9 @@ const app = {
         const enIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
         // En iPhone el APK no sirve de nada, así que no se le pregunta.
         if (enIOS) return false;
-        if (window.navigator.standalone === true
-            || window.matchMedia('(display-mode: standalone)').matches) return false;
+        // Aquí se miraba si venía de la aplicación instalada de Chrome para
+        // no preguntar. Al revés: quien tiene esa es justo a quien hay que
+        // decirle que lo que quiere es el APK.
         return !localStorage.getItem('modoUso');
     },
 
@@ -8271,7 +8272,7 @@ function _puedeOfrecerInstalar() {
     if (_isStandalone) return false;
     for (const id of ['rolScreen', 'modoScreen']) {
         const p = document.getElementById(id);
-        if (p && p.offsetParent !== null) return false;
+        if (p && getComputedStyle(p).display !== 'none') return false;
     }
     return !!(typeof app !== 'undefined' && app?.usuarioActual?.email);
 }
