@@ -7421,8 +7421,12 @@ const app = {
                      + '\n   → Déjala cerrada un cuarto de hora y vuelve a este repaso');
             } else {
                 const min = Math.round((Date.now() - ultimo) / 60000);
-                L.push((min <= 30 ? '✅' : '⚠️') + ` Última comprobación de fondo: hace ${min} min`
-                     + (min > 30 ? '\n   → El móvil la está parando: quítale el ahorro de batería' : ''));
+                L.push(min <= 3
+                    ? `✅ Mirando al minuto (última vez hace ${min} min)`
+                    : (min <= 30 ? '⚠️' : '❌')
+                      + ` Última comprobación de fondo: hace ${min} min`
+                      + '\n   → El vigilante no está en marcha: cierra la app del todo,'
+                      + ' vuelve a abrirla y quítale el ahorro de batería');
             }
         }
 
