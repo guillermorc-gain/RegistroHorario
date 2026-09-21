@@ -33,18 +33,20 @@
         "texto": "Tt",
         "adjuntos": [],
         "en": "2026-09-21T18:50:01.059Z"
+      },
+      {
+        "de": "guillermo.rc82@gmail.com",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Rrr",
+        "adjuntos": [],
+        "en": "2026-09-21T18:58:06.095Z"
       }
     ],
     "archivada": false,
     "de": "gestor",
     "tipo": "gestion",
     "gestor": "Guillermo Ríos Correa",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "guillermo.rc82@gmail.com",
-      "nombre": "Guillermo Ríos Correa",
-      "en": "2026-09-21T18:57:59.223Z"
-    }
+    "estado": "pendiente"
   },
   "20260921185534682-w16ri-0": {
     "id": "20260921185534682-w16ri-0",
