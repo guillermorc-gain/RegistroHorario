@@ -1,9 +1,9 @@
 {
-  "id": "/",
+  "id": "/gestion/",
   "name": "Gestión EMT Movilidad",
   "short_name": "Gestión EMT",
   "description": "Control de horas de trabajo EMT",
-  "start_url": "/",
+  "start_url": "/gestion/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
@@ -14,25 +14,25 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "/gestion/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-192.png",
+      "src": "/gestion/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/gestion/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/gestion/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
