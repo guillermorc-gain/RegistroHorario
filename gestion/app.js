@@ -1717,7 +1717,7 @@ const app = {
 
     _aplicarPermisosGestor() {
         const soy = this._soyElGestor();
-        ['sectionVersiones', 'sectionPrueba', 'sectionAcceso'].forEach(id => {
+        ['sectionVersiones', 'sectionVersionesGestion', 'sectionPrueba', 'sectionAcceso'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = soy ? '' : 'none';
         });
@@ -3954,6 +3954,78 @@ const app = {
         } catch (e) {
             cont.innerHTML = '<div style="color:#e74c3c;font-size:12px;padding:8px 14px;">Error al cargar versiones</div>';
         }
+    },
+
+    // Lo mismo que la de trabajadores, pero para esta app. Se mantiene
+    // aparte a propósito: publicar una no puede tocar el reparto de la otra.
+    async _cargarVersionesGestion() {
+        const cont = document.getElementById('versionesGestionList');
+        const act  = document.getElementById('versionGestionActual');
+        if (!cont) return;
+        cont.innerHTML = '<div class="ops-field-sub" style="padding:8px 14px;">Cargando…</div>';
+        try {
+            const [res, rVer] = await Promise.all([
+                this._releases(true),
+                fetch(VERSION_URL, { cache: 'no-store' })
+            ]);
+            if (!res.ok) {
+                cont.innerHTML = `<div class="ops-field-sub" style="padding:10px 14px;color:#c0392b;">${
+                    res.limite
+                        ? 'GitHub ha limitado las consultas por hora. Prueba dentro de unos minutos.'
+                        : 'No se pudieron cargar las versiones (error ' + res.status + ').'}</div>`;
+                if (act) act.textContent = '';
+                return;
+            }
+            const publicada = rVer.ok ? ((await rVer.json())?.gestion ?? null) : null;
+            this._versionGestionPublicada = publicada;
+            const re = new RegExp('^' + RELEASE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
+            const builds = (Array.isArray(res.lista) ? res.lista : [])
+                .map(r => ({ r, m: re.exec(r.tag_name || '') }))
+                .filter(x => x.m)
+                .map(x => ({ n: parseInt(x.m[1], 10), fecha: x.r.published_at }))
+                .sort((a, b) => b.n - a.n);
+            // La publicada puede ser anterior a las que quedan listadas: sin
+            // esto no saldría marcada y no habría forma de ver cuál está.
+            if (publicada !== null && !builds.some(b => b.n === publicada)) {
+                builds.push({ n: publicada, fecha: null });
+                builds.sort((a, b) => b.n - a.n);
+            }
+            if (act) {
+                act.textContent = publicada === null
+                    ? 'Ahora mismo reciben la más reciente'
+                    : `Publicada: ${this._buildNumToVersion(publicada)}`;
+            }
+            if (!builds.length) { cont.innerHTML = '<div class="ops-field-sub" style="padding:8px 14px;">Sin versiones</div>'; return; }
+            cont.innerHTML = builds.map(b => {
+                const activa = b.n === publicada;
+                const f = b.fecha
+                    ? new Date(b.fecha).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })
+                    : 'versión publicada';
+                return `<div class="ver-item${activa ? ' activa' : ''}">
+                    <span class="ver-n">${this._buildNumToVersion(b.n)}<br><span class="ver-fecha">${f}</span></span>
+                    ${activa ? '<span class="ver-badge">Publicada</span>'
+                             : `<button class="ver-btn" onclick="app._publicarVersionGestion(${b.n})">Publicar</button>`}
+                </div>`;
+            }).join('');
+        } catch (e) {
+            cont.innerHTML = '<div style="color:#e74c3c;font-size:12px;padding:8px 14px;">Error al cargar versiones</div>';
+        }
+    },
+
+    async _publicarVersionGestion(build) {
+        if (!confirm(`¿Publicar la ${this._buildNumToVersion(build)} para los demás de gestión?\n\nSolo recibirán esa versión hasta que publiques otra. Tú seguirás viendo la más reciente.`)) return;
+        try {
+            const resp = await fetch(VERSION_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ app: 'gestion', build })
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._mostrarToast('🚀 Publicada ' + this._buildNumToVersion(build), 3000);
+            this._cargarVersionesGestion();
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
     async _publicarVersion(build) {
@@ -7601,14 +7673,25 @@ const app = {
             }
             const lista = res.lista;
             const re = new RegExp('^' + RELEASE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
-            // Aquí todos reciben la última que haya. El reparto escalonado es
-            // para la app de los trabajadores, que es lo que decide "Versión
-            // para los usuarios"; a esta nunca se le publicó ninguna, así que
-            // quien no fuera el gestor se quedaba clavado en la que hubiera
-            // apuntada y no podía actualizar nunca. Los que entran aquí son
-            // los que llevan la aplicación: no hay a quién proteger de una
-            // versión recién salida.
+            // El gestor siempre ve la última, para poder probarla antes de
+            // soltársela a los demás; el resto reciben la que él haya
+            // publicado en "Versión para gestión". Esto ya existía y hubo que
+            // quitarlo porque no había forma de publicar ninguna: los demás se
+            // quedaban clavados para siempre en una versión que nunca llegaba
+            // a apuntarse. Ahora se publica desde ahí, y mientras no se
+            // publique ninguna todos reciben la más reciente, que es lo que
+            // hacía falta para no volver a dejar a nadie tirado.
+            const soyGestor = this._soyElGestor();
             let publicada = null;
+            if (!soyGestor) {
+                const pub = await this._buildPublicado();
+                if (!pub.ok) {
+                    if (showFeedback) this._mostrarToast(
+                        '⏳ No se ha podido comprobar qué versión toca instalar. Prueba más tarde.', 4500);
+                    return;
+                }
+                publicada = pub.build;
+            }
             let release = null, latestNum = 0, latestTag = '';
             (Array.isArray(lista) ? lista : []).forEach(r => {
                 const m = re.exec(r.tag_name || '');
