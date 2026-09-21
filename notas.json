@@ -79,5 +79,25 @@
       "nombre": "Guillermo Rios",
       "en": "2026-09-21T14:10:48.630Z"
     }
+  },
+  "20260921180705456-sa5jp-0": {
+    "id": "20260921180705456-sa5jp-0",
+    "email": "guillermo.rcxx@gmail.com",
+    "creado": "2026-09-21T18:07:05.456Z",
+    "nombre": "Guillermo Ríos Correa",
+    "conductor": "1234-5",
+    "mensajes": [
+      {
+        "de": "trabajador",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "✅ He leído el cambio de jornada: Se te asigna este servicio y horario: 05:30–13:00. Confirma como leído. Gracias.",
+        "adjuntos": [],
+        "en": "2026-09-21T18:07:05.456Z"
+      }
+    ],
+    "archivada": false,
+    "de": "trabajador",
+    "tipo": "gestion",
+    "estado": "pendiente"
   }
 }
