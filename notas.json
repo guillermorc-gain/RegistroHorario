@@ -89,18 +89,20 @@
         "texto": "Ggg",
         "adjuntos": [],
         "en": "2026-09-21T19:35:32.538Z"
+      },
+      {
+        "de": "gestor",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Tt",
+        "adjuntos": [],
+        "en": "2026-09-21T19:36:48.829Z"
       }
     ],
     "archivada": false,
     "de": "gestor",
     "tipo": "gestion",
     "gestor": "Guillermo Rios",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "g.rioscorrea@gmail.com",
-      "nombre": "Guillermo Ríos Correa",
-      "en": "2026-09-21T19:36:45.830Z"
-    }
+    "estado": "pendiente"
   },
   "20260921193621574-pfg86-0": {
     "id": "20260921193621574-pfg86-0",
