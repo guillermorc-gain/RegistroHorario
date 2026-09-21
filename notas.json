@@ -33,51 +33,5 @@
       "nombre": "Guillermo Ríos Correa",
       "en": "2026-09-21T14:07:14.062Z"
     }
-  },
-  "20260921140837251-d4nco-0": {
-    "id": "20260921140837251-d4nco-0",
-    "email": "guillermo.rc82@gmail.com",
-    "creado": "2026-09-21T14:08:37.251Z",
-    "nombre": "Guillermo Ríos Correa",
-    "conductor": "1418-3",
-    "mensajes": [
-      {
-        "de": "trabajador",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "👋",
-        "adjuntos": [],
-        "en": "2026-09-21T14:08:37.251Z"
-      },
-      {
-        "de": "guillermo.rc82@gmail.com",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Rr",
-        "adjuntos": [],
-        "en": "2026-09-21T14:09:05.809Z"
-      },
-      {
-        "de": "guillermo.rc82@gmail.com",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Fgg",
-        "adjuntos": [],
-        "en": "2026-09-21T14:09:22.315Z"
-      },
-      {
-        "de": "gestor",
-        "autor": "Guillermo Rios",
-        "texto": "nbjjhj",
-        "adjuntos": [],
-        "en": "2026-09-21T14:10:47.423Z"
-      }
-    ],
-    "archivada": false,
-    "de": "trabajador",
-    "tipo": "gestion",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "guillermo.rcvpn@gmail.com",
-      "nombre": "Guillermo Rios",
-      "en": "2026-09-21T14:10:48.630Z"
-    }
   }
 }
