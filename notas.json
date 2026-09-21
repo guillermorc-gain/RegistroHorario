@@ -67,7 +67,12 @@
     "de": "gestor",
     "tipo": "gestion",
     "gestor": "Guillermo Ríos Correa",
-    "estado": "pendiente"
+    "estado": "visto",
+    "vistoPor": {
+      "email": "guillermo.rcvpn@gmail.com",
+      "nombre": "Guillermo Rios",
+      "en": "2026-09-21T19:35:54.161Z"
+    }
   },
   "20260921193532538-95u5i-0": {
     "id": "20260921193532538-95u5i-0",
