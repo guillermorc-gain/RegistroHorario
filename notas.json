@@ -33,5 +33,26 @@
       "nombre": "Guillermo Ríos Correa",
       "en": "2026-09-21T14:07:14.062Z"
     }
+  },
+  "20260921182958129-mpe9f-0": {
+    "id": "20260921182958129-mpe9f-0",
+    "email": "guillermo.rcxx@gmail.com",
+    "creado": "2026-09-21T18:29:58.129Z",
+    "nombre": "Guillermo Ríos Correa",
+    "conductor": "1234-5",
+    "mensajes": [
+      {
+        "de": "gestor",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Krkfk",
+        "adjuntos": [],
+        "en": "2026-09-21T18:29:58.129Z"
+      }
+    ],
+    "archivada": false,
+    "de": "gestor",
+    "tipo": "gestion",
+    "gestor": "Guillermo Ríos Correa",
+    "estado": "pendiente"
   }
 }
