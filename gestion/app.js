@@ -483,9 +483,10 @@ const app = {
             this._iniciarSondeoChat();
             this._cargarNotasGestor();
             this.cargarDatos();
-            // Ya está dentro: el cartel de instalar sale ahora, no antes de
-            // saber en cuál de las dos aplicaciones está.
-            try { window._ofrecerInstalarSiToca?.(); } catch (_) {}
+            // Ya está dentro: ahora —y no antes de saber en cuál de las dos
+            // aplicaciones está— se le pregunta si se descarga la aplicación
+            // o sigue en el navegador.
+            this._preguntarModoSiToca();
         } catch(e) {
             this.mostrarAuth();
             this.mostrarMensaje('Error de red: ' + e.message, 'error');
@@ -8013,6 +8014,82 @@ const app = {
         catch (_) { return { ok: false }; }
     },
 
+    // ── Descargar la aplicación desde el navegador ──────────────────────────
+    //
+    // Antes esto instalaba la web como aplicación de Chrome. Eso dejaba un
+    // icono que abría el navegador disfrazado: sin avisos con la aplicación
+    // cerrada y sin nada de lo que trae el APK. Ahora lo que se ofrece es el
+    // APK de verdad, cogido de la última versión que le toque a esta
+    // aplicación —trabajador, gestión y desarrollador tienen cada una sus
+    // propias etiquetas y su propio reparto escalonado—.
+    async _urlApkMasReciente() {
+        try {
+            const res = await this._releases();
+            if (!res.ok) return null;
+            const re = new RegExp('^' + RELEASE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
+            // Al administrador se le ofrece la última aunque no esté
+            // publicada, igual que en el aviso de actualización.
+            const soyGestor = (this.usuarioActual?.email || '').toLowerCase() === SUPER_USER_EMAIL.toLowerCase();
+            let publicada = null;
+            if (!soyGestor) {
+                const pub = await this._buildPublicado();
+                if (!pub.ok) return null;
+                publicada = pub.build;
+            }
+            let release = null, mejor = 0;
+            (Array.isArray(res.lista) ? res.lista : []).forEach(r => {
+                const m = re.exec(r.tag_name || '');
+                if (!m) return;
+                const n = parseInt(m[1], 10);
+                if (publicada !== null && n > publicada) return;
+                if (n > mejor) { mejor = n; release = r; }
+            });
+            if (!release) return null;
+            const asset = release.assets?.find(a => a.name.endsWith('.apk'));
+            // Sin APK adjunto se abre la página de la versión: desde ahí
+            // puede bajarlo a mano en vez de quedarse sin nada.
+            return { url: asset?.browser_download_url || release.html_url,
+                     version: this._buildNumToVersion(mejor) };
+        } catch (_) { return null; }
+    },
+
+    _debePreguntarModo() {
+        if (window.Capacitor?.isNativePlatform?.()) return false;
+        // La de desarrollador va siempre por APK: no se sirve en la web.
+        if (ES_APP_DEV) return false;
+        const enIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        // En iPhone el APK no sirve de nada, así que no se le pregunta.
+        if (enIOS) return false;
+        if (window.navigator.standalone === true
+            || window.matchMedia('(display-mode: standalone)').matches) return false;
+        return !localStorage.getItem('modoUso');
+    },
+
+    _preguntarModoSiToca() {
+        if (!this._debePreguntarModo()) {
+            try { window._ofrecerInstalarSiToca?.(); } catch (_) {}
+            return;
+        }
+        const pant = document.getElementById('modoScreen');
+        if (!pant) { try { window._ofrecerInstalarSiToca?.(); } catch (_) {} return; }
+        pant.style.display = '';
+        // Qué versión se va a descargar, para que no sea un salto al vacío.
+        this._urlApkMasReciente().then(apk => {
+            const sub = document.getElementById('modoApkSub');
+            if (sub && apk?.version) sub.textContent = 'Última versión: ' + apk.version;
+        }).catch(() => {});
+    },
+
+    elegirModo(modo) {
+        try { localStorage.setItem('modoUso', modo); } catch (_) {}
+        const pant = document.getElementById('modoScreen');
+        if (pant) pant.style.display = 'none';
+        // El cartel de abajo se queda en los dos casos: si se ha descargado
+        // el APK y algo ha fallado, sigue teniendo el botón a mano.
+        try { window._ofrecerInstalarSiToca?.(); } catch (_) {}
+        if (modo === 'apk') this.instalarApp();
+    },
+
     async _checkForUpdates(showFeedback = false) {
         if (!window.Capacitor?.isNativePlatform?.()) return;
         if (typeof APP_VERSION === 'undefined' || APP_VERSION === '0') return;
@@ -8174,33 +8251,34 @@ const app = {
 
 app.init();
 
-window._deferredPrompt = null;
 const _isIOS        = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 const _isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
 
-// Ofrecer instalar antes de entrar no vale para nada: desde la pantalla de
+// Ofrecer la descarga antes de entrar no vale para nada: desde la pantalla de
 // "¿con cuál entras?" no se sabe cuál de las dos aplicaciones quiere, y son
 // dos distintas. Así que el cartel espera a que haya iniciado sesión: para
-// entonces ya está en la suya.
+// entonces ya está en la suya. Tampoco sale encima de la pantalla en la que
+// está eligiendo si se la descarga.
 function _puedeOfrecerInstalar() {
     if (_isStandalone) return false;
-    const rol = document.getElementById('rolScreen');
-    if (rol && rol.offsetParent !== null) return false;
+    for (const id of ['rolScreen', 'modoScreen']) {
+        const p = document.getElementById(id);
+        if (p && p.offsetParent !== null) return false;
+    }
     return !!(typeof app !== 'undefined' && app?.usuarioActual?.email);
 }
 
-// Se llama al entrar: si el navegador ya ofreció instalar mientras estaba en
-// la pantalla de elegir, el cartel sale ahora.
 window._ofrecerInstalarSiToca = function() {
-    if (!_puedeOfrecerInstalar()) return;
-    if (window._deferredPrompt) _showInstallBanner(false);
-    else if (_isIOS) _showInstallBanner(true);
+    _showInstallBanner(_isIOS);
 };
 
 function _showInstallBanner(ios) {
     if (!_puedeOfrecerInstalar()) return;
     const banner = document.getElementById('installBanner');
-    document.getElementById('installBannerMsg').textContent = ios ? 'Toca Compartir ↑ → "Añadir a inicio"' : 'Instala la app para acceso rápido';
+    const msg = document.getElementById('installBannerMsg');
+    if (msg) msg.textContent = ios
+        ? 'Toca Compartir ↑ → "Añadir a inicio"'
+        : 'Descarga el APK: avisa aunque esté cerrada';
     const bannerBtn = document.getElementById('installBannerBtn');
     if (bannerBtn) bannerBtn.style.display = ios ? 'none' : '';
     if (banner) banner.classList.add('show');
@@ -8208,20 +8286,29 @@ function _showInstallBanner(ios) {
     if (sec) sec.style.display = '';
 }
 
-window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); window._deferredPrompt = e; _showInstallBanner(false); });
-window.addEventListener('appinstalled', () => {
-    window._deferredPrompt = null;
-    const banner = document.getElementById('installBanner'); if (banner) banner.classList.remove('show');
-    const sec = document.getElementById('installSection'); if (sec) sec.style.display = 'none';
-});
+// Chrome ofrece por su cuenta instalar la web como aplicación suya. Eso es
+// justo lo que no queremos —el icono abriría el navegador disfrazado—, así
+// que se le corta el paso y el único ofrecimiento es el APK.
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); });
 
+// Descargar el APK de la última versión que le toque.
 app.instalarApp = async function() {
-    if (!window._deferredPrompt) { alert(_isIOS ? 'En Safari:\n1. Toca Compartir (□↑)\n2. "Añadir a pantalla de inicio"\n3. Pulsa "Añadir"' : 'Usa el menú del navegador → "Instalar app".'); return; }
-    window._deferredPrompt.prompt();
-    const { outcome } = await window._deferredPrompt.userChoice;
-    if (outcome === 'accepted') { const banner = document.getElementById('installBanner'); if (banner) banner.classList.remove('show'); const sec = document.getElementById('installSection'); if (sec) sec.style.display = 'none'; }
-    window._deferredPrompt = null;
+    if (_isIOS) {
+        alert('En iPhone no hay aplicación que instalar.\n\nPara tenerla a mano:\n1. Toca Compartir (□↑)\n2. "Añadir a pantalla de inicio"');
+        return;
+    }
+    const btn = document.getElementById('installBannerBtn');
+    const antes = btn ? btn.textContent : '';
+    if (btn) { btn.textContent = 'Buscando…'; btn.disabled = true; }
+    const apk = await app._urlApkMasReciente();
+    if (btn) { btn.textContent = antes; btn.disabled = false; }
+    if (!apk) {
+        app._mostrarToast?.('❌ No se ha podido encontrar la aplicación para descargar. Prueba en unos minutos.', 5000);
+        return;
+    }
+    app._mostrarToast?.('⬇️ Descargando ' + apk.version + '…', 4000);
+    // Los APK de GitHub vienen con Content-Disposition: se descargan sin
+    // sacarle de la página.
+    window.location.href = apk.url;
 };
 app.ocultarInstallBanner = function() { const b = document.getElementById('installBanner'); if (b) b.classList.remove('show'); };
-
-if (_isIOS && !_isStandalone) setTimeout(() => _showInstallBanner(true), 3000);
