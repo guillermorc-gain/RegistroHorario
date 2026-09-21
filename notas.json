@@ -251,6 +251,13 @@
         "texto": "Hola",
         "adjuntos": [],
         "en": "2026-09-21T13:47:06.019Z"
+      },
+      {
+        "de": "guillermo.rc82@gmail.com",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Jek",
+        "adjuntos": [],
+        "en": "2026-09-21T14:07:12.837Z"
       }
     ],
     "archivada": false,
@@ -259,11 +266,6 @@
     "deEmail": "guillermo.rc82@gmail.com",
     "deNombre": "Guillermo Ríos Correa",
     "deConductor": "1418-3",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "guillermo.rcxx@gmail.com",
-      "nombre": "Guillermo Ríos Correa",
-      "en": "2026-09-21T13:47:36.794Z"
-    }
+    "estado": "pendiente"
   }
 }
