@@ -949,14 +949,14 @@ const app = {
         if (horas < 0) { alert('❌ Las horas no pueden ser negativas'); return; }
         const horaInicio     = document.getElementById('horaInicio').value;
         const horaFin        = document.getElementById('horaFin').value;
-        const esNoche        = document.getElementById('nocheToggle').checked;
         const esPR           = this.prActivo;
         const esExtra        = this.extraActivo;
+        const esSinAsistencia = this.sinAsistenciaActivo;
         const extraDestino   = esExtra ? this._extraDestino() : null;
-        const horasNocturnas = esNoche ? (parseFloat(document.getElementById('horasNocturnas').value) || 0) : 0;
-        const precioNoche    = esNoche ? (parseFloat(document.getElementById('precioNoche').value) || 0) : 0;
+        const horasNocturnas = parseFloat(document.getElementById('horasNocturnas').value) || 0;
+        const precioNoche    = horasNocturnas > 0 ? (parseFloat(document.getElementById('precioNoche').value) || 0) : 0;
         const extraNoche     = Math.round(horasNocturnas * precioNoche * 100) / 100;
-        if (esNoche && horasNocturnas > horas) { alert('❌ Las horas nocturnas no pueden superar las horas totales'); return; }
+        if (horasNocturnas > horas) { alert('❌ Las horas nocturnas no pueden superar las horas totales'); return; }
 
         try {
             const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
@@ -973,11 +973,12 @@ const app = {
                 fecha: fechaFormato, horas,
                 timestamp: new Date(fecha + 'T12:00:00').getTime(),
                 ...(horaInicio && horaFin ? { horaInicio, horaFin } : {}),
-                ...(esNoche && horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
+                ...(horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
                 ...(esPR ? { pr: true } : {}),
                 ...(esFestivo ? { festivo: true } : {}),
                 ...(esExtra ? { extraManual: true, extraDestino } : {}),
-                ...(esVacaciones ? { vacaciones: true } : {})
+                ...(esVacaciones ? { vacaciones: true } : {}),
+                ...(esSinAsistencia ? { sinAsistencia: true } : {})
             };
             if (esPR && this._prUsados(datos.historial) > this.PR_ANUALES) {
                 delete datos.historial[registroId];
@@ -1387,34 +1388,15 @@ const app = {
         if (mins < 0) mins += 1440;
         const horas = Math.round(mins / 60 * 2) / 2;
         if (horas > 0) document.getElementById('horasInput').value = horas;
+        // Las horas nocturnas salen solas del horario: sin botón que las active.
         const nocturnas = this._calcHorasNocturnas(inicio, fin);
-        const nocheExtra = document.getElementById('nocheExtra');
-        const nocheBtn   = document.querySelector('.noche-compact');
-        // Auto-activate luna if start hour is in nocturnal range (21–06)
-        const autoLuna = h1 >= 21 || h1 < 6;
-        if (nocturnas > 0 || autoLuna) {
-            document.getElementById('nocheToggle').checked = true;
-            if (nocheBtn) nocheBtn.classList.add('active');
-            nocheExtra.classList.add('visible');
-            if (nocturnas > 0) {
-                document.getElementById('horasNocturnas').value = nocturnas;
-                if (this.precioNocheDefault > 0) document.getElementById('precioNoche').value = this.precioNocheDefault;
-                this.calcularExtra();
-            }
+        if (nocturnas > 0) {
+            document.getElementById('horasNocturnas').value = nocturnas;
+            if (this.precioNocheDefault > 0) document.getElementById('precioNoche').value = this.precioNocheDefault;
         } else {
-            document.getElementById('nocheToggle').checked = false;
-            if (nocheBtn) nocheBtn.classList.remove('active');
-            nocheExtra.classList.remove('visible');
             document.getElementById('horasNocturnas').value = '';
-            document.getElementById('nocheResumen').textContent = '';
         }
-    },
-
-    clickNocheCompact() {
-        const cb = document.getElementById('nocheToggle');
-        cb.checked = !cb.checked;
-        document.querySelector('.noche-compact')?.classList.toggle('active', cb.checked);
-        this.toggleNoche();
+        this.calcularExtra();
     },
 
     // PR = Permiso Retribuido. Two per calendar year, counted down as they are used.
@@ -1802,19 +1784,28 @@ const app = {
         this._guardarOrdenTabs();
     },
 
-    toggleNoche() {
-        const on = document.getElementById('nocheToggle').checked;
-        document.getElementById('nocheExtra').classList.toggle('visible', on);
-        if (on && this.precioNocheDefault > 0 && !document.getElementById('precioNoche').value)
-            document.getElementById('precioNoche').value = this.precioNocheDefault;
-        if (!on) { document.getElementById('nocheResumen').textContent = ''; document.getElementById('horasNocturnas').value = ''; }
-    },
-
     calcularExtra() {
         const hN = parseFloat(document.getElementById('horasNocturnas').value) || 0;
         const precio = parseFloat(document.getElementById('precioNoche').value) || 0;
+        document.getElementById('nocheExtra')?.classList.toggle('visible', hN > 0);
+        const badge = document.getElementById('horasNocheBadge');
+        if (badge) {
+            badge.classList.toggle('visible', hN > 0);
+            badge.textContent = hN > 0 ? `🌙 ${String(hN).replace('.', ',')}h` : '';
+        }
         document.getElementById('nocheResumen').textContent =
             (hN > 0 && precio > 0) ? `Extra: ${hN}h × ${precio}€ = ${(hN * precio).toFixed(2)}€` : '';
+    },
+
+    // "No fui a trabajar": ese día no cobra el plus de asistencia, pero las
+    // horas puestas siguen contando como jornada efectiva.
+    sinAsistenciaActivo: false,
+
+    clickSinAsistencia() {
+        this.sinAsistenciaActivo = !this.sinAsistenciaActivo;
+        document.getElementById('noAsistCompact')?.classList.toggle('active', this.sinAsistenciaActivo);
+        const cb = document.getElementById('sinAsistenciaToggle');
+        if (cb) cb.checked = this.sinAsistenciaActivo;
     },
 
     calcularExtraModal() {
@@ -1912,8 +1903,11 @@ const app = {
         document.getElementById('horasNocturnas').value = '';
         document.getElementById('precioNoche').value    = '';
         document.getElementById('nocheResumen').textContent = '';
-        document.getElementById('nocheToggle').checked = false;
-        document.querySelector('.noche-compact')?.classList.remove('active');
+        const badge = document.getElementById('horasNocheBadge');
+        if (badge) { badge.classList.remove('visible'); badge.textContent = ''; }
+        this.sinAsistenciaActivo = false;
+        document.getElementById('noAsistCompact')?.classList.remove('active');
+        const nat = document.getElementById('sinAsistenciaToggle'); if (nat) nat.checked = false;
         this.prActivo = false;
         document.getElementById('prCompact').classList.remove('active');
         document.getElementById('prToggle').checked = false;
