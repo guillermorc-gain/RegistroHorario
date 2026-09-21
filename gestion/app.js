@@ -141,6 +141,7 @@ const app = {
         this.setupUI();
         if (this.darkMode) this.aplicarDarkMode();
         this._restaurarTabs();
+        this._initSwipeTabs();
         this._restaurarMensual();
         this._restaurarSecciones();
         this._cargarCuadrante();
@@ -1723,6 +1724,33 @@ const app = {
         if (idx === 1) this._cargarCuadrante();
         if (idx === 2) this._cargarNotasGestor();
         if (idx === 3) this._cargarConductores();
+    },
+
+    // El dedo puede arrastrar tanto sobre el orden visual de la barra
+    // (puede estar reordenada) como quedarse quieto sobre algo que se
+    // desplaza de lado (el propio _sobreCarrusel se encarga de eso).
+    _initSwipeTabs() {
+        const cont = document.getElementById('appContent');
+        if (!cont || cont._swipeTabs) return;
+        cont._swipeTabs = true;
+        let x0 = 0, y0 = 0, activo = false;
+        cont.addEventListener('touchstart', e => {
+            if (e.touches.length !== 1 || this._sobreCarrusel(e.target, cont)) { activo = false; return; }
+            x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; activo = true;
+        }, { passive: true });
+        cont.addEventListener('touchend', e => {
+            if (!activo) return;
+            activo = false;
+            const t = e.changedTouches[0];
+            const dx = t.clientX - x0, dy = t.clientY - y0;
+            if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+            const btns = [...document.querySelectorAll('#tabBar .tab-btn')];
+            const actualIdx = btns.findIndex(b => b.classList.contains('active'));
+            if (actualIdx === -1) return;
+            const destino = dx < 0 ? actualIdx + 1 : actualIdx - 1;
+            if (destino < 0 || destino >= btns.length) return;
+            this.switchTab(parseInt(btns[destino].dataset.tab, 10));
+        }, { passive: true });
     },
 
     _tabDragStart(e) {
