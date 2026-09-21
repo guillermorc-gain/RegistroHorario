@@ -19,6 +19,13 @@
         "texto": "Jek",
         "adjuntos": [],
         "en": "2026-09-21T14:07:12.837Z"
+      },
+      {
+        "de": "guillermo.rc82@gmail.com",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Nek",
+        "adjuntos": [],
+        "en": "2026-09-21T18:31:57.266Z"
       }
     ],
     "archivada": false,
@@ -27,12 +34,7 @@
     "deEmail": "guillermo.rc82@gmail.com",
     "deNombre": "Guillermo Ríos Correa",
     "deConductor": "1418-3",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "guillermo.rc82@gmail.com",
-      "nombre": "Guillermo Ríos Correa",
-      "en": "2026-09-21T14:07:14.062Z"
-    }
+    "estado": "pendiente"
   },
   "20260921182958129-mpe9f-0": {
     "id": "20260921182958129-mpe9f-0",
