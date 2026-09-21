@@ -174,22 +174,20 @@ const app = {
         if (el) el.style.display = 'flex';
     },
 
+    // Esto se abre desde el navegador, así que lo que hace es llevar a la web
+    // que toca. Antes intentaba abrir la aplicación con un enlace de tipo
+    // intent que llevaba escrito a dónde ir si no estaba instalada, pero ese
+    // "si no está" no lo respetan todos los navegadores: al que no la tenía le
+    // salía la pantalla de error y se quedaba sin poder entrar por ningún
+    // lado. Quien la tenga instalada la abre desde su icono, que para eso está.
     elegirRol(rol) {
         const web = rol === 'gestion'
             ? 'https://registro-horario-emt.vercel.app/gestion/'
             : 'https://registro-horario-emt.vercel.app/?app=trabajador';
-        const paquete = rol === 'gestion'
-            ? 'com.guillermorc.gestionemt' : 'com.guillermorc.horasemt';
-        // En Android el propio enlace lleva escrito a dónde ir si la app no
-        // está instalada, así que no hay que andar adivinando si lo está.
-        if (/Android/i.test(navigator.userAgent)) {
-            window.location.href = 'intent://localhost/#Intent;scheme=https;package=' + paquete
-                + ';S.browser_fallback_url=' + encodeURIComponent(web) + ';end';
-            return;
-        }
         if (rol === 'gestion') { window.location.href = web; return; }
         const el = document.getElementById('rolScreen');
         if (el) el.style.display = 'none';
+        try { history.replaceState(null, '', '/?app=trabajador'); } catch (_) {}
     },
 
     _migrarUbicacionAntigua() {
@@ -568,7 +566,10 @@ const app = {
     _rebotarAGestion(pkgDestino, searchParams) {
         if (!['com.guillermorc.gestionemt','com.guillermorc.devemt'].includes(pkgDestino)) return false;
         if (window.Capacitor?.isNativePlatform?.()) return false;
-        if (/Android/i.test(navigator.userAgent)) return false;   // ahí se vuelve por intent
+        // En Android, lo que sale de la app vuelve a la app por su enlace; lo
+        // que sale del navegador se queda en el navegador y hay que llevarlo
+        // a /gestion/, que si no acaba entrando en la app de trabajador.
+        if (/Android/i.test(navigator.userAgent) && this._vieneDeLaApp(searchParams)) return false;
         if (window.location.pathname.startsWith('/gestion')) return false;
         window.location.replace('/gestion/?' + searchParams.toString());
         return true;
