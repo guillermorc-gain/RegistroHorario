@@ -61,17 +61,19 @@
         "texto": "Jkkk",
         "adjuntos": [],
         "en": "2026-09-21T18:32:23.253Z"
+      },
+      {
+        "de": "gestor",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "Jkkk",
+        "adjuntos": [],
+        "en": "2026-09-21T18:32:24.112Z"
       }
     ],
     "archivada": false,
     "de": "gestor",
     "tipo": "gestion",
     "gestor": "Guillermo Ríos Correa",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "g.rioscorrea@gmail.com",
-      "nombre": "Guillermo Ríos Correa",
-      "en": "2026-09-21T18:32:24.250Z"
-    }
+    "estado": "pendiente"
   }
 }
