@@ -1600,17 +1600,17 @@ const app = {
     },
 
     // A la app de gestión entra más gente que el gestor. Los usuarios de
-    // prueba y el reparto de versiones son cosa suya y de nadie más, así que
-    // para el resto de cuentas ni salen las secciones ni existen los de
-    // prueba en ninguna lista. El servidor ya lo exigía; esto es para que
-    // tampoco se vean.
+    // prueba, el reparto de versiones y quién puede entrar son cosa suya y
+    // de nadie más, así que para el resto de cuentas ni salen las secciones
+    // ni existen los de prueba en ninguna lista. El servidor ya lo exigía;
+    // esto es para que tampoco se vean.
     _soyElGestor() {
         return (this.usuarioActual?.email || '').toLowerCase() === SUPER_USER_EMAIL.toLowerCase();
     },
 
     _aplicarPermisosGestor() {
         const soy = this._soyElGestor();
-        ['sectionVersiones', 'sectionPrueba'].forEach(id => {
+        ['sectionVersiones', 'sectionPrueba', 'sectionAcceso'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = soy ? '' : 'none';
         });
