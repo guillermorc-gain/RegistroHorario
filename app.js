@@ -5901,9 +5901,26 @@ const app = {
         return mejor || loc.name || '';
     },
 
+    // ¿Está ya cubierto el día? Con la jornada entera registrada —o estando
+    // de vacaciones, de baja o de festivo— no queda nada que avisar. Va por
+    // delante de la comparación por lugares a propósito: esa depende de que
+    // el nombre de la ubicación guardada coincida con el de la jornada, y
+    // cuando no coincidían el aviso no callaba en todo el día.
+    _jornadaCompletaHoy() {
+        const hoy = this._hoyId();
+        let horas = 0, sinJornada = false;
+        Object.entries(this._historialFull || {}).forEach(([id, r]) => {
+            if (this._fechaDeId(id) !== hoy) return;
+            if (r.vacaciones || r.be || r.festivo) sinJornada = true;
+            horas += parseFloat(r.horas) || 0;
+        });
+        return sinJornada || horas >= (this.jornadaHoras || 7.5) - 0.01;
+    },
+
     // ¿Toca avisar por este lugar? `i` es su sitio en la lista de ubicaciones.
     _tocaAvisar(i) {
         const hoy = this._hoyId();
+        if (this._jornadaCompletaHoy()) return false;
         // Una jornada a medias es la que se ha empezado y no se ha cerrado:
         // mientras no tenga salida, sigue teniendo sentido avisar.
         if (this.avisoLugar === 'una') {
@@ -5922,6 +5939,10 @@ const app = {
         const sitios = [...this._lugaresRegistradosHoy()].join('|');
         window.AndroidBridge?.saveToPrefs?.('avisoLugar', this.avisoLugar);
         window.AndroidBridge?.saveToPrefs?.('lugaresHoy', `${hoy}~${sitios}`);
+        // Con el día ya cubierto el aviso nativo tampoco tiene que saltar, y
+        // con la app cerrada esto es lo único que puede mirar.
+        window.AndroidBridge?.saveToPrefs?.('jornadaCompleta',
+            this._jornadaCompletaHoy() ? hoy : '');
     },
 
     _getWorkLocations() { return JSON.parse(localStorage.getItem('workLocations') || '[]'); },

@@ -284,6 +284,9 @@ jobs:
                       public void scheduleWorkNotification(String horaInicio, String horaFin) {
                           SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
                           String today = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(new java.util.Date());
+                          // Con el día entero registrado no se avisa de nada más,
+                          // esté como esté el modo de aviso.
+                          if (today.equals(prefs.getString("jornadaCompleta", ""))) return;
                           // Con "cada lugar" la decisión ya la ha tomado la app,
                           // que es la que sabe en cuál está; aquí solo se
                           // comprueba el caso simple de una vez al día.
@@ -705,6 +708,10 @@ jobs:
                           if (!ok) return;
                       }
                       String today = new java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(new java.util.Date());
+                      // Con el día entero registrado no hay nada que avisar, y
+                      // así no depende de que el nombre del aro coincida con el
+                      // del lugar que se apuntó en la jornada.
+                      if (today.equals(prefs.getString("jornadaCompleta", ""))) return;
                       // Con "una vez al día" basta con saber si ya registró hoy.
                       // Con "cada lugar" hay que mirar en cuál: no se repite
                       // donde ya fichó, pero sí se avisa en uno nuevo.
