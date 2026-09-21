@@ -1385,13 +1385,13 @@
     "nombre": "Guillermo Ríos Correa",
     "conductor": "1234-5",
     "avatar": null,
-    "version": "build-274",
+    "version": "build-275",
     "horasMes": 14,
     "horasTotales": 14,
     "diasMes": 3,
     "turno": "T",
     "puesto": "",
-    "actualizado": "2026-09-21T13:34:29.888Z",
+    "actualizado": "2026-09-21T13:44:57.078Z",
     "horaInicio": "18:00",
     "horaFin": "22:00",
     "horarioDe": "anterior",
@@ -1402,7 +1402,7 @@
         "i": "17:00",
         "o": "22:00",
         "n": 1,
-        "pu": "Taller"
+        "pu": "Son Rossinyol"
       },
       {
         "f": "20260917",
@@ -1410,7 +1410,7 @@
         "i": "17:00",
         "o": "22:00",
         "n": 1,
-        "pu": "Taller"
+        "pu": "Son Rossinyol"
       },
       {
         "f": "20260918",
@@ -1418,7 +1418,7 @@
         "i": "18:00",
         "o": "22:00",
         "n": 1,
-        "pu": "Taller"
+        "pu": "Son Rossinyol"
       }
     ],
     "horasAnuales": 1700,
@@ -1458,9 +1458,9 @@
     },
     "tramosDia": {},
     "avisoVisto": {
-      "clave": "20260921|Calle|05:30–13:00",
-      "texto": "Ahora te toca en Calle · Horario 05:30–13:00",
-      "en": "2026-09-21T13:25:24.295Z"
+      "clave": "20260921|Taller|20:00–03:00",
+      "texto": "Ahora te toca en Taller · Horario 20:00–03:00",
+      "en": "2026-09-21T13:44:57.078Z"
     }
   },
   "prueba-1789758756867@prueba.local": {
