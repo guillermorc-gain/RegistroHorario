@@ -3373,7 +3373,7 @@ const app = {
     _renderCuadranteTrab() {
         const cont = document.getElementById('ctList');
         if (!cont) return;
-        const lista = Object.values(this._conductores || {});
+        const lista = Object.values(this._conductores || {}).filter(u => !u.oculto);
         this._renderOrdenCuad();
         const cnt = document.getElementById('ctCnt');
         if (cnt) cnt.textContent = lista.length ? `${lista.length}` : '';
@@ -4612,7 +4612,7 @@ const app = {
 
         // Aplanar: una entrada por trabajador y día
         const filas = [];
-        Object.values(this._conductores || {}).forEach(u => {
+        Object.values(this._conductores || {}).filter(u => !u.oculto).forEach(u => {
             (u.jornadas || []).forEach(j => filas.push({
                 f: j.f, horas: j.h || 0, ini: j.i || '', fin: j.o || '',
                 extra: j.x === 1, festivo: !!j.fe, vac: !!j.v, pr: !!j.p, be: !!j.b,
@@ -5292,7 +5292,7 @@ const app = {
             btnHoy.title = off === 0 ? 'Elegir día' : 'Volver a hoy';
         }
 
-        const lista    = Object.values(this._conductores || {});
+        const lista    = Object.values(this._conductores || {}).filter(u => !u.oculto);
         // Los que no tienen lugar asignado también salen, en su propio grupo:
         // si no, un trabajador nuevo se quedaba invisible hasta asignárselo.
         const SIN = 'Sin asignar';
