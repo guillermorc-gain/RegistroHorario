@@ -18,8 +18,9 @@ const ADMIN_EMAIL  = 'g.rioscorrea@gmail.com';
 const MAX_MESES    = 36;      // tres años; más no se mira nunca
 const MAX_LINEAS   = 30;
 const MAX_TEXTO    = 60;
-// Un mes normal es AAAAMM; las pagas extra son AAAAEJ (julio) y AAAAED
-// (diciembre) — no son un mes del calendario, así que van con su propia clave.
+// Un mes es AAAAMM. El formato AAAAEJ/AAAAED (paga extra como nómina
+// aparte) ya no se genera, pero se sigue aceptando para no romper una que
+// ya estuviera guardada de cuando existía.
 const MES_RE       = /^(\d{6}|\d{4}(?:EJ|ED))$/;
 
 const ghHeaders = () => ({
@@ -101,6 +102,9 @@ function limpiarNomina(n) {
     pctBienios: numero(n?.pctBienios, 100),
     sindicato: numero(n?.sindicato, 9999),
     prorrata:  numero(n?.prorrata, 99999),
+    // Julio y diciembre llevan la paga extra activada por defecto; solo se
+    // guarda cuando se desactiva a mano.
+    ...(n?.pagaExtra === false ? { pagaExtra: false } : {}),
     tipos: {
       cc:        numero(t.cc, 100),
       desempleo: numero(t.desempleo, 100),

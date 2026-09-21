@@ -25,7 +25,7 @@
 const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.googleusercontent.com';
 // drive.file is needed on top of appdata: appdata can only write to a hidden
 // folder, so the monthly export could not create a visible "Movilidad Emt".
-const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file profile email';
+const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send profile email';
 const AUTH_SCOPE       = 'profile email';
 // Turnos de cada puesto. La hora de entrada registrada decide en cuál cae.
 let PUESTOS_DEFINIDOS = ['Son Rossinyol', 'Control', 'Calle', 'Taller', 'Anselmo Clavé'];
@@ -141,6 +141,7 @@ const app = {
         this.setupUI();
         if (this.darkMode) this.aplicarDarkMode();
         this._restaurarTabs();
+        this._initSwipeTabs();
         this._restaurarMensual();
         this._restaurarSecciones();
         this._cargarCuadrante();
@@ -949,14 +950,14 @@ const app = {
         if (horas < 0) { alert('❌ Las horas no pueden ser negativas'); return; }
         const horaInicio     = document.getElementById('horaInicio').value;
         const horaFin        = document.getElementById('horaFin').value;
-        const esNoche        = document.getElementById('nocheToggle').checked;
         const esPR           = this.prActivo;
         const esExtra        = this.extraActivo;
+        const esSinAsistencia = this.sinAsistenciaActivo;
         const extraDestino   = esExtra ? this._extraDestino() : null;
-        const horasNocturnas = esNoche ? (parseFloat(document.getElementById('horasNocturnas').value) || 0) : 0;
-        const precioNoche    = esNoche ? (parseFloat(document.getElementById('precioNoche').value) || 0) : 0;
+        const horasNocturnas = parseFloat(document.getElementById('horasNocturnas').value) || 0;
+        const precioNoche    = horasNocturnas > 0 ? (parseFloat(document.getElementById('precioNoche').value) || 0) : 0;
         const extraNoche     = Math.round(horasNocturnas * precioNoche * 100) / 100;
-        if (esNoche && horasNocturnas > horas) { alert('❌ Las horas nocturnas no pueden superar las horas totales'); return; }
+        if (horasNocturnas > horas) { alert('❌ Las horas nocturnas no pueden superar las horas totales'); return; }
 
         try {
             const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
@@ -973,11 +974,12 @@ const app = {
                 fecha: fechaFormato, horas,
                 timestamp: new Date(fecha + 'T12:00:00').getTime(),
                 ...(horaInicio && horaFin ? { horaInicio, horaFin } : {}),
-                ...(esNoche && horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
+                ...(horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
                 ...(esPR ? { pr: true } : {}),
                 ...(esFestivo ? { festivo: true } : {}),
                 ...(esExtra ? { extraManual: true, extraDestino } : {}),
-                ...(esVacaciones ? { vacaciones: true } : {})
+                ...(esVacaciones ? { vacaciones: true } : {}),
+                ...(esSinAsistencia ? { sinAsistencia: true } : {})
             };
             if (esPR && this._prUsados(datos.historial) > this.PR_ANUALES) {
                 delete datos.historial[registroId];
@@ -1387,34 +1389,15 @@ const app = {
         if (mins < 0) mins += 1440;
         const horas = Math.round(mins / 60 * 2) / 2;
         if (horas > 0) document.getElementById('horasInput').value = horas;
+        // Las horas nocturnas salen solas del horario: sin botón que las active.
         const nocturnas = this._calcHorasNocturnas(inicio, fin);
-        const nocheExtra = document.getElementById('nocheExtra');
-        const nocheBtn   = document.querySelector('.noche-compact');
-        // Auto-activate luna if start hour is in nocturnal range (21–06)
-        const autoLuna = h1 >= 21 || h1 < 6;
-        if (nocturnas > 0 || autoLuna) {
-            document.getElementById('nocheToggle').checked = true;
-            if (nocheBtn) nocheBtn.classList.add('active');
-            nocheExtra.classList.add('visible');
-            if (nocturnas > 0) {
-                document.getElementById('horasNocturnas').value = nocturnas;
-                if (this.precioNocheDefault > 0) document.getElementById('precioNoche').value = this.precioNocheDefault;
-                this.calcularExtra();
-            }
+        if (nocturnas > 0) {
+            document.getElementById('horasNocturnas').value = nocturnas;
+            if (this.precioNocheDefault > 0) document.getElementById('precioNoche').value = this.precioNocheDefault;
         } else {
-            document.getElementById('nocheToggle').checked = false;
-            if (nocheBtn) nocheBtn.classList.remove('active');
-            nocheExtra.classList.remove('visible');
             document.getElementById('horasNocturnas').value = '';
-            document.getElementById('nocheResumen').textContent = '';
         }
-    },
-
-    clickNocheCompact() {
-        const cb = document.getElementById('nocheToggle');
-        cb.checked = !cb.checked;
-        document.querySelector('.noche-compact')?.classList.toggle('active', cb.checked);
-        this.toggleNoche();
+        this.calcularExtra();
     },
 
     // PR = Permiso Retribuido. Two per calendar year, counted down as they are used.
@@ -1743,6 +1726,33 @@ const app = {
         if (idx === 3) this._cargarConductores();
     },
 
+    // El dedo puede arrastrar tanto sobre el orden visual de la barra
+    // (puede estar reordenada) como quedarse quieto sobre algo que se
+    // desplaza de lado (el propio _sobreCarrusel se encarga de eso).
+    _initSwipeTabs() {
+        const cont = document.getElementById('appContent');
+        if (!cont || cont._swipeTabs) return;
+        cont._swipeTabs = true;
+        let x0 = 0, y0 = 0, activo = false;
+        cont.addEventListener('touchstart', e => {
+            if (e.touches.length !== 1 || this._sobreCarrusel(e.target, cont)) { activo = false; return; }
+            x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; activo = true;
+        }, { passive: true });
+        cont.addEventListener('touchend', e => {
+            if (!activo) return;
+            activo = false;
+            const t = e.changedTouches[0];
+            const dx = t.clientX - x0, dy = t.clientY - y0;
+            if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+            const btns = [...document.querySelectorAll('#tabBar .tab-btn')];
+            const actualIdx = btns.findIndex(b => b.classList.contains('active'));
+            if (actualIdx === -1) return;
+            const destino = dx < 0 ? actualIdx + 1 : actualIdx - 1;
+            if (destino < 0 || destino >= btns.length) return;
+            this.switchTab(parseInt(btns[destino].dataset.tab, 10));
+        }, { passive: true });
+    },
+
     _tabDragStart(e) {
         this._dragSrcTab = e.currentTarget;
         e.currentTarget.classList.add('dragging');
@@ -1802,19 +1812,28 @@ const app = {
         this._guardarOrdenTabs();
     },
 
-    toggleNoche() {
-        const on = document.getElementById('nocheToggle').checked;
-        document.getElementById('nocheExtra').classList.toggle('visible', on);
-        if (on && this.precioNocheDefault > 0 && !document.getElementById('precioNoche').value)
-            document.getElementById('precioNoche').value = this.precioNocheDefault;
-        if (!on) { document.getElementById('nocheResumen').textContent = ''; document.getElementById('horasNocturnas').value = ''; }
-    },
-
     calcularExtra() {
         const hN = parseFloat(document.getElementById('horasNocturnas').value) || 0;
         const precio = parseFloat(document.getElementById('precioNoche').value) || 0;
+        document.getElementById('nocheExtra')?.classList.toggle('visible', hN > 0);
+        const badge = document.getElementById('horasNocheBadge');
+        if (badge) {
+            badge.classList.toggle('visible', hN > 0);
+            badge.textContent = hN > 0 ? `🌙 ${String(hN).replace('.', ',')}h` : '';
+        }
         document.getElementById('nocheResumen').textContent =
             (hN > 0 && precio > 0) ? `Extra: ${hN}h × ${precio}€ = ${(hN * precio).toFixed(2)}€` : '';
+    },
+
+    // "No fui a trabajar": ese día no cobra el plus de asistencia, pero las
+    // horas puestas siguen contando como jornada efectiva.
+    sinAsistenciaActivo: false,
+
+    clickSinAsistencia() {
+        this.sinAsistenciaActivo = !this.sinAsistenciaActivo;
+        document.getElementById('noAsistCompact')?.classList.toggle('active', this.sinAsistenciaActivo);
+        const cb = document.getElementById('sinAsistenciaToggle');
+        if (cb) cb.checked = this.sinAsistenciaActivo;
     },
 
     calcularExtraModal() {
@@ -1912,8 +1931,11 @@ const app = {
         document.getElementById('horasNocturnas').value = '';
         document.getElementById('precioNoche').value    = '';
         document.getElementById('nocheResumen').textContent = '';
-        document.getElementById('nocheToggle').checked = false;
-        document.querySelector('.noche-compact')?.classList.remove('active');
+        const badge = document.getElementById('horasNocheBadge');
+        if (badge) { badge.classList.remove('visible'); badge.textContent = ''; }
+        this.sinAsistenciaActivo = false;
+        document.getElementById('noAsistCompact')?.classList.remove('active');
+        const nat = document.getElementById('sinAsistenciaToggle'); if (nat) nat.checked = false;
         this.prActivo = false;
         document.getElementById('prCompact').classList.remove('active');
         document.getElementById('prToggle').checked = false;
@@ -3633,18 +3655,25 @@ const app = {
     zoomCuadrante(ev) {
         const img = document.getElementById('cuadVisorImg');
         if (!img) return;
+        const yaAmpliada = img.classList.contains('zoom');
+        // La proporción del punto tocado se toma antes de ampliar, que es
+        // cuando el tamaño de la imagen todavía es el pequeño.
+        const ratioX = !yaAmpliada && ev ? ev.offsetX / (img.clientWidth  || 1) : 0.5;
+        const ratioY = !yaAmpliada && ev ? ev.offsetY / (img.clientHeight || 1) : 0.5;
         const ampliada = img.classList.toggle('zoom');
         const ayuda = document.getElementById('cuadVisorAyuda');
         if (ayuda) ayuda.textContent = ampliada
             ? 'Arrastra para moverte · toca para reducir'
             : 'Toca la imagen para ampliar · pellizca para acercar';
-        // Al ampliar, centrar en el punto tocado
-        if (ampliada && ev) {
-            const visor = document.getElementById('cuadVisor');
+        const visor = document.getElementById('cuadVisor');
+        if (ampliada) {
             requestAnimationFrame(() => {
-                visor.scrollLeft = (img.scrollWidth - visor.clientWidth) / 2;
-                visor.scrollTop  = Math.max(0, ev.offsetY * (img.clientHeight / (img.clientHeight || 1)) - visor.clientHeight / 2);
+                visor.scrollLeft = img.scrollWidth  * ratioX - visor.clientWidth  / 2;
+                visor.scrollTop  = img.scrollHeight * ratioY - visor.clientHeight / 2;
             });
+        } else {
+            visor.scrollLeft = 0;
+            visor.scrollTop = 0;
         }
     },
 
@@ -4461,10 +4490,62 @@ const app = {
         this._enviarAContacto(email);
     },
 
+    // Un MIME de verdad con el adjunto dentro, codificado en base64url como
+    // pide la API de Gmail.
+    _base64(datos) {
+        if (typeof datos === 'string') return btoa(unescape(encodeURIComponent(datos)));
+        let bin = '';
+        for (let i = 0; i < datos.length; i += 8192) bin += String.fromCharCode.apply(null, datos.subarray(i, i + 8192));
+        return btoa(bin);
+    },
+
+    _base64Url(texto) {
+        return btoa(unescape(encodeURIComponent(texto)))
+            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    },
+
+    async _enviarGmailApi(destino, asunto, cuerpoTexto, archivo) {
+        if (!await this._ensureToken()) throw new Error('Sin sesión de Google');
+        const boundary = 'mixed_' + Date.now();
+        const asuntoCod = `=?UTF-8?B?${this._base64(asunto)}?=`;
+        const mime = `To: ${destino}\r\n`
+            + `Subject: ${asuntoCod}\r\n`
+            + `MIME-Version: 1.0\r\n`
+            + `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`
+            + `--${boundary}\r\n`
+            + `Content-Type: text/plain; charset="UTF-8"\r\n\r\n`
+            + `${cuerpoTexto}\r\n\r\n`
+            + `--${boundary}\r\n`
+            + `Content-Type: ${archivo.tipo}; name="${archivo.nombre}"\r\n`
+            + `Content-Disposition: attachment; filename="${archivo.nombre}"\r\n`
+            + `Content-Transfer-Encoding: base64\r\n\r\n`
+            + `${this._base64(archivo.contenido)}\r\n`
+            + `--${boundary}--`;
+        const resp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ raw: this._base64Url(mime) }),
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.error?.message || String(resp.status));
+        }
+    },
+
     async _enviarAContacto(email) {
         const p = this._emailPendiente;
         if (!p) return;
         document.getElementById('emailModal').classList.remove('show');
+        this._mostrarToast('✉️ Enviando...', 2000);
+        try {
+            await this._enviarGmailApi(email,
+                p.asunto, `Te adjunto ${p.nombre}.`,
+                { nombre: p.nombre, tipo: p.tipo, contenido: p.contenido });
+            this._mostrarToast(`✅ Enviado a ${email}`, 3000);
+            return;
+        } catch (e) {
+            console.error('Gmail API:', e.message);
+        }
         try {
             const blob = new Blob([p.contenido], { type: p.tipo });
             const file = new File([blob], p.nombre, { type: p.tipo });
@@ -4478,7 +4559,7 @@ const app = {
         const asunto = encodeURIComponent(p.asunto);
         const cuerpo = encodeURIComponent(`Te adjunto ${p.nombre}, que se acaba de descargar.`);
         window.open(`mailto:${email}?subject=${asunto}&body=${cuerpo}`, '_blank');
-        this._mostrarToast('📎 Descargado — adjúntalo al correo que se ha abierto', 5000);
+        this._mostrarToast('📎 No se pudo enviar solo — descargado, adjúntalo al correo que se ha abierto', 5500);
     },
 
     ordenarRegistro(modo) {

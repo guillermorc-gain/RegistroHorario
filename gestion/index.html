@@ -151,13 +151,16 @@
         .app-content.dark .tab-empty-t{color:#a0a0a0;}
         .app-content.dark .tab-empty-s{color:#7d8590;}
 
-        .noche-compact{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 10px;background:#fff3cd;border-radius:8px;border:1.5px solid #ffc107;cursor:pointer;flex-shrink:0;touch-action:manipulation;user-select:none;transition:background 0.15s;}
-        .noche-compact.active{background:#f39c12;border-color:#e67e00;}
-        .noche-compact.active span{filter:brightness(10);}
-        .app-content.dark .noche-compact{background:#2a2500;border-color:#665500;}
-        .app-content.dark .noche-compact.active{background:#a06000;border-color:#f39c12;}
-        .noche-compact span{font-size:15px;line-height:1;pointer-events:none;}
-        .noche-compact input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#f39c12;}
+        .horas-noct-badge{display:none;align-items:center;gap:3px;align-self:flex-end;margin-bottom:9px;padding:4px 7px;background:#fff3cd;border:1.5px solid #ffc107;border-radius:7px;font-size:11px;font-weight:800;color:#856404;white-space:nowrap;}
+        .horas-noct-badge.visible{display:flex;}
+        .app-content.dark .horas-noct-badge{background:#2a2500;border-color:#665500;color:#f0c419;}
+        .noasist-compact{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 8px;background:transparent;border-radius:8px;border:1.5px solid #dfe4ea;cursor:pointer;flex-shrink:0;touch-action:manipulation;user-select:none;}
+        .noasist-compact.active{background:#8d6e63;border-color:#6d4c41;}
+        .noasist-compact.active span{filter:brightness(10);}
+        .app-content.dark .noasist-compact{border-color:#2d3561;}
+        .app-content.dark .noasist-compact.active{background:#6d4c41;border-color:#8d6e63;}
+        .noasist-compact span{font-size:15px;line-height:1;pointer-events:none;}
+        .noasist-compact input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#8d6e63;}
         .pr-compact{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 8px;background:#e8f4fd;border-radius:8px;border:1.5px solid #3498db;cursor:pointer;flex-shrink:0;touch-action:manipulation;user-select:none;}
         .pr-compact.active{background:#3498db;border-color:#2980b9;}
         .pr-compact.active span{color:white;}
@@ -1115,11 +1118,12 @@
                         <label>Horas</label>
                         <input type="number" id="horasInput" min="0" step="0.5" placeholder="8">
                     </div>
+                    <span class="horas-noct-badge" id="horasNocheBadge"></span>
                 </div>
                 <div class="toggle-row">
-                    <div class="noche-compact" onclick="app.clickNocheCompact()" title="Nocturno">
-                        <span>🌙</span>
-                        <input type="checkbox" id="nocheToggle" onclick="event.stopPropagation();app.toggleNoche()">
+                    <div class="noasist-compact" id="noAsistCompact" onclick="app.clickSinAsistencia()" title="No fui a trabajar (no cobra el plus de asistencia)">
+                        <span>🚫</span>
+                        <input type="checkbox" id="sinAsistenciaToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#8d6e63;cursor:pointer;">
                     </div>
                     <div class="pr-compact" id="prCompact" onclick="app.clickPrCompact()" title="Permiso Retribuido">
                         <span>PR</span>

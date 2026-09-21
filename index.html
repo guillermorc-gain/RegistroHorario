@@ -320,6 +320,7 @@
         .input-group input{width:100%;padding:8px;border:1.5px solid #e8eaf0;border-radius:7px;font-size:13px;font-family:inherit;background:white;color:#2c3e50;}
         .app-content.dark .input-group input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
         .input-group input:focus{outline:none;border-color:var(--g1);}
+        .fecha-rango-toggle{font-size:11px;font-weight:700;color:var(--g1);text-align:right;margin-top:6px;cursor:pointer;user-select:none;}
         /* ── TAB BAR ── */
         /* ── BOTTOM TAB BAR (iOS style) ── */
         .tab-bar{display:flex;align-items:stretch;flex-shrink:0;background:rgba(255,255,255,0.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:0.5px solid rgba(0,0,0,0.14);padding-bottom:env(safe-area-inset-bottom,0px);}
@@ -343,13 +344,16 @@
         .app-content.dark .tab-empty-t{color:#a0a0a0;}
         .app-content.dark .tab-empty-s{color:#7d8590;}
 
-        .noche-compact{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 10px;background:#fff3cd;border-radius:8px;border:1.5px solid #ffc107;cursor:pointer;flex-shrink:0;touch-action:manipulation;user-select:none;transition:background 0.15s;}
-        .noche-compact.active{background:#f39c12;border-color:#e67e00;}
-        .noche-compact.active span{filter:brightness(10);}
-        .app-content.dark .noche-compact{background:#2a2500;border-color:#665500;}
-        .app-content.dark .noche-compact.active{background:#a06000;border-color:#f39c12;}
-        .noche-compact span{font-size:15px;line-height:1;pointer-events:none;}
-        .noche-compact input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#f39c12;}
+        .horas-noct-badge{display:none;align-items:center;gap:3px;align-self:flex-end;margin-bottom:9px;padding:4px 7px;background:#fff3cd;border:1.5px solid #ffc107;border-radius:7px;font-size:11px;font-weight:800;color:#856404;white-space:nowrap;}
+        .horas-noct-badge.visible{display:flex;}
+        .app-content.dark .horas-noct-badge{background:#2a2500;border-color:#665500;color:#f0c419;}
+        .noasist-compact{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 8px;background:transparent;border-radius:8px;border:1.5px solid #dfe4ea;cursor:pointer;flex-shrink:0;touch-action:manipulation;user-select:none;}
+        .noasist-compact.active{background:#8d6e63;border-color:#6d4c41;}
+        .noasist-compact.active span{filter:brightness(10);}
+        .app-content.dark .noasist-compact{border-color:#2d3561;}
+        .app-content.dark .noasist-compact.active{background:#6d4c41;border-color:#8d6e63;}
+        .noasist-compact span{font-size:15px;line-height:1;pointer-events:none;}
+        .noasist-compact input[type=checkbox]{width:14px;height:14px;cursor:pointer;accent-color:#8d6e63;}
         .pr-compact{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:6px 8px;background:#e8f4fd;border-radius:8px;border:1.5px solid #3498db;cursor:pointer;flex-shrink:0;touch-action:manipulation;user-select:none;}
         .pr-compact.active{background:#3498db;border-color:#2980b9;}
         .pr-compact.active span{color:white;}
@@ -407,15 +411,19 @@
         /* ── HISTORY MONTH HEADERS ── */
         .hm-mes{position:sticky;top:0;z-index:2;background:#eef1f6;color:#5d6d7e;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;padding:8px 14px;display:flex;align-items:center;gap:7px;border-bottom:1px solid #dde1e9;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
         .hm-mes:active{background:#e2e7ef;}
-        .modal-card.dark .hm-mes{background:#161f2e;color:#93a1b3;border-bottom-color:#2d3561;}
-        .modal-card.dark .hm-mes:active{background:#1d2738;}
+        .modal-card.dark .hm-mes,.app-content.dark .hm-mes{background:#161f2e;color:#93a1b3;border-bottom-color:#2d3561;}
+        .modal-card.dark .hm-mes:active,.app-content.dark .hm-mes:active{background:#1d2738;}
         .hm-mes-chev{font-size:10px;width:10px;flex-shrink:0;}
         .hm-mes-n{flex:1;}
         .hm-mes-tot{font-weight:800;color:var(--g1);letter-spacing:0;display:flex;align-items:center;gap:6px;}
         .hm-mes-c{background:rgba(93,109,126,0.16);color:#5d6d7e;border-radius:9px;padding:1px 6px;font-size:9.5px;letter-spacing:0;}
         .hm-mes-ext{background:#fdebd0;color:#d35400;border-radius:9px;padding:1px 6px;font-size:9.5px;letter-spacing:0;font-weight:800;}
         .hm-mes-noc{background:#fff3cd;color:#856404;border-radius:9px;padding:1px 6px;font-size:9.5px;letter-spacing:0;font-weight:800;}
-        .modal-card.dark .hm-mes-c{background:rgba(255,255,255,0.12);color:#93a1b3;}
+        .modal-card.dark .hm-mes-c,.app-content.dark .hm-mes-c{background:rgba(255,255,255,0.12);color:#93a1b3;}
+        .hist-sec-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:#7f8c8d;margin:14px 2px 6px;}
+        .app-content.dark .hist-sec-title{color:#a0a0a0;}
+        .hist-lista{background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
+        .app-content.dark .hist-lista{background:#1e2a3a;}
         /* ── HISTORY ENTRY STRIPES ── */
         .hm-stripe-festivo{border-left:4px solid #e67e22!important;padding-left:10px!important;}
         .hm-stripe-pr{border-left:4px solid #3498db!important;padding-left:10px!important;}
@@ -442,8 +450,13 @@
         .app-content.dark .nom-l-i{color:#e0e0e0;}
         .nom-l.resta .nom-l-i{color:#e74c3c;}
         .nom-liquido{margin-top:12px;background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;border-radius:12px;padding:13px 15px;display:flex;justify-content:space-between;align-items:center;}
+        .nom-liquido-top{margin-top:0;margin-bottom:10px;}
         .nom-liquido-l{font-size:11px;font-weight:700;opacity:.9;text-transform:uppercase;letter-spacing:.5px;}
         .nom-liquido-v{font-size:20px;font-weight:800;}
+        .nom-row-check{padding:6px 0 10px;font-size:13px;color:#2c3e50;}
+        .app-content.dark .nom-row-check{color:#e0e0e0;}
+        .nom-row-check label{display:flex;align-items:center;gap:8px;cursor:pointer;}
+        .nom-row-check input{width:17px;height:17px;accent-color:var(--g1);cursor:pointer;}
         .nom-datos{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;}
         .nom-dato{background:#f4f6f9;border-radius:9px;padding:6px 10px;font-size:11.5px;font-weight:700;color:#5a6b7d;}
         .app-content.dark .nom-dato{background:#232b45;color:#c8cfe0;}
@@ -539,7 +552,8 @@
         .app-content.dark .cuad-box{background:#1e2a3a;}
         .cuad-img{max-width:100%;border-radius:8px;cursor:zoom-in;display:block;}
         .cuad-box #cuadVacio{margin:auto;}
-        .cuad-acciones{display:flex;gap:6px;flex-shrink:0;}
+        .cuad-acciones{display:flex;gap:6px;flex-shrink:0;margin-top:8px;}
+        .cuad-acciones button{flex:1;}
         .cuad-visor{display:none;position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:99999;align-items:center;justify-content:center;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pinch-zoom;}
         .cuad-visor.show{display:flex;}
         .cuad-visor img{max-width:100%;max-height:100%;object-fit:contain;transform-origin:center center;transition:transform .18s ease;}
@@ -819,6 +833,21 @@
                 </div>
             </div>
 
+            <!-- Fecha del registro -->
+            <div class="input-section" id="fechaSection">
+                <div class="input-row" id="fechaRow" style="margin-bottom:0;">
+                    <div class="input-group" style="flex:1;">
+                        <label>Fecha <span id="festivoHint" style="display:none;color:#e67e22;font-weight:800;"></span></label>
+                        <input type="date" id="fechaInput" oninput="app.calcularHorasPorTiempo();app.comprobarFestivo();app._sincronizarHastaMin()" onchange="app.calcularHorasPorTiempo();app.comprobarFestivo();app._sincronizarHastaMin()">
+                    </div>
+                    <div class="input-group" style="flex:1;display:none;" id="fechaHastaGroup">
+                        <label>Hasta</label>
+                        <input type="date" id="fechaHastaInput">
+                    </div>
+                </div>
+                <div class="fecha-rango-toggle" id="fechaRangoToggle" onclick="app._toggleRangoFechas()">📅 Registrar varios días</div>
+            </div>
+
             <!-- Progress -->
             <div class="progress-section">
                 <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
@@ -846,12 +875,6 @@
             <!-- Input -->
             <div class="input-section" id="inputSection">
                 <div id="editLabel" class="edit-label" style="display:none;">✏️ Editando en pantalla</div>
-                <div class="input-row" style="margin-bottom:6px;">
-                    <div class="input-group" style="flex:1;">
-                        <label>Fecha <span id="festivoHint" style="display:none;color:#e67e22;font-weight:800;"></span></label>
-                        <input type="date" id="fechaInput" oninput="app.calcularHorasPorTiempo();app.comprobarFestivo()" onchange="app.calcularHorasPorTiempo();app.comprobarFestivo()">
-                    </div>
-                </div>
                 <div class="input-row">
                     <div class="input-group">
                         <label>Inicio</label>
@@ -865,11 +888,12 @@
                         <label>Horas</label>
                         <input type="number" id="horasInput" min="0" step="0.5" placeholder="8">
                     </div>
+                    <span class="horas-noct-badge" id="horasNocheBadge"></span>
                 </div>
                 <div class="toggle-row" id="toggleRow">
-                    <div class="noche-compact" id="cuadroNoche" data-cuadro="noche" onclick="app.clickNocheCompact()" title="Nocturno">
-                        <span>🌙</span>
-                        <input type="checkbox" id="nocheToggle" onclick="event.stopPropagation();app.toggleNoche()">
+                    <div class="noasist-compact" id="noAsistCompact" data-cuadro="sinAsistencia" onclick="app.clickSinAsistencia()" title="No fui a trabajar (no cobra el plus de asistencia)">
+                        <span>🚫</span>
+                        <input type="checkbox" id="sinAsistenciaToggle" style="pointer-events:none;width:14px;height:14px;accent-color:#8d6e63;cursor:pointer;">
                     </div>
                     <div class="pr-compact" id="prCompact" data-cuadro="pr" onclick="app.clickPrCompact()" title="Permiso Retribuido">
                         <span>PR</span>
@@ -941,16 +965,9 @@
                 <div id="mensualTable"><div style="text-align:center;color:#95a5a6;font-size:12px;padding:6px;">Sin datos</div></div>
             </div>
 
-            <!-- History bar (collapsed by default) -->
-            <div class="historial-bar" onclick="app.mostrarHistorialModal()">
-                <span class="historial-bar-title">Jornadas anteriores</span>
-                <span class="historial-count" id="historialCount">—</span>
-                <button class="historial-toggle" title="Ver registros">▼</button>
-            </div>
-
         </div><!-- end tabPanel0 -->
 
-        <!-- ── TAB: Cuadrante ── -->
+        <!-- ── TAB: Historial (cuadrante + jornadas anteriores) ── -->
         <div class="tab-panel" id="tabPanel1">
             <div class="cuad-head">
                 <span class="cuad-title">🗓️ Cuadrante</span>
@@ -965,8 +982,13 @@
                 <img id="cuadImg" class="cuad-img" style="display:none" onclick="app.verCuadranteGrande()">
             </div>
             <div class="cuad-acciones">
+                <button class="btn-secondary" onclick="document.getElementById('cuadranteFileInput').click()">📤 Subir foto/archivo</button>
                 <button class="btn-main" onclick="app.exportarRegistro()">📊 Exportar mis jornadas</button>
             </div>
+            <input type="file" id="cuadranteFileInput" accept="image/*" style="display:none" onchange="app._onCuadranteFileElegido(event)">
+
+            <div class="hist-sec-title">Jornadas anteriores</div>
+            <ul id="historialModalList" class="hist-lista" style="list-style:none;padding:0;margin:0;"></ul>
         </div>
 
         <!-- ── TAB: Notas ── -->
@@ -991,11 +1013,6 @@
                 <span class="nom-titulo" id="miNomMes"></span>
                 <button class="nom-mes-btn" onclick="app.miNomMes(1)">›</button>
             </div>
-            <div class="nom-extra-barra" id="miNomExtraBarra"></div>
-            <div class="nom-extra-barra">
-                <button class="nom-extra-btn" onclick="app.mostrarCompararNominas()">⚖️ Comparar nóminas</button>
-                <button class="nom-extra-btn" onclick="app.mostrarExportarNominas()">📊 Exportar</button>
-            </div>
             <div id="miNomina"></div>
         </div>
 
@@ -1015,7 +1032,7 @@
                     ondragstart="app._tabDragStart(event)" ondragend="app._tabDragEnd(event)"
                     ondragover="app._tabDragOver(event)" ondragleave="app._tabDragLeave(event)"
                     ondrop="app._tabDrop(event)">
-                <span class="tab-ico">🗓️</span><span class="tab-lbl">Cuadrante</span>
+                <span class="tab-ico">🗓️</span><span class="tab-lbl">Historial</span>
             </button>
             <button class="tab-btn" data-tab="2" draggable="true"
                     onclick="app.switchTab(2)"
@@ -1390,19 +1407,6 @@
     </div>
 </div>
 
-<!-- Historial Modal -->
-<div class="modal" id="historialModal">
-    <div class="modal-card" id="historialModalContent">
-        <div class="modal-header">
-            <h3>📋 Todas las jornadas</h3>
-            <button class="modal-close" onclick="document.getElementById('historialModal').classList.remove('show')">×</button>
-        </div>
-        <div class="modal-body" style="padding:0;">
-            <ul id="historialModalList" style="list-style:none;"></ul>
-        </div>
-    </div>
-</div>
-
 <!-- Edit Modal -->
 <div class="modal" id="editModal">
     <div class="modal-card" id="editModalContent">
@@ -1605,6 +1609,8 @@
             <button class="modal-close" onclick="document.getElementById('expNomModal').classList.remove('show')">×</button>
         </div>
         <div class="modal-body" style="padding:0;">
+            <div class="pm-quien">Qué nóminas</div>
+            <div id="expNomLista" class="exp-cols"></div>
             <div class="pm-quien">Formato</div>
             <div class="pm-op" onclick="app.exportarNomSheets()">
                 <div style="flex:1;">Google Sheets<br><span class="pm-turnos">Crea la hoja en tu Drive y la abre</span></div>

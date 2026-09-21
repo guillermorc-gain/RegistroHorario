@@ -4,7 +4,7 @@
 const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.googleusercontent.com';
 // drive.file is needed on top of appdata: appdata can only write to a hidden
 // folder, so the monthly export could not create a visible "Movilidad Emt".
-const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file profile email';
+const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send profile email';
 const AUTH_SCOPE       = 'profile email';
 // Turnos de cada puesto. La hora de entrada registrada decide en cuál cae.
 let PUESTOS_DEFINIDOS = ['Son Rossinyol', 'Control', 'Calle', 'Taller', 'Anselmo Clavé'];
@@ -127,6 +127,7 @@ const app = {
         this.setupUI();
         if (this.darkMode) this.aplicarDarkMode();
         this._restaurarTabs();
+        this._initSwipeTabs();
         this._restaurarMensual();
         this._cargarCuadrante();
         this._aplicarModoVacaciones();
@@ -1030,6 +1031,9 @@ const app = {
         const horasRaw = document.getElementById('horasInput').value;
         let   horas = parseFloat(horasRaw) || 0;
         const fecha = document.getElementById('fechaInput').value;
+        const hastaGrupo = document.getElementById('fechaHastaGroup');
+        const hastaVal    = document.getElementById('fechaHastaInput')?.value || '';
+        const fechaHasta  = (hastaGrupo && hastaGrupo.style.display !== 'none' && hastaVal) ? hastaVal : fecha;
         const esFestivo      = this.festivoActivo;
         const esVacaciones   = this.vacacionesActivo;
         const esBaja         = this.bajaActiva;
@@ -1039,20 +1043,23 @@ const app = {
             alert('❌ Introduce fecha y horas válidas'); return;
         }
         if (horas < 0) { alert('❌ Las horas no pueden ser negativas'); return; }
+        if (fechaHasta < fecha) { alert('❌ La fecha "hasta" no puede ser anterior a la de inicio'); return; }
+        const fechas = this._rangoDeFechas(fecha, fechaHasta);
+        if (fechas.length > 62) { alert('❌ El rango es demasiado largo (máximo dos meses)'); return; }
         const horaInicio     = document.getElementById('horaInicio').value;
         let   horaFin        = document.getElementById('horaFin').value;
         // Todos los sitios del día, el del desplegable incluido
         const tramos = this._tramosDelDia();
         const total  = this._jornadaDeLosTramos(tramos);
         if (total) { horaFin = total.fin; horas = total.horas; }
-        const esNoche        = document.getElementById('nocheToggle').checked;
         const esPR           = this.prActivo;
         const esExtra        = this.extraActivo;
+        const esSinAsistencia = this.sinAsistenciaActivo;
         const extraDestino   = esExtra ? this._extraDestino() : null;
-        const horasNocturnas = esNoche ? (parseFloat(document.getElementById('horasNocturnas').value) || 0) : 0;
-        const precioNoche    = esNoche ? (parseFloat(document.getElementById('precioNoche').value) || 0) : 0;
+        const horasNocturnas = parseFloat(document.getElementById('horasNocturnas').value) || 0;
+        const precioNoche    = horasNocturnas > 0 ? (parseFloat(document.getElementById('precioNoche').value) || 0) : 0;
         const extraNoche     = Math.round(horasNocturnas * precioNoche * 100) / 100;
-        if (esNoche && horasNocturnas > horas) { alert('❌ Las horas nocturnas no pueden superar las horas totales'); return; }
+        if (horasNocturnas > horas) { alert('❌ Las horas nocturnas no pueden superar las horas totales'); return; }
 
         try {
             const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
@@ -1064,34 +1071,47 @@ const app = {
             // abrir el lápiz de una jornada, cerrarlo sin guardar y registrar
             // otra del mismo día borraba la primera y la dejaba en una sola,
             // sin aviso ni rastro.
-            const fechaFormato = new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            const fechaKey     = fecha.replace(/-/g, '');
-            const registroId   = this._nuevoRegistroId(datos.historial, fechaKey);
-            datos.historial[registroId] = {
-                fecha: fechaFormato, horas,
-                timestamp: new Date(fecha + 'T12:00:00').getTime(),
-                ...(horaInicio && horaFin ? { horaInicio, horaFin } : {}),
-                ...(esNoche && horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
-                ...(esPR ? { pr: true } : {}),
-                ...(esFestivo ? { festivo: true } : {}),
-                ...(this.puestoTrabajo ? { puesto: this.puestoTrabajo } : {}),
-                ...(esExtra ? { extraManual: true, extraDestino } : {}),
-                ...(esVacaciones ? { vacaciones: true } : {}),
-                ...(esBaja ? { be: true } : {}),
-                ...(tramos.length ? { tramos } : {})
-            };
-            if (esPR && this._prUsados(datos.historial) > this.PR_ANUALES) {
-                delete datos.historial[registroId];
-                alert(`❌ Ya has usado los ${this.PR_ANUALES} permisos retribuidos de este año`);
-                return;
+            // Con un rango se repite la misma jornada en cada día, para ponerse
+            // al día con lo que se olvidó de registrar; por defecto es un solo
+            // día, así que casi siempre esto da una sola vuelta.
+            let guardados = 0, ultimaFechaKey = '';
+            for (const fechaDia of fechas) {
+                const fechaFormato = new Date(fechaDia + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                const fechaKey     = fechaDia.replace(/-/g, '');
+                const registroId   = this._nuevoRegistroId(datos.historial, fechaKey);
+                datos.historial[registroId] = {
+                    fecha: fechaFormato, horas,
+                    timestamp: new Date(fechaDia + 'T12:00:00').getTime(),
+                    ...(horaInicio && horaFin ? { horaInicio, horaFin } : {}),
+                    ...(horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
+                    ...(esPR ? { pr: true } : {}),
+                    ...(esFestivo ? { festivo: true } : {}),
+                    ...(this.puestoTrabajo ? { puesto: this.puestoTrabajo } : {}),
+                    ...(esExtra ? { extraManual: true, extraDestino } : {}),
+                    ...(esVacaciones ? { vacaciones: true } : {}),
+                    ...(esBaja ? { be: true } : {}),
+                    ...(esSinAsistencia ? { sinAsistencia: true } : {}),
+                    ...(tramos.length ? { tramos } : {})
+                };
+                if (esPR && this._prUsados(datos.historial) > this.PR_ANUALES) {
+                    delete datos.historial[registroId];
+                    if (!guardados) { alert(`❌ Ya has usado los ${this.PR_ANUALES} permisos retribuidos de este año`); return; }
+                    break;
+                }
+                const tot = this._calcTotales(datos.historial);
+                if (tot.anualReal > this.horasAnualesCustom + tot.topeExtras) {
+                    delete datos.historial[registroId];
+                    if (!guardados) {
+                        alert(`❌ Superarías el tope anual + 30% de extras (${(this.horasAnualesCustom + tot.topeExtras).toFixed(1)}h)`);
+                        return;
+                    }
+                    break;
+                }
+                datos.horasTrabajadas = tot.anualReal;
+                guardados++;
+                ultimaFechaKey = fechaKey;
             }
-            const tot = this._calcTotales(datos.historial);
-            if (tot.anualReal > this.horasAnualesCustom + tot.topeExtras) {
-                delete datos.historial[registroId];
-                alert(`❌ Superarías el tope anual + 30% de extras (${(this.horasAnualesCustom + tot.topeExtras).toFixed(1)}h)`);
-                return;
-            }
-            datos.horasTrabajadas = tot.anualReal;
+            if (!guardados) return;
 
             if (horaInicio && horaFin) {
                 if (!datos.prefs) datos.prefs = {};
@@ -1099,8 +1119,8 @@ const app = {
                 datos.prefs.horaFin = horaFin;
             }
             await this._writeDriveFile(datos);
-            localStorage.setItem('lastRegisteredDate', fechaKey);
-            window.AndroidBridge?.saveToPrefs('lastRegisteredDate', fechaKey);
+            localStorage.setItem('lastRegisteredDate', ultimaFechaKey);
+            window.AndroidBridge?.saveToPrefs('lastRegisteredDate', ultimaFechaKey);
             if (horaInicio) localStorage.setItem('lastHoraInicio', horaInicio);
             const horaFinVal = document.getElementById('horaFin').value;
             if (horaFinVal) localStorage.setItem('lastHoraFin', horaFinVal);
@@ -1110,13 +1130,19 @@ const app = {
             this.cancelarEdicion();
             this._publicarResumen();
             this._comprobarLugarPorUbicacion();
-            // Decir qué ha quedado: con dos jornadas en un día es la única
-            // forma de saber si se han guardado las dos.
-            const delDia = Object.keys(datos.historial)
-                .filter(id => this._fechaDeId(id) === fechaKey).length;
-            this._mostrarToast(delDia > 1
-                ? `✅ Guardada · ${delDia} jornadas ese día`
-                : '✅ Jornada guardada', 3000);
+            if (fechas.length > 1) {
+                this._mostrarToast(guardados < fechas.length
+                    ? `✅ Guardados ${guardados} de ${fechas.length} días · se paró al llegar al tope`
+                    : `✅ ${guardados} días guardados`, 3000);
+            } else {
+                // Decir qué ha quedado: con dos jornadas en un día es la única
+                // forma de saber si se han guardado las dos.
+                const delDia = Object.keys(datos.historial)
+                    .filter(id => this._fechaDeId(id) === ultimaFechaKey).length;
+                this._mostrarToast(delDia > 1
+                    ? `✅ Guardada · ${delDia} jornadas ese día`
+                    : '✅ Jornada guardada', 3000);
+            }
         } catch(e) {
             alert('❌ Error al guardar: ' + e.message);
         }
@@ -1159,7 +1185,10 @@ const app = {
             ...(esFestivo ? { festivo: true } : {}),
             ...(puesto ? { puesto } : {}),
             ...(tramos.length ? { tramos } : {}),
-            ...(prev.extraManual ? { extraManual: true, extraDestino: prev.extraDestino } : {})
+            ...(prev.extraManual ? { extraManual: true, extraDestino: prev.extraDestino } : {}),
+            ...(prev.vacaciones ? { vacaciones: true } : {}),
+            ...(prev.be ? { be: true } : {}),
+            ...(prev.sinAsistencia ? { sinAsistencia: true } : {})
         };
         datos.horasTrabajadas = this._calcTotales(datos.historial).anualReal;
 
@@ -1184,7 +1213,7 @@ const app = {
             this.actualizarUI(datos);
             this._publicarResumen();
             if (this.editingId === id) this.editingId = null;
-            if (document.getElementById('historialModal').classList.contains('show')) this._renderHistorialModal();
+            this._renderHistorialModal();
         }
     },
 
@@ -1424,9 +1453,62 @@ const app = {
         const y = hoy.getFullYear();
         const m = String(hoy.getMonth() + 1).padStart(2, '0');
         const d = String(hoy.getDate()).padStart(2, '0');
-        document.getElementById('fechaInput').value = `${y}-${m}-${d}`;
-        document.getElementById('fechaInput').max   = `${y}-${m}-${d}`;
+        const hoyISO = `${y}-${m}-${d}`;
+        document.getElementById('fechaInput').value = hoyISO;
+        document.getElementById('fechaInput').max   = hoyISO;
+        const hasta = document.getElementById('fechaHastaInput');
+        if (hasta) hasta.max = hoyISO;
         this.comprobarFestivo();
+        this._sincronizarHastaMin();
+    },
+
+    // El rango de fechas es para ponerse al día con jornadas atrasadas: por
+    // defecto está oculto y solo se registra la de hoy, y hasta vuelve a
+    // esconderse después de registrar para no dejarlo puesto por error.
+    _toggleRangoFechas() {
+        const grupo = document.getElementById('fechaHastaGroup');
+        const link  = document.getElementById('fechaRangoToggle');
+        if (!grupo) return;
+        const abierto = grupo.style.display !== 'none';
+        grupo.style.display = abierto ? 'none' : 'flex';
+        if (link) link.textContent = abierto ? '📅 Registrar varios días' : '📅 Solo un día';
+        if (!abierto) {
+            const desde = document.getElementById('fechaInput');
+            const hasta = document.getElementById('fechaHastaInput');
+            if (desde && hasta && !hasta.value) hasta.value = desde.value;
+        }
+    },
+
+    _sincronizarHastaMin() {
+        const desde = document.getElementById('fechaInput')?.value;
+        const hasta = document.getElementById('fechaHastaInput');
+        if (!desde || !hasta) return;
+        hasta.min = desde;
+        if (hasta.value && hasta.value < desde) hasta.value = desde;
+    },
+
+    _ocultarRangoFechas() {
+        const grupo = document.getElementById('fechaHastaGroup');
+        const link  = document.getElementById('fechaRangoToggle');
+        const hasta = document.getElementById('fechaHastaInput');
+        if (grupo) grupo.style.display = 'none';
+        if (link) link.textContent = '📅 Registrar varios días';
+        if (hasta) hasta.value = '';
+    },
+
+    // Todas las fechas entre dos, las dos incluidas. Con el constructor local
+    // de Date el cambio de mes o de año sale solo, sin líos de zona horaria.
+    _rangoDeFechas(desde, hasta) {
+        const out = [];
+        let [y, m, d] = desde.split('-').map(Number);
+        for (let guard = 0; guard < 400; guard++) {
+            const key = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            out.push(key);
+            if (key >= hasta) break;
+            const sig = new Date(y, m - 1, d + 1);
+            y = sig.getFullYear(); m = sig.getMonth() + 1; d = sig.getDate();
+        }
+        return out;
     },
 
     actualizarFecha() {
@@ -1516,34 +1598,17 @@ const app = {
         const horas = Math.round(mins / 60 * 2) / 2;
         if (horas > 0) document.getElementById('horasInput').value = horas;
         this._renderTramos();            // cambian las horas sin lugar
+        // Las horas nocturnas salen solas del horario: no hay botón que las
+        // active, así que si no hay ninguna el cuadro no aparece por ningún
+        // lado.
         const nocturnas = this._calcHorasNocturnas(inicio, fin);
-        const nocheExtra = document.getElementById('nocheExtra');
-        const nocheBtn   = document.querySelector('.noche-compact');
-        // Auto-activate luna if start hour is in nocturnal range (21–06)
-        const autoLuna = h1 >= 21 || h1 < 6;
-        if (nocturnas > 0 || autoLuna) {
-            document.getElementById('nocheToggle').checked = true;
-            if (nocheBtn) nocheBtn.classList.add('active');
-            nocheExtra.classList.add('visible');
-            if (nocturnas > 0) {
-                document.getElementById('horasNocturnas').value = nocturnas;
-                if (this.precioNocheDefault > 0) document.getElementById('precioNoche').value = this.precioNocheDefault;
-                this.calcularExtra();
-            }
+        if (nocturnas > 0) {
+            document.getElementById('horasNocturnas').value = nocturnas;
+            if (this.precioNocheDefault > 0) document.getElementById('precioNoche').value = this.precioNocheDefault;
         } else {
-            document.getElementById('nocheToggle').checked = false;
-            if (nocheBtn) nocheBtn.classList.remove('active');
-            nocheExtra.classList.remove('visible');
             document.getElementById('horasNocturnas').value = '';
-            document.getElementById('nocheResumen').textContent = '';
         }
-    },
-
-    clickNocheCompact() {
-        const cb = document.getElementById('nocheToggle');
-        cb.checked = !cb.checked;
-        document.querySelector('.noche-compact')?.classList.toggle('active', cb.checked);
-        this.toggleNoche();
+        this.calcularExtra();
     },
 
     // PR = Permiso Retribuido. Two per calendar year, counted down as they are used.
@@ -1654,7 +1719,7 @@ const app = {
         }
     },
 
-    añadirVacaciones() {
+    async añadirVacaciones() {
         const desde = document.getElementById('vacDesde').value;
         const hasta = document.getElementById('vacHasta').value;
         if (!desde || !hasta) { this._mostrarToast('❌ Indica las dos fechas', 3000); return; }
@@ -1668,14 +1733,61 @@ const app = {
         this._renderVacaciones();
         this._aplicarModoVacaciones();
         this._mostrarToast('🏖️ Vacaciones añadidas', 2500);
+        await this._registrarDiasVacaciones(desde, hasta);
     },
 
-    borrarVacaciones(i) {
+    // Cada día del rango que todavía no tenga nada registrado se apunta como
+    // vacaciones, sin horario: así la nómina y el resumen anual ya cuentan
+    // esos días sin tener que registrarlos uno a uno.
+    async _registrarDiasVacaciones(desde, hasta) {
+        try {
+            const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
+            if (!datos.historial) datos.historial = {};
+            let tocado = false;
+            for (let d = new Date(desde + 'T12:00:00'), fin = new Date(hasta + 'T12:00:00');
+                 d <= fin; d.setDate(d.getDate() + 1)) {
+                const fechaKey = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+                if (datos.historial[fechaKey]) continue;   // ya hay algo ese día: no se toca
+                datos.historial[fechaKey] = {
+                    fecha: d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+                    horas: 0, timestamp: +d, vacaciones: true, deVacaciones: true,
+                };
+                tocado = true;
+            }
+            if (!tocado) return;
+            datos.horasTrabajadas = this._calcTotales(datos.historial).anualReal;
+            await this._writeDriveFile(datos);
+            this.actualizarUI(datos);
+        } catch (e) { this._mostrarToast('❌ No se pudieron registrar los días: ' + e.message, 4000); }
+    },
+
+    async borrarVacaciones(i) {
         const v = this._getVacaciones();
+        const periodo = v[i];
         v.splice(i, 1);
         this._saveVacaciones(v);
         this._renderVacaciones();
         this._aplicarModoVacaciones();
+        if (periodo) await this._quitarDiasVacaciones(periodo.desde, periodo.hasta);
+    },
+
+    // Solo se quitan los días que se pusieron solos al añadir el periodo: si
+    // se ha tocado algo de esa jornada a mano, se deja tal cual.
+    async _quitarDiasVacaciones(desde, hasta) {
+        try {
+            const datos = await this._readDriveFile();
+            if (!datos?.historial) return;
+            let tocado = false;
+            for (let d = new Date(desde + 'T12:00:00'), fin = new Date(hasta + 'T12:00:00');
+                 d <= fin; d.setDate(d.getDate() + 1)) {
+                const fechaKey = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+                if (datos.historial[fechaKey]?.deVacaciones) { delete datos.historial[fechaKey]; tocado = true; }
+            }
+            if (!tocado) return;
+            datos.horasTrabajadas = this._calcTotales(datos.historial).anualReal;
+            await this._writeDriveFile(datos);
+            this.actualizarUI(datos);
+        } catch (_) { /* si falla, se quedan los días apuntados; no pasa nada grave */ }
     },
 
     _renderVacaciones() {
@@ -2823,25 +2935,7 @@ const app = {
 
     _nombreMes(mes) {
         const m = String(mes || '');
-        if (/^\d{4}EJ$/.test(m)) return `Paga extra de julio ${m.slice(0, 4)}`;
-        if (/^\d{4}ED$/.test(m)) return `Paga extra de diciembre ${m.slice(0, 4)}`;
         return `${MESES_ES[+m.slice(4, 6) - 1]} ${m.slice(0, 4)}`;
-    },
-
-    // Las pagas extra no son un mes del calendario: son dos nóminas aparte al
-    // año, sin prorratear. Se guardan con la clave AAAAEJ (julio) / AAAAED
-    // (diciembre) en vez de AAAAMM, así reutilizan el mismo almacén.
-    _esExtra(mes) { return /^\d{4}(EJ|ED)$/.test(String(mes || '')); },
-
-    verPagaExtra(tipo) {
-        const actual = this._miNomMes || this._mesDeHoy();
-        this._miNomMes = actual.slice(0, 4) + tipo;
-        this._renderMiNomina();
-    },
-
-    volverAMesNormal() {
-        this._miNomMes = this._mesDeHoy();
-        this._renderMiNomina();
     },
 
     _eur(n) {
@@ -2850,10 +2944,7 @@ const app = {
     },
 
     miNomMes(paso) {
-        const actual = this._miNomMes || this._mesDeHoy();
-        this._miNomMes = this._esExtra(actual)
-            ? String(Number(actual.slice(0, 4)) + paso) + actual.slice(4)
-            : this._mesMas(actual, paso);
+        this._miNomMes = this._mesMas(this._miNomMes || this._mesDeHoy(), paso);
         this._renderMiNomina();
     },
 
@@ -2886,12 +2977,7 @@ const app = {
 
     editarMiNomina() {
         const mes = this._miNomMes;
-        const esExtra = this._esExtra(mes);
-        // La paga extra parte de la misma paga del año anterior, no del mes
-        // de antes; un mes normal parte del mes de antes.
-        const anterior = esExtra
-            ? String(Number(mes.slice(0, 4)) - 1) + mes.slice(4)
-            : this._mesMas(mes, -1);
+        const anterior = this._mesMas(mes, -1);
         const g = this._misNominas?.[mes] || this._misNominas?.[anterior] || {};
         const C = this.CONVENIO;
         this._nomEditando = {
@@ -2904,12 +2990,13 @@ const app = {
             // todas las nóminas.
             desde:     g.desde || this.fechaAltaDefault || '',
             pctBienios: Number(g.pctBienios ?? this.pctBieniosDefault ?? 0),
-            // El sindicato se paga siempre, 12 € por defecto en la nómina
-            // normal (0 en la paga extra); si se deja de pagar se pone a 0 a
-            // mano y ese 0 es lo que sigue arrastrándose.
-            sindicato: Number(g.sindicato ?? (esExtra ? 0 : 12)),
-            // Las pagas extra no se prorratean: son estas dos nóminas aparte.
+            // El sindicato se paga siempre, 12 € por defecto; si se deja de
+            // pagar se pone a 0 a mano y ese 0 es lo que sigue arrastrándose.
+            sindicato: Number(g.sindicato ?? 12),
             prorrata:  Number(g.prorrata ?? 0),
+            // Julio y diciembre llevan la paga extra activada por defecto;
+            // solo se guarda cuando se desactiva a mano ese mes.
+            pagaExtra: g.pagaExtra !== false,
             tipos:     { ...this.TIPOS_NOMINA, ...(g.tipos || {}) },
             // Sin nada guardado se quedan a undefined y los pone el cálculo a
             // partir de los registros; en cuanto se escriben, mandan.
@@ -2919,6 +3006,11 @@ const app = {
             extras:    (g.extras || []).map(e => ({ ...e })),
             nota:      g.nota || '',
         };
+        this._renderMiNomina();
+    },
+
+    _toggleMiPagaExtra(on) {
+        this._nomEditando.pagaExtra = !!on;
         this._renderMiNomina();
     },
 
@@ -2958,7 +3050,11 @@ const app = {
             const data = await r.json();
             if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return; }
             this._misNominas = this._misNominas || {};
-            this._misNominas[this._miNomMes] = data?.[this._miNomMes] || cuerpo;
+            // La respuesta trae el mes entero, con todos los que lo tengan
+            // rellenado ese mes: hay que coger solo la mía, si no se quedaba
+            // con el mapa entero en vez de la nómina, y el sindicato a 0 (o
+            // cualquier otro cambio) se deshacía nada más guardar.
+            this._misNominas[this._miNomMes] = data?.[this._miNomMes]?.[this.usuarioActual?.email] || cuerpo;
             localStorage.setItem('misNominas', JSON.stringify(this._misNominas));
             this._nomEditando = null;
             this._renderMiNomina();
@@ -3026,6 +3122,9 @@ const app = {
             if (r.vacaciones) vac.add(f);
             else if (r.pr)    pr.add(f);
             else if (r.be)    baja.add(f);
+            // "No fui a trabajar": cuenta como jornada, pero sin el plus de
+            // asistencia, que es justo lo que premia estar presente.
+            else if (r.sinAsistencia) { /* no lleva plus, pero tampoco resta del base */ }
             else if ((parseFloat(r.horas) || 0) > 0) trabajados.add(f);
         });
         const vacaciones = Math.min(this.DIAS_NOMINA, vac.size);
@@ -3076,26 +3175,30 @@ const app = {
         return this.TRAMOS_ANTIGUEDAD.find(t => a >= t.anios).pct;
     },
 
+    // Julio y diciembre llevan paga extra por defecto, dentro de la misma
+    // nómina; en Cambiar datos se puede desactivar para ese mes.
+    _esMesExtra(mes) {
+        const m = String(mes || '').slice(4, 6);
+        return m === '07' || m === '12';
+    },
+
     _calcNomina(mes, n) {
         const D = this.DIAS_NOMINA;
         const g = n || {};
-        const esExtra = this._esExtra(mes);
+        const conPagaExtra = this._esMesExtra(mes) && g.pagaExtra !== false;
         // Los precios guardados mandan sobre los de partida
         const C = {
             porDia: { ...this.CONVENIO.porDia, ...(g.precios?.porDia || {}) },
             delMes: { ...this.CONVENIO.delMes, ...(g.precios?.delMes || {}) },
         };
         const dias = this._diasDeNomina(mes);
-        // La paga extra es solo salario base y antigüedad: sin plus de
-        // asistencia, sin horas extras ni nocturnas, sin los complementos que
-        // ya se cobran cada mes.
-        const diasAsist = esExtra ? 0 : Number(g.dias?.asistencia ?? dias.asistencia) || 0;
-        const hExtra    = esExtra ? 0 : Number(g.extra?.h ?? this._horasExtraDelMes(mes)) || 0;
+        const diasAsist = Number(g.dias?.asistencia ?? dias.asistencia) || 0;
+        const hExtra    = Number(g.extra?.h ?? this._horasExtraDelMes(mes)) || 0;
         // El precio de la hora extra y de la nocturna salen de Ajustes › Trabajo,
         // así no hay que volver a escribirlos en cada nómina.
-        const pExtra    = esExtra ? 0 : Number(g.extra?.p ?? this.precioExtraDefault ?? 0) || 0;
-        const hNoct     = esExtra ? 0 : Number(g.noct?.h ?? this._horasNocturnasDelMes(mes)) || 0;
-        const pNoct     = esExtra ? 0 : Number(g.noct?.p ?? this.precioNocheDefault ?? 0) || 0;
+        const pExtra    = Number(g.extra?.p ?? this.precioExtraDefault ?? 0) || 0;
+        const hNoct     = Number(g.noct?.h ?? this._horasNocturnasDelMes(mes)) || 0;
+        const pNoct     = Number(g.noct?.p ?? this.precioNocheDefault ?? 0) || 0;
         // Con la fecha de entrada puesta manda la antigüedad; si no, lo que
         // se haya escrito a mano. Ambas salen del perfil si la nómina no
         // guarda las suyas propias.
@@ -3115,41 +3218,44 @@ const app = {
         // La antigüedad sube el día de vacaciones y la hora extra, no solo el
         // salario base.
         const conAnt = v => v * (1 + pctBienios / 100);
-        if (!esExtra && dias.vacaciones) devengos.push(porDia('Vacaciones', dias.vacaciones, conAnt(C.porDia.vacaciones)));
-        if (!esExtra && dias.permiso)    devengos.push(porDia('Permiso retribuido', dias.permiso, C.porDia.base));
+        if (dias.vacaciones) devengos.push(porDia('Vacaciones', dias.vacaciones, conAnt(C.porDia.vacaciones)));
+        if (dias.permiso)    devengos.push(porDia('Permiso retribuido', dias.permiso, C.porDia.base));
         // Los bienios son un porcentaje del salario base del mes entero, no de
         // los días que haya trabajado: en junio, con catorce de vacaciones,
-        // siguen siendo los mismos 38,63 que en julio. En la paga extra, del
-        // salario base entero igual que en cualquier mes.
+        // siguen siendo los mismos 38,63 que en julio.
         if (pctBienios) devengos.push({
             ...delMes('Bienios', D * C.porDia.base * pctBienios / 100),
             pctBienios, anios: this._aniosEnLaEmpresa(desde, mes) });
-        if (!esExtra) {
-            devengos.push(delMes('Comp. No Absorbible', C.delMes.noAbsorbible));
-            devengos.push(delMes('Plus Transporte', C.delMes.transporte));
-            devengos.push(delMes('Complemento Ajuste convenio', C.delMes.ajuste));
-            devengos.push(delMes('Complemento convenio', C.delMes.ajuste2));
-            // Fijo, pero solo desde que existe
-            if (mes >= this.DESDE_RESPONSABILIDAD) {
-                devengos.push(delMes('Compl. Responsabilidad/Calidad', C.delMes.responsabilidad));
-            }
-            if (diasAsist) devengos.push(porDia('Complemento Asistencia', diasAsist, C.porDia.asistencia));
-            if (hNoct)     devengos.push({ c: 'Complemento horas nocturnas', d: hNoct, p: r2(pNoct),
-                                           i: r2(hNoct * pNoct), horas: true });
-            if (hExtra)    devengos.push({ c: 'Horas extras', d: hExtra, p: r2(conAnt(pExtra)),
-                                           i: r2(hExtra * conAnt(pExtra)), horas: true });
+        devengos.push(delMes('Comp. No Absorbible', C.delMes.noAbsorbible));
+        devengos.push(delMes('Plus Transporte', C.delMes.transporte));
+        devengos.push(delMes('Complemento Ajuste convenio', C.delMes.ajuste));
+        devengos.push(delMes('Complemento convenio', C.delMes.ajuste2));
+        // Fijo, pero solo desde que existe
+        if (mes >= this.DESDE_RESPONSABILIDAD) {
+            devengos.push(delMes('Compl. Responsabilidad/Calidad', C.delMes.responsabilidad));
+        }
+        if (diasAsist) devengos.push(porDia('Complemento Asistencia', diasAsist, C.porDia.asistencia));
+        // Estas dos van siempre, aunque sean 0: si aparecen y desaparecen
+        // según el mes, la nómina entera sube o baja una línea al pasar de
+        // una a otra.
+        devengos.push({ c: 'Complemento horas nocturnas', d: hNoct, p: r2(pNoct),
+                         i: r2(hNoct * pNoct), horas: true });
+        devengos.push({ c: 'Horas extras', d: hExtra, p: r2(conAnt(pExtra)),
+                         i: r2(hExtra * conAnt(pExtra)), horas: true });
+        // La paga extra es un salario base más, con su antigüedad, sin los
+        // demás complementos: se suma encima de lo de siempre ese mes.
+        if (conPagaExtra) {
+            devengos.push(delMes('Paga extra - Salario base', D * C.porDia.base));
+            if (pctBienios) devengos.push(delMes('Paga extra - Antigüedad', D * C.porDia.base * pctBienios / 100));
         }
         (g.extras || []).forEach(e => {
             if (e && String(e.c || '').trim()) devengos.push({ c: e.c, d: 0, p: 0, i: r2(Number(e.i) || 0) });
         });
 
         const devengado = r2(devengos.reduce((t, l) => t + l.i, 0));
-        // Las pagas extra no se prorratean: son estas dos nóminas aparte, así
-        // que aquí la prorrata siempre es 0 salvo que quede una guardada de
-        // antes de cambiarlo.
         const prorrata  = r2(Number(g.prorrata ?? 0));
         const base      = r2(devengado + prorrata);
-        const sindicato = r2(Number(g.sindicato ?? (esExtra ? 0 : 12)));
+        const sindicato = r2(Number(g.sindicato ?? 12));
         const pct = (c, sobre, p) => ({ c, base: sobre, pct: p, i: r2(sobre * p / 100) });
         const deducciones = [
             pct('Aportac. Contingencias Comunes', base, tipos.cc),
@@ -3158,12 +3264,16 @@ const app = {
             pct('Aportac. Mecanismo de equidad', base, tipos.mei),
             pct('IRPF Cta. Ajena Dinerarios', devengado, tipos.irpf),
         ];
-        if (sindicato) deducciones.push({ c: 'Sindicato SITEIB', base: 0, pct: 0, i: sindicato });
+        // Siempre va, aunque sea 0: si aparece y desaparece según el mes, la
+        // nómina entera sube o baja una línea al pasar de uno a otro, igual
+        // que pasaba antes con las horas nocturnas y las extras.
+        deducciones.push({ c: 'Sindicato/s', base: 0, pct: 0, i: sindicato });
         const aDeducir = r2(deducciones.reduce((t, l) => t + l.i, 0));
         return { dias, devengos, deducciones, devengado, prorrata, base, aDeducir,
                  liquido: r2(devengado - aDeducir), precios: C, tipos, sindicato,
                  pctBienios, pctAnt, anios: this._aniosEnLaEmpresa(desde, mes), desde,
-                 hExtra, pExtra, hNoct, pNoct, diasAsist, esExtra };
+                 hExtra, pExtra, hNoct, pNoct, diasAsist,
+                 esMesExtra: this._esMesExtra(mes), conPagaExtra };
     },
 
     _renderMiNomina() {
@@ -3173,13 +3283,6 @@ const app = {
         const mes = this._miNomMes = this._miNomMes || this._mesDeHoy();
         const titulo = document.getElementById('miNomMes');
         if (titulo) titulo.textContent = this._nombreMes(mes);
-        const barraExtra = document.getElementById('miNomExtraBarra');
-        if (barraExtra) {
-            barraExtra.innerHTML = this._esExtra(mes)
-                ? `<button class="nom-extra-btn" onclick="app.volverAMesNormal()">📅 Volver al mes</button>`
-                : `<button class="nom-extra-btn" onclick="app.verPagaExtra('EJ')">🎁 Paga extra julio</button>
-                   <button class="nom-extra-btn" onclick="app.verPagaExtra('ED')">🎁 Paga extra diciembre</button>`;
-        }
 
         const editando = this._nomEditando;
         const n = editando || this._misNominas?.[mes];
@@ -3212,17 +3315,23 @@ const app = {
                 sufijo ? `<em>${sufijo}</em>` : ''}</div>`;
 
         const P = c.precios;
+        const pagaExtraToggle = !editando || !this._esMesExtra(mes) ? '' : `
+            <div class="nom-sec">Paga extra</div>
+            <div class="nom-row-check">
+                <label><input type="checkbox" ${n.pagaExtra !== false ? 'checked' : ''}
+                    onchange="app._toggleMiPagaExtra(this.checked)"> Incluir la paga extra de este mes</label>
+            </div>`;
         const ajustes = !editando ? '' : `
+            ${pagaExtraToggle}
             <div class="nom-sec">Tu convenio</div>
             ${campo('Salario base', P.porDia.base, 'precios.porDia.base', '€/día')}
-            ${c.esExtra ? '' : `
             ${campo('Vacaciones <small>sin antigüedad</small>', P.porDia.vacaciones, 'precios.porDia.vacaciones', '€/día')}
             ${campo('Asistencia', P.porDia.asistencia, 'precios.porDia.asistencia', '€/día')}
             ${campo('Comp. No Absorbible', P.delMes.noAbsorbible, 'precios.delMes.noAbsorbible', '€/mes')}
             ${campo('Plus Transporte', P.delMes.transporte, 'precios.delMes.transporte', '€/mes')}
             ${campo('Ajuste convenio', P.delMes.ajuste, 'precios.delMes.ajuste', '€/mes')}
             ${campo('Complemento convenio', P.delMes.ajuste2, 'precios.delMes.ajuste2', '€/mes')}
-            ${campo('Responsabilidad/Calidad', P.delMes.responsabilidad, 'precios.delMes.responsabilidad', '€/mes')}`}
+            ${campo('Responsabilidad/Calidad', P.delMes.responsabilidad, 'precios.delMes.responsabilidad', '€/mes')}
             <div class="nom-sec">Antigüedad</div>
             ${c.desde
                 ? `<div class="nom-nota">Entraste en la empresa el <b>${esc(c.desde)}</b>
@@ -3233,7 +3342,6 @@ const app = {
                 : `<div class="nom-nota">Sin fecha de alta puesta en Opciones › Perfil, la
                      antigüedad se aplica con el <b>${num(c.pctBienios)} %</b> manual que
                      hayas puesto allí.</div>`}
-            ${c.esExtra ? '' : `
             <div class="nom-sec">Este mes</div>
             ${campo('Horas extras', c.hExtra, 'extra.h', 'horas')}
             <div class="nom-nota">Hora extra a <b>${num(c.pExtra)} €</b>, el precio que hay
@@ -3241,7 +3349,7 @@ const app = {
             ${campo('Horas nocturnas', c.hNoct, 'noct.h', 'horas')}
             <div class="nom-nota">Hora nocturna a <b>${num(c.pNoct)} €</b>, el precio que hay
                 puesto en Ajustes › Trabajo.</div>
-            ${campo('Días de asistencia', c.diasAsist, 'dias.asistencia', 'días')}`}
+            ${campo('Días de asistencia', c.diasAsist, 'dias.asistencia', 'días')}
             ${(n.extras || []).map((e, k) => `<div class="nom-edit">
                 <input type="text" style="flex:1" value="${esc(e.c)}" placeholder="Otro concepto"
                        onchange="app._setMiExtra(${k},'c',this.value)">
@@ -3255,7 +3363,7 @@ const app = {
             ${campo('Formación profesional', c.tipos.fp, 'tipos.fp', '%')}
             ${campo('Mecanismo de equidad', c.tipos.mei, 'tipos.mei', '%')}
             ${campo('IRPF', c.tipos.irpf, 'tipos.irpf', '%')}
-            ${campo('Sindicato', c.sindicato, 'sindicato', '€')}
+            ${campo('Sindicato/s', c.sindicato, 'sindicato', '€')}
             <div class="edit-field" style="margin-top:10px;"><label>Nota</label>
                 <input type="text" id="miNomNota" value="${esc(n.nota || '')}"
                        placeholder="Lo que quieras recordar"></div>
@@ -3267,6 +3375,19 @@ const app = {
             </div>`;
 
         cont.innerHTML = `<div class="nom-tarjeta">
+            <div class="nom-liquido nom-liquido-top">
+                <span class="nom-liquido-l">Líquido</span>
+                <span class="nom-liquido-v">${this._eur(c.liquido)}</span></div>
+            <div class="nom-sec">Devengos</div>
+            ${c.devengos.map(l => linea(l, false)).join('')}
+            <div class="nom-sec">Deducciones</div>
+            ${c.deducciones.map(l => linea(l, true)).join('')}
+            <div class="nom-l" style="font-weight:800;"><span class="nom-l-c">A deducir</span>
+                <span class="nom-l-i">−${this._eur(c.aDeducir)}</span></div>
+            <div class="nom-sec">Base de cotización</div>
+            <div class="nom-l"><span class="nom-l-c">${c.prorrata
+                ? 'Devengado + prorrata de pagas extra' : 'Devengado'}</span>
+                <span class="nom-l-i">${this._eur(c.base)}</span></div>
             <div class="nom-sec">Días del mes</div>
             <div class="nom-datos">
                 <span class="nom-dato"><b>${c.dias.base}</b> de salario base</span>
@@ -3275,27 +3396,15 @@ const app = {
                 ${c.diasAsist ? `<span class="nom-dato"><b>${c.diasAsist}</b> de asistencia</span>` : ''}
                 ${c.hExtra ? `<span class="nom-dato"><b>${num(c.hExtra)}</b> horas extras</span>` : ''}
             </div>
-            <div class="nom-sec">Devengos</div>
-            ${c.devengos.map(l => linea(l, false)).join('')}
-            <div class="nom-l" style="font-weight:800;"><span class="nom-l-c">Devengado</span>
-                <span class="nom-l-i">${this._eur(c.devengado)}</span></div>
-            <div class="nom-sec">Deducciones</div>
-            ${c.deducciones.map(l => linea(l, true)).join('')}
-            <div class="nom-l" style="font-weight:800;"><span class="nom-l-c">A deducir</span>
-                <span class="nom-l-i">−${this._eur(c.aDeducir)}</span></div>
-            <div class="nom-liquido">
-                <span class="nom-liquido-l">Líquido</span>
-                <span class="nom-liquido-v">${this._eur(c.liquido)}</span></div>
-            <div class="nom-sec">Base de cotización</div>
-            <div class="nom-l"><span class="nom-l-c">${c.prorrata
-                ? 'Devengado + prorrata de pagas extra' : 'Devengado'}</span>
-                <span class="nom-l-i">${this._eur(c.base)}</span></div>
             ${!editando && n.nota ? `<div class="nom-sec">Nota</div>
                 <div class="nom-l"><span class="nom-l-c" style="white-space:normal;">${esc(n.nota)}</span></div>` : ''}
             ${ajustes}
             ${!editando ? `<button class="nom-mas" style="margin-top:12px;"
                 onclick="app.editarMiNomina()">✎ Cambiar los datos</button>` : ''}
-            ${!editando ? this._compararMiNomina(mes, c) : ''}
+            <div class="nom-extra-barra" style="margin-top:14px;">
+                <button class="nom-extra-btn" onclick="app.mostrarCompararNominas()">⚖️ Comparar nóminas</button>
+                <button class="nom-extra-btn" onclick="app.mostrarExportarNominas()">📊 Exportar</button>
+            </div>
         </div>`;
     },
 
@@ -3319,19 +3428,6 @@ const app = {
                    Math.round((A.liquido - B.liquido) * 100) / 100)
             + [...new Set([...Object.keys(MA), ...Object.keys(MB)])]
                 .map(c => fila(c, Math.round(((MA[c] ?? 0) - (MB[c] ?? 0)) * 100) / 100)).join('');
-    },
-
-    // Frente al mes anterior, si lo hay (o la misma paga extra del año antes)
-    _compararMiNomina(mes, ahora) {
-        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-        const anterior = this._esExtra(mes)
-            ? String(Number(mes.slice(0, 4)) - 1) + mes.slice(4)
-            : this._mesMas(mes, -1);
-        const prev = this._misNominas?.[anterior];
-        if (!prev) return '';
-        const antes = this._calcNomina(anterior, prev);
-        return `<div class="nom-sec">Frente a ${esc(this._nombreMes(anterior))}</div>`
-            + this._diffNominas(mes, ahora, anterior, antes);
     },
 
     // ── Comparar dos nóminas cualquiera ─────────────────────────────────────
@@ -3372,24 +3468,90 @@ const app = {
     },
 
     // ── Exportar las nóminas ─────────────────────────────────────────────────
-    CABECERAS_EXPORT_NOM: ['Nómina', 'Devengado', 'Deducciones', 'Líquido', 'Base de cotización',
-        'Salario base €/día', 'Antigüedad %', 'Horas extra', 'Horas nocturnas', 'Sindicato €'],
+    // Una fila por concepto, igual que se ve en la propia nómina, con un
+    // bloque por cada nómina elegida.
+    CABECERAS_EXPORT_NOM: ['Nómina / concepto', 'Días u horas', 'Precio', 'Importe'],
 
+    _nomExportSel: null,   // null = todas
+
+    _nomExportElegidas() {
+        const claves = this._clavesNominasGuardadas();
+        return this._nomExportSel ? claves.filter(c => this._nomExportSel.has(c)) : claves;
+    },
+
+    _renderSelectorExportNom() {
+        const cont = document.getElementById('expNomLista');
+        if (!cont) return;
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const claves = this._clavesNominasGuardadas();
+        const elegidas = this._nomExportElegidas();
+        const todo = elegidas.length === claves.length;
+        cont.innerHTML = `<label class="exp-col exp-todo">
+                <input type="checkbox" ${todo ? 'checked' : ''} onchange="app._marcarTodoExportNom(this.checked)">
+                <span>Todas</span></label>`
+            + claves.map(clave => `<label class="exp-col">
+                <input type="checkbox" value="${clave}" ${elegidas.includes(clave) ? 'checked' : ''}
+                       onchange="app._toggleExportNom('${clave}',this.checked)">
+                <span>${esc(this._nombreMes(clave))}</span></label>`).join('');
+    },
+
+    _toggleExportNom(clave, on) {
+        if (!this._nomExportSel) this._nomExportSel = new Set(this._clavesNominasGuardadas());
+        if (on) this._nomExportSel.add(clave); else this._nomExportSel.delete(clave);
+        this._renderSelectorExportNom();
+    },
+
+    _marcarTodoExportNom(on) {
+        this._nomExportSel = on ? null : new Set();
+        this._renderSelectorExportNom();
+    },
+
+    // El mismo desglose que se ve en la nómina —devengos, deducciones, base de
+    // cotización, días del mes, líquido—, uno detrás de otro por cada nómina
+    // elegida. El "Devengado" no lleva fila propia: ya sale una vez, dentro de
+    // la base de cotización, igual que en la pantalla.
     _filasExportNom() {
-        return this._clavesNominasGuardadas().map(clave => {
-            const c = this._calcNomina(clave, this._misNominas[clave]);
-            return [this._nombreMes(clave), c.devengado, c.aDeducir, c.liquido, c.base,
-                c.precios.porDia.base, c.pctBienios, c.hExtra, c.hNoct, c.sindicato];
+        const filas = [];
+        this._nomExportElegidas().forEach(clave => {
+            const n = this._misNominas[clave] || {};
+            const c = this._calcNomina(clave, n);
+            filas.push([`Nómina: ${this._nombreMes(clave)}`, '', '', '']);
+            filas.push(['Devengos', '', '', '']);
+            c.devengos.forEach(l => filas.push([l.c, l.d ? `${l.d}${l.horas ? 'h' : ''}` : '', l.p || '', l.i]));
+            filas.push(['Deducciones', '', '', '']);
+            c.deducciones.forEach(l => filas.push([l.c, l.pct ? `${l.pct} %` : '', '', -l.i]));
+            filas.push(['A deducir', '', '', -c.aDeducir]);
+            filas.push([c.prorrata
+                ? 'Base de cotización · Devengado + prorrata de pagas extra'
+                : 'Base de cotización · Devengado', '', '', c.base]);
+            filas.push(['Días del mes', '', '', '']);
+            filas.push(['· De salario base', c.dias.base, '', '']);
+            if (c.dias.vacaciones) filas.push(['· De vacaciones', c.dias.vacaciones, '', '']);
+            if (c.dias.permiso)    filas.push(['· De permiso', c.dias.permiso, '', '']);
+            if (c.diasAsist)       filas.push(['· De asistencia', c.diasAsist, '', '']);
+            if (c.hExtra)          filas.push(['· Horas extras', `${c.hExtra}h`, '', '']);
+            if (n.nota)            filas.push(['Nota', n.nota, '', '']);
+            filas.push(['Líquido', '', '', c.liquido]);
+            filas.push(['', '', '', '']);
         });
+        return filas;
     },
 
     mostrarExportarNominas() {
         if (!this._clavesNominasGuardadas().length) { this._mostrarToast('No hay nóminas que exportar', 3000); return; }
+        this._nomExportSel = null;
+        this._renderSelectorExportNom();
         document.getElementById('expNomModal').classList.add('show');
         if (this.darkMode) document.getElementById('expNomModalContent').classList.add('dark');
     },
 
+    _hayNomElegidas() {
+        if (!this._nomExportElegidas().length) { this._mostrarToast('Elige al menos una nómina', 3000); return false; }
+        return true;
+    },
+
     exportarNomCSV() {
+        if (!this._hayNomElegidas()) return;
         document.getElementById('expNomModal').classList.remove('show');
         this._descargar(this._csvDe(this.CABECERAS_EXPORT_NOM, this._filasExportNom()),
             this._nombreExport('csv').replace('jornadas', 'nominas'), 'text/csv;charset=utf-8;');
@@ -3397,6 +3559,7 @@ const app = {
     },
 
     exportarNomXLS() {
+        if (!this._hayNomElegidas()) return;
         document.getElementById('expNomModal').classList.remove('show');
         const ok = this._descargarBinario(this._xlsxDe('Nóminas', this.CABECERAS_EXPORT_NOM, this._filasExportNom()),
             this._nombreExport('xlsx').replace('jornadas', 'nominas'),
@@ -3406,6 +3569,7 @@ const app = {
     },
 
     async exportarNomSheets() {
+        if (!this._hayNomElegidas()) return;
         document.getElementById('expNomModal').classList.remove('show');
         this._mostrarToast('☁️ Creando hoja en Drive...', 3000);
         try {
@@ -3456,7 +3620,7 @@ const app = {
     },
 
     prepararEmailNominas() {
-        if (!this._clavesNominasGuardadas().length) { this._mostrarToast('No hay nóminas que exportar', 3000); return; }
+        if (!this._hayNomElegidas()) return;
         document.getElementById('expNomModal').classList.remove('show');
         this.mostrarEnviarEmail(this._csvDe(this.CABECERAS_EXPORT_NOM, this._filasExportNom()),
             this._nombreExport('csv').replace('jornadas', 'nominas'),
@@ -3502,10 +3666,66 @@ const app = {
         this._enviarAContacto(email);
     },
 
+    // Un MIME de verdad con el adjunto dentro, codificado en base64url como
+    // pide la API de Gmail. El texto y el binario (el .xlsx) se codifican
+    // igual: a base64 normal para el cuerpo de la parte, y todo el mensaje a
+    // base64url para el campo "raw".
+    _base64(datos) {
+        if (typeof datos === 'string') return btoa(unescape(encodeURIComponent(datos)));
+        let bin = '';
+        for (let i = 0; i < datos.length; i += 8192) bin += String.fromCharCode.apply(null, datos.subarray(i, i + 8192));
+        return btoa(bin);
+    },
+
+    _base64Url(texto) {
+        return btoa(unescape(encodeURIComponent(texto)))
+            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    },
+
+    async _enviarGmailApi(destino, asunto, cuerpoTexto, archivo) {
+        if (!await this._ensureToken()) throw new Error('Sin sesión de Google');
+        const boundary = 'mixed_' + Date.now();
+        const asuntoCod = `=?UTF-8?B?${this._base64(asunto)}?=`;
+        const mime = `To: ${destino}\r\n`
+            + `Subject: ${asuntoCod}\r\n`
+            + `MIME-Version: 1.0\r\n`
+            + `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`
+            + `--${boundary}\r\n`
+            + `Content-Type: text/plain; charset="UTF-8"\r\n\r\n`
+            + `${cuerpoTexto}\r\n\r\n`
+            + `--${boundary}\r\n`
+            + `Content-Type: ${archivo.tipo}; name="${archivo.nombre}"\r\n`
+            + `Content-Disposition: attachment; filename="${archivo.nombre}"\r\n`
+            + `Content-Transfer-Encoding: base64\r\n\r\n`
+            + `${this._base64(archivo.contenido)}\r\n`
+            + `--${boundary}--`;
+        const resp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ raw: this._base64Url(mime) }),
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.error?.message || String(resp.status));
+        }
+    },
+
     async _enviarAContacto(email) {
         const p = this._emailPendiente;
         if (!p) return;
         document.getElementById('emailModal').classList.remove('show');
+        this._mostrarToast('✉️ Enviando...', 2000);
+        try {
+            await this._enviarGmailApi(email,
+                p.asunto, `Te adjunto ${p.nombre}.`,
+                { nombre: p.nombre, tipo: p.tipo, contenido: p.contenido });
+            this._mostrarToast(`✅ Enviado a ${email}`, 3000);
+            return;
+        } catch (e) {
+            // Sin sesión de Google, permiso de Gmail sin dar todavía, o sin
+            // red: se cae a compartir el archivo, que siempre funciona.
+            console.error('Gmail API:', e.message);
+        }
         try {
             const blob = new Blob([p.contenido], { type: p.tipo });
             const file = new File([blob], p.nombre, { type: p.tipo });
@@ -3519,7 +3739,7 @@ const app = {
         const asunto = encodeURIComponent(p.asunto);
         const cuerpo = encodeURIComponent(`Te adjunto ${p.nombre}, que se acaba de descargar.`);
         window.open(`mailto:${email}?subject=${asunto}&body=${cuerpo}`, '_blank');
-        this._mostrarToast('📎 Descargado — adjúntalo al correo que se ha abierto', 5000);
+        this._mostrarToast('📎 No se pudo enviar solo — descargado, adjúntalo al correo que se ha abierto', 5500);
     },
 
     // ── Lugar de trabajo de la jornada ───────────────────────────────────────
@@ -3736,7 +3956,7 @@ const app = {
     // HTML y sus manejadores no cambian.
 
     CUADROS: [
-        { id: 'noche',   el: 'cuadroNoche',       nom: '🌙 Nocturnas' },
+        { id: 'sinAsistencia', el: 'noAsistCompact', nom: '🚫 No fui a trabajar' },
         { id: 'pr',      el: 'prCompact',         nom: 'PR · permiso retribuido' },
         { id: 'festivo', el: 'festivoCompact',    nom: '🎉 Festivos' },
         { id: 'extra',   el: 'extraCompact',      nom: '⏱️ Horas extras' },
@@ -4285,6 +4505,9 @@ const app = {
         // Un día de baja sin horas cuenta como jornada hecha contra el objetivo
         if (reg.be && h === 0) return this._horasBaja();
         if (reg.festivo && h === 0) return this.jornadaHoras;
+        // Las vacaciones no restan del objetivo anual: cuentan como jornada
+        // hecha, igual que un festivo no trabajado.
+        if (reg.vacaciones && h === 0) return this.jornadaHoras;
         return h;
     },
 
@@ -4410,9 +4633,36 @@ const app = {
             panel.classList.toggle('active', panel.id === 'tabPanel' + idx);
         });
         localStorage.setItem('activeTab', String(idx));
-        if (idx === 1) this._cargarCuadrante();
+        if (idx === 1) { this._cargarCuadrante(); this._renderHistorialModal(); }
         if (idx === 2) { this._pintarDestino(); this._cargarNotas(); }
         if (idx === 3) this._cargarMisNominas();
+    },
+
+    // El dedo puede arrastrar tanto sobre el orden visual de la barra
+    // (puede estar reordenada) como quedarse quieto sobre algo que se
+    // desplaza de lado (el propio _sobreCarrusel se encarga de eso).
+    _initSwipeTabs() {
+        const cont = document.getElementById('appContent');
+        if (!cont || cont._swipeTabs) return;
+        cont._swipeTabs = true;
+        let x0 = 0, y0 = 0, activo = false;
+        cont.addEventListener('touchstart', e => {
+            if (e.touches.length !== 1 || this._sobreCarrusel(e.target, cont)) { activo = false; return; }
+            x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; activo = true;
+        }, { passive: true });
+        cont.addEventListener('touchend', e => {
+            if (!activo) return;
+            activo = false;
+            const t = e.changedTouches[0];
+            const dx = t.clientX - x0, dy = t.clientY - y0;
+            if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+            const btns = [...document.querySelectorAll('#tabBar .tab-btn')];
+            const actualIdx = btns.findIndex(b => b.classList.contains('active'));
+            if (actualIdx === -1) return;
+            const destino = dx < 0 ? actualIdx + 1 : actualIdx - 1;
+            if (destino < 0 || destino >= btns.length) return;
+            this.switchTab(parseInt(btns[destino].dataset.tab, 10));
+        }, { passive: true });
     },
 
     _tabDragStart(e) {
@@ -4474,19 +4724,29 @@ const app = {
         this._guardarOrdenTabs();
     },
 
-    toggleNoche() {
-        const on = document.getElementById('nocheToggle').checked;
-        document.getElementById('nocheExtra').classList.toggle('visible', on);
-        if (on && this.precioNocheDefault > 0 && !document.getElementById('precioNoche').value)
-            document.getElementById('precioNoche').value = this.precioNocheDefault;
-        if (!on) { document.getElementById('nocheResumen').textContent = ''; document.getElementById('horasNocturnas').value = ''; }
-    },
-
     calcularExtra() {
         const hN = parseFloat(document.getElementById('horasNocturnas').value) || 0;
         const precio = parseFloat(document.getElementById('precioNoche').value) || 0;
+        document.getElementById('nocheExtra')?.classList.toggle('visible', hN > 0);
+        const badge = document.getElementById('horasNocheBadge');
+        if (badge) {
+            badge.classList.toggle('visible', hN > 0);
+            badge.textContent = hN > 0 ? `🌙 ${String(hN).replace('.', ',')}h` : '';
+        }
         document.getElementById('nocheResumen').textContent =
             (hN > 0 && precio > 0) ? `Extra: ${hN}h × ${precio}€ = ${(hN * precio).toFixed(2)}€` : '';
+    },
+
+    // "No fui a trabajar": ese día no cobra el plus de asistencia, pero las
+    // horas puestas siguen contando como jornada efectiva, igual que
+    // cualquier otro día.
+    sinAsistenciaActivo: false,
+
+    clickSinAsistencia() {
+        this.sinAsistenciaActivo = !this.sinAsistenciaActivo;
+        document.getElementById('noAsistCompact')?.classList.toggle('active', this.sinAsistenciaActivo);
+        const cb = document.getElementById('sinAsistenciaToggle');
+        if (cb) cb.checked = this.sinAsistenciaActivo;
     },
 
     calcularExtraModal() {
@@ -4576,6 +4836,7 @@ const app = {
         // anterior. No debe reabrir el cajón nocturno aunque ese horario lo sea.
         const manteniaFestivo = this.festivoActivo;
         this.establecerFechaHoy();
+        this._ocultarRangoFechas();
         const lastInicio = localStorage.getItem('lastHoraInicio') || '';
         const lastFin    = localStorage.getItem('lastHoraFin') || '';
         document.getElementById('horaInicio').value = lastInicio;
@@ -4584,8 +4845,11 @@ const app = {
         document.getElementById('horasNocturnas').value = '';
         document.getElementById('precioNoche').value    = '';
         document.getElementById('nocheResumen').textContent = '';
-        document.getElementById('nocheToggle').checked = false;
-        document.querySelector('.noche-compact')?.classList.remove('active');
+        const badge = document.getElementById('horasNocheBadge');
+        if (badge) { badge.classList.remove('visible'); badge.textContent = ''; }
+        this.sinAsistenciaActivo = false;
+        document.getElementById('noAsistCompact')?.classList.remove('active');
+        const nat = document.getElementById('sinAsistenciaToggle'); if (nat) nat.checked = false;
         this.prActivo = false;
         document.getElementById('prCompact').classList.remove('active');
         document.getElementById('prToggle').checked = false;
@@ -4622,8 +4886,7 @@ const app = {
     cancelarEdicion() { this.editingId = null; this.limpiarInput(); },
 
     mostrarHistorialModal() {
-        document.getElementById('historialModal').classList.add('show');
-        if (this.darkMode) document.getElementById('historialModalContent').classList.add('dark');
+        this.switchTab(1);
         this._renderHistorialModal();
     },
 
@@ -4724,7 +4987,6 @@ const app = {
                 </div>`;
             li.querySelector('.hm-nota').addEventListener('click', () => this.editarNota(id));
             li.querySelector('.hm-edit').addEventListener('click', () => {
-                document.getElementById('historialModal').classList.remove('show');
                 this.editarRegistro(id);
             });
             li.querySelector('.hm-del').addEventListener('click', () => this.borrarRegistro(id));
@@ -4957,10 +5219,26 @@ const app = {
     CUADRANTE_URL: 'https://registro-horario-emt.vercel.app/api/cuadrante',
 
     async _cargarCuadrante() {
+        // El propio primero —si ha subido uno, es el que quiere ver—, y si no
+        // hay, el que haya publicado gestión.
+        let data = null;
+        if (this.usuarioActual?.email && await this._ensureToken()) {
+            try {
+                const rp = await fetch(`${this.CUADRANTE_URL}?mio=1`, {
+                    cache: 'no-store',
+                    headers: { Authorization: `Bearer ${this.accessToken}` },
+                });
+                if (rp.ok) {
+                    const p = await rp.json();
+                    if (p?.imagen) data = p;
+                }
+            } catch (_) {}
+        }
         try {
-            const resp = await fetch(this.CUADRANTE_URL, { cache: 'no-store' });
-            if (!resp.ok) return;
-            const data = await resp.json();
+            if (!data) {
+                const resp = await fetch(this.CUADRANTE_URL, { cache: 'no-store' });
+                if (resp.ok) data = await resp.json();
+            }
             this._pintarCuadrante(data);
             if (data?.imagen) localStorage.setItem('cuadranteCache', JSON.stringify(data));
         } catch (_) {
@@ -4976,16 +5254,58 @@ const app = {
         const img   = document.getElementById('cuadImg');
         const vacio = document.getElementById('cuadVacio');
         const fecha = document.getElementById('cuadFecha');
-        const borrar= document.getElementById('cuadBorrar');
         const hay = !!(data && data.imagen);
         if (img)   { img.style.display = hay ? 'block' : 'none'; if (hay) img.src = data.imagen; }
         if (vacio) vacio.style.display = hay ? 'none' : 'flex';
-        if (borrar) borrar.style.display = hay ? 'inline-block' : 'none';
         if (fecha) {
-            fecha.textContent = hay && data.actualizado
+            // La fecha solo tiene sentido para el que ha publicado gestión;
+            // el que ha subido cada uno para sí mismo no la lleva.
+            fecha.textContent = hay && data.publicadoPor && data.actualizado
                 ? new Date(data.actualizado).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })
                 : '';
         }
+    },
+
+    async _onCuadranteFileElegido(event) {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+        if (!file.type.startsWith('image/')) { alert('❌ Elige una imagen'); return; }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const img = new Image();
+            img.onload = async () => {
+                const MAX = 1400;
+                const escala = Math.min(1, MAX / Math.max(img.width, img.height));
+                const w = Math.round(img.width * escala), h = Math.round(img.height * escala);
+                const canvas = document.createElement('canvas');
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                let calidad = 0.82, dataUrl = canvas.toDataURL('image/jpeg', calidad);
+                while (dataUrl.length > 430 * 1024 && calidad > 0.35) {
+                    calidad -= 0.12;
+                    dataUrl = canvas.toDataURL('image/jpeg', calidad);
+                }
+                if (dataUrl.length > 430 * 1024) { alert('❌ La imagen sigue siendo muy grande'); return; }
+                try {
+                    if (!await this._ensureToken()) throw new Error('Sin sesión de Google');
+                    const resp = await fetch(`${this.CUADRANTE_URL}?mio=1`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ imagen: dataUrl, nombre: file.name }),
+                    });
+                    const data = await resp.json();
+                    if (!resp.ok) { alert('❌ ' + (data.error || resp.status)); return; }
+                    this._pintarCuadrante(data);
+                    localStorage.setItem('cuadranteCache', JSON.stringify(data));
+                    this._mostrarToast?.('✅ Cuadrante subido', 2500);
+                } catch (err) {
+                    alert('❌ No se pudo subir: ' + err.message);
+                }
+            };
+            img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
     },
 
     verCuadranteGrande() {
@@ -4999,18 +5319,25 @@ const app = {
     zoomCuadrante(ev) {
         const img = document.getElementById('cuadVisorImg');
         if (!img) return;
+        const yaAmpliada = img.classList.contains('zoom');
+        // La proporción del punto tocado se toma antes de ampliar, que es
+        // cuando el tamaño de la imagen todavía es el pequeño.
+        const ratioX = !yaAmpliada && ev ? ev.offsetX / (img.clientWidth  || 1) : 0.5;
+        const ratioY = !yaAmpliada && ev ? ev.offsetY / (img.clientHeight || 1) : 0.5;
         const ampliada = img.classList.toggle('zoom');
         const ayuda = document.getElementById('cuadVisorAyuda');
         if (ayuda) ayuda.textContent = ampliada
             ? 'Arrastra para moverte · toca para reducir'
             : 'Toca la imagen para ampliar · pellizca para acercar';
-        // Al ampliar, centrar en el punto tocado
-        if (ampliada && ev) {
-            const visor = document.getElementById('cuadVisor');
+        const visor = document.getElementById('cuadVisor');
+        if (ampliada) {
             requestAnimationFrame(() => {
-                visor.scrollLeft = (img.scrollWidth - visor.clientWidth) / 2;
-                visor.scrollTop  = Math.max(0, ev.offsetY * (img.clientHeight / (img.clientHeight || 1)) - visor.clientHeight / 2);
+                visor.scrollLeft = img.scrollWidth  * ratioX - visor.clientWidth  / 2;
+                visor.scrollTop  = img.scrollHeight * ratioY - visor.clientHeight / 2;
             });
+        } else {
+            visor.scrollLeft = 0;
+            visor.scrollTop = 0;
         }
     },
 
@@ -5355,7 +5682,7 @@ const app = {
     aplicarDarkMode() {
         document.body.classList.add('dark');
         ['#appHeader','#appContent','#tabBar','#optionsHeader','#optionsContent','#modalContent',
-         '#editModalContent','#historialModalContent','#avatarModalContent']
+         '#editModalContent','#avatarModalContent']
             .forEach(s => { const e = document.querySelector(s); if(e) e.classList.add('dark'); });
         document.querySelector('.container')?.classList.add('dark');
     },
@@ -5363,7 +5690,7 @@ const app = {
     removerDarkMode() {
         document.body.classList.remove('dark');
         ['#appHeader','#appContent','#tabBar','#optionsHeader','#optionsContent','#modalContent',
-         '#editModalContent','#historialModalContent','#avatarModalContent']
+         '#editModalContent','#avatarModalContent']
             .forEach(s => { const e = document.querySelector(s); if(e) e.classList.remove('dark'); });
         document.querySelector('.container')?.classList.remove('dark');
     },
