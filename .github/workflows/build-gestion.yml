@@ -141,6 +141,12 @@ jobs:
           XMLEOF
 
       - name: Patch MainActivity — OAuth + file downloads + BroadcastReceiver
+        # El paquete entra por aquí y no metido en el script: este paso son
+        # noventa mil caracteres de Java, y con un ${{ }} dentro Actions tiene
+        # que tratarlo entero como plantilla, se pasa de largo y da por
+        # inválido el fichero entero. Entonces no se monta ninguna de las dos.
+        env:
+          APPID: ${{ matrix.appid }}
         run: |
           cat > /tmp/MainActivity.java << 'JAVAEOF'
           package com.guillermorc.gestionemt;
@@ -1482,9 +1488,9 @@ jobs:
           }
           JAVAEOF
           # El mismo código, con el paquete que le toca a esta aplicación
-          PKGDIR="android/app/src/main/java/$(echo '${{ matrix.appid }}' | tr . /)"
+          PKGDIR="android/app/src/main/java/$(echo "$APPID" | tr . /)"
           mkdir -p "$PKGDIR"
-          sed "s/com\.guillermorc\.gestionemt/${{ matrix.appid }}/g" \
+          sed "s/com\.guillermorc\.gestionemt/$APPID/g" \
               /tmp/MainActivity.java > "$PKGDIR/MainActivity.java"
           head -2 "$PKGDIR/MainActivity.java"
 
