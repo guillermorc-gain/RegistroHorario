@@ -4542,6 +4542,16 @@ const app = {
         const horaAhora  = horas(ahora);
         const cambiaLugar = this._clavePuesto(lugarAntes) !== this._clavePuesto(lugarAhora);
         const cambiaHora  = horaAntes !== horaAhora;
+        if (cambiaLugar) {
+            // Elegir el lugar a mano manda sobre lo asignado, pero solo sobre
+            // lo que había asignado entonces: si gestión lo cambia después,
+            // manda el cambio. Sin esto, a quien hubiera tocado el lugar hoy
+            // —o a quien se lo hubiera puesto el GPS— le seguía saliendo el
+            // sitio viejo en Registro mientras arriba ya ponía el nuevo.
+            localStorage.removeItem('lugarElegidoEl');
+            this._renderLugarJornada();
+            this._actualizarCabeceraUsuario();
+        }
         if (!cambiaLugar && !cambiaHora) return;
 
         const partes = [];
