@@ -891,6 +891,58 @@ const app = {
             if (!resp.ok) { const t = await resp.text(); throw new Error('Drive actualizar: ' + resp.status + ' ' + t.slice(0,120)); }
         }
         localStorage.setItem('lastBackupTime', Date.now().toString());
+        this._espejarCopia(json);
+    },
+
+    // ── Preparando la mudanza de la copia ────────────────────────────────
+    // El historial vive en la carpeta oculta de Drive, y pedir esa carpeta es
+    // uno de los permisos que hacen salir el aviso de "aplicación no
+    // verificada". Para poder dejar de pedirlo hay que sacar los datos de ahí
+    // antes, y no de golpe: quien no haya actualizado se quedaría sin
+    // historial. Así que de momento la copia buena sigue donde estaba y aquí
+    // se va dejando la misma, tal cual, como archivo normal dentro de
+    // "Movilidad Emt". Cuando todos tengan esta versión, la app podrá leer de
+    // ahí y quitar el permiso.
+    //
+    // Va sin esperar y sin quejarse: es una copia de más. Si falla, la buena
+    // ya está guardada y no cambia nada.
+    async _espejarCopia(json) {
+        if (!json || this._espejoEnCurso) return;
+        if (!this.accessToken || Date.now() >= this.tokenExpiry) return;
+        this._espejoEnCurso = true;
+        try {
+            let id = localStorage.getItem('driveFileIdVisible');
+            if (!id) {
+                const carpeta = await this._carpetaDrive('Movilidad Emt', null);
+                // Puede existir ya de una versión anterior, y entonces hay que
+                // escribir encima en vez de dejar dos copias con el mismo
+                // nombre, que es como se parte un historial en dos.
+                const q = `name='${DRIVE_FILE_NAME}' and trashed=false and '${carpeta}' in parents`;
+                const r = await this._driveGet(
+                    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`);
+                if (r.ok) {
+                    const d = await r.json();
+                    if (d.files?.length) id = d.files[0].id;
+                }
+                if (!id) {
+                    const creado = await this._subirJsonADrive(DRIVE_FILE_NAME, json, carpeta);
+                    if (creado?.id) localStorage.setItem('driveFileIdVisible', creado.id);
+                    return;
+                }
+                localStorage.setItem('driveFileIdVisible', id);
+            }
+            const resp = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media`, {
+                method: 'PATCH',
+                headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
+                body: json
+            });
+            // Si ese archivo ya no está, se olvida el id y la próxima vez se
+            // crea de nuevo.
+            if (resp.status === 404) localStorage.removeItem('driveFileIdVisible');
+        } catch (_) {
+        } finally {
+            this._espejoEnCurso = false;
+        }
     },
 
     async _autoBackup() {
@@ -964,6 +1016,9 @@ const app = {
         try {
             const data = await this._readDriveFile();
             if (data?.preferencias) this._aplicarPreferenciasDesde(data.preferencias);
+            // Al abrir también, que si no solo se mudaría la copia de quien
+            // llegue a guardar algo.
+            if (data) this._espejarCopia(JSON.stringify({ ...data, preferencias: this._getPreferencias() }));
             this.actualizarUI(data || { horasTrabajadas: 0, historial: {} });
             this._renderGpsSettings();
             this._startScheduleTimer();
