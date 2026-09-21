@@ -493,8 +493,39 @@ jobs:
                           }).start();
                       }
 
+                      // Devuelve false si no hay navegador que la atienda, y
+                      // entonces se sigue con el cuadro de siempre.
+                      private boolean abrirPestanaNavegador(String authUrl) {
+                          try {
+                              Intent i = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(authUrl));
+                              // Los extras de "pestaña personalizada": si el navegador
+                              // los entiende se abre dentro de la app con su color, y
+                              // si no, se abre el navegador de siempre. En los dos
+                              // casos comparte la sesión de Google del teléfono, que
+                              // es lo que se busca.
+                              android.os.Bundle extras = new android.os.Bundle();
+                              extras.putBinder("android.support.customtabs.extra.SESSION", null);
+                              i.putExtras(extras);
+                              i.putExtra("android.support.customtabs.extra.TOOLBAR_COLOR", 0xFF1565C0);
+                              if (!(ctx instanceof android.app.Activity))
+                                  i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                              ctx.startActivity(i);
+                              return true;
+                          } catch (Exception e) {
+                              return false;
+                          }
+                      }
+
                       @JavascriptInterface
                       public void performOAuthInWebView(final String authUrl, final boolean isSilent) {
+                          // La entrada normal se abre ahora en el navegador del
+                          // teléfono, como una pestaña dentro de la app. Así Google
+                          // ve la sesión que ya hay en el móvil y ofrece las cuentas
+                          // para elegir; el cuadro de aquí abajo era un navegador
+                          // aparte que empezaba de cero y pedía el correo entero.
+                          // La renovación callada sigue por el cuadro: no puede
+                          // abrir nada a la vista.
+                          if (!isSilent && abrirPestanaNavegador(authUrl)) return;
                           ((android.app.Activity) ctx).runOnUiThread(new Runnable() {
                               @Override public void run() {
                                   final android.webkit.WebView wv = new android.webkit.WebView(ctx);
