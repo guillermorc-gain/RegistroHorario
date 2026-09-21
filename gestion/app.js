@@ -6033,6 +6033,10 @@ const app = {
                 && this._clavePuesto(lugarHoy) !== this._clavePuesto(u.puesto);
             const turno = sitios.length > 1 ? ''
                 : (this._turnoDe(lugarHoy, j?.i) || (esHoy ? u.turno : ''));
+            // El horario del día, para verlo junto al lugar: con el sitio solo
+            // no se sabe a qué hora entra, que es lo primero que se mira.
+            const hh = this._horasDelDia(u, fecha, j);
+            const horasHoy = (hh?.i && hh?.f) ? `${hh.i}–${hh.f}` : '';
             const t = this._totalesDe(u, fecha);
             const foto = u.avatar || this._avatares[u.email];
             const av = foto
@@ -6061,7 +6065,8 @@ const app = {
                             this._desviaciones(u) ? `<span class="cond-alerta" title="Horarios que no cuadran"
                                 onclick="event.stopPropagation();app.revisarHorarios('${esc(u.email)}')">❗${
                                 this._desviaciones(u)}</span>` : ''}
-                            <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app.ponerJornada('${esc(u.email)}','${esc(fecha)}','${esc(lugarHoy)}')">· ${esc(lugarHoy) || 'asignar lugar'}${excepcion ? ' ·' : ''} ✎</span>${
+                            <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app.ponerJornada('${esc(u.email)}','${esc(fecha)}','${esc(lugarHoy)}')">· ${esc(lugarHoy) || 'asignar lugar'}${
+                                horasHoy ? ` <span class="cond-hora">${esc(horasHoy)}</span>` : ''}${excepcion ? ' ·' : ''} ✎</span>${
                             // Lo ha dado por leído él: el cambio le ha llegado
                             this._vistoDe(u, fecha)}${
                             // Con lugar pero sin hora tampoco tiene servicio, y
