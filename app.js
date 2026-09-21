@@ -3729,9 +3729,20 @@ const app = {
             this._mostrarToast(`✅ Enviado a ${email}`, 3000);
             return;
         } catch (e) {
-            // Sin sesión de Google, permiso de Gmail sin dar todavía, o sin
-            // red: se cae a compartir el archivo, que siempre funciona.
             console.error('Gmail API:', e.message);
+            // Quien entró en la app antes de que existiera el envío por Gmail
+            // tiene un token sin ese permiso, y no hay forma de dárselo en
+            // silencio (renovarlo por detrás no amplía lo que ya se concedió):
+            // solo lo consigue volviendo a entrar y aceptándolo.
+            if (/insufficient|permission/i.test(e.message || '')) {
+                if (confirm('Para enviar el correo sin salir de la app hace falta darle '
+                    + 'permiso de Gmail, y tu sesión es de antes de que existiera eso.\n\n'
+                    + '¿Vuelves a entrar ahora para dárselo? De momento se comparte '
+                    + 'el archivo de otra forma.')) {
+                    this.login(false);
+                    return;
+                }
+            }
         }
         try {
             const blob = new Blob([p.contenido], { type: p.tipo });
