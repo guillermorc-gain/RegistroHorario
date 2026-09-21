@@ -158,6 +158,7 @@ const app = {
         this._aplicarModoVacaciones();
         this._buildAvatarGrid();
         this._setupDeepLinkListener();
+        this._iniciarSondeoTrabajadores();
         this._setupAppLifecycleBackup();
         this._setupNotificationActions(); // must register listener before any async
         this._setupNotifChat();           // y las del chat, por lo mismo
@@ -648,6 +649,8 @@ const app = {
                 this.switchTab(2);
             }
             if (this.usuarioActual) this._cargarNotasGestor();
+            // Puede haber cambiado algo mientras la app estaba de fondo
+            if (this.usuarioActual) this._cargarConductores(true);
             // If RegistrarReceiver updated Drive while in background, refresh the data
             const flag = window.AndroidBridge?.getPref?.('pendingRefresh');
             if (flag === '1' && this.usuarioActual) {
@@ -3199,9 +3202,22 @@ const app = {
 
     async _guardarJornada() {
         const sitios = this._jorTodosLosTramos();
-        if (!sitios.length) { this._mostrarToast('Pon la hora de entrada y la de salida', 3000); return; }
         const tramo = this._tramosJornada().find(t => t.id === this._jorAlcance);
         if (!tramo) return;
+        // Se puede dejar el horario para luego y poner solo el lugar: a este
+        // cuadro se entra desde la lista de trabajadores para asignar sitio, y
+        // exigir las horas dejaba sin poder hacerlo. Sin lugar y sin horas, lo
+        // que se hace es quitar el que hubiera.
+        if (!sitios.length) {
+            document.getElementById('jornadaModal').classList.remove('show');
+            const d = this._diasDelTramo(tramo);
+            await this._guardarCampoTrab(this._jorEditando,
+                { puesto: this._jorLugar || '', desde: tramo.desde, hasta: tramo.hasta },
+                (this._jorLugar ? `✅ ${this._jorLugar}` : 'Lugar quitado')
+                    + ` · ${d} día${d === 1 ? '' : 's'}`);
+            this._renderPuestos();
+            return;
+        }
         document.getElementById('jornadaModal').classList.remove('show');
         const dias = this._diasDelTramo(tramo);
         // Arriba va lo que abarca el día entero —de la primera entrada a la
@@ -3956,10 +3972,25 @@ const app = {
 
     USUARIOS_URL: 'https://registro-horario-emt.vercel.app/api/usuarios',
 
-    async _cargarConductores() {
+    // La lista la puede cambiar otra cuenta de gestión mientras esta la tiene
+    // abierta, y antes solo se volvía a pedir al abrir la app o al cambiar de
+    // pestaña: lo que tocara el otro no aparecía hasta entonces. Al refrescar
+    // por su cuenta no se pone el "Cargando…", que sería un parpadeo cada
+    // minuto sin venir a cuento.
+    _iniciarSondeoTrabajadores() {
+        if (this._sondeoTrab) return;
+        this._sondeoTrab = setInterval(() => {
+            if (!this.usuarioActual || document.hidden) return;
+            // Con un cuadro abierto se está editando algo: no se repinta debajo
+            if (document.querySelector('.modal.show')) return;
+            this._cargarConductores(true);
+        }, 60000);
+    },
+
+    async _cargarConductores(callado = false) {
         const cont = document.getElementById('condList');
         if (!cont) return;
-        cont.innerHTML = '<div class="tab-empty"><span class="tab-empty-s">Cargando…</span></div>';
+        if (!callado) cont.innerHTML = '<div class="tab-empty"><span class="tab-empty-s">Cargando…</span></div>';
         try {
             const resp = await fetch(this.USUARIOS_URL, { cache: 'no-store' });
             if (!resp.ok) throw new Error(resp.status);
@@ -3970,6 +4001,9 @@ const app = {
             // llegan se repinta. Si no llegan, queda la inicial de siempre.
             this._cargarAvatares();
         } catch (e) {
+            // Refrescando por detrás no se borra lo que ya se ve por un fallo
+            // de red: se queda lo último bueno y se prueba dentro de un minuto.
+            if (callado) return;
             cont.innerHTML = '<div class="tab-empty"><span class="tab-empty-ico">⚠️</span>'
                 + '<span class="tab-empty-t">No se pudo cargar</span>'
                 + '<span class="tab-empty-s">Revisa la conexión e inténtalo otra vez.</span></div>';
@@ -5874,7 +5908,7 @@ const app = {
                             this._desviaciones(u) ? `<span class="cond-alerta" title="Horarios que no cuadran"
                                 onclick="event.stopPropagation();app.revisarHorarios('${esc(u.email)}')">❗${
                                 this._desviaciones(u)}</span>` : ''}
-                            <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app._editarPuesto('${esc(u.email)}','${esc(fecha)}')">· ${esc(lugarHoy) || 'asignar lugar'}${excepcion ? ' ·' : ''} ✎</span>${
+                            <span class="cond-puesto puesto-click" onclick="event.stopPropagation();app.ponerJornada('${esc(u.email)}','${esc(fecha)}','${esc(lugarHoy)}')">· ${esc(lugarHoy) || 'asignar lugar'}${excepcion ? ' ·' : ''} ✎</span>${
                             // Con lugar pero sin hora tampoco tiene servicio, y
                             // sin decirlo no hay manera de saber por qué sale
                             // en el filtro.
