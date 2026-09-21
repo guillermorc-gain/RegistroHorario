@@ -1719,13 +1719,15 @@ jobs:
               im = src.resize((lado, lado), Image.LANCZOS)
               if chapa is None:
                   return im
-              dia = int(lado * 0.42)
-              cx = cy = int(lado * 0.73)
+              # Del tamaño que ya tenía la de gestión: el disco ocupa un
+              # cuarto del icono y va centrado en el 76%.
+              dia = max(8, int(lado * 0.25))
+              cx = cy = int(lado * 0.763)
               disco = Image.new('RGBA', (lado, lado), (0, 0, 0, 0))
               ImageDraw.Draw(disco).ellipse(
                   [cx - dia//2, cy - dia//2, cx + dia//2, cy + dia//2], fill=(255, 255, 255, 255))
               im.alpha_composite(disco)
-              g = int(dia * 0.76)
+              g = max(6, int(dia * 0.8))
               l = max(chapa.size)
               c = Image.new('RGBA', (l, l), (0, 0, 0, 0))
               c.paste(chapa, ((l - chapa.size[0])//2, (l - chapa.size[1])//2), chapa)
