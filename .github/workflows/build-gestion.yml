@@ -611,6 +611,42 @@ jobs:
                               }
                           });
                       }
+                      // Compartir un archivo ya adjuntado, con la app que elija.
+                      // Lo de antes era descargarlo y abrir un correo vacío: se
+                      // llegaba a la app de correo y el archivo no estaba.
+                      @JavascriptInterface
+                      public void compartirArchivo(String nombre, String mime, String base64,
+                                                   String asunto, String destino) {
+                          try {
+                              byte[] datos = android.util.Base64.decode(base64, android.util.Base64.DEFAULT);
+                              java.io.File dir = new java.io.File(ctx.getCacheDir(), "compartir");
+                              if (!dir.exists()) dir.mkdirs();
+                              String limpio = (nombre == null || nombre.isEmpty()) ? "archivo" : nombre;
+                              limpio = limpio.replaceAll("[\\\\/:*?\"<>|]", "_");
+                              java.io.File f = new java.io.File(dir, limpio);
+                              java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
+                              fos.write(datos);
+                              fos.close();
+                              Uri uri = FileProvider.getUriForFile(
+                                  ctx, ctx.getPackageName() + ".fileprovider", f);
+                              Intent envio = new Intent(Intent.ACTION_SEND);
+                              envio.setType(mime == null || mime.isEmpty() ? "*/*" : mime);
+                              envio.putExtra(Intent.EXTRA_STREAM, uri);
+                              if (asunto != null && !asunto.isEmpty())
+                                  envio.putExtra(Intent.EXTRA_SUBJECT, asunto);
+                              if (destino != null && !destino.isEmpty())
+                                  envio.putExtra(Intent.EXTRA_EMAIL, new String[]{ destino });
+                              envio.putExtra(Intent.EXTRA_TEXT, "Te adjunto " + limpio + ".");
+                              envio.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                              Intent chooser = Intent.createChooser(envio, "Enviar con");
+                              chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                              ctx.startActivity(chooser);
+                          } catch (Exception e) {
+                              ((android.app.Activity) ctx).runOnUiThread(() ->
+                                  Toast.makeText(ctx, "No se pudo compartir el archivo", Toast.LENGTH_LONG).show());
+                          }
+                      }
+
                       @JavascriptInterface
                       public void registerGeofences(String locationsJson) {
                           try {
