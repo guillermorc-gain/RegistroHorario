@@ -394,6 +394,7 @@ const app = {
             this.mostrarApp();
             this.actualizarBotonesPerfil();
             this._actualizarCabeceraUsuario();
+            this._aplicarPermisosGestor();
             setTimeout(() => this._autoRellenarFormulario(), 50);
             this._scheduleTokenRefresh();
             this.cargarDatos();
@@ -1598,6 +1599,31 @@ const app = {
         if (num) num.textContent = this.numConductor || '';
     },
 
+    // A la app de gestión entra más gente que el gestor. Los usuarios de
+    // prueba y el reparto de versiones son cosa suya y de nadie más, así que
+    // para el resto de cuentas ni salen las secciones ni existen los de
+    // prueba en ninguna lista. El servidor ya lo exigía; esto es para que
+    // tampoco se vean.
+    _soyElGestor() {
+        return (this.usuarioActual?.email || '').toLowerCase() === SUPER_USER_EMAIL.toLowerCase();
+    },
+
+    _aplicarPermisosGestor() {
+        const soy = this._soyElGestor();
+        ['sectionVersiones', 'sectionPrueba'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = soy ? '' : 'none';
+        });
+    },
+
+    // Los conductores que se ven: nunca los ocultos, y los de prueba solo
+    // para el gestor.
+    _conductoresVisibles() {
+        const soy = this._soyElGestor();
+        return Object.values(this._conductores || {})
+            .filter(u => !u.oculto && (soy || !u.ficticio));
+    },
+
     // Record ids are YYYYMMDD for the first entry of a day, then YYYYMMDD-2, -3…
     _nuevoRegistroId(historial, fechaKey) {
         if (!historial[fechaKey]) return fechaKey;
@@ -2376,8 +2402,7 @@ const app = {
     // Los que se ven ahora mismo con lo que haya escrito en el buscador
     _destinatariosVisibles() {
         const q = (document.getElementById('destBuscar')?.value || '').toLowerCase().trim();
-        return Object.values(this._conductores || {})
-            .filter(u => !u.oculto)
+        return this._conductoresVisibles()
             .filter(u => !q || `${u.conductor || ''} ${u.nombre || ''} ${u.email}`.toLowerCase().includes(q))
             .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'));
     },
@@ -3374,7 +3399,7 @@ const app = {
     _renderCuadranteTrab() {
         const cont = document.getElementById('ctList');
         if (!cont) return;
-        const lista = Object.values(this._conductores || {}).filter(u => !u.oculto);
+        const lista = this._conductoresVisibles();
         this._renderOrdenCuad();
         const cnt = document.getElementById('ctCnt');
         if (cnt) cnt.textContent = lista.length ? `${lista.length}` : '';
@@ -3937,7 +3962,7 @@ const app = {
 
     _filasExport() {
         const filas = [];
-        Object.values(this._conductores || {}).filter(u => !u.oculto).forEach(u => {
+        this._conductoresVisibles().forEach(u => {
             (u.jornadas || []).forEach(j => {
                 const lugar = this._lugarDe(u, j.f, j);
                 const t = this._turnoDe(lugar, j.i) || '';
@@ -4613,7 +4638,7 @@ const app = {
 
         // Aplanar: una entrada por trabajador y día
         const filas = [];
-        Object.values(this._conductores || {}).filter(u => !u.oculto).forEach(u => {
+        this._conductoresVisibles().forEach(u => {
             (u.jornadas || []).forEach(j => filas.push({
                 f: j.f, horas: j.h || 0, ini: j.i || '', fin: j.o || '',
                 extra: j.x === 1, festivo: !!j.fe, vac: !!j.v, pr: !!j.p, be: !!j.b,
@@ -5293,7 +5318,7 @@ const app = {
             btnHoy.title = off === 0 ? 'Elegir día' : 'Volver a hoy';
         }
 
-        const lista    = Object.values(this._conductores || {}).filter(u => !u.oculto);
+        const lista    = this._conductoresVisibles();
         // Los que no tienen lugar asignado también salen, en su propio grupo:
         // si no, un trabajador nuevo se quedaba invisible hasta asignárselo.
         const SIN = 'Sin asignar';
@@ -5678,7 +5703,11 @@ const app = {
         const fecha = this._fechaOffset(this._puestosOffset);
         const esHoy = this._puestosOffset === 0;
         const orden = localStorage.getItem('ordenTrabajadores') || 'nombre';
-        const todos = Object.values(this._conductores || {});
+        // Aquí sí entran los ocultos —el filtro "Ocultos" es el único sitio
+        // desde donde se pueden volver a mostrar—, pero los de prueba solo
+        // para el gestor.
+        const soyGestor = this._soyElGestor();
+        const todos = Object.values(this._conductores || {}).filter(u => soyGestor || !u.ficticio);
         const filtro = localStorage.getItem('filtroTrabajadores') || 'todos';
         this._renderFiltrosCond(todos, fecha);
         const lista = todos
