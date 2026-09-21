@@ -1385,15 +1385,15 @@
     "conductor": "1234-5",
     "avatar": null,
     "version": "build-268",
-    "horasMes": 14,
-    "horasTotales": 14,
-    "diasMes": 3,
+    "horasMes": 21,
+    "horasTotales": 21,
+    "diasMes": 4,
     "turno": "T",
     "puesto": "",
-    "actualizado": "2026-09-21T12:32:13.744Z",
-    "horaInicio": "18:00",
-    "horaFin": "22:00",
-    "horarioDe": "anterior",
+    "actualizado": "2026-09-21T12:36:39.609Z",
+    "horaInicio": "14:00",
+    "horaFin": "21:00",
+    "horarioDe": "hoy",
     "jornadas": [
       {
         "f": "20260915",
@@ -1417,6 +1417,14 @@
         "i": "18:00",
         "o": "22:00",
         "n": 1,
+        "pu": "Son Rossinyol"
+      },
+      {
+        "f": "20260921",
+        "h": 7,
+        "i": "14:00",
+        "o": "21:00",
+        "n": 0,
         "pu": "Son Rossinyol"
       }
     ],
