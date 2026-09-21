@@ -528,9 +528,17 @@ jobs:
                                       public boolean shouldOverrideUrlLoading(android.webkit.WebView view, android.webkit.WebResourceRequest req) {
                                           if (handled[0]) return true;
                                           String u = req.getUrl().toString();
-                                          if (u.contains("registro-horario-emt.vercel.app")) {
-                                              String qry = req.getUrl().getQuery();
-                                              reportResult(qry != null ? qry : "");
+                                          String host = req.getUrl().getHost() == null ? "" : req.getUrl().getHost();
+                                          String qry  = req.getUrl().getQuery() == null ? "" : req.getUrl().getQuery();
+                                          // La vuelta de Google es la que trae el código a la
+                                          // dirección de la app. Antes bastaba con que la URL
+                                          // nombrara el dominio, y el enlace de continuar del
+                                          // aviso de "aplicación no verificada" lo nombra: se
+                                          // tragaba ese toque y cancelaba la entrada justo a
+                                          // quien intentaba seguir adelante.
+                                          if ("registro-horario-emt.vercel.app".equals(host)
+                                                  && (qry.contains("code=") || qry.contains("error="))) {
+                                              reportResult(qry);
                                               return true;
                                           }
                                           if (u.contains("silent_failed=1") || u.contains("error=access_denied") || u.contains("error=interaction_required")) {
@@ -540,7 +548,8 @@ jobs:
                                       }
                                       @Override
                                       public void onPageFinished(android.webkit.WebView view, String pageUrl) {
-                                          if (handled[0] || pageUrl == null || !pageUrl.contains("registro-horario-emt.vercel.app")) return;
+                                          if (handled[0] || pageUrl == null) return;
+                                          if (!"registro-horario-emt.vercel.app".equals(android.net.Uri.parse(pageUrl).getHost())) return;
                                           view.evaluateJavascript(
                                               "(function(){var q=(window.location.search||'').replace(/^\\?/,'');return q.indexOf('code=')>=0?q:'';})();",
                                               new android.webkit.ValueCallback<String>() {
@@ -548,7 +557,10 @@ jobs:
                                                       if (val != null && !val.equals("null") && !val.equals("\"\"") && val.length() > 4) {
                                                           String clean = val.startsWith("\"") ? val.substring(1, val.length()-1) : val;
                                                           reportResult(clean);
-                                                      } else { reportResult(null); }
+                                                      }
+                                                      // Sin código no se da por perdida la entrada:
+                                                      // puede ser una parada de camino, y cerrar
+                                                      // aquí el cuadro dejaba fuera a quien seguía.
                                                   }
                                               }
                                           );
