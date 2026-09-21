@@ -1044,6 +1044,15 @@ jobs:
                       try { mirarChat(ctx); } catch (Exception ignored) {}
                   }
 
+                  // El mismo número que le pone la app web a cada conversación,
+                  // para que el aviso puesto desde fuera y el puesto desde dentro
+                  // sean el mismo y no se dupliquen.
+                  static int idDeAviso(String conv) {
+                      int h = 0;
+                      for (int i = 0; i < conv.length(); i++) h = h * 31 + conv.charAt(i);
+                      return 2000 + Math.abs(h % 90000);
+                  }
+
                   static void mirarChat(Context ctx) throws Exception {
                       SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
                       String email = prefs.getString("chatEmail", "");
@@ -1067,11 +1076,8 @@ jobs:
                       br.close(); c.disconnect();
 
                       org.json.JSONArray arr = new org.json.JSONArray(sb.toString());
-                      int nuevos = 0;
                       String masNuevo = visto;
-                      // De cuáles se avisa, para poder darlas por leídas desde
-                      // el propio aviso sin tener que abrir la app.
-                      StringBuilder ids = new StringBuilder();
+                      java.util.List<org.json.JSONObject> nuevas = new java.util.ArrayList<>();
                       for (int i = 0; i < arr.length(); i++) {
                           org.json.JSONObject n = arr.getJSONObject(i);
                           if (n.optBoolean("archivada", false)) continue;
@@ -1086,15 +1092,11 @@ jobs:
                           boolean mio = esGestor ? "gestor".equals(de)
                                                  : (email.equalsIgnoreCase(de) || "trabajador".equals(de));
                           if (mio || en.isEmpty() || en.compareTo(visto) <= 0) continue;
-                          nuevos++;
+                          if (n.optString("id", "").isEmpty()) continue;
+                          nuevas.add(n);
                           if (en.compareTo(masNuevo) > 0) masNuevo = en;
-                          String id = n.optString("id", "");
-                          if (!id.isEmpty()) {
-                              if (ids.length() > 0) ids.append(",");
-                              ids.append(id);
-                          }
                       }
-                      if (nuevos == 0) return;
+                      if (nuevas.isEmpty()) return;
                       prefs.edit().putString("chatVisto", masNuevo).apply();
 
                       NotificationManager nm =
@@ -1105,45 +1107,61 @@ jobs:
                       }
                       int flags = PendingIntent.FLAG_UPDATE_CURRENT
                           | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
-                      Intent oi = new Intent(ctx, MainActivity.class);
-                      oi.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                      oi.putExtra("abrirNotas", true);
-                      PendingIntent pi = PendingIntent.getActivity(ctx, 2, oi, flags);
-                      // "Marcar leído" se resuelve aquí mismo: quita el aviso y
-                      // manda el visto. Antes tocarlo abría la app, que es justo
-                      // lo que no se quiere de un botón que dice "ya lo he visto".
-                      Intent li = new Intent(ctx, LeidoReceiver.class);
-                      li.putExtra("ids", ids.toString());
-                      li.putExtra("hasta", masNuevo);
-                      PendingIntent leidoPI = PendingIntent.getBroadcast(ctx, 4, li, flags);
-                      // Contestar desde la propia barra, sin abrir nada. Solo cuando lo
-                      // nuevo es de una conversación: con varias no se sabría a cuál va.
-                      NotificationCompat.Action responder = null;
-                      String unico = ids.toString();
-                      if (!unico.isEmpty() && unico.indexOf(',') < 0) {
+                      // La respuesta escrita viaja dentro del Intent, así que ese de
+                      // ahí abajo no puede ser inmutable como los demás.
+                      int flagsAbiertos = PendingIntent.FLAG_UPDATE_CURRENT
+                          | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0);
+                      // Un aviso por conversación, con su nombre y su mensaje. Antes
+                      // era uno solo que decía "tienes 3 mensajes" y obligaba a entrar
+                      // para saber de qué iban; y con varias no se podía contestar,
+                      // porque no se sabía a cuál. Ahora cada uno lleva su "Responder"
+                      // y su "Marcar leído", y los dos se resuelven sin abrir la app.
+                      for (org.json.JSONObject n : nuevas) {
+                          String id = n.optString("id", "");
+                          int idAviso = idDeAviso(id);
+                          String quien = n.optString("quien", "");
+                          String cuerpo = n.optString("texto", "");
+                          if (quien.isEmpty()) quien = "Mensaje nuevo";
+                          if (cuerpo.isEmpty()) cuerpo = "Toca para leerlo en la aplicación";
+
+                          Intent oi = new Intent(ctx, MainActivity.class);
+                          oi.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                          oi.putExtra("abrirNotas", true);
+                          PendingIntent pi = PendingIntent.getActivity(ctx, idAviso, oi, flags);
+
+                          // "Marcar leído" se resuelve aquí mismo: quita el aviso y
+                          // manda el visto. Antes tocarlo abría la app, que es justo
+                          // lo que no se quiere de un botón que dice "ya lo he visto".
+                          Intent li = new Intent(ctx, LeidoReceiver.class);
+                          li.putExtra("ids", id);
+                          li.putExtra("hasta", masNuevo);
+                          li.putExtra("aviso", idAviso);
+                          PendingIntent leidoPI =
+                              PendingIntent.getBroadcast(ctx, idAviso + 100000, li, flags);
+
                           Intent ri = new Intent(ctx, ResponderReceiver.class);
-                          ri.putExtra("id", unico);
-                          // La respuesta escrita viaja dentro del Intent, así que este
-                          // no puede ser inmutable como los demás.
-                          int flagsAbiertos = PendingIntent.FLAG_UPDATE_CURRENT
-                              | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0);
-                          responder = new NotificationCompat.Action.Builder(0, "Responder",
-                                  PendingIntent.getBroadcast(ctx, 6, ri, flagsAbiertos))
+                          ri.putExtra("id", id);
+                          ri.putExtra("aviso", idAviso);
+                          NotificationCompat.Action responder = new NotificationCompat.Action.Builder(
+                                  0, "Responder",
+                                  PendingIntent.getBroadcast(ctx, idAviso + 200000, ri, flagsAbiertos))
                               .addRemoteInput(new androidx.core.app.RemoteInput.Builder("texto")
                                   .setLabel("Escribe tu respuesta\u2026").build())
                               .setAllowGeneratedReplies(false)
                               .build();
+
+                          nm.notify(idAviso, new NotificationCompat.Builder(ctx, CHAT_CHANNEL)
+                              .setSmallIcon(R.drawable.ic_stat_chat)
+                              .setContentTitle(quien)
+                              .setContentText(cuerpo)
+                              .setStyle(new NotificationCompat.BigTextStyle().bigText(cuerpo))
+                              .setPriority(NotificationCompat.PRIORITY_HIGH)
+                              .setContentIntent(pi)
+                              .addAction(0, "Marcar leído", leidoPI)
+                              .addAction(responder)
+                              .setAutoCancel(true)
+                              .build());
                       }
-                      NotificationCompat.Builder aviso = new NotificationCompat.Builder(ctx, CHAT_CHANNEL)
-                          .setSmallIcon(R.drawable.ic_stat_chat)
-                          .setContentTitle(nuevos == 1 ? "Tienes un mensaje" : "Tienes " + nuevos + " mensajes")
-                          .setContentText("Contesta o marca como leído sin abrir la aplicación")
-                          .setPriority(NotificationCompat.PRIORITY_HIGH)
-                          .setContentIntent(pi)
-                          .addAction(0, "Marcar leído", leidoPI)
-                          .setAutoCancel(true);
-                      if (responder != null) aviso.addAction(responder);
-                      nm.notify(1002, aviso.build());
                   }
               }
 
@@ -1159,7 +1177,7 @@ jobs:
                       final String id = intent == null ? "" : intent.getStringExtra("id");
                       NotificationManager nm =
                           (NotificationManager) app.getSystemService(Context.NOTIFICATION_SERVICE);
-                      if (nm != null) nm.cancel(1002);
+                      if (nm != null) nm.cancel(intent == null ? 1002 : intent.getIntExtra("aviso", 1002));
                       if (texto.isEmpty() || id == null || id.isEmpty()) return;
                       final PendingResult pendiente = goAsync();
                       new Thread(() -> {
@@ -1209,7 +1227,7 @@ jobs:
                       final String hasta = intent == null ? "" : intent.getStringExtra("hasta");
                       NotificationManager nm =
                           (NotificationManager) app.getSystemService(Context.NOTIFICATION_SERVICE);
-                      if (nm != null) nm.cancel(1002);
+                      if (nm != null) nm.cancel(intent == null ? 1002 : intent.getIntExtra("aviso", 1002));
                       if (hasta != null && !hasta.isEmpty()) {
                           app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                              .edit().putString("chatVisto", hasta).apply();
