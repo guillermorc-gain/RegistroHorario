@@ -1454,6 +1454,11 @@ const app = {
         return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     },
 
+    // El mismo día de hoy, en el formato compacto de los ids del historial
+    // (AAAAMMDD), en zona local: con toISOString() el día sale en UTC y
+    // hasta 2h después de medianoche local seguía marcando el de ayer.
+    _hoyId() { return this._hoyISO().replace(/-/g, ''); },
+
     _periodoVacacionesActivo() {
         const hoy = this._hoyISO();
         return this._getVacaciones().find(v => hoy >= v.desde && hoy <= v.hasta) || null;
@@ -2137,7 +2142,7 @@ const app = {
         const restantes = t.restantes;
         const pct       = (t.anualReal / this.horasAnualesCustom) * 100;
         // Ocultar el banner de proximidad si ya hay registro hoy
-        const _todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const _todayId = this._hoyId();
         if (this._hayRegistroEnFecha(_todayId)) {
             document.getElementById('workBanner')?.classList.remove('show');
             localStorage.setItem('lastRegisteredDate', _todayId);
@@ -6671,7 +6676,7 @@ const app = {
         if (locs.length === 0 || !navigator.geolocation) return;
         if (this.gpsMode === 'off') return;
         if (this.gpsMode === 'schedule' && !this._isInGpsSchedule()) return;
-        const todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const todayId = this._hoyId();
         if (localStorage.getItem('lastRegisteredDate') === todayId) return;
         if (this._historialFull[todayId]) return;
         navigator.geolocation.getCurrentPosition((pos) => {
@@ -6739,7 +6744,7 @@ const app = {
                 const ahora = Date.now();
                 if (ahora - this._lastGeoCheck < this.gpsInterval * 60 * 1000) return;
                 this._lastGeoCheck = ahora;
-                const todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                const todayId = this._hoyId();
                 if (localStorage.getItem('lastRegisteredDate') === todayId) return;
                 if (this._historialFull[todayId]) return;
                 const locs = this._getWorkLocations();
@@ -6844,7 +6849,7 @@ const app = {
         let minutos = (h2 * 60 + m2) - (h1 * 60 + m1);
         if (minutos <= 0) minutos += 24 * 60;
         const horas = Math.round(minutos / 6) / 10;
-        const fecha = new Date().toISOString().slice(0, 10);
+        const fecha = this._hoyISO();
         const registroId = fecha.replace(/-/g, '');
         try {
             const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
