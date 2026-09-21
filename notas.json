@@ -257,5 +257,25 @@
     "de": "trabajador",
     "tipo": "gestion",
     "estado": "pendiente"
+  },
+  "20260921134631543-clhvy-0": {
+    "id": "20260921134631543-clhvy-0",
+    "email": "guillermo.rcxx@gmail.com",
+    "creado": "2026-09-21T13:46:31.543Z",
+    "nombre": "Guillermo Ríos Correa",
+    "conductor": "1234-5",
+    "mensajes": [
+      {
+        "de": "trabajador",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "✅ He leído el cambio de jornada: Ahora te toca en Son Rossinyol",
+        "adjuntos": [],
+        "en": "2026-09-21T13:46:31.543Z"
+      }
+    ],
+    "archivada": false,
+    "de": "trabajador",
+    "tipo": "gestion",
+    "estado": "pendiente"
   }
 }
