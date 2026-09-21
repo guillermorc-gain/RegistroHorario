@@ -1390,7 +1390,7 @@
     "diasMes": 3,
     "turno": "T",
     "puesto": "",
-    "actualizado": "2026-09-21T11:58:26.635Z",
+    "actualizado": "2026-09-21T12:05:12.403Z",
     "horaInicio": "18:00",
     "horaFin": "22:00",
     "horarioDe": "anterior",
@@ -1401,7 +1401,7 @@
         "i": "17:00",
         "o": "22:00",
         "n": 1,
-        "pu": ""
+        "pu": "Son Rossinyol"
       },
       {
         "f": "20260917",
@@ -1409,7 +1409,7 @@
         "i": "17:00",
         "o": "22:00",
         "n": 1,
-        "pu": ""
+        "pu": "Son Rossinyol"
       },
       {
         "f": "20260918",
@@ -1417,7 +1417,7 @@
         "i": "18:00",
         "o": "22:00",
         "n": 1,
-        "pu": ""
+        "pu": "Son Rossinyol"
       }
     ],
     "horasAnuales": 1700,
