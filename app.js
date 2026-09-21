@@ -3264,7 +3264,10 @@ const app = {
             pct('Aportac. Mecanismo de equidad', base, tipos.mei),
             pct('IRPF Cta. Ajena Dinerarios', devengado, tipos.irpf),
         ];
-        if (sindicato) deducciones.push({ c: 'Sindicato/s', base: 0, pct: 0, i: sindicato });
+        // Siempre va, aunque sea 0: si aparece y desaparece según el mes, la
+        // nómina entera sube o baja una línea al pasar de uno a otro, igual
+        // que pasaba antes con las horas nocturnas y las extras.
+        deducciones.push({ c: 'Sindicato/s', base: 0, pct: 0, i: sindicato });
         const aDeducir = r2(deducciones.reduce((t, l) => t + l.i, 0));
         return { dias, devengos, deducciones, devengado, prorrata, base, aDeducir,
                  liquido: r2(devengado - aDeducir), precios: C, tipos, sindicato,
@@ -3503,17 +3506,31 @@ const app = {
         this._renderSelectorExportNom();
     },
 
-    // El mismo desglose de la nómina —devengos, deducciones, líquido—, uno
-    // detrás de otro por cada nómina elegida.
+    // El mismo desglose que se ve en la nómina —devengos, deducciones, base de
+    // cotización, días del mes, líquido—, uno detrás de otro por cada nómina
+    // elegida. El "Devengado" no lleva fila propia: ya sale una vez, dentro de
+    // la base de cotización, igual que en la pantalla.
     _filasExportNom() {
         const filas = [];
         this._nomExportElegidas().forEach(clave => {
-            const c = this._calcNomina(clave, this._misNominas[clave]);
+            const n = this._misNominas[clave] || {};
+            const c = this._calcNomina(clave, n);
             filas.push([`Nómina: ${this._nombreMes(clave)}`, '', '', '']);
+            filas.push(['Devengos', '', '', '']);
             c.devengos.forEach(l => filas.push([l.c, l.d ? `${l.d}${l.horas ? 'h' : ''}` : '', l.p || '', l.i]));
-            filas.push(['Devengado', '', '', c.devengado]);
+            filas.push(['Deducciones', '', '', '']);
             c.deducciones.forEach(l => filas.push([l.c, l.pct ? `${l.pct} %` : '', '', -l.i]));
             filas.push(['A deducir', '', '', -c.aDeducir]);
+            filas.push([c.prorrata
+                ? 'Base de cotización · Devengado + prorrata de pagas extra'
+                : 'Base de cotización · Devengado', '', '', c.base]);
+            filas.push(['Días del mes', '', '', '']);
+            filas.push(['· De salario base', c.dias.base, '', '']);
+            if (c.dias.vacaciones) filas.push(['· De vacaciones', c.dias.vacaciones, '', '']);
+            if (c.dias.permiso)    filas.push(['· De permiso', c.dias.permiso, '', '']);
+            if (c.diasAsist)       filas.push(['· De asistencia', c.diasAsist, '', '']);
+            if (c.hExtra)          filas.push(['· Horas extras', `${c.hExtra}h`, '', '']);
+            if (n.nota)            filas.push(['Nota', n.nota, '', '']);
             filas.push(['Líquido', '', '', c.liquido]);
             filas.push(['', '', '', '']);
         });

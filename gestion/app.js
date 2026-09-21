@@ -3655,18 +3655,25 @@ const app = {
     zoomCuadrante(ev) {
         const img = document.getElementById('cuadVisorImg');
         if (!img) return;
+        const yaAmpliada = img.classList.contains('zoom');
+        // La proporción del punto tocado se toma antes de ampliar, que es
+        // cuando el tamaño de la imagen todavía es el pequeño.
+        const ratioX = !yaAmpliada && ev ? ev.offsetX / (img.clientWidth  || 1) : 0.5;
+        const ratioY = !yaAmpliada && ev ? ev.offsetY / (img.clientHeight || 1) : 0.5;
         const ampliada = img.classList.toggle('zoom');
         const ayuda = document.getElementById('cuadVisorAyuda');
         if (ayuda) ayuda.textContent = ampliada
             ? 'Arrastra para moverte · toca para reducir'
             : 'Toca la imagen para ampliar · pellizca para acercar';
-        // Al ampliar, centrar en el punto tocado
-        if (ampliada && ev) {
-            const visor = document.getElementById('cuadVisor');
+        const visor = document.getElementById('cuadVisor');
+        if (ampliada) {
             requestAnimationFrame(() => {
-                visor.scrollLeft = (img.scrollWidth - visor.clientWidth) / 2;
-                visor.scrollTop  = Math.max(0, ev.offsetY * (img.clientHeight / (img.clientHeight || 1)) - visor.clientHeight / 2);
+                visor.scrollLeft = img.scrollWidth  * ratioX - visor.clientWidth  / 2;
+                visor.scrollTop  = img.scrollHeight * ratioY - visor.clientHeight / 2;
             });
+        } else {
+            visor.scrollLeft = 0;
+            visor.scrollTop = 0;
         }
     },
 
