@@ -2419,8 +2419,12 @@ const app = {
         try {
             const r = await fetch(this.NOTAS_URL, { cache: 'no-store' });
             if (!r.ok) throw new Error(r.status);
-            // Lo que se escriben entre compañeros no pasa por aquí
-            this._notas = (await r.json()).filter(n => n.tipo !== 'companero');
+            // Lo que se escriben entre compañeros no pasa por aquí, salvo lo
+            // que le manden a uno mismo: es como le llegan al desarrollador
+            // las notas que se le escriben desde la app de los trabajadores.
+            const mio = (this.usuarioActual?.email || '').toLowerCase();
+            this._notas = (await r.json()).filter(n =>
+                n.tipo !== 'companero' || (n.email || '').toLowerCase() === mio);
             localStorage.setItem('notasCache', JSON.stringify(this._notas));
         } catch (_) {
             try { this._notas = JSON.parse(localStorage.getItem('notasCache') || '[]'); } catch (__) {}
@@ -2547,6 +2551,25 @@ const app = {
     },
 
     // Los que se ven ahora mismo con lo que haya escrito en el buscador
+    DEV_EMAIL: 'g.rioscorrea@gmail.com',
+    DEV_NOMBRE: 'Desarrollador',
+
+    // Quien lleva la aplicación, con nombre propio y aparte de la plantilla:
+    // fuera de la lista de trabajadores no le afecta "Todos", que si no una
+    // nota a toda la plantilla se le colaría a él también.
+    _filaDesarrollador() {
+        if ((this.usuarioActual?.email || '').toLowerCase() === this.DEV_EMAIL) return '';
+        const q = (document.getElementById('destBuscar')?.value || '').toLowerCase().trim();
+        if (q && !this.DEV_NOMBRE.toLowerCase().includes(q)) return '';
+        const on = this._elegidos.includes(this.DEV_EMAIL);
+        return `<div class="dest-fila${on ? ' on' : ''}"
+            onclick="app._alternarDest('${this.DEV_EMAIL}')">
+            <span class="dest-marca">${on ? '✓' : ''}</span>
+            <span class="nt-num">💻</span>
+            <span class="nt-nom">${this.DEV_NOMBRE}</span>
+        </div>`;
+    },
+
     _destinatariosVisibles() {
         const q = (document.getElementById('destBuscar')?.value || '').toLowerCase().trim();
         return this._conductoresVisibles()
@@ -2558,7 +2581,8 @@ const app = {
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
         const lista = this._destinatariosVisibles();
         const cont = document.getElementById('destLista');
-        cont.innerHTML = lista.length ? lista.map(u => {
+        const dev = this._filaDesarrollador();
+        cont.innerHTML = dev + (lista.length ? lista.map(u => {
             const on = this._elegidos.includes(u.email);
             return `<div class="dest-fila${on ? ' on' : ''}"
                 onclick="app._alternarDest('${esc(u.email).replace(/'/g, "\\'")}')">
@@ -2567,7 +2591,7 @@ const app = {
                 <span class="nt-nom">${esc(u.nombre) || esc(u.email)}</span>
             </div>`;
         }).join('')
-            : '<div class="baja-vacio">Ningún trabajador con ese nombre o número</div>';
+            : (dev ? '' : '<div class="baja-vacio">Ningún trabajador con ese nombre o número</div>'));
         const n = this._elegidos.length;
         const cuantos = document.getElementById('destCuantos');
         if (cuantos) cuantos.textContent = n ? `${n} elegido${n === 1 ? '' : 's'}` : '';
@@ -2836,8 +2860,13 @@ const app = {
         const n = (this._notas || []).find(x => x.id === id);
         const ultimo = this._ultimoMensaje(n);
         if (!ultimo) return;
-        // Leído es leído: además de apuntarlo aquí, se le dice al otro.
-        if (!this._estaVista(n)) this._marcarVisto(id, true, true);
+        // Leído es leído: además de apuntarlo aquí, se le dice al otro. Lo
+        // que no se da por visto es lo que he escrito yo: esto se llama
+        // también al recargar con la conversación abierta, y lo marcaba
+        // "visto por" quien acababa de escribir.
+        if (!this._esMiMensaje(ultimo, n) && !this._estaVista(n)) {
+            this._marcarVisto(id, true, true);
+        }
         const l = this._leidas();
         l[id] = ultimo.en || new Date().toISOString();
         localStorage.setItem('convLeidas', JSON.stringify(l));
@@ -2922,11 +2951,12 @@ const app = {
 
     // Alinear a la derecha lo que he escrito yo
     _esMiMensaje(m, n) {
-        if (true) return m.de === 'gestor';
+        // En las conversaciones de gestión lo propio va firmado como "gestor".
+        // En las que le llegan a uno como persona —las que le escriben al
+        // desarrollador desde la app de los trabajadores— va con su correo.
+        if (m.de === 'gestor') return true;
         const mio = (this.usuarioActual?.email || '').toLowerCase();
-        if ((m.de || '').toLowerCase() === mio) return true;
-        return m.de === 'trabajador' && n.tipo !== 'companero'
-            && (n.email || '').toLowerCase() === mio;
+        return !!mio && (m.de || '').toLowerCase() === mio;
     },
 
     _tituloHilo(n) {

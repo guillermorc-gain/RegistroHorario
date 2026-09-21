@@ -2603,6 +2603,16 @@ const app = {
     _destino: null,          // null = gestión
     _directorio: [],
 
+    // Quien lleva la aplicación. Sale con nombre propio en la lista de a
+    // quién escribir, en las dos apps, para poder contarle un fallo o pedirle
+    // algo sin tener que buscar su correo por ahí.
+    DEV_EMAIL: 'g.rioscorrea@gmail.com',
+    DEV_NOMBRE: 'Desarrollador',
+
+    _soyElDesarrollador() {
+        return (this.usuarioActual?.email || '').toLowerCase() === this.DEV_EMAIL;
+    },
+
     async elegirDestinatario() {
         document.getElementById('destBuscar').value = '';
         this._renderDestinatarios();
@@ -2628,20 +2638,28 @@ const app = {
         const mio = (this.usuarioActual?.email || '').toLowerCase();
         const lista = this._directorio
             .filter(u => (u.email || '').toLowerCase() !== mio)     // a uno mismo, no
+            .filter(u => (u.email || '').toLowerCase() !== this.DEV_EMAIL)  // va aparte, arriba
             .filter(u => !q || `${u.conductor || ''} ${u.nombre || ''}`.toLowerCase().includes(q));
+        // El desarrollador va con los fijos de arriba, no entre los compañeros
+        const ponerDev = !this._soyElDesarrollador()
+            && (!q || this.DEV_NOMBRE.toLowerCase().includes(q));
         const fila = (email, num, nombre) => `<div class="dest-fila"
             onclick="app._ponerDestino(${email === null ? 'null' : `'${esc(email).replace(/'/g, "\\'")}'`})">
             <span class="nt-num">${esc(num)}</span>
             <span class="nt-nom">${esc(nombre)}</span></div>`;
         document.getElementById('destLista').innerHTML =
             fila(null, '🛠️', 'Gestión')
+            + (ponerDev ? fila(this.DEV_EMAIL, '💻', this.DEV_NOMBRE) : '')
             + (lista.length ? lista.map(u => fila(u.email, u.conductor || '—', u.nombre || u.email)).join('')
                : `<div class="baja-vacio">${q ? 'Ningún compañero con ese nombre o número'
                     : 'Todavía no hay más compañeros'}</div>`);
     },
 
     _ponerDestino(email) {
-        this._destino = email ? this._directorio.find(u => u.email === email) || { email } : null;
+        this._destino = !email ? null
+            : (email.toLowerCase() === this.DEV_EMAIL
+                ? { email: this.DEV_EMAIL, nombre: this.DEV_NOMBRE, conductor: '💻' }
+                : this._directorio.find(u => u.email === email) || { email });
         document.getElementById('destModal').classList.remove('show');
         this._pintarDestino();
     },
@@ -2651,7 +2669,9 @@ const app = {
         const e = document.getElementById('ntEnviar');
         const d = this._destino;
         if (b) b.textContent = (d ? `${d.conductor ? d.conductor + ' · ' : ''}${d.nombre || d.email}` : 'Gestión') + ' ▾';
-        if (e) e.textContent = d ? '📨 Enviar al compañero' : '📨 Enviar a gestión';
+        if (e) e.textContent = !d ? '📨 Enviar a gestión'
+            : (d.email || '').toLowerCase() === this.DEV_EMAIL
+                ? '📨 Enviar al desarrollador' : '📨 Enviar al compañero';
     },
 
     // ── Estar al tanto de los mensajes ───────────────────────────────────────
@@ -2855,7 +2875,15 @@ const app = {
         // Leído es leído: además de apuntarlo aquí, se le dice al otro. Antes
         // "marcar leído" desde el aviso solo se lo guardaba el móvil y quien
         // había escrito no se enteraba de nada.
-        if (!this._estaVista(n)) this._marcarVisto(id, true, true);
+        //
+        // Lo que no se da por visto es lo que he escrito yo: esto se llama
+        // también al recargar con la conversación abierta, y lo estaba
+        // marcando "visto por" quien acababa de escribir. Encima con eso la
+        // conversación dejaba de contar como pendiente y no saltaba ni la
+        // campana ni el aviso del móvil.
+        if (!this._esMiMensaje(ultimo, n) && !this._estaVista(n)) {
+            this._marcarVisto(id, true, true);
+        }
         const l = this._leidas();
         l[id] = ultimo.en || new Date().toISOString();
         localStorage.setItem('convLeidas', JSON.stringify(l));
