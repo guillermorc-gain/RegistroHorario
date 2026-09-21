@@ -643,7 +643,7 @@
            navegador donde esté; vh es la de un navegador sin barras y deja el
            cuadro más alto que el hueco. Se deja vh de reserva para los que no
            entiendan dvh. */
-        .modal-card{background:white;border-radius:16px;width:100%;max-width:440px;overflow:hidden;max-height:90vh;max-height:calc(100dvh - 30px);display:flex;flex-direction:column;}
+        .modal-card{background:white;border-radius:16px;width:100%;max-width:440px;max-width:min(440px, calc(100vw - 30px));overflow:hidden;max-height:90vh;max-height:calc(100dvh - 30px);display:flex;flex-direction:column;}
         .modal-card.dark{background:#1e2a3a;color:#e0e0e0;}
         .jm-op{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #f2f2f2;cursor:pointer;font-size:14.5px;font-weight:700;color:#2c3e50;}
         .modal-card.dark .jm-op{color:#e0e0e0;border-color:#2d3561;}
@@ -697,7 +697,20 @@
         .edit-field input:focus{outline:none;border-color:var(--g1);}
         .modal-card.dark .edit-field input{background:#111827;color:#e0e0e0;border-color:#2d3561;}
         .edit-row{display:flex;gap:8px;}
-        .edit-row .edit-field{flex:1;}
+        .edit-row .edit-field{flex:1;min-width:0;}
+        /* Sin min-width:0 los campos no bajan de lo que miden por dentro —una
+           hora, un número— y entre los tres empujaban el cuadro más ancho que
+           la pantalla: no es que no cupiera a lo alto, es que se salía de
+           lado y había que arrastrarlo para ver la mitad de las cosas. */
+        .edit-field input,.edit-field select{min-width:0;max-width:100%;}
+        /* Y lo mismo los seis cuadros de abajo, que venían con flex-shrink:0
+           de la pantalla de registrar, donde tienen el ancho entero. Aquí se
+           dejan encoger y, si aun así no caben, se pasan a la línea de abajo. */
+        .toggle-row{flex-wrap:wrap;}
+        .toggle-row > *{flex:1 1 auto;min-width:0;flex-shrink:1;}
+        /* Red de seguridad: si algo se pasa de ancho, que se recorte y no que
+           el cuadro entero se pueda arrastrar de lado. */
+        .modal-body{overflow-x:hidden;}
         .extra-label{font-size:11px;color:#27ae60;font-weight:700;text-align:right;margin-top:2px;}
 
         /* avatar picker */
