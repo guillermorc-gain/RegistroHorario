@@ -88,7 +88,6 @@ jobs:
           W="www-gestion/index.html"
           sed -i 's|<meta name="app-rol" content="[^"]*">|<meta name="app-rol" content="${{ matrix.rol }}">|' "$W"
           sed -i 's|<div class="splash-rol" id="splashRol">[^<]*</div>|<div class="splash-rol" id="splashRol">${{ matrix.emoji }} ${{ matrix.rotulo }}</div>|' "$W"
-          sed -i 's|id="splashIco" src="[^"]*"|id="splashIco" src="${{ matrix.icono }}"|' "$W"
           sed -i 's|id="authLogo" src="[^"]*"|id="authLogo" src="${{ matrix.icono }}"|' "$W"
           sed -i 's|<title>[^<]*</title>|<title>${{ matrix.nombre }}</title>|' "$W"
           grep -o 'app-rol[^>]*' "$W" | head -1
