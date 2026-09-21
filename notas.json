@@ -134,5 +134,25 @@
       "nombre": "Guillermo Ríos Correa",
       "en": "2026-09-19T23:06:39.562Z"
     }
+  },
+  "20260921124259708-zps5d-0": {
+    "id": "20260921124259708-zps5d-0",
+    "email": "guillermo.rcxx@gmail.com",
+    "creado": "2026-09-21T12:42:59.708Z",
+    "nombre": "Guillermo Ríos Correa",
+    "conductor": "1234-5",
+    "mensajes": [
+      {
+        "de": "trabajador",
+        "autor": "Guillermo Ríos Correa",
+        "texto": "✅ He leído el cambio de jornada: Ahora te toca en Calle",
+        "adjuntos": [],
+        "en": "2026-09-21T12:42:59.708Z"
+      }
+    ],
+    "archivada": false,
+    "de": "trabajador",
+    "tipo": "gestion",
+    "estado": "pendiente"
   }
 }
