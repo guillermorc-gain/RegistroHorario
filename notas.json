@@ -1,25 +1,4 @@
 {
-  "20260921190204889-6gg14-0": {
-    "id": "20260921190204889-6gg14-0",
-    "email": "guillermo.rcxx@gmail.com",
-    "creado": "2026-09-21T19:02:04.889Z",
-    "nombre": "Guillermo Ríos Correa",
-    "conductor": "1234-5",
-    "mensajes": [
-      {
-        "de": "gestor",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Rrr",
-        "adjuntos": [],
-        "en": "2026-09-21T19:02:04.889Z"
-      }
-    ],
-    "archivada": false,
-    "de": "gestor",
-    "tipo": "gestion",
-    "gestor": "Guillermo Ríos Correa",
-    "estado": "pendiente"
-  },
   "20260921190204889-jyuux-1": {
     "id": "20260921190204889-jyuux-1",
     "email": "guillermo.rc82@gmail.com",
