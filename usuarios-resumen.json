@@ -1385,13 +1385,13 @@
     "nombre": "Guillermo Ríos Correa",
     "conductor": "1234-5",
     "avatar": null,
-    "version": "build-275",
+    "version": "build-276",
     "horasMes": 14,
     "horasTotales": 14,
     "diasMes": 3,
     "turno": "T",
     "puesto": "",
-    "actualizado": "2026-09-21T13:44:57.078Z",
+    "actualizado": "2026-09-21T18:03:17.126Z",
     "horaInicio": "18:00",
     "horaFin": "22:00",
     "horarioDe": "anterior",
@@ -1458,9 +1458,9 @@
     },
     "tramosDia": {},
     "avisoVisto": {
-      "clave": "20260921|Taller|20:00–03:00",
-      "texto": "Ahora te toca en Taller · Horario 20:00–03:00",
-      "en": "2026-09-21T13:44:57.078Z"
+      "clave": "20260921|Son Rossinyol|20:00–03:00",
+      "texto": "Ahora te toca en Son Rossinyol",
+      "en": "2026-09-21T18:03:17.126Z"
     }
   },
   "prueba-1789758756867@prueba.local": {
