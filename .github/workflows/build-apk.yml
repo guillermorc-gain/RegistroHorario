@@ -70,10 +70,10 @@ jobs:
       - name: Patch AndroidManifest — permissions + intent filter localhost
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>|' "$MANIFEST"
+          sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>|' "$MANIFEST"
           sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
           sed -i 's|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />|' "$MANIFEST"
-          sed -i 's|</application>|    <receiver android:name=".MainActivity$GeofenceReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$ChatReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$LeidoReceiver" android:exported="false" />\n    <service android:name=".MainActivity$ChatJob" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="false" />\n    <receiver android:name=".MainActivity$BootReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/></intent-filter></receiver>\n    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
+          sed -i 's|</application>|    <receiver android:name=".MainActivity$GeofenceReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$ChatReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$LeidoReceiver" android:exported="false" />\n    <service android:name=".MainActivity$ChatJob" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="false" />\n    <service android:name=".MainActivity$AvisoService" android:foregroundServiceType="dataSync" android:exported="false" />\n    <receiver android:name=".MainActivity$BootReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/></intent-filter></receiver>\n    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
 
       - name: Create FileProvider paths config
         run: |
@@ -264,6 +264,7 @@ jobs:
                               .apply();
                           programarAvisoChat(ctx);
                           asegurarAvisoDeFondo(ctx);
+                          arrancarVigilante(ctx);
                       }
 
                       @JavascriptInterface
@@ -954,6 +955,89 @@ jobs:
                   }
               }
 
+              // Con la app cerrada, todo lo de arriba lo entrega Android cuando le
+              // viene bien: en reposo profundo una alarma "tolerada" puede tardar
+              // diez, quince o veinte minutos. Llega, pero tarde, y un cambio de
+              // turno que llega tarde no sirve de nada.
+              //
+              // Esto es lo único que Android deja correr de verdad cada minuto sin
+              // tener un servidor de push por medio: un servicio en primer plano.
+              // El precio es el aviso fijo y callado de la barra —sin sonido, sin
+              // número y sin icono arriba—, que además es lo que impide que el
+              // sistema lo mate. Si lo mata igual, las alarmas de antes siguen ahí
+              // de red.
+              public static class AvisoService extends android.app.Service {
+                  public static final String CANAL_FIJO = "vigilante_emt";
+                  private static final int ID_FIJO = 1500;
+                  private volatile boolean vivo = false;
+              
+                  @Override public android.os.IBinder onBind(Intent i) { return null; }
+              
+                  @Override
+                  public void onCreate() {
+                      super.onCreate();
+                      NotificationManager nm =
+                          (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
+                          NotificationChannel ch = new NotificationChannel(CANAL_FIJO,
+                              "Pendiente de mensajes", NotificationManager.IMPORTANCE_MIN);
+                          ch.setShowBadge(false);
+                          ch.setSound(null, null);
+                          nm.createNotificationChannel(ch);
+                      }
+                      int flags = PendingIntent.FLAG_UPDATE_CURRENT
+                          | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
+                      Intent oi = new Intent(this, MainActivity.class);
+                      oi.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                      android.app.Notification fija = new NotificationCompat.Builder(this, CANAL_FIJO)
+                          .setSmallIcon(R.drawable.ic_stat_chat)
+                          .setContentTitle("Mensajes al día")
+                          .setContentText("Avisa en cuanto llega algo")
+                          .setPriority(NotificationCompat.PRIORITY_MIN)
+                          .setOngoing(true)
+                          .setShowWhen(false)
+                          .setContentIntent(PendingIntent.getActivity(this, 5, oi, flags))
+                          .build();
+                      try {
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                              startForeground(ID_FIJO, fija,
+                                  android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+                          } else {
+                              startForeground(ID_FIJO, fija);
+                          }
+                      } catch (Exception e) { stopSelf(); return; }
+                      vivo = true;
+                      new Thread(() -> {
+                          while (vivo) {
+                              try { ChatReceiver.repasar(getApplicationContext()); } catch (Exception ignored) {}
+                              try { Thread.sleep(60 * 1000L); } catch (InterruptedException e) { return; }
+                          }
+                      }).start();
+                  }
+              
+                  @Override
+                  public int onStartCommand(Intent intent, int flags, int startId) {
+                      // Si el sistema lo tumba por falta de memoria, que lo vuelva a levantar
+                      return android.app.Service.START_STICKY;
+                  }
+              
+                  @Override
+                  public void onDestroy() { vivo = false; super.onDestroy(); }
+              }
+              
+              // Arrancarlo es cosa de dos sitios: al abrir la app y al encender el
+              // móvil. Desde el fondo Android puede no dejar, y entonces no pasa
+              // nada: quedan la alarma y el trabajo periódico.
+              public static void arrancarVigilante(Context ctx) {
+                  SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                  if (prefs.getString("chatEmail", "").isEmpty()) return;
+                  try {
+                      Intent i = new Intent(ctx, AvisoService.class);
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(i);
+                      else ctx.startService(i);
+                  } catch (Exception ignored) {}
+              }
+              
               // La cadena de arriba se sostiene sola: cada despertar deja puesto el
               // siguiente. Pero basta con que se pierda uno —el móvil apagado, la app
               // parada por el sistema, un fallo al programar— para que la cadena se
@@ -1263,6 +1347,7 @@ jobs:
                       // alguien abría la app no llegaba un solo aviso.
                       try { programarAvisoChat(ctx); } catch (Exception ignored) {}
                       try { asegurarAvisoDeFondo(ctx); } catch (Exception ignored) {}
+                      try { arrancarVigilante(ctx); } catch (Exception ignored) {}
                       SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
                       String locJson = prefs.getString("geofenceLocations", null);
                       String gpsMode = prefs.getString("gpsMode", "always");
