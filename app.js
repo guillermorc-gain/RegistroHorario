@@ -1210,6 +1210,11 @@ const app = {
             this.actualizarUI(datos);
             this.cancelarEdicion();
             this._publicarResumen();
+            // Solo de un día suelto: registrar una semana de golpe es ponerse
+            // al día con lo atrasado, no cambiar la jornada de hoy.
+            if (fechas.length === 1) {
+                this._avisarDesvioAGestion(ultimaFechaKey, this.puestoTrabajo, horaInicio, horaFin);
+            }
             this._comprobarLugarPorUbicacion();
             if (fechas.length > 1) {
                 this._mostrarToast(guardados < fechas.length
@@ -4583,6 +4588,11 @@ const app = {
         } catch (_) { /* sin aviso en la barra queda el de la pantalla */ }
     },
 
+    _avisoVisto() {
+        try { return JSON.parse(localStorage.getItem('avisoVisto') || 'null'); }
+        catch (_) { return null; }
+    },
+
     _pintarAvisoCambio() {
         const el = document.getElementById('cambioJornadaAviso');
         if (!el) return;
@@ -4619,6 +4629,13 @@ const app = {
             const data = await r.json();
             this._notas = [data, ...(this._notas || [])];
             this._renderNotas();
+            // Y se queda apuntado para que gestión lo vea como visto en su
+            // lista de trabajadores, no solo como una nota más.
+            try {
+                localStorage.setItem('avisoVisto',
+                    JSON.stringify({ clave: pend.clave || '', texto: pend.texto }));
+            } catch (_) {}
+            this._publicarResumen();
             this._mostrarToast('✅ Gestión ya sabe que lo has leído', 3000);
         } catch (e) {
             // Que no se pierda por un corte de red: vuelve el aviso y se
@@ -4627,6 +4644,55 @@ const app = {
             this._pintarAvisoCambio();
             this._mostrarToast('❌ No se ha podido avisar a gestión: ' + e.message, 4500);
         }
+    },
+
+    // Un cuarto de hora arriba o abajo no es cambiar de horario, es fichar
+    // como cualquiera. Es el mismo margen con el que gestión marca los días
+    // que no cuadran, para que las dos apps digan lo mismo.
+    MARGEN_AVISO: 15,
+
+    // Si lo registrado no cuadra con lo asignado, gestión tiene que enterarse
+    // para darlo por bueno o corregirlo. Se avisa por donde ya llegan los
+    // avisos —una nota—, así le salta en el móvil aunque tenga la app cerrada.
+    async _avisarDesvioAGestion(fechaKey, lugar, inicio, fin) {
+        const a = this._asignacionDeHoy();
+        if (!a || a.fecha !== fechaKey) return;          // solo de hoy
+        const lugarPlan = (a.lugar || '').trim();
+        const plan = a.horario || null;
+        const cambiaLugar = !!lugarPlan
+            && this._clavePuesto(lugarPlan) !== this._clavePuesto(lugar || '');
+        const enMin = v => {
+            const [h, m] = String(v || '').split(':').map(Number);
+            return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null;
+        };
+        const dif = (x, y) => {
+            const a1 = enMin(x), b1 = enMin(y);
+            return (a1 === null || b1 === null) ? 0 : Math.abs(a1 - b1);
+        };
+        const cambiaHora = !!(plan?.i && plan?.f && inicio && fin)
+            && (dif(inicio, plan.i) > this.MARGEN_AVISO || dif(fin, plan.f) > this.MARGEN_AVISO);
+        if (!cambiaLugar && !cambiaHora) return;
+
+        // Corregir dos veces la misma jornada no son dos avisos
+        const clave = `${fechaKey}|${lugar || ''}|${inicio || ''}-${fin || ''}`;
+        if (localStorage.getItem('desvioAvisado') === clave) return;
+        localStorage.setItem('desvioAvisado', clave);
+
+        const partes = [];
+        if (cambiaLugar) partes.push(`en ${lugar || 'sin lugar'}, y tocaba en ${lugarPlan}`);
+        if (cambiaHora)  partes.push(`de ${inicio} a ${fin}, y tocaba de ${plan.i} a ${plan.f}`);
+        try {
+            await fetch(this.NOTAS_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json',
+                           'X-User-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({
+                    texto: `⚠️ He registrado la jornada de hoy ${partes.join(' y ')}. Confírmalo si está bien.`,
+                    nombre: this.usuarioActual?.name || '',
+                    conductor: this.numConductor || '',
+                })
+            });
+        } catch (_) { /* sin red no se avisa; el desajuste sigue saliendo en gestión */ }
     },
 
     // La misma huella que guarda la parte nativa, para que las dos hablen de
@@ -5880,6 +5946,11 @@ const app = {
             const payload = {
                 nombre:       this.usuarioActual.name || '',
                 conductor:    this.numConductor || '',
+                // Lo último que ha dado por leído, para que gestión lo vea en
+                // su lista y no solo le llegue la nota. El servidor solo le
+                // pone hora cuando cambia, así que mandarlo siempre no mueve
+                // la que ya tenía.
+                ...(this._avisoVisto() ? { avisoVisto: this._avisoVisto() } : {}),
                 avatar:       localStorage.getItem('avatarPhoto') || null,
                 version:      (typeof APP_VERSION !== 'undefined') ? APP_VERSION : '',
                 horasMes:     Math.round(delMes.reduce((s, r) => s + (parseFloat(r.horas) || 0), 0) * 10) / 10,
