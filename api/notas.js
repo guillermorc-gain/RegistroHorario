@@ -253,6 +253,17 @@ export default async function handler(req, res) {
       // tiene los índices; si no, se filtra aquí como siempre.
       // Quién mandó el último también va en la huella: el aviso nativo lo
       // necesita para no avisarte de lo que acabas de escribir tú.
+      // Con quién es la conversación, visto desde quien pregunta: el aviso de
+      // Android lo pone de título, y sin esto solo podía decir "tienes un
+      // mensaje" —sin saber de quién ni de qué— y obligaba a abrir la app.
+      const conQuien = n => {
+        if (n.tipo === 'companero') {
+          return (n.deEmail || '').toLowerCase() === quien
+            ? (n.nombre || n.email || '') : (n.deNombre || n.deEmail || '');
+        }
+        return quien ? 'Gestión'
+          : `${n.conductor ? n.conductor + ' · ' : ''}${n.nombre || n.email || ''}`;
+      };
       const huella = notas => notas.map(n => {
         const m = n.mensajes || [];
         const ult = m.length ? m[m.length - 1] : null;
@@ -261,11 +272,18 @@ export default async function handler(req, res) {
                  // Y de qué tipo es: el gestor pide el resumen entero y con
                  // esto sabe cuáles no son suyas —lo que se escriben entre
                  // ellos— para no avisar de conversaciones ajenas.
-                 tipo: n.tipo === 'companero' ? 'companero' : 'gestion' };
+                 tipo: n.tipo === 'companero' ? 'companero' : 'gestion',
+                 quien: String(conQuien(n)).slice(0, 80),
+                 // Lo justo para que el aviso se lea entero en la barra
+                 texto: String(ult?.texto || '').slice(0, 140) };
       });
+      // Al gestor, que pregunta sin correo, no le toca saber siquiera que
+      // existen las conversaciones entre compañeros.
+      const paraQuienPregunta = notas => quien
+        ? notas : notas.filter(n => n.tipo !== 'companero');
       if (hayBaseDeDatos()) {
         const notas = (await leerNotas(quien)).map(normalizar);
-        return res.status(200).json(soloResumen ? huella(notas) : notas);
+        return res.status(200).json(soloResumen ? huella(paraQuienPregunta(notas)) : notas);
       }
       const { data } = await getFile();
       // Las mías son las que me llegan y las que he mandado a un compañero
@@ -274,7 +292,7 @@ export default async function handler(req, res) {
                             || (n.deEmail || '').toLowerCase() === quien)
         .sort((a, b) => (b.creado || '').localeCompare(a.creado || ''))
         .map(normalizar);
-      return res.status(200).json(soloResumen ? huella(notas) : notas);
+      return res.status(200).json(soloResumen ? huella(paraQuienPregunta(notas)) : notas);
     }
 
     // El trabajador escribe las suyas. El correo sale del token; la cabecera

@@ -2874,11 +2874,13 @@ const app = {
     async _retirarAviso(conv) {
         const LN = window.Capacitor?.Plugins?.LocalNotifications;
         if (!LN) return;
-        delete this._notificadas[conv];
+        if (this._notificadas[conv]) {
+            delete this._notificadas[conv];
+            this._guardarNotificadas();
+        }
         try { await LN.cancel({ notifications: [{ id: this._idAviso(conv) }] }); } catch (_) {}
     },
 
-    // Un aviso por conversación sin leer que no se haya avisado ya
     // Lo ya avisado se guarda: al arrancar, la lista en memoria estaba vacía
     // y la app volvía a lanzar el aviso —con su sonido— de mensajes de los
     // que la barra ya había avisado con la app cerrada. Ese era el segundo
@@ -2894,61 +2896,24 @@ const app = {
         try { localStorage.setItem('notificadas', JSON.stringify(this._notificadas)); } catch (_) {}
     },
 
+    // El aviso de la barra lo pone la parte nativa, que es la que sigue
+    // mirando con la app cerrada y la que puede resolver "Responder" y
+    // "Marcar leído" sin abrir nada. Ponerlo también desde aquí sobraba: el
+    // mismo mensaje sonaba dos veces, y contestar desde ese aviso abría la
+    // app —que es justo lo que no se quiere—. Aquí solo se retiran los de las
+    // conversaciones que ya se han leído.
     async _avisarEnLaBarra() {
-        const LN = window.Capacitor?.Plugins?.LocalNotifications;
-        if (!LN?.schedule || !window.Capacitor?.isNativePlatform?.()) return;
+        if (!window.Capacitor?.isNativePlatform?.()) return;
         this._cargarNotificadas();
-        const pendientes = (this._notas || []).filter(n => !n.archivada && this._sinLeer(n));
-        const vivas = new Set(pendientes.map(n => n.id));
-        // Las que ya se han leído en otro sitio dejan de molestar
-        Object.keys(this._notificadas).forEach(id => { if (!vivas.has(id)) this._retirarAviso(id); });
-        // Con la app delante no hace falta la barra: está la campana y el
-        // sonido de dentro. El aviso de la barra es para cuando no se está.
-        if (!document.hidden) return;
-
-        const avisos = [];
-        const reciénAvisadas = [];
-        for (const n of pendientes) {
-            const ultimo = this._ultimoMensaje(n);
-            if (!ultimo || this._notificadas[n.id] === ultimo.en) continue;
-            // Se apunta al final, cuando de verdad haya salido: dándolo por
-            // avisado antes, un fallo del móvil dejaba ese mensaje sin aviso
-            // para siempre, porque ya constaba como dado.
-            reciénAvisadas.push([n.id, ultimo.en]);
-            avisos.push({
-                id: this._idAviso(n.id),
-                title: this._tituloHilo(n),
-                body: ultimo.texto || '📎 Adjunto',
-                actionTypeId: 'CHAT_MENSAJE',
-                extra: { conv: n.id },
-                smallIcon: 'ic_stat_chat',
-                ...(this.notifSoundChat && this.notifSoundChat !== 'ninguno'
-                    && this.notifSoundChat !== 'default'
-                    ? { channelId: this.notifSoundChat } : {}),
-            });
-        }
-        if (!avisos.length) return;
-        const apuntar = () => {
-            reciénAvisadas.forEach(([id, en]) => { this._notificadas[id] = en; });
-            this._guardarNotificadas();
-        };
-        try {
-            await LN.schedule({ notifications: avisos });
-            apuntar();
-        } catch (e) {
-            // Casi siempre es el canal de sonido elegido, que en ese móvil no
-            // llegó a crearse. Antes de rendirse, se prueba sin sonido: más
-            // vale un aviso soso que ninguno.
-            try {
-                await LN.schedule({
-                    notifications: avisos.map(({ channelId, sound, ...resto }) => resto),
-                });
-                apuntar();
-            } catch (e2) {
-                console.error('aviso chat:', e2);
-                this._mostrarToast('⚠️ El móvil no ha dejado poner el aviso: ' + (e2?.message || e2), 6000);
-            }
-        }
+        const vivas = new Set((this._notas || [])
+            .filter(n => !n.archivada && this._sinLeer(n)).map(n => n.id));
+        // Se repasan todas, no solo las que avisó esta app: con la app cerrada
+        // el aviso lo puso la parte nativa y aquí no consta.
+        const candidatas = new Set([
+            ...(this._notas || []).map(n => n.id),
+            ...Object.keys(this._notificadas),
+        ]);
+        candidatas.forEach(id => { if (!vivas.has(id)) this._retirarAviso(id); });
     },
     // ── Sin leer ─────────────────────────────────────────────────────────────
     // De cada conversación se guarda la hora del último mensaje que se ha
