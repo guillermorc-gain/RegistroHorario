@@ -1461,7 +1461,8 @@
       "clave": "20260921|Son Rossinyol|20:00–03:00",
       "texto": "Ahora te toca en Son Rossinyol",
       "en": "2026-09-21T18:03:17.126Z"
-    }
+    },
+    "oculto": true
   },
   "prueba-1789758756867@prueba.local": {
     "nombre": "Toni Rodríguez",
