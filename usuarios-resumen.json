@@ -10,7 +10,7 @@
     "diasMes": 15,
     "turno": "M",
     "puesto": "Control",
-    "actualizado": "2026-09-21T19:51:36.882Z",
+    "actualizado": "2026-09-21T19:58:33.714Z",
     "horaInicio": "09:00",
     "horaFin": "12:30",
     "horarioDe": "hoy",
@@ -508,15 +508,6 @@
         "o": "22:30",
         "n": 1.5,
         "pu": "Control"
-      },
-      {
-        "f": "20260601",
-        "h": 0,
-        "i": "09:00",
-        "o": "12:30",
-        "n": 0,
-        "pu": "Son Rossinyol",
-        "v": 1
       },
       {
         "f": "20260615",
