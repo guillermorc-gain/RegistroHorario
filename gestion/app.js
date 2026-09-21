@@ -163,10 +163,8 @@ const app = {
         poner('authTitulo', 'Desarrollador EMT - Movilidad');
         poner('authSub', 'Pruebas y mantenimiento · EMT Palma');
         poner('splashRol', '⚙️ Desarrollador');
-        for (const id of ['authLogo', 'splashIco']) {
-            const img = document.getElementById(id);
-            if (img) img.src = 'icons/icon-dev-192.png';
-        }
+        const logo = document.getElementById('authLogo');
+        if (logo) logo.src = 'icons/icon-dev-192.png';
         document.title = 'Desarrollador Movilidad EMT';
     },
 
