@@ -1756,8 +1756,11 @@ const app = {
         // En la app de desarrollador no hay número de trabajador: no lo es.
         if (num) num.textContent = ROL_APP === 'desarrollador' ? '' : (this.numConductor || '');
         if (tit) {
-            tit.textContent = (ROL_APP === 'desarrollador' || this._soyElDesarrollador())
-                ? '⚙️ Desarrollador Movilidad EMT' : '🛠️ Gestión EMT Movilidad';
+            // En su propia aplicación basta con el nombre: ya se sabe cuál es
+            // por el icono y la bienvenida, y así cabe el nombre de la cuenta.
+            tit.textContent = ROL_APP === 'desarrollador' ? '⚙️ Desarrollador'
+                : this._soyElDesarrollador() ? '⚙️ Desarrollador Movilidad EMT'
+                : '🛠️ Gestión EMT Movilidad';
         }
     },
 
@@ -1785,7 +1788,9 @@ const app = {
         const lugar = (u?.lugares?.[fecha] || u?.puesto || '');
         const h = this._horasPlan(u, fecha);
         const horas = (h?.i && h?.f) ? `${h.i}\u2013${h.f}` : '';
-        return `${fecha}|${lugar}|${horas}`;
+        // Con el sello de cuándo se le asignó: al volver a asignarle la misma
+        // jornada, el visto de la anterior deja de valer y vuelve a pedirse.
+        return `${fecha}|${lugar}|${horas}|${u?.asignadoDia?.[fecha] || 0}`;
     },
 
     // El visto del trabajador: sale cuando ha dado por leído un cambio de ese
@@ -3449,13 +3454,16 @@ const app = {
     },
 
     // Quitar lo asignado en ese tramo y dejarlo como estaba
+    // Quitar la jornada es dejarlo sin asignar: ni horas ni lugar. Antes solo
+    // le quitaba las horas y se quedaba con el sitio puesto, que en el cuadro
+    // se lee como que sigue teniendo servicio allí.
     async _quitarJornada() {
         const tramo = this._tramosJornada().find(t => t.id === this._jorAlcance);
         if (!tramo) return;
         document.getElementById('jornadaModal').classList.remove('show');
         await this._guardarCampoTrab(this._jorEditando,
-            { horario: '', desde: tramo.desde, hasta: tramo.hasta },
-            'Jornada quitada de esos días');
+            { horario: '', puesto: '', tramos: [], desde: tramo.desde, hasta: tramo.hasta },
+            'Sin asignar esos días');
         this._renderPuestos();
     },
 

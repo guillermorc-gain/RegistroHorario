@@ -4767,6 +4767,9 @@ const app = {
         const horaAhora  = horas(ahora);
         const cambiaLugar = this._clavePuesto(lugarAntes) !== this._clavePuesto(lugarAhora);
         const cambiaHora  = horaAntes !== horaAhora;
+        // Que se la hayan vuelto a asignar cuenta como cambio aunque quede
+        // igual que antes: alguien ha tocado su jornada y tiene que enterarse.
+        const reasignada  = (antes.rev || 0) !== (ahora.rev || 0);
         if (cambiaLugar) {
             // Elegir el lugar a mano manda sobre lo asignado, pero solo sobre
             // lo que había asignado entonces: si gestión lo cambia después,
@@ -4777,11 +4780,11 @@ const app = {
             this._renderLugarJornada();
             this._actualizarCabeceraUsuario();
         }
-        if (!cambiaLugar && !cambiaHora) return;
+        if (!cambiaLugar && !cambiaHora && !reasignada) return;
 
         const partes = [];
-        if (cambiaLugar) partes.push(lugarAhora || 'sin lugar');
-        if (cambiaHora)  partes.push(horaAhora || 'sin horario');
+        if (cambiaLugar || (reasignada && !cambiaHora)) partes.push(lugarAhora || 'sin lugar');
+        if (cambiaHora  || (reasignada && !cambiaLugar)) partes.push(horaAhora || 'sin horario');
         const cuerpo = 'Se te asigna este servicio y horario: ' + partes.join(' · ')
             + '. Confirma como leído. Gracias.';
         this._mostrarToast('📍 ' + cuerpo, 7000);
@@ -4949,7 +4952,10 @@ const app = {
     // lo mismo: día, lugar y horas.
     _claveJornada(a) {
         const h = (a?.horario?.i && a?.horario?.f) ? `${a.horario.i}–${a.horario.f}` : '';
-        return `${a?.fecha || ''}|${a?.lugar || ''}|${h}`;
+        // Con el sello de cuándo se asignó: quitarle la jornada y volver a
+        // ponerle la misma es un cambio, aunque el antes y el después se
+        // parezcan. Sin esto no llegaba ningún aviso.
+        return `${a?.fecha || ''}|${a?.lugar || ''}|${h}|${a?.rev || 0}`;
     },
 
     async _cargarAsignacion() {

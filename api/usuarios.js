@@ -306,12 +306,31 @@ function horarioDelDia(u, f) {
 // Lo que le toca ese día: dónde y a qué hora. Un lugar puesto para esa fecha
 // manda sobre el habitual, y como va por fecha, al día siguiente vuelve solo
 // al del mes sin que nadie tenga que deshacer nada.
+// Cuándo se le asignó por última vez la jornada de ese día. Sin esto, quitarle
+// la jornada y volver a ponerle la misma no era ningún cambio —el antes y el
+// después son idénticos— y no le llegaba aviso ninguno: ni a la app abierta,
+// que compara con lo que tenía, ni al aviso de fondo, que compara con lo
+// último que vio. Con el sello, volver a asignar siempre es algo nuevo.
+const MAX_SELLOS = 400;
+
+function sellarAsignacion(u, fechas) {
+  const sellos = { ...(u.asignadoDia || {}) };
+  const ahora = Date.now();
+  for (const f of fechas) sellos[f] = ahora;
+  const claves = Object.keys(sellos).sort();
+  u.asignadoDia = claves.length <= MAX_SELLOS ? sellos
+    : Object.fromEntries(claves.slice(-MAX_SELLOS).map(k => [k, sellos[k]]));
+}
+
 function loQueLeToca(u, f) {
   if (!u) return null;
   const delDia = (u.lugares || {})[f] || '';
   return {
     fecha: f,
     lugar: delDia || u.puesto || '',
+    // Va con la jornada porque forma parte de su huella: dos jornadas iguales
+    // asignadas en momentos distintos son dos avisos distintos.
+    rev: (u.asignadoDia || {})[f] || 0,
     habitual: u.puesto || '',
     // Para que la app pueda decir que ese día va a otro sitio
     excepcion: !!delDia && clavePuesto(delDia) !== clavePuesto(u.puesto || ''),
@@ -517,6 +536,7 @@ export default async function handler(req, res) {
             if (limpio) hs[f] = limpio; else delete hs[f];
           }
           data[clave].horariosDia = limpiarHorariosDia(hs);
+          sellarAsignacion(data[clave], diasEntre(desde, hasta));
           // El día puede ir repartido entre varios lugares. Se guarda aparte y
           // además se deja la hora de entrada y el primer lugar arriba, que es
           // lo que leen la cabecera del trabajador y el resto del cuadro.
@@ -555,6 +575,7 @@ export default async function handler(req, res) {
             else delete lugares[f];
           }
           data[clave].lugares = recortarLugares(lugares);
+          sellarAsignacion(data[clave], diasEntre(desde, hasta));
         }
         // Sin fechas es el lugar habitual: manda sobre cualquier excepción.
         // Se exige que venga `puesto`: si no, una petición con un campo que
