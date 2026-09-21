@@ -66,7 +66,72 @@ const MENSAJES = {
   google_no_responde: ['No se ha podido comprobar la sesión con Google. Inténtalo en un minuto.', 503],
 };
 
-// Para las acciones del gestor. Responde el error y devuelve '' si no pasa.
+// ── Quién puede gestionar ───────────────────────────────────────────────────
+// El gestor principal se encarga de la aplicación y de que funcione; los
+// correos que él autoriza se encargan de gestionar a los trabajadores, y para
+// eso tienen que poder hacer lo mismo que él. La lista es la misma que decide
+// quién entra en la app de gestión, así que no hay dos sitios que cuadrar.
+const REPO_DATOS    = 'guillermorc-gain/RegistroHorario';
+const RAMA_DATOS    = 'datos';
+const LISTA_GESTION = 'allowed-users-gestion.json';
+export const GESTOR_PRINCIPAL = 'g.rioscorrea@gmail.com';
+
+// La lista cambia muy de tanto en tanto y esto se consulta en cada escritura:
+// un minuto de memoria evita ir a GitHub a cada petición.
+let listaCache = { emails: null, hasta: 0 };
+
+async function listaDeGestion() {
+  if (listaCache.emails && Date.now() < listaCache.hasta) return listaCache.emails;
+  try {
+    const r = await fetch(
+      `https://api.github.com/repos/${REPO_DATOS}/contents/${LISTA_GESTION}?ref=${RAMA_DATOS}`,
+      { headers: {
+          'User-Agent': 'horasemt-app',
+          Accept: 'application/vnd.github+json',
+          ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
+        } }
+    );
+    if (!r.ok) throw new Error(String(r.status));
+    const data = await r.json();
+    const emails = JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
+    listaCache = {
+      emails: (Array.isArray(emails) ? emails : []).map(e => String(e).toLowerCase().trim()),
+      hasta: Date.now() + 60 * 1000,
+    };
+  } catch (_) {
+    // Si no se puede leer, no se estrena a nadie: se reusa la última buena un
+    // rato corto, y si nunca hubo, solo pasa el gestor principal. Un corte con
+    // GitHub no puede abrir la puerta, pero tampoco cerrársela a quien ya
+    // estaba dentro.
+    if (!listaCache.emails) return null;
+    listaCache.hasta = Date.now() + 15 * 1000;
+  }
+  return listaCache.emails;
+}
+
+export async function esGestor(email) {
+  const e = String(email || '').toLowerCase().trim();
+  if (!e) return false;
+  if (e === GESTOR_PRINCIPAL) return true;
+  const lista = await listaDeGestion();
+  return !!lista && lista.includes(e);
+}
+
+// Para las acciones de gestión. Responde el error y devuelve '' si no pasa.
+export async function exigirGestor(req, res) {
+  const { email, motivo } = await revisarToken(tokenDe(req));
+  if (!email) {
+    const [texto, codigo] = MENSAJES[motivo] || MENSAJES.token_raro;
+    res.status(codigo).json({ error: texto, motivo });
+    return '';
+  }
+  if (await esGestor(email)) return email;
+  res.status(403).json({ error: `Esta cuenta (${email}) no tiene acceso a gestión`, motivo: 'no_es_gestor' });
+  return '';
+}
+
+// Para lo que sigue siendo solo del gestor principal: quién tiene acceso a la
+// aplicación y qué versión se le ofrece a la gente.
 export async function exigirAdmin(req, res, adminEmail) {
   const { email, motivo } = await revisarToken(tokenDe(req));
   if (!email) {

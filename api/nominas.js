@@ -8,13 +8,12 @@
 // Los datos del trabajo (días, horas, extras, nocturnas) no se guardan aquí:
 // salen de las jornadas que ya hay, que es su sitio. Aquí solo van los
 // importes, que son lo que el gestor escribe a mano.
-import { exigirAdmin, emailDelToken, tokenDe } from './_auth.js';
+import { exigirGestor, esGestor, emailDelToken, tokenDe } from './_auth.js';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO         = 'guillermorc-gain/RegistroHorario';
 const BRANCH       = 'datos';
 const FILE_PATH    = 'nominas.json';
-const ADMIN_EMAIL  = 'g.rioscorrea@gmail.com';
 const MAX_MESES    = 36;      // tres años; más no se mira nunca
 const MAX_LINEAS   = 30;
 const MAX_TEXTO    = 60;
@@ -154,7 +153,7 @@ export default async function handler(req, res) {
       const quien = String(req.query.mio || '').toLowerCase().trim();
       const delToken = await emailDelToken(tokenDe(req));
       if (!delToken) return res.status(401).json({ error: 'Vuelve a entrar en la app' });
-      if (delToken !== quien && delToken !== ADMIN_EMAIL) {
+      if (delToken !== quien && !await esGestor(delToken)) {
         return res.status(403).json({ error: 'Esa nómina no es tuya' });
       }
       const { data } = await getFile();
@@ -172,8 +171,8 @@ export default async function handler(req, res) {
         if (delToken && delToken === suyo) return await guardar(req, res, suyo);
     }
 
-    // Lo que cobra la gente no lo lee nadie más que el gestor
-    if (!await exigirAdmin(req, res, ADMIN_EMAIL)) return;
+    // Lo que cobra la gente no lo lee nadie más que gestión
+    if (!await exigirGestor(req, res)) return;
 
     if (req.method === 'GET') {
       const { data } = await getFile();

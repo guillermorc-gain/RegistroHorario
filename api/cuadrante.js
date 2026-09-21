@@ -1,4 +1,4 @@
-import { exigirAdmin, emailDelToken, tokenDe } from './_auth.js';
+import { exigirGestor, emailDelToken, tokenDe } from './_auth.js';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO         = 'guillermorc-gain/RegistroHorario';
@@ -8,7 +8,6 @@ const BRANCH       = 'datos';
 const FILE_PATH    = 'cuadrante.json';
 // El de gestión publica el de todos; cada trabajador puede además subir el
 // suyo propio (uno personal, que solo ve él).
-const ADMIN_EMAIL  = 'g.rioscorrea@gmail.com';
 // A data URL costs ~33% more than the raw bytes, and GitHub's contents API
 // starts failing around 1 MB of base64, so keep the payload well under it.
 // Al escribir, el JSON se manda en base64, que abulta un tercio más. Con
@@ -86,7 +85,7 @@ export default async function handler(req, res) {
       return res.status(200).json(global_(data));
     }
 
-    const adminEmail = await exigirAdmin(req, res, ADMIN_EMAIL);
+    const adminEmail = await exigirGestor(req, res);
     if (!adminEmail) return;
     return await guardarGlobal(req, res, adminEmail);
   } catch (e) {

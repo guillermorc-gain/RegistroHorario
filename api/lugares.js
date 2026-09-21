@@ -1,7 +1,7 @@
 // Catálogo de lugares de trabajo: nombre, turnos y ubicación. Lo mantiene el
 // gestor y lo leen las dos apps, para que los turnos y las ubicaciones dejen de
 // estar escritos a mano en el código de cada una.
-import { exigirAdmin } from './_auth.js';
+import { exigirGestor } from './_auth.js';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO         = 'guillermorc-gain/RegistroHorario';
@@ -9,7 +9,6 @@ const REPO         = 'guillermorc-gain/RegistroHorario';
 // que cancelaba el despliegue del código que fuera por medio.
 const BRANCH       = 'datos';
 const FILE_PATH    = 'lugares.json';
-const ADMIN_EMAIL  = 'g.rioscorrea@gmail.com';
 const MAX_LUGARES  = 60;
 
 const ghHeaders = () => ({
@@ -113,7 +112,7 @@ export default async function handler(req, res) {
       return res.status(200).json(data);
     }
 
-    if (!await exigirAdmin(req, res, ADMIN_EMAIL)) return;
+    if (!await exigirGestor(req, res)) return;
 
     const { nombre } = req.body || {};
     const k = clave(nombre);
