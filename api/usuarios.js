@@ -1,4 +1,4 @@
-import { emailDelToken, tokenDe, exigirAdmin } from './_auth.js';
+import { emailDelToken, tokenDe, exigirGestor, GESTOR_PRINCIPAL } from './_auth.js';
 import { hayBaseDeDatos, leerUsuarios, leerUsuario, leerAvatares, guardarUsuario, borrarUsuario } from './_almacen.js';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
@@ -7,7 +7,6 @@ const REPO         = 'guillermorc-gain/RegistroHorario';
 // que cancelaba el despliegue del código que fuera por medio.
 const BRANCH       = 'datos';
 const FILE_PATH    = 'usuarios-resumen.json';
-const ADMIN_EMAIL  = 'g.rioscorrea@gmail.com';
 const MAX_AVATAR   = 40 * 1024;   // el avatar va reescalado a 80px, no debe pasar de aquí
 const MAX_JORNADAS = 500;         // un año da ~220; el tope evita cargas absurdas
 const MAX_LUGARES  = 500;         // un lugar por día: más de un año de excepciones
@@ -431,11 +430,18 @@ export default async function handler(req, res) {
       return nuevo ? res.status(200).json(nuevo[quien]) : res.status(500).json({ error: 'No se pudo guardar' });
     }
 
-    // Solo el gestor asigna el puesto de trabajo
+    // Esto lo hace gestión: el gestor principal y los correos que él haya
+    // autorizado, que son los que llevan a los trabajadores.
     if (req.method === 'PATCH' || req.method === 'DELETE') {
-      if (!await exigirAdmin(req, res, ADMIN_EMAIL)) return;
+      const quienGestiona = await exigirGestor(req, res);
+      if (!quienGestiona) return;
       const { email, puesto, ficticio, baja, bajas, vacaciones, nota, fecha,
               desde, hasta, dias, grupo, horario, mes, revisiones, oculto } = req.body || {};
+      // Los usuarios de prueba son cosa de quien lleva la aplicación, no de
+      // quien gestiona la plantilla: ni los ve ni los crea.
+      if (ficticio && quienGestiona !== GESTOR_PRINCIPAL) {
+        return res.status(403).json({ error: 'Los usuarios de prueba los lleva el gestor de la aplicación' });
+      }
       const clave = (email || '').toLowerCase().trim();
       if (!clave) return res.status(400).json({ error: 'Falta el email' });
       // Los usuarios de prueba solo pueden vivir bajo este dominio, para que no

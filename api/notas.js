@@ -1,4 +1,4 @@
-import { emailDelToken, tokenDe } from './_auth.js';
+import { emailDelToken, tokenDe, esGestor } from './_auth.js';
 import { hayBaseDeDatos, leerNotas, leerNota, guardarNota, borrarNota } from './_almacen.js';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
@@ -7,7 +7,6 @@ const REPO         = 'guillermorc-gain/RegistroHorario';
 // que cancelaba el despliegue del código que fuera por medio.
 const BRANCH       = 'datos';
 const FILE_PATH    = 'notas.json';
-const ADMIN_EMAIL  = 'g.rioscorrea@gmail.com';
 const MAX_TEXTO    = 500;
 const MAX_NOTAS    = 400;   // las más viejas se van cayendo
 // Una nota para toda la plantilla son tantas conversaciones como gente
@@ -188,11 +187,12 @@ function normalizar(nota) {
   return { ...resto, mensajes };
 }
 
-// Quién puede escribir y tocar una conversación: los dos que hablan, y el
-// gestor en las que van dirigidas a él.
-function puedeTocar(nota, quien) {
+// Quién puede escribir y tocar una conversación: los dos que hablan, y
+// gestión en las que van dirigidas a ella. Que quien llama sea de gestión se
+// comprueba fuera, que ahí se puede esperar a la respuesta.
+function puedeTocar(nota, quien, deGestion = false) {
   if (!nota) return false;
-  if (quien === ADMIN_EMAIL) return nota.tipo !== 'companero' || nota.email === quien;
+  if (deGestion) return nota.tipo !== 'companero' || nota.email === quien;
   return nota.email === quien || nota.deEmail === quien;
 }
 
@@ -271,6 +271,9 @@ export default async function handler(req, res) {
       const delToken = await emailDelToken(tokenDe(req));
       const quien = delToken || (req.headers['x-user-email'] || '').toLowerCase().trim();
       if (!quien || !quien.includes('@')) return res.status(400).json({ error: 'Falta el usuario' });
+      // Firmar como gestión solo lo puede hacer quien lo sea de verdad, y eso
+      // sale del token: con la cabecera sola cualquiera se haría pasar.
+      const deGestion = !!delToken && await esGestor(delToken);
       const b = req.body || {};
       const cuerpo = texto(b.texto);
       const adjuntos = [];
@@ -283,10 +286,10 @@ export default async function handler(req, res) {
       if (hilo) {
         const previa = hayBaseDeDatos() ? await leerNota(hilo) : (await getFile()).data[hilo];
         if (!previa) return res.status(404).json({ error: 'Esa conversación ya no está' });
-        if (!puedeTocar(previa, quien)) {
+        if (!puedeTocar(previa, quien, deGestion)) {
           return res.status(403).json({ error: 'Esa conversación no es tuya' });
         }
-        const soyGestor = quien === ADMIN_EMAIL && previa.tipo !== 'companero';
+        const soyGestor = deGestion && previa.tipo !== 'companero';
         const conMensaje = añadirMensaje(previa, {
           de: soyGestor ? 'gestor' : quien,
           autor: soyGestor ? (b.gestor || 'Gestión') : (b.nombre || b.deNombre || ''),
@@ -318,8 +321,8 @@ export default async function handler(req, res) {
       // y un trabajador escribiendo a un compañero. Firmar como gestión exige
       // el token; con la cabecera sola cualquiera podría hacerse pasar por él.
       const delGestor = !!para && b.tipo !== 'companero';
-      if (delGestor && delToken !== ADMIN_EMAIL) {
-        return res.status(403).json({ error: 'Solo el gestor escribe a un trabajador' });
+      if (delGestor && !deGestion) {
+        return res.status(403).json({ error: 'Solo gestión escribe a un trabajador' });
       }
       const entreCompaneros = !!para && !delGestor;
       if (entreCompaneros && !para.includes('@')) {
@@ -382,13 +385,14 @@ export default async function handler(req, res) {
       const { id, visto, archivada, gestor, nombre } = req.body || {};
       if (!id) return res.status(400).json({ error: 'Falta la nota' });
       if (!quien || !quien.includes('@')) return res.status(400).json({ error: 'Falta el usuario' });
+      const deGestion = !!delToken && await esGestor(delToken);
       // El visto lo da cualquiera de los dos: no hace falta comprobar nada
       // más de lo que ya comprueba puedeTocar.
       const quita = { visto, archivada, quien, nombre: gestor || nombre };
 
       if (hayBaseDeDatos()) {
         const n = await leerNota(id);
-        if (!puedeTocar(n, quien)) return res.status(404).json({ error: 'Esa conversación no es tuya' });
+        if (!puedeTocar(n, quien, deGestion)) return res.status(404).json({ error: 'Esa conversación no es tuya' });
         if (req.method === 'DELETE') {
           await borrarNota(id);
           return res.status(200).json({ id, borrada: true });
@@ -400,7 +404,7 @@ export default async function handler(req, res) {
       let prohibido = false;
       const nuevo = await guardarConReintento(data => {
         if (!data[id]) return null;
-        if (!puedeTocar(data[id], quien)) { prohibido = true; return null; }
+        if (!puedeTocar(data[id], quien, deGestion)) { prohibido = true; return null; }
         if (req.method === 'DELETE') { const out = { ...data }; delete out[id]; return out; }
         return acotarAdjuntos({ ...data, [id]: tocarNota(data[id], quita) });
       }, req.method === 'DELETE' ? `Quitar conversación ${id}` : `Cambio en ${id}`);
