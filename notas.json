@@ -26,38 +26,5 @@
     "tipo": "gestion",
     "gestor": "Guillermo Ríos Correa",
     "estado": "pendiente"
-  },
-  "20260921193532538-95u5i-0": {
-    "id": "20260921193532538-95u5i-0",
-    "email": "g.rioscorrea@gmail.com",
-    "creado": "2026-09-21T19:35:32.538Z",
-    "nombre": "Desarrollador",
-    "conductor": "💻",
-    "mensajes": [
-      {
-        "de": "gestor",
-        "autor": "Guillermo Rios",
-        "texto": "Ggg",
-        "adjuntos": [],
-        "en": "2026-09-21T19:35:32.538Z"
-      },
-      {
-        "de": "gestor",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Tt",
-        "adjuntos": [],
-        "en": "2026-09-21T19:36:48.829Z"
-      }
-    ],
-    "archivada": false,
-    "de": "gestor",
-    "tipo": "gestion",
-    "gestor": "Guillermo Rios",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "g.rioscorrea@gmail.com",
-      "nombre": "Guillermo Ríos Correa",
-      "en": "2026-09-21T19:36:49.952Z"
-    }
   }
 }
