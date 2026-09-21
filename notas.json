@@ -33,37 +33,5 @@
     "tipo": "gestion",
     "gestor": "Guillermo Ríos Correa",
     "estado": "pendiente"
-  },
-  "20260921184613983-sp5fz-0": {
-    "id": "20260921184613983-sp5fz-0",
-    "email": "guillermo.rcxx@gmail.com",
-    "creado": "2026-09-21T18:46:13.983Z",
-    "nombre": "Guillermo Ríos Correa",
-    "conductor": "1234-5",
-    "mensajes": [
-      {
-        "de": "trabajador",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Grg",
-        "adjuntos": [],
-        "en": "2026-09-21T18:46:13.983Z"
-      },
-      {
-        "de": "gestor",
-        "autor": "Guillermo Rios",
-        "texto": "Dff",
-        "adjuntos": [],
-        "en": "2026-09-21T18:48:23.925Z"
-      }
-    ],
-    "archivada": false,
-    "de": "trabajador",
-    "tipo": "gestion",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "guillermo.rcxx@gmail.com",
-      "nombre": "Guillermo Ríos Correa",
-      "en": "2026-09-21T18:49:21.609Z"
-    }
   }
 }
