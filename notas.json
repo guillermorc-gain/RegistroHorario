@@ -47,30 +47,5 @@
     "tipo": "gestion",
     "gestor": "Guillermo Rios",
     "estado": "pendiente"
-  },
-  "20260921220226803-5xy5u-0": {
-    "id": "20260921220226803-5xy5u-0",
-    "email": "guillermo.rc82@gmail.com",
-    "creado": "2026-09-21T22:02:26.803Z",
-    "nombre": "Guillermo Ríos Correa",
-    "conductor": "1418-3",
-    "mensajes": [
-      {
-        "de": "trabajador",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "✅ He leído el cambio de jornada: Se te asigna este servicio y horario: Taller · 20:00–03:00. Confirma como leído. Gracias.",
-        "adjuntos": [],
-        "en": "2026-09-21T22:02:26.803Z"
-      }
-    ],
-    "archivada": false,
-    "de": "trabajador",
-    "tipo": "gestion",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "guillermo.rcvpn@gmail.com",
-      "nombre": "Guillermo Rios",
-      "en": "2026-09-21T22:07:18.074Z"
-    }
   }
 }
