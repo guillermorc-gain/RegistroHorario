@@ -2,9 +2,15 @@
 'use strict';
 
 const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.googleusercontent.com';
-// drive.file is needed on top of appdata: appdata can only write to a hidden
-// folder, so the monthly export could not create a visible "Movilidad Emt".
-const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send profile email';
+// Al entrar solo se piden permisos de los que Google llama corrientes. Basta
+// con pedir uno de los "sensibles" —la carpeta oculta de Drive, o enviar
+// correo— para que salga el aviso de aplicacion no verificada, con lo de
+// Configuracion avanzada, y ahi se atasca cualquiera. drive.file da acceso a
+// lo que crea la propia app, que es todo lo que esta guarda.
+const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.file profile email';
+// Enviar el correo sin salir de la app si es sensible, asi que no se le pide a
+// todo el mundo al entrar: se pide aparte, y solo a quien vaya a usarlo.
+const GMAIL_SCOPE      = 'https://www.googleapis.com/auth/gmail.send';
 const AUTH_SCOPE       = 'profile email';
 // Turnos de cada puesto. La hora de entrada registrada decide en cuál cae.
 let PUESTOS_DEFINIDOS = ['Son Rossinyol', 'Control', 'Calle', 'Taller', 'Anselmo Clavé'];
@@ -141,6 +147,15 @@ const app = {
     },
 
     _migrarUbicacionAntigua() {
+        // El id guardado puede apuntar a la copia de la carpeta oculta de
+        // Drive, donde esta version ya no tiene permiso para entrar. Se olvida
+        // una sola vez y se busca de nuevo: los datos no se van a ninguna
+        // parte, estan aqui y en el servidor.
+        if (!localStorage.getItem('copiaDriveVisible')) {
+            localStorage.setItem('copiaDriveVisible', '1');
+            localStorage.removeItem('driveFileId');
+            this.driveFileId = null;
+        }
         const old = localStorage.getItem('workLocation');
         if (old && !localStorage.getItem('workLocations')) {
             const loc = JSON.parse(old);
@@ -404,7 +419,7 @@ const app = {
             .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
     },
 
-    async login(silent = false) {
+    async login(silent = false, permisoExtra = '') {
         const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
         const redirectUri = isAndroidNative
             ? 'https://registro-horario-emt.vercel.app/'
@@ -417,10 +432,12 @@ const app = {
             client_id: GOOGLE_CLIENT_ID,
             redirect_uri: redirectUri,
             response_type: 'code',
-            scope: DRIVE_SCOPE,
+            scope: (DRIVE_SCOPE + ' ' + permisoExtra).trim(),
             code_challenge: challenge,
             code_challenge_method: 'S256',
             access_type: 'offline',
+            // Pedir un permiso nuevo no puede costar los que ya estaban dados
+            include_granted_scopes: 'true',
             state: ANDROID_PACKAGE,
             prompt: silent ? 'none' : 'consent',
             ...(email ? { login_hint: email } : {})
@@ -428,6 +445,10 @@ const app = {
         const url = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
         if (isAndroidNative && window.AndroidBridge?.performOAuthInWebView
                 && !sessionStorage.getItem('oauthWebViewFailed')) {
+            // La entrada se abre en una pestaña del navegador, fuera de la app:
+            // si se vuelve de ella sin sesión es que la han cancelado, y hay
+            // que enterarse para no dejar la pantalla colgada en "Conectando".
+            if (!silent) sessionStorage.setItem('loginAbierto', '1');
             window.AndroidBridge.performOAuthInWebView(url, silent);
         } else {
             window.location.assign(url);
@@ -456,6 +477,7 @@ const app = {
     },
 
     async _exchangeCode(code, isSilent = false) {
+        sessionStorage.removeItem('loginAbierto');
         const verifier = localStorage.getItem('pkceVerifier');
         localStorage.removeItem('pkceVerifier');
         if (!verifier) { this.mostrarAuth(); return; }
@@ -580,6 +602,17 @@ const app = {
             if (this.accessToken && Date.now() < this.tokenExpiry) this._autoBackup();
         };
         const onForeground = () => {
+            // Vuelta de la pestaña del navegador sin haber entrado: se enseña
+            // la pantalla de entrar en vez de un "Conectando" que no avanza.
+            // El margen es para darle tiempo al código a llegar por el enlace.
+            if (sessionStorage.getItem('loginAbierto')) {
+                setTimeout(() => {
+                    if (!sessionStorage.getItem('loginAbierto')) return;
+                    sessionStorage.removeItem('loginAbierto');
+                    if (this.accessToken && Date.now() < this.tokenExpiry) return;
+                    this.mostrarAuth();
+                }, 1500);
+            }
             // Al volver se miran los mensajes: es lo que hace que salte el
             // aviso cuando la app estaba de fondo.
             this._iniciarSondeoChat();
@@ -800,6 +833,14 @@ const app = {
         });
     },
 
+    // La copia va dentro de "Movilidad Emt", junto a los resumenes. Si la
+    // carpeta no se deja crear no se pierde la copia: se guarda suelta en
+    // Drive, que es mejor que quedarse sin ella.
+    async _carpetaCopias() {
+        try { return await this._carpetaDrive('Movilidad Emt', null); }
+        catch (_) { return null; }
+    },
+
     _recordarFicheroDrive(id) {
         this.driveFileId = id;
         localStorage.setItem('driveFileId', id);
@@ -811,7 +852,7 @@ const app = {
     // segunda copia y la historia se parte en dos.
     async _listarFicherosDrive() {
         const resp = await this._driveGet(
-            `https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D'${DRIVE_FILE_NAME}'`
+            `https://www.googleapis.com/drive/v3/files?q=name%3D'${DRIVE_FILE_NAME}'%20and%20trashed%3Dfalse`
             + `&fields=files(id,modifiedTime)&orderBy=modifiedTime desc`
         );
         if (!resp.ok) throw new Error('Drive buscar: ' + resp.status);
@@ -878,7 +919,9 @@ const app = {
         const resp = await this._driveGet(
             `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
         );
-        if (resp.status === 404) {
+        // 403 es la copia vieja, la de la carpeta oculta: ya no se llega a
+        // ella, y tratarla como perdida deja que se cree la nueva.
+        if (resp.status === 404 || resp.status === 403) {
             // El id guardado ya no vale; se busca otra vez desde cero
             this.driveFileId = null;
             localStorage.removeItem('driveFileId');
@@ -898,7 +941,8 @@ const app = {
 
         if (!fileId) {
             const boundary = '-------314159265358979323846';
-            const meta     = JSON.stringify({ name: DRIVE_FILE_NAME, parents: ['appDataFolder'] });
+            const carpeta  = await this._carpetaCopias();
+            const meta     = JSON.stringify({ name: DRIVE_FILE_NAME, ...(carpeta ? { parents: [carpeta] } : {}) });
             const body     = `\r\n--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${json}\r\n--${boundary}--`;
             const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
                 method: 'POST',
@@ -3730,16 +3774,19 @@ const app = {
             return;
         } catch (e) {
             console.error('Gmail API:', e.message);
-            // Quien entró en la app antes de que existiera el envío por Gmail
-            // tiene un token sin ese permiso, y no hay forma de dárselo en
-            // silencio (renovarlo por detrás no amplía lo que ya se concedió):
-            // solo lo consigue volviendo a entrar y aceptándolo.
+            // El permiso de Gmail no se pide al entrar, a propósito: es de los
+            // que hacen salir el aviso de aplicación no verificada, y no tiene
+            // sentido que lo vea todo el mundo por una función que casi nadie
+            // usa. Se pide aquí, cuando de verdad hace falta. Ampliarlo en
+            // silencio no se puede: renovar el token por detrás no añade
+            // permisos, solo los renueva.
             if (/insufficient|permission/i.test(e.message || '')) {
                 if (confirm('Para enviar el correo sin salir de la app hace falta darle '
-                    + 'permiso de Gmail, y tu sesión es de antes de que existiera eso.\n\n'
+                    + 'permiso de Gmail, y no se pide al entrar: Google avisa de '
+                    + 'aplicación no verificada a quien se lo concede.\n\n'
                     + '¿Vuelves a entrar ahora para dárselo? De momento se comparte '
                     + 'el archivo de otra forma.')) {
-                    this.login(false);
+                    this.login(false, GMAIL_SCOPE);
                     return;
                 }
             }
