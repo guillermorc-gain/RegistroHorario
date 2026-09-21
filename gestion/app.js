@@ -162,13 +162,11 @@ const app = {
         };
         poner('authTitulo', 'Desarrollador EMT - Movilidad');
         poner('authSub', 'Pruebas y mantenimiento · EMT Palma');
-        poner('logoChapaIco', '⚙️');
-        poner('splashChapa', '⚙️');
         poner('splashRol', '⚙️ Desarrollador');
-        const chapaSplash = document.getElementById('splashChapa');
-        if (chapaSplash) chapaSplash.style.background = '#E8590C';
-        const chapa = document.getElementById('logoChapa');
-        if (chapa) chapa.setAttribute('fill', '#E8590C');
+        for (const id of ['authLogo', 'splashIco']) {
+            const img = document.getElementById(id);
+            if (img) img.src = 'icons/icon-dev-192.png';
+        }
         document.title = 'Desarrollador Movilidad EMT';
     },
 
