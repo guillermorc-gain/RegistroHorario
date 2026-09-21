@@ -2607,8 +2607,14 @@ const app = {
         v.classList.add('show');
     },
 
-    // ── A quién va el mensaje: a gestión o a un compañero ────────────────────
-    _destino: null,          // null = gestión
+    // ── A quién va el mensaje: a gestión, al desarrollador o a compañeros ───
+    // Se elige igual que en la app de gestión: se marcan en una lista y se
+    // escribe una vez. La misma nota puede ir a varios, y cada uno recibe la
+    // suya: si contesta, contesta en su conversación y no la ven los demás.
+
+    A_GESTION: '__gestion__',
+    _elegidos: [],
+    _notaPara: [],
     _directorio: [],
 
     // Quien lleva la aplicación. Sale con nombre propio en la lista de a
@@ -2623,6 +2629,7 @@ const app = {
 
     async elegirDestinatario() {
         document.getElementById('destBuscar').value = '';
+        this._elegidos = [];
         this._renderDestinatarios();
         document.getElementById('destModal').classList.add('show');
         if (this.darkMode) document.getElementById('destModalContent').classList.add('dark');
@@ -2640,46 +2647,87 @@ const app = {
         }
     },
 
+    // Los compañeros que se ven ahora mismo con lo que haya en el buscador.
+    // Gestión y el desarrollador van aparte, arriba, y no los toca "Todos":
+    // una nota para la plantilla entera no tiene por qué colárseles.
+    _companerosVisibles() {
+        const q = (document.getElementById('destBuscar')?.value || '').toLowerCase().trim();
+        const mio = (this.usuarioActual?.email || '').toLowerCase();
+        return this._directorio
+            .filter(u => (u.email || '').toLowerCase() !== mio)
+            .filter(u => (u.email || '').toLowerCase() !== this.DEV_EMAIL)
+            .filter(u => !q || `${u.conductor || ''} ${u.nombre || ''}`.toLowerCase().includes(q));
+    },
+
+    _fichaDe(email) {
+        if (email === this.A_GESTION) return { email, nombre: 'Gestión', conductor: '🛠️' };
+        if ((email || '').toLowerCase() === this.DEV_EMAIL) {
+            return { email: this.DEV_EMAIL, nombre: this.DEV_NOMBRE, conductor: '💻' };
+        }
+        return this._directorio.find(u => u.email === email) || null;
+    },
+
     _renderDestinatarios() {
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
         const q = (document.getElementById('destBuscar')?.value || '').toLowerCase().trim();
-        const mio = (this.usuarioActual?.email || '').toLowerCase();
-        const lista = this._directorio
-            .filter(u => (u.email || '').toLowerCase() !== mio)     // a uno mismo, no
-            .filter(u => (u.email || '').toLowerCase() !== this.DEV_EMAIL)  // va aparte, arriba
-            .filter(u => !q || `${u.conductor || ''} ${u.nombre || ''}`.toLowerCase().includes(q));
-        // El desarrollador va con los fijos de arriba, no entre los compañeros
-        const ponerDev = !this._soyElDesarrollador()
-            && (!q || this.DEV_NOMBRE.toLowerCase().includes(q));
-        const fila = (email, num, nombre) => `<div class="dest-fila"
-            onclick="app._ponerDestino(${email === null ? 'null' : `'${esc(email).replace(/'/g, "\\'")}'`})">
-            <span class="nt-num">${esc(num)}</span>
-            <span class="nt-nom">${esc(nombre)}</span></div>`;
-        document.getElementById('destLista').innerHTML =
-            fila(null, '🛠️', 'Gestión')
-            + (ponerDev ? fila(this.DEV_EMAIL, '💻', this.DEV_NOMBRE) : '')
+        const lista = this._companerosVisibles();
+        const fila = (email, num, nombre) => {
+            const on = this._elegidos.includes(email);
+            return `<div class="dest-fila${on ? ' on' : ''}"
+                onclick="app._alternarDest('${esc(email).replace(/'/g, "\\'")}')">
+                <span class="dest-marca">${on ? '✓' : ''}</span>
+                <span class="nt-num">${esc(num)}</span>
+                <span class="nt-nom">${esc(nombre)}</span></div>`;
+        };
+        const fijos = (!q || 'gestión gestion'.includes(q) ? fila(this.A_GESTION, '🛠️', 'Gestión') : '')
+            + (!this._soyElDesarrollador() && (!q || this.DEV_NOMBRE.toLowerCase().includes(q))
+                ? fila(this.DEV_EMAIL, '💻', this.DEV_NOMBRE) : '');
+        document.getElementById('destLista').innerHTML = fijos
             + (lista.length ? lista.map(u => fila(u.email, u.conductor || '—', u.nombre || u.email)).join('')
-               : `<div class="baja-vacio">${q ? 'Ningún compañero con ese nombre o número'
-                    : 'Todavía no hay más compañeros'}</div>`);
+               : (fijos ? '' : `<div class="baja-vacio">${q ? 'Nadie con ese nombre o número'
+                    : 'Todavía no hay más compañeros'}</div>`));
+        const n = this._elegidos.length;
+        const cuantos = document.getElementById('destCuantos');
+        if (cuantos) cuantos.textContent = n ? `${n} elegido${n === 1 ? '' : 's'}` : '';
+        const seguir = document.getElementById('destSeguir');
+        if (seguir) {
+            seguir.textContent = n > 1 ? `Escribir a ${n}` : 'Escribir';
+            seguir.disabled = n === 0;
+            seguir.style.opacity = n === 0 ? '.5' : '';
+        }
     },
 
-    _ponerDestino(email) {
-        this._destino = !email ? null
-            : (email.toLowerCase() === this.DEV_EMAIL
-                ? { email: this.DEV_EMAIL, nombre: this.DEV_NOMBRE, conductor: '💻' }
-                : this._directorio.find(u => u.email === email) || { email });
+    _alternarDest(email) {
+        const i = this._elegidos.indexOf(email);
+        if (i === -1) this._elegidos.push(email); else this._elegidos.splice(i, 1);
+        this._renderDestinatarios();
+    },
+
+    // "Todos" son los compañeros que se estén viendo: con el buscador en
+    // blanco, la plantilla entera; con algo escrito, solo los que encajan.
+    _marcarTodosDest(si) {
+        const visibles = this._companerosVisibles().map(u => u.email);
+        this._elegidos = si
+            ? [...new Set([...this._elegidos, ...visibles])]
+            : this._elegidos.filter(e => !visibles.includes(e));
+        this._renderDestinatarios();
+    },
+
+    _escribirALosElegidos() {
+        if (!this._elegidos.length) return;
+        this._notaPara = this._elegidos.slice();
         document.getElementById('destModal').classList.remove('show');
-        this._pintarDestino();
-    },
-
-    _pintarDestino() {
-        const b = document.getElementById('ntParaBtn');
-        const e = document.getElementById('ntEnviar');
-        const d = this._destino;
-        if (b) b.textContent = (d ? `${d.conductor ? d.conductor + ' · ' : ''}${d.nombre || d.email}` : 'Gestión') + ' ▾';
-        if (e) e.textContent = !d ? '📨 Enviar a gestión'
-            : (d.email || '').toLowerCase() === this.DEV_EMAIL
-                ? '📨 Enviar al desarrollador' : '📨 Enviar al compañero';
+        const nombres = this._notaPara.map(e => {
+            const f = this._fichaDe(e);
+            return f ? `${f.conductor ? f.conductor + ' · ' : ''}${f.nombre || f.email}` : e;
+        });
+        document.getElementById('notaQuien').textContent = nombres.length === 1
+            ? nombres[0] : `${nombres.length} destinatarios · cada uno recibirá la suya`;
+        document.getElementById('ntTexto').value = '';
+        document.getElementById('notaFirma').textContent =
+            `Firmarás como ${this.usuarioActual?.name || 'ti'}.`;
+        document.getElementById('notaModal').classList.add('show');
+        if (this.darkMode) document.getElementById('notaModalContent').classList.add('dark');
     },
 
     // ── Estar al tanto de los mensajes ───────────────────────────────────────
@@ -2831,13 +2879,32 @@ const app = {
     },
 
     // Un aviso por conversación sin leer que no se haya avisado ya
+    // Lo ya avisado se guarda: al arrancar, la lista en memoria estaba vacía
+    // y la app volvía a lanzar el aviso —con su sonido— de mensajes de los
+    // que la barra ya había avisado con la app cerrada. Ese era el segundo
+    // sonido al abrir.
+    _cargarNotificadas() {
+        if (this._notificadasListas) return;
+        this._notificadasListas = true;
+        try { this._notificadas = JSON.parse(localStorage.getItem('notificadas') || '{}') || {}; }
+        catch (_) { this._notificadas = {}; }
+    },
+
+    _guardarNotificadas() {
+        try { localStorage.setItem('notificadas', JSON.stringify(this._notificadas)); } catch (_) {}
+    },
+
     async _avisarEnLaBarra() {
         const LN = window.Capacitor?.Plugins?.LocalNotifications;
         if (!LN?.schedule || !window.Capacitor?.isNativePlatform?.()) return;
+        this._cargarNotificadas();
         const pendientes = (this._notas || []).filter(n => !n.archivada && this._sinLeer(n));
         const vivas = new Set(pendientes.map(n => n.id));
         // Las que ya se han leído en otro sitio dejan de molestar
         Object.keys(this._notificadas).forEach(id => { if (!vivas.has(id)) this._retirarAviso(id); });
+        // Con la app delante no hace falta la barra: está la campana y el
+        // sonido de dentro. El aviso de la barra es para cuando no se está.
+        if (!document.hidden) return;
 
         const avisos = [];
         const reciénAvisadas = [];
@@ -2861,7 +2928,10 @@ const app = {
             });
         }
         if (!avisos.length) return;
-        const apuntar = () => reciénAvisadas.forEach(([id, en]) => { this._notificadas[id] = en; });
+        const apuntar = () => {
+            reciénAvisadas.forEach(([id, en]) => { this._notificadas[id] = en; });
+            this._guardarNotificadas();
+        };
         try {
             await LN.schedule({ notifications: avisos });
             apuntar();
@@ -2955,7 +3025,11 @@ const app = {
         const n = this._totalSinLeer();
         const antes = this._sinLeerPrevio ?? n;
         this._sinLeerPrevio = n;
-        if (n > antes && this.notifSoundChat !== 'ninguno') {
+        // Lo que ya estaba sin leer al abrir no es nuevo: de eso avisó la
+        // barra mientras la app estaba cerrada, y volver a sonar aquí era
+        // sonar dos veces por lo mismo. Y si la app no está delante, quien
+        // avisa es la barra, no esto.
+        if (n > antes && this.notifSoundChat !== 'ninguno' && !document.hidden) {
             try { this._previewNotifSound(this.notifSoundChat); } catch (_) {}
         }
         this._pintarCampana();
@@ -3136,29 +3210,44 @@ const app = {
     async enviarNota() {
         const campo = document.getElementById('ntTexto');
         const texto = (campo?.value || '').trim();
-        if (!texto) { this._mostrarToast('Escribe algo o adjunta un archivo', 2500); return; }
-        const d = this._destino;
-        try {
+        if (!texto) { this._mostrarToast('Escribe algo', 2500); return; }
+        const todos = (this._notaPara || []).slice();
+        if (!todos.length) return;
+        document.getElementById('notaModal').classList.remove('show');
+        const aGestion = todos.includes(this.A_GESTION);
+        const para = todos.filter(e => e !== this.A_GESTION);
+        const enviar = async cuerpo => {
             const r = await fetch(this.NOTAS_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json',
                            'X-User-Email': this.usuarioActual?.email || '' },
-                // nombre/conductor describen a quien recibe, que es de quien
-                // cuelga la nota; quien la manda va aparte en deNombre.
-                body: JSON.stringify({ texto,
-                    nombre: d ? (d.nombre || d.email) : (this.usuarioActual?.name || ''),
-                    conductor: d ? (d.conductor || '') : (this.numConductor || ''),
-                    ...(d ? { para: d.email, tipo: 'companero',
-                              deNombre: this.usuarioActual?.name || '',
-                              deConductor: this.numConductor || '' } : {}) })
+                body: JSON.stringify({ texto, ...cuerpo }),
             });
             const data = await r.json();
-            if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return; }
-            campo.value = '';
-                    this._notas = [data, ...this._notas];
+            if (!r.ok) throw new Error(data.error || r.status);
+            return Array.isArray(data) ? data : [data];
+        };
+        try {
+            const nuevas = [];
+            if (para.length) {
+                // nombre/conductor describen a quien recibe, que es de quien
+                // cuelga la nota; quien la manda va aparte en deNombre.
+                nuevas.push(...await enviar({ para, tipo: 'companero',
+                    nombres:     para.map(e => this._fichaDe(e)?.nombre || ''),
+                    conductores: para.map(e => this._fichaDe(e)?.conductor || ''),
+                    deNombre: this.usuarioActual?.name || '',
+                    deConductor: this.numConductor || '' }));
+            }
+            if (aGestion) {
+                nuevas.push(...await enviar({ nombre: this.usuarioActual?.name || '',
+                    conductor: this.numConductor || '' }));
+            }
+            if (campo) campo.value = '';
+            this._notas = [...nuevas, ...this._notas];
             this._renderNotas();
-            this._mostrarToast(d ? `📨 Enviado a ${d.nombre || d.email}` : '📨 Nota enviada a gestión', 3000);
-        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
+            this._mostrarToast(nuevas.length === 1
+                ? '📨 Nota enviada' : `📨 Nota enviada a ${nuevas.length}`, 3000);
+        } catch (e) { this._mostrarToast('❌ ' + e.message, 4000); }
     },
 
     // ── Mi nómina ────────────────────────────────────────────────────────────
@@ -5173,7 +5262,7 @@ const app = {
             panel.classList.toggle('active', panel.id === 'tabPanel' + idx);
         });
         if (idx === 1) { this._cargarCuadrante(); this._renderHistorialModal(); }
-        if (idx === 2) { this._pintarDestino(); this._cargarNotas(); }
+        if (idx === 2) this._cargarNotas();
         if (idx === 3) this._cargarMisNominas();
     },
 

@@ -135,6 +135,13 @@
         .modal-card.dark .dest-buscar{border-color:#2d3561;}
         .dest-buscar input{width:100%;border:1.5px solid #dfe4ea;border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13.5px;color:#2c3e50;background:#fff;}
         .modal-card.dark .dest-buscar input{background:#16202e;border-color:#2d3561;color:#e0e0e0;}
+        .dest-barra{display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid #f4f4f4;}
+        .modal-card.dark .dest-barra{border-color:#2d3561;}
+        .dest-barra button{background:#eef2f7;border:none;border-radius:9px;padding:6px 12px;font-size:12px;font-weight:800;color:#5a6b7d;cursor:pointer;}
+        .modal-card.dark .dest-barra button{background:#2d3561;color:#c8cfe0;}
+        .dest-barra span{margin-left:auto;font-size:12px;font-weight:800;color:#7f8c8d;}
+        .dest-marca{flex:0 0 20px;width:20px;height:20px;border-radius:6px;border:2px solid #cfd8e3;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;font-weight:900;}
+        .dest-fila.on .dest-marca{background:var(--g1);border-color:var(--g1);}
         .dest-fila{display:flex;align-items:center;gap:9px;padding:11px 16px;border-bottom:1px solid #f4f4f4;cursor:pointer;-webkit-tap-highlight-color:transparent;}
         .modal-card.dark .dest-fila{border-color:#2d3561;}
         .dest-fila:active{background:#f4f6f9;}
@@ -1081,13 +1088,7 @@
         <!-- ── TAB: Notas ── -->
         <div class="tab-panel" id="tabPanel2">
             <div class="nt-nueva">
-                <div class="nt-para">
-                    <span class="nt-para-l">Para</span>
-                    <button class="nt-para-b" id="ntParaBtn" onclick="app.elegirDestinatario()">Gestión ▾</button>
-                </div>
-                <textarea id="ntTexto" class="nt-texto" rows="2" maxlength="500"
-                          placeholder="Escribe aquí lo que quieras contar…"></textarea>
-                <button class="btn-main" id="ntEnviar" onclick="app.enviarNota()">📨 Enviar a gestión</button>
+                <button class="btn-main" onclick="app.elegirDestinatario()">✉️ Escribir</button>
             </div>
             <div class="cond-filtros" id="ntArchivadas"></div>
             <div id="ntLista" class="nt-lista"></div>
@@ -1797,7 +1798,38 @@
                 <input type="text" id="destBuscar" placeholder="Buscar por nombre o número…"
                        oninput="app._renderDestinatarios()">
             </div>
+            <div class="dest-barra">
+                <button onclick="app._marcarTodosDest(true)">Todos</button>
+                <button onclick="app._marcarTodosDest(false)">Ninguno</button>
+                <span id="destCuantos"></span>
+            </div>
             <div id="destLista" class="baja-lista" style="max-height:52vh;overflow-y:auto;"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-confirm" id="destSeguir"
+                    onclick="app._escribirALosElegidos()">Escribir</button>
+        </div>
+    </div>
+</div>
+
+<!-- Escribir una nota -->
+<div class="modal" id="notaModal">
+    <div class="modal-card" id="notaModalContent">
+        <div class="modal-header">
+            <h3>✉️ Escribir a</h3>
+            <button class="modal-close" onclick="document.getElementById('notaModal').classList.remove('show')">×</button>
+        </div>
+        <div class="modal-body">
+            <div id="notaQuien" class="pm-quien" style="margin:-16px -16px 12px;"></div>
+            <div class="edit-field"><label>Tu nota</label>
+                <textarea id="ntTexto" rows="3" maxlength="500"
+                    placeholder="Escribe aquí lo que quieras contar…"
+                    style="border:1.5px solid #dfe4ea;border-radius:8px;padding:8px;font-family:inherit;font-size:13.5px;resize:vertical;"></textarea></div>
+            <span class="ops-field-sub" id="notaFirma" style="display:block;margin-top:6px;"></span>
+        </div>
+        <div class="modal-footer">
+            <button class="modal-btn modal-btn-cancel" onclick="document.getElementById('notaModal').classList.remove('show')">Cancelar</button>
+            <button class="modal-btn modal-btn-confirm" onclick="app.enviarNota()">Enviar</button>
         </div>
     </div>
 </div>

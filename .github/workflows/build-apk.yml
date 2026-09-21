@@ -73,7 +73,7 @@ jobs:
           sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>|' "$MANIFEST"
           sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
           sed -i 's|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />|' "$MANIFEST"
-          sed -i 's|</application>|    <receiver android:name=".MainActivity$GeofenceReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$ChatReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$LeidoReceiver" android:exported="false" />\n    <service android:name=".MainActivity$ChatJob" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="false" />\n    <service android:name=".MainActivity$AvisoService" android:foregroundServiceType="dataSync" android:exported="false" />\n    <receiver android:name=".MainActivity$BootReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/></intent-filter></receiver>\n    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
+          sed -i 's|</application>|    <receiver android:name=".MainActivity$GeofenceReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$ChatReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$LeidoReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$ResponderReceiver" android:exported="false" />\n    <service android:name=".MainActivity$ChatJob" android:permission="android.permission.BIND_JOB_SERVICE" android:exported="false" />\n    <service android:name=".MainActivity$AvisoService" android:foregroundServiceType="dataSync" android:exported="false" />\n    <receiver android:name=".MainActivity$BootReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/></intent-filter></receiver>\n    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
 
       - name: Create FileProvider paths config
         run: |
@@ -1265,18 +1265,88 @@ jobs:
                       li.putExtra("ids", ids.toString());
                       li.putExtra("hasta", masNuevo);
                       PendingIntent leidoPI = PendingIntent.getBroadcast(ctx, 4, li, flags);
-                      nm.notify(1002, new NotificationCompat.Builder(ctx, CHAT_CHANNEL)
+                      // Contestar desde la propia barra, sin abrir nada. Solo cuando lo
+                      // nuevo es de una conversación: con varias no se sabría a cuál va.
+                      NotificationCompat.Action responder = null;
+                      String unico = ids.toString();
+                      if (!unico.isEmpty() && unico.indexOf(',') < 0) {
+                          Intent ri = new Intent(ctx, ResponderReceiver.class);
+                          ri.putExtra("id", unico);
+                          // La respuesta escrita viaja dentro del Intent, así que este
+                          // no puede ser inmutable como los demás.
+                          int flagsAbiertos = PendingIntent.FLAG_UPDATE_CURRENT
+                              | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0);
+                          responder = new NotificationCompat.Action.Builder(0, "Responder",
+                                  PendingIntent.getBroadcast(ctx, 6, ri, flagsAbiertos))
+                              .addRemoteInput(new androidx.core.app.RemoteInput.Builder("texto")
+                                  .setLabel("Escribe tu respuesta\u2026").build())
+                              .setAllowGeneratedReplies(false)
+                              .build();
+                      }
+                      NotificationCompat.Builder aviso = new NotificationCompat.Builder(ctx, CHAT_CHANNEL)
                           .setSmallIcon(R.drawable.ic_stat_chat)
                           .setContentTitle(nuevos == 1 ? "Tienes un mensaje" : "Tienes " + nuevos + " mensajes")
-                          .setContentText("Toca para leerlo en la aplicación")
+                          .setContentText("Contesta o marca como leído sin abrir la aplicación")
                           .setPriority(NotificationCompat.PRIORITY_HIGH)
                           .setContentIntent(pi)
                           .addAction(0, "Marcar leído", leidoPI)
-                          .setAutoCancel(true)
-                          .build());
+                          .setAutoCancel(true);
+                      if (responder != null) aviso.addAction(responder);
+                      nm.notify(1002, aviso.build());
                   }
               }
 
+              // Contestar desde el aviso de la barra, sin abrir la app: lo que se
+              // escribe ahí llega al hilo igual que si se hubiera escrito dentro.
+              public static class ResponderReceiver extends BroadcastReceiver {
+                  @Override
+                  public void onReceive(Context ctx, Intent intent) {
+                      final Context app = ctx.getApplicationContext();
+                      android.os.Bundle escrito = androidx.core.app.RemoteInput.getResultsFromIntent(intent);
+                      CharSequence cs = escrito == null ? null : escrito.getCharSequence("texto");
+                      final String texto = cs == null ? "" : cs.toString().trim();
+                      final String id = intent == null ? "" : intent.getStringExtra("id");
+                      NotificationManager nm =
+                          (NotificationManager) app.getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (nm != null) nm.cancel(1002);
+                      if (texto.isEmpty() || id == null || id.isEmpty()) return;
+                      final PendingResult pendiente = goAsync();
+                      new Thread(() -> {
+                          try { mandarRespuesta(app, id, texto); } catch (Exception ignored) {}
+                          finally { pendiente.finish(); }
+                      }).start();
+                  }
+              
+                  private void mandarRespuesta(Context ctx, String id, String texto) throws Exception {
+                      SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                      String url    = prefs.getString("chatUrl", "");
+                      String email  = prefs.getString("chatEmail", "");
+                      String nombre = prefs.getString("chatNombre", "");
+                      if (url.isEmpty() || email.isEmpty()) return;
+                      String token = obtenerTokenValido(ctx);
+                      java.net.HttpURLConnection c =
+                          (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                      c.setRequestMethod("POST");
+                      c.setRequestProperty("Content-Type", "application/json");
+                      c.setRequestProperty("X-User-Email", email);
+                      if (token != null && !token.isEmpty())
+                          c.setRequestProperty("Authorization", "Bearer " + token);
+                      c.setConnectTimeout(15000);
+                      c.setReadTimeout(15000);
+                      c.setDoOutput(true);
+                      org.json.JSONObject body = new org.json.JSONObject();
+                      body.put("id", id);
+                      body.put("texto", texto);
+                      // El servidor coge el que le toque según de quién sea el hilo
+                      body.put("nombre", nombre);
+                      body.put("deNombre", nombre);
+                      body.put("gestor", nombre);
+                      c.getOutputStream().write(body.toString().getBytes("UTF-8"));
+                      c.getResponseCode();
+                      c.disconnect();
+                  }
+              }
+              
               // Dar por leído desde el aviso, sin abrir nada. Quita el aviso al
               // momento y por detrás le dice al otro que ya está visto, que es
               // lo que esperaba ver de vuelta.
