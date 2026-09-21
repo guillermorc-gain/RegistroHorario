@@ -1654,7 +1654,7 @@ const app = {
         }
     },
 
-    añadirVacaciones() {
+    async añadirVacaciones() {
         const desde = document.getElementById('vacDesde').value;
         const hasta = document.getElementById('vacHasta').value;
         if (!desde || !hasta) { this._mostrarToast('❌ Indica las dos fechas', 3000); return; }
@@ -1668,14 +1668,61 @@ const app = {
         this._renderVacaciones();
         this._aplicarModoVacaciones();
         this._mostrarToast('🏖️ Vacaciones añadidas', 2500);
+        await this._registrarDiasVacaciones(desde, hasta);
     },
 
-    borrarVacaciones(i) {
+    // Cada día del rango que todavía no tenga nada registrado se apunta como
+    // vacaciones, sin horario: así la nómina y el resumen anual ya cuentan
+    // esos días sin tener que registrarlos uno a uno.
+    async _registrarDiasVacaciones(desde, hasta) {
+        try {
+            const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
+            if (!datos.historial) datos.historial = {};
+            let tocado = false;
+            for (let d = new Date(desde + 'T12:00:00'), fin = new Date(hasta + 'T12:00:00');
+                 d <= fin; d.setDate(d.getDate() + 1)) {
+                const fechaKey = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+                if (datos.historial[fechaKey]) continue;   // ya hay algo ese día: no se toca
+                datos.historial[fechaKey] = {
+                    fecha: d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+                    horas: 0, timestamp: +d, vacaciones: true, deVacaciones: true,
+                };
+                tocado = true;
+            }
+            if (!tocado) return;
+            datos.horasTrabajadas = this._calcTotales(datos.historial).anualReal;
+            await this._writeDriveFile(datos);
+            this.actualizarUI(datos);
+        } catch (e) { this._mostrarToast('❌ No se pudieron registrar los días: ' + e.message, 4000); }
+    },
+
+    async borrarVacaciones(i) {
         const v = this._getVacaciones();
+        const periodo = v[i];
         v.splice(i, 1);
         this._saveVacaciones(v);
         this._renderVacaciones();
         this._aplicarModoVacaciones();
+        if (periodo) await this._quitarDiasVacaciones(periodo.desde, periodo.hasta);
+    },
+
+    // Solo se quitan los días que se pusieron solos al añadir el periodo: si
+    // se ha tocado algo de esa jornada a mano, se deja tal cual.
+    async _quitarDiasVacaciones(desde, hasta) {
+        try {
+            const datos = await this._readDriveFile();
+            if (!datos?.historial) return;
+            let tocado = false;
+            for (let d = new Date(desde + 'T12:00:00'), fin = new Date(hasta + 'T12:00:00');
+                 d <= fin; d.setDate(d.getDate() + 1)) {
+                const fechaKey = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+                if (datos.historial[fechaKey]?.deVacaciones) { delete datos.historial[fechaKey]; tocado = true; }
+            }
+            if (!tocado) return;
+            datos.horasTrabajadas = this._calcTotales(datos.historial).anualReal;
+            await this._writeDriveFile(datos);
+            this.actualizarUI(datos);
+        } catch (_) { /* si falla, se quedan los días apuntados; no pasa nada grave */ }
     },
 
     _renderVacaciones() {
@@ -4373,6 +4420,9 @@ const app = {
         // Un día de baja sin horas cuenta como jornada hecha contra el objetivo
         if (reg.be && h === 0) return this._horasBaja();
         if (reg.festivo && h === 0) return this.jornadaHoras;
+        // Las vacaciones no restan del objetivo anual: cuentan como jornada
+        // hecha, igual que un festivo no trabajado.
+        if (reg.vacaciones && h === 0) return this.jornadaHoras;
         return h;
     },
 
