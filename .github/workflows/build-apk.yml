@@ -1660,16 +1660,21 @@ jobs:
 
       - name: Set Android launcher icon
         run: |
+          sudo apt-get install -y -qq fonts-noto-color-emoji || true
           pip install Pillow -q
-          python3 << 'PYEOF'
-          from PIL import Image
-          import os
+          EMOJI='💪' ICON_BG='21,101,192' ICON_SRC='www/icons/icon-512.png' python3 << 'PYEOF'
+          from PIL import Image, ImageDraw, ImageFont
+          import os, glob
 
-          src_path = 'www/icons/icon-512.png'
+          # El icono es el emoji que le toca a cada app: el brazo para la de
+          # trabajador, el lápiz para gestión y el engranaje para la de
+          # desarrollador. Son tres aplicaciones parecidas en el mismo móvil y
+          # el icono es lo único que se mira para abrir una u otra.
+          EMOJI = os.environ.get('EMOJI', '')
+          BG    = tuple(int(os.environ.get('ICON_BG', '21,101,192').split(',')[i]) for i in range(3))
+          SRC   = os.environ.get('ICON_SRC', '')
           res_base = 'android/app/src/main/res'
-          BG = (21, 101, 192)  # #1565C0
 
-          # (legacy_size, adaptive_canvas_size)
           sizes = {
               'mipmap-mdpi':    (48,  108),
               'mipmap-hdpi':    (72,  162),
@@ -1678,34 +1683,56 @@ jobs:
               'mipmap-xxxhdpi': (192, 432),
           }
 
-          from PIL import ImageDraw
+          def del_emoji():
+              # Noto Color Emoji solo trae un tamaño de mapa de bits, 109, y
+              # pedirle otro es un error; se dibuja en ese y luego se escala.
+              rutas = ['/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf']
+              rutas += glob.glob('/usr/share/fonts/**/NotoColorEmoji*.ttf', recursive=True)
+              for ruta in rutas:
+                  try:
+                      f = ImageFont.truetype(ruta, 109)
+                      im = Image.new('RGBA', (240, 240), (0, 0, 0, 0))
+                      ImageDraw.Draw(im).text((40, 40), EMOJI, font=f, embedded_color=True)
+                      caja = im.getbbox()
+                      if caja:
+                          return im.crop(caja)
+                  except Exception as e:
+                      print('emoji:', ruta, e)
+              return None
 
-          src_full = Image.open(src_path).convert('RGBA')
-          sw, sh = src_full.size
+          dibujo = del_emoji()
+          if dibujo is None:
+              # Si el emoji no sale, antes que romper el montaje se usa el
+              # icono de siempre.
+              print('Sin emoji: se usa', SRC)
+              dibujo = Image.open(SRC).convert('RGBA')
+              m = Image.new('L', dibujo.size, 0)
+              ImageDraw.Draw(m).ellipse([2, 2, dibujo.size[0]-3, dibujo.size[1]-3], fill=255)
+              dibujo.putalpha(m)
 
-          # The source icon has grey checkerboard pixels embedded at the corners.
-          # Apply a circular mask so corners become the blue background color.
-          circ_mask = Image.new('L', (sw, sh), 0)
-          ImageDraw.Draw(circ_mask).ellipse([2, 2, sw-3, sh-3], fill=255)
-          src_full.putalpha(circ_mask)
+          # Cuadrado, con el dibujo centrado y sin deformar
+          lado = max(dibujo.size)
+          cuadro = Image.new('RGBA', (lado, lado), (0, 0, 0, 0))
+          cuadro.paste(dibujo, ((lado - dibujo.size[0]) // 2, (lado - dibujo.size[1]) // 2), dibujo)
 
           for dir_name, (size, asize) in sizes.items():
               path = f'{res_base}/{dir_name}'
               os.makedirs(path, exist_ok=True)
 
-              # Legacy icon: circular clock on solid blue, fills full square
-              bg = Image.new('RGBA', (size, size), (*BG, 255))
-              fg = src_full.resize((size, size), Image.LANCZOS)
-              result = Image.alpha_composite(bg, fg).convert('RGB')
-              result.save(f'{path}/ic_launcher.png')
-              result.save(f'{path}/ic_launcher_round.png')
+              # Icono de toda la vida: el dibujo al 80% sobre el color de la app
+              fondo = Image.new('RGBA', (size, size), (*BG, 255))
+              d = cuadro.resize((size * 4 // 5, size * 4 // 5), Image.LANCZOS)
+              off = (size - d.size[0]) // 2
+              fondo.paste(d, (off, off), d)
+              fondo.convert('RGB').save(f'{path}/ic_launcher.png')
+              fondo.convert('RGB').save(f'{path}/ic_launcher_round.png')
 
-              # Adaptive foreground: icon at 66% of canvas, centered
-              fg_sz = asize * 2 // 3
+              # Adaptativo: el sistema recorta, así que el dibujo va al 60%
+              fg_sz = asize * 3 // 5
               adapt = Image.new('RGBA', (asize, asize), (*BG, 255))
-              icon_fg = src_full.resize((fg_sz, fg_sz), Image.LANCZOS)
+              d = cuadro.resize((fg_sz, fg_sz), Image.LANCZOS)
               off = (asize - fg_sz) // 2
-              adapt.paste(icon_fg, (off, off), icon_fg.split()[3])
+              adapt.paste(d, (off, off), d)
               adapt.convert('RGB').save(f'{path}/ic_launcher_foreground.png')
 
               Image.new('RGB', (asize, asize), BG).save(f'{path}/ic_launcher_background.png')

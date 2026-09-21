@@ -9,6 +9,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="app-rol" content="trabajador">
     <meta name="apple-mobile-web-app-title" content="EMT - Movilidad">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <style>
@@ -116,6 +117,13 @@
         .exp-col input{width:18px;height:18px;accent-color:var(--g1);flex-shrink:0;}
         .exp-todo{font-weight:800;border-bottom:1px solid #f2f2f2;}
         .modal-card.dark .exp-todo{border-color:#2d3561;}
+        .cond-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:#7f8c8d;}
+        .app-content.dark .cond-title{color:#a0a0a0;}
+        .sec-head{display:flex;flex-shrink:0;align-items:center;gap:5px;padding:4px 2px;user-select:none;-webkit-tap-highlight-color:transparent;}
+        .sec-head .cond-title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .sec-cnt{font-size:9.5px;font-weight:800;color:var(--g1);background:#eaf2fd;padding:2px 6px;border-radius:9px;white-space:nowrap;flex-shrink:0;}
+        .app-content.dark .sec-cnt{background:#14283f;}
+        .cond-refresh{flex-shrink:0;width:30px;height:30px;background:linear-gradient(135deg,var(--g1),var(--g2));border:none;border-radius:8px;color:#fff;font-size:16px;cursor:pointer;}
         .reg-barra{display:flex;align-items:center;gap:8px;padding:2px 2px 6px;flex-shrink:0;}
         .reg-barra .cond-title{flex:1;}
         .reg-list{flex:1;min-height:0;overflow-y:auto;}
@@ -766,6 +774,7 @@
         .splash-bus{font-size:72px;line-height:1;animation:splash-pulse 1.6s ease-in-out infinite;}
         .splash-title{color:white;font-size:24px;font-weight:800;letter-spacing:0.5px;margin-top:4px;}
         .splash-sub{color:rgba(255,255,255,0.65);font-size:13px;}
+        .splash-rol{color:rgba(255,255,255,0.92);font-size:14px;font-weight:800;letter-spacing:2px;text-transform:uppercase;}
         @keyframes splash-pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.1);}}
 
         /* ── INSTALL BANNER ── */
@@ -785,8 +794,9 @@
 
 <!-- Splash Screen -->
 <div id="splashScreen">
-    <div class="splash-bus">🚌</div>
-    <div class="splash-title">EMT - Movilidad</div>
+    <div class="splash-bus" id="splashIco">💪</div>
+    <div class="splash-title" id="splashTit">EMT · Movilidad</div>
+    <div class="splash-rol" id="splashRol">Trabajador</div>
     <div class="splash-sub" id="splashMsg">Iniciando...</div>
 </div>
 <script>
@@ -852,7 +862,7 @@
         <div class="app-header" id="appHeader">
             <div class="app-header-top">
                 <div class="app-header-left">
-                    <span class="app-header-title">🚌 EMT - Movilidad</span>
+                    <span class="app-header-title" id="cabeceraTitulo">🚌 EMT - Movilidad</span>
                     <span class="app-header-date" id="fechaHoy"></span>
                 </div>
                 <div class="app-header-right">
@@ -1087,8 +1097,11 @@
 
         <!-- ── TAB: Notas ── -->
         <div class="tab-panel" id="tabPanel2">
-            <div class="nt-nueva">
-                <button class="btn-main" onclick="app.elegirDestinatario()">✉️ Escribir</button>
+            <div class="sec-head" style="cursor:default;">
+                <span class="cond-title">📝 Notas</span>
+                <span class="sec-cnt" id="ntCnt"></span>
+                <button class="cond-refresh" onclick="app.elegirDestinatario()" title="Escribir">＋</button>
+                <button class="cond-refresh" onclick="app._cargarNotas()" title="Actualizar">⟳</button>
             </div>
             <div class="cond-filtros" id="ntArchivadas"></div>
             <div id="ntLista" class="nt-lista"></div>
