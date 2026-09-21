@@ -1428,7 +1428,9 @@
     "diasAt": 1789820835635,
     "horario": "",
     "grupo": null,
-    "lugares": {},
+    "lugares": {
+      "20260921": "Son Rossinyol"
+    },
     "horarios": {
       "202609": {
         "i": "05:30",
