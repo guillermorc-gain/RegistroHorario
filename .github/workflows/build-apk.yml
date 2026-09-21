@@ -1662,7 +1662,7 @@ jobs:
         run: |
           sudo apt-get install -y -qq fonts-noto-color-emoji || true
           pip install Pillow -q
-          EMOJI='💪' ICON_BG='21,101,192' python3 << 'PYEOF'
+          EMOJI='💪' CHAPA_BG='21,101,192' ICON_BG='21,101,192' python3 << 'PYEOF'
           from PIL import Image, ImageDraw, ImageFont
           import os, glob
 
@@ -1673,6 +1673,7 @@ jobs:
           # para abrir una u otra.
           EMOJI = os.environ.get('EMOJI', '')
           BG    = tuple(int(x) for x in os.environ.get('ICON_BG', '21,101,192').split(',')[:3])
+          CHAPA = tuple(int(x) for x in os.environ.get('CHAPA_BG', '21,101,192').split(',')[:3])
           res_base = 'android/app/src/main/res'
 
           sizes = {
@@ -1719,15 +1720,21 @@ jobs:
               im = src.resize((lado, lado), Image.LANCZOS)
               if chapa is None:
                   return im
-              # Del tamaño que ya tenía la de gestión: el disco ocupa un
-              # cuarto del icono y va centrado en el 76%.
-              dia = max(8, int(lado * 0.25))
+              # Medido en el icono de gestión, que ya llevaba una: el aro
+              # blanco ocupa un cuarto del icono, el disco de color un 22,9%,
+              # y va centrado en el 76%. El color del disco es el que hace que
+              # se vea de lejos, así que es el que más contrasta con su dibujo.
+              aro = max(10, int(lado * 0.25))
+              dia = max(8,  int(lado * 0.229))
               cx = cy = int(lado * 0.763)
-              disco = Image.new('RGBA', (lado, lado), (0, 0, 0, 0))
-              ImageDraw.Draw(disco).ellipse(
-                  [cx - dia//2, cy - dia//2, cx + dia//2, cy + dia//2], fill=(255, 255, 255, 255))
-              im.alpha_composite(disco)
-              g = max(6, int(dia * 0.8))
+              capa = Image.new('RGBA', (lado, lado), (0, 0, 0, 0))
+              dr = ImageDraw.Draw(capa)
+              dr.ellipse([cx - aro//2, cy - aro//2, cx + aro//2, cy + aro//2],
+                         fill=(255, 255, 255, 255))
+              dr.ellipse([cx - dia//2, cy - dia//2, cx + dia//2, cy + dia//2],
+                         fill=(*CHAPA, 255))
+              im.alpha_composite(capa)
+              g = max(6, int(dia * 0.72))
               l = max(chapa.size)
               c = Image.new('RGBA', (l, l), (0, 0, 0, 0))
               c.paste(chapa, ((l - chapa.size[0])//2, (l - chapa.size[1])//2), chapa)
