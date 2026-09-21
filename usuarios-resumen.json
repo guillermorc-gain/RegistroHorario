@@ -1567,7 +1567,12 @@
       "20260918": "plan",
       "20260921": "real"
     },
-    "horariosDia": {},
+    "horariosDia": {
+      "20260921": {
+        "i": "20:00",
+        "f": "03:00"
+      }
+    },
     "tramosDia": {},
     "avisoVisto": {
       "clave": "20260921|Son Rossinyol|05:30–13:00",
