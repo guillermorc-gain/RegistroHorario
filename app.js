@@ -6707,7 +6707,10 @@ const app = {
         try {
             const r = await fetch(VERSION_URL, { cache: 'no-store' });
             if (r.ok) {
-                const build = (await r.json())?.build ?? null;
+                // El fichero guarda un número por app —trabajadores y gestión
+                // tienen su propia numeración de builds— para que publicar
+                // una no toque el reparto de la otra.
+                const build = (await r.json())?.worker ?? null;
                 localStorage.setItem('buildPublicado', JSON.stringify(build));
                 return { ok: true, build };
             }

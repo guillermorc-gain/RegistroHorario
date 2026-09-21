@@ -3774,7 +3774,7 @@ const app = {
                 return;
             }
             const releases = res.lista;
-            this._versionPublicada = rVer.ok ? ((await rVer.json())?.build ?? null) : null;
+            this._versionPublicada = rVer.ok ? ((await rVer.json())?.worker ?? null) : null;
             // Solo las de la app de trabajadores
             const re = /^build-(\d+)$/;
             const builds = (Array.isArray(releases) ? releases : [])
@@ -3817,7 +3817,7 @@ const app = {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json',
                            'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ build })
+                body: JSON.stringify({ app: 'worker', build })
             });
             const data = await resp.json();
             if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
@@ -7362,7 +7362,10 @@ const app = {
         try {
             const r = await fetch(VERSION_URL, { cache: 'no-store' });
             if (r.ok) {
-                const build = (await r.json())?.build ?? null;
+                // El fichero guarda un número por app —trabajadores y gestión
+                // tienen su propia numeración de builds— para que publicar
+                // una no toque el reparto de la otra.
+                const build = (await r.json())?.gestion ?? null;
                 localStorage.setItem('buildPublicado', JSON.stringify(build));
                 return { ok: true, build };
             }
