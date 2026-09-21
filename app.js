@@ -1118,9 +1118,10 @@ const app = {
         const esFestivo      = this.festivoActivo;
         const esVacaciones   = this.vacacionesActivo;
         const esBaja         = this.bajaActiva;
-        // A holiday, a vacation day or a sick day may be registered with no
-        // hours worked; anything else needs hours.
-        if (!fecha || (!esFestivo && !esVacaciones && !esBaja && (isNaN(parseFloat(horasRaw)) || horas <= 0))) {
+        // Un festivo, un día de vacaciones, una baja o un día que no se fue a
+        // trabajar se registran sin horas; lo demás las necesita.
+        const sinHoras = esFestivo || esVacaciones || esBaja || this.sinAsistenciaActivo;
+        if (!fecha || (!sinHoras && (isNaN(parseFloat(horasRaw)) || horas <= 0))) {
             alert('❌ Introduce fecha y horas válidas'); return;
         }
         if (horas < 0) { alert('❌ Las horas no pueden ser negativas'); return; }
@@ -1256,8 +1257,8 @@ const app = {
         const sinAsist  = document.getElementById('editModalSinAsistencia').checked;
         const destExtra = document.querySelector('input[name="editExtraDestino"]:checked')?.value || 'anual';
         const prev      = this._historialMap?.[this.editingId] || {};
-        // Festivo, vacaciones y baja son días sin horas: no se exigen.
-        const sinJornada = esFestivo || esVac || esBe;
+        // Festivo, vacaciones, baja y no haber ido son días sin horas.
+        const sinJornada = esFestivo || esVac || esBe || sinAsist;
         if (!fecha || (!sinJornada && (isNaN(horas) || horas <= 0))) { alert('❌ Introduce fecha y horas válidas'); return; }
 
         const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
@@ -5097,6 +5098,13 @@ const app = {
         document.getElementById('noAsistCompact')?.classList.toggle('active', this.sinAsistenciaActivo);
         const cb = document.getElementById('sinAsistenciaToggle');
         if (cb) cb.checked = this.sinAsistenciaActivo;
+        // No haber ido es un día sin horas, igual que vacaciones o una baja:
+        // se ponen a cero solas en vez de tener que borrarlas a mano.
+        if (this.sinAsistenciaActivo) {
+            const h = document.getElementById('horasInput');
+            if (h) h.value = '0';
+            this.calcularExtra?.();
+        }
     },
 
     calcularExtraModal() {
@@ -5389,7 +5397,7 @@ const app = {
         el.checked = !el.checked;
         // Vacaciones y baja son días sin jornada: se ponen las horas a cero,
         // igual que al registrar.
-        if (el.checked && (nombre === 'Vacaciones' || nombre === 'Be')) {
+        if (el.checked && (nombre === 'Vacaciones' || nombre === 'Be' || nombre === 'SinAsistencia')) {
             const h = document.getElementById('editModalHoras');
             if (h) h.value = '0';
         }
@@ -6293,7 +6301,7 @@ const app = {
         let horas = 0, sinJornada = false;
         Object.entries(this._historialFull || {}).forEach(([id, r]) => {
             if (this._fechaDeId(id) !== hoy) return;
-            if (r.vacaciones || r.be || r.festivo) sinJornada = true;
+            if (r.vacaciones || r.be || r.festivo || r.sinAsistencia) sinJornada = true;
             horas += parseFloat(r.horas) || 0;
         });
         return sinJornada || horas >= (this.jornadaHoras || 7.5) - 0.01;
