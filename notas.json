@@ -66,6 +66,11 @@
     "archivada": false,
     "de": "trabajador",
     "tipo": "gestion",
-    "estado": "pendiente"
+    "estado": "visto",
+    "vistoPor": {
+      "email": "guillermo.rc82@gmail.com",
+      "nombre": "Guillermo Ríos Correa",
+      "en": "2026-09-21T14:09:23.404Z"
+    }
   }
 }
