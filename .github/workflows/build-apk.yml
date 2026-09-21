@@ -877,8 +877,85 @@ jobs:
                       final Context app = ctx.getApplicationContext();
                       new Thread(() -> {
                           try { mirarChat(app); } catch (Exception ignored) {}
+                          try { mirarJornada(app); } catch (Exception ignored) {}
                           programarAvisoChat(app);     // se vuelve a poner siempre
                       }).start();
+                  }
+
+                  // Si gestión le cambia el sitio o la hora de hoy, que se
+                  // entere aunque tenga la app cerrada, y no cuando ya va de
+                  // camino al lugar de antes. Se aprovecha el mismo despertar
+                  // que el de los mensajes: no cuesta otra alarma.
+                  private void mirarJornada(Context ctx) throws Exception {
+                      SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                      String email = prefs.getString("chatEmail", "");
+                      String base  = prefs.getString("asignacionUrl", "");
+                      if (email.isEmpty() || base.isEmpty()) return;
+
+                      java.net.HttpURLConnection c = (java.net.HttpURLConnection)
+                          new java.net.URL(base + "?mio=" + java.net.URLEncoder.encode(email, "UTF-8"))
+                              .openConnection();
+                      c.setConnectTimeout(15000);
+                      c.setReadTimeout(15000);
+                      c.setRequestProperty("User-Agent", "HorasEMT/1.0");
+                      if (c.getResponseCode() != 200) { c.disconnect(); return; }
+                      StringBuilder sb = new StringBuilder();
+                      java.io.BufferedReader br = new java.io.BufferedReader(
+                          new java.io.InputStreamReader(c.getInputStream(), "UTF-8"));
+                      String linea;
+                      while ((linea = br.readLine()) != null) sb.append(linea);
+                      br.close(); c.disconnect();
+
+                      org.json.JSONObject a = new org.json.JSONObject(sb.toString());
+                      String fecha = a.optString("fecha", "");
+                      if (fecha.isEmpty()) return;
+                      String lugar = a.optString("lugar", "");
+                      org.json.JSONObject h = a.optJSONObject("horario");
+                      String horas = "";
+                      if (h != null && !h.optString("i", "").isEmpty() && !h.optString("f", "").isEmpty())
+                          horas = h.optString("i") + "\u2013" + h.optString("f");
+                      String ahora = fecha + "|" + lugar + "|" + horas;
+
+                      String visto = prefs.getString("jornadaVista", "");
+                      if (ahora.equals(visto)) return;
+                      prefs.edit().putString("jornadaVista", ahora).apply();
+                      // La primera vez no hay con qué comparar, y cambiar de
+                      // día tampoco es ningún cambio: la jornada de mañana es
+                      // otra por definición.
+                      if (visto.isEmpty()) return;
+                      String[] antes = visto.split("\\|", -1);
+                      if (antes.length < 3 || !antes[0].equals(fecha)) return;
+
+                      String texto = "";
+                      if (!antes[1].equalsIgnoreCase(lugar))
+                          texto = lugar.isEmpty() ? "Te han quitado el lugar" : "Ahora te toca en " + lugar;
+                      if (!antes[2].equals(horas)) {
+                          String t = horas.isEmpty() ? "Te han quitado el horario" : "Horario " + horas;
+                          texto = texto.isEmpty() ? t : texto + " \u00b7 " + t;
+                      }
+                      if (texto.isEmpty()) return;
+
+                      NotificationManager nm =
+                          (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (nm == null) return;
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          nm.createNotificationChannel(new NotificationChannel(
+                              CHAT_CHANNEL, "Mensajes", NotificationManager.IMPORTANCE_HIGH));
+                      }
+                      int flags = PendingIntent.FLAG_UPDATE_CURRENT
+                          | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
+                      Intent oi = new Intent(ctx, MainActivity.class);
+                      oi.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                      PendingIntent pi = PendingIntent.getActivity(ctx, 3, oi, flags);
+                      nm.notify(1003, new NotificationCompat.Builder(ctx, CHAT_CHANNEL)
+                          .setSmallIcon(R.drawable.ic_stat_chat)
+                          .setContentTitle("Te han cambiado la jornada de hoy")
+                          .setContentText(texto)
+                          .setStyle(new NotificationCompat.BigTextStyle().bigText(texto))
+                          .setPriority(NotificationCompat.PRIORITY_HIGH)
+                          .setContentIntent(pi)
+                          .setAutoCancel(true)
+                          .build());
                   }
 
                   private void mirarChat(Context ctx) throws Exception {

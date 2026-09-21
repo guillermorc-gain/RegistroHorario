@@ -2608,6 +2608,9 @@ const app = {
         // el sondeo de aquí arriba solo vive mientras la pantalla esté viva.
         window.AndroidBridge?.activarAvisoChat?.(
             this.usuarioActual.email, false, this.NOTAS_URL);
+        // De paso, por dónde preguntar por la jornada de hoy: el mismo aviso
+        // nativo mira también si le han cambiado el sitio o la hora.
+        window.AndroidBridge?.saveToPrefs?.('asignacionUrl', this.USUARIOS_URL);
     },
 
     // Hasta dónde he leído, para que el aviso nativo no repita lo ya visto
@@ -4474,6 +4477,50 @@ const app = {
         return a ? (a.lugar || '') : (this.puestoTrabajo || '');
     },
 
+    // Si gestión le cambia el sitio o la hora, se le avisa, que si no se
+    // entera cuando ya va de camino al lugar de antes. Solo cuenta el cambio
+    // sobre lo que ya sabía de ese mismo día: al pasar de un día a otro lo
+    // normal es que la jornada sea distinta, y eso no es ninguna novedad.
+    _avisarCambioDeJornada(antes, ahora) {
+        if (!antes || !ahora || antes.fecha !== ahora.fecha) return;
+        const horas = a => (a?.horario?.i && a?.horario?.f) ? `${a.horario.i}–${a.horario.f}` : '';
+        const lugarAntes = (antes.lugar || '').trim();
+        const lugarAhora = (ahora.lugar || '').trim();
+        const horaAntes  = horas(antes);
+        const horaAhora  = horas(ahora);
+        const cambiaLugar = this._clavePuesto(lugarAntes) !== this._clavePuesto(lugarAhora);
+        const cambiaHora  = horaAntes !== horaAhora;
+        if (!cambiaLugar && !cambiaHora) return;
+
+        const partes = [];
+        if (cambiaLugar) partes.push(lugarAhora ? `Ahora te toca en ${lugarAhora}` : 'Te han quitado el lugar');
+        if (cambiaHora)  partes.push(horaAhora ? `Horario ${horaAhora}` : 'Te han quitado el horario');
+        const cuerpo = partes.join(' · ');
+        this._mostrarToast('📍 ' + cuerpo, 7000);
+
+        // En el móvil el aviso de la barra lo pone la parte nativa, que es la
+        // que sigue mirando con la app cerrada; aquí solo se avisa en pantalla
+        // para no dar el mismo recado dos veces. En la web no hay nativa.
+        if (window.AndroidBridge) return;
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (!LN?.schedule) return;
+        try {
+            LN.schedule({ notifications: [{
+                id: 2101,
+                title: 'Te han cambiado la jornada de hoy',
+                body: cuerpo,
+                smallIcon: 'ic_stat_chat',
+            }] });
+        } catch (_) { /* sin aviso en la barra queda el de la pantalla */ }
+    },
+
+    // La misma huella que guarda la parte nativa, para que las dos hablen de
+    // lo mismo: día, lugar y horas.
+    _claveJornada(a) {
+        const h = (a?.horario?.i && a?.horario?.f) ? `${a.horario.i}–${a.horario.f}` : '';
+        return `${a?.fecha || ''}|${a?.lugar || ''}|${h}`;
+    },
+
     async _cargarAsignacion() {
         const email = this.usuarioActual?.email;
         if (!email) return;
@@ -4483,8 +4530,13 @@ const app = {
             if (!r.ok) return;
             const a = await r.json();
             if (!a || !a.fecha) return;
+            const antes = this._asignacion;
             this._asignacion = a;
             localStorage.setItem('asignacionHoy', JSON.stringify(a));
+            this._avisarCambioDeJornada(antes, a);
+            // Lo que ya ha visto la app no se lo tiene que volver a decir el
+            // aviso nativo cuando despierte dentro de un rato.
+            window.AndroidBridge?.saveToPrefs?.('jornadaVista', this._claveJornada(a));
             this._actualizarCabeceraUsuario();
             // Si lo que propone el formulario ha cambiado, se repinta; si no,
             // se deja en paz por si está a medio rellenar.
