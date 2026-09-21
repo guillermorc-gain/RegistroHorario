@@ -1454,6 +1454,11 @@ const app = {
         return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     },
 
+    // El mismo día de hoy, en el formato compacto de los ids del historial
+    // (AAAAMMDD), en zona local: con toISOString() el día sale en UTC y
+    // hasta 2h después de medianoche local seguía marcando el de ayer.
+    _hoyId() { return this._hoyISO().replace(/-/g, ''); },
+
     _periodoVacacionesActivo() {
         const hoy = this._hoyISO();
         return this._getVacaciones().find(v => hoy >= v.desde && hoy <= v.hasta) || null;
@@ -2137,7 +2142,7 @@ const app = {
         const restantes = t.restantes;
         const pct       = (t.anualReal / this.horasAnualesCustom) * 100;
         // Ocultar el banner de proximidad si ya hay registro hoy
-        const _todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const _todayId = this._hoyId();
         if (this._hayRegistroEnFecha(_todayId)) {
             document.getElementById('workBanner')?.classList.remove('show');
             localStorage.setItem('lastRegisteredDate', _todayId);
@@ -3769,7 +3774,7 @@ const app = {
                 return;
             }
             const releases = res.lista;
-            this._versionPublicada = rVer.ok ? ((await rVer.json())?.build ?? null) : null;
+            this._versionPublicada = rVer.ok ? ((await rVer.json())?.worker ?? null) : null;
             // Solo las de la app de trabajadores
             const re = /^build-(\d+)$/;
             const builds = (Array.isArray(releases) ? releases : [])
@@ -3812,7 +3817,7 @@ const app = {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json',
                            'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ build })
+                body: JSON.stringify({ app: 'worker', build })
             });
             const data = await resp.json();
             if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
@@ -4545,6 +4550,19 @@ const app = {
             return;
         } catch (e) {
             console.error('Gmail API:', e.message);
+            // Quien entró en la app antes de que existiera el envío por Gmail
+            // tiene un token sin ese permiso, y no hay forma de dárselo en
+            // silencio (renovarlo por detrás no amplía lo que ya se concedió):
+            // solo lo consigue volviendo a entrar y aceptándolo.
+            if (/insufficient|permission/i.test(e.message || '')) {
+                if (confirm('Para enviar el correo sin salir de la app hace falta darle '
+                    + 'permiso de Gmail, y tu sesión es de antes de que existiera eso.\n\n'
+                    + '¿Vuelves a entrar ahora para dárselo? De momento se comparte '
+                    + 'el archivo de otra forma.')) {
+                    this.login(false);
+                    return;
+                }
+            }
         }
         try {
             const blob = new Blob([p.contenido], { type: p.tipo });
@@ -4735,6 +4753,27 @@ const app = {
             if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
             this._conductores = data;
             this._renderConductores(); this._renderPrueba();
+        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
+    },
+
+    // Ocultar un trabajador real de la pestaña Trabajadores (sus datos se
+    // quedan, solo deja de salir en el día a día); para verlo otra vez está
+    // el filtro "Ocultos".
+    async _toggleOcultoTrabajador(email) {
+        const u = (this._conductores || {})[email];
+        if (!u) return;
+        const oculto = !u.oculto;
+        try {
+            const resp = await fetch(this.USUARIOS_URL, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ email, oculto })
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._conductores = data;
+            this._renderConductores();
+            this._mostrarToast(oculto ? '🙈 Ocultado de Trabajadores' : '👁️ Vuelve a salir en Trabajadores', 2500);
         } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
     },
 
@@ -5590,9 +5629,14 @@ const app = {
     },
 
     FILTROS_COND: [['todos', 'Todos'], ['activo', 'Activos'], ['libre', 'Libres'],
-                   ['sinservicio', 'Sin turno asignado'], ['be', 'BE'], ['vacaciones', 'Vacaciones']],
+                   ['sinservicio', 'Sin turno asignado'], ['be', 'BE'], ['vacaciones', 'Vacaciones'],
+                   ['ocultos', 'Ocultos']],
 
+    // Los ocultos no salen en ningún filtro salvo el suyo: para verlos y
+    // poder mostrarlos otra vez hay que elegir justo ese.
     _pasaFiltroCond(u, fecha, filtro) {
+        if (filtro === 'ocultos') return !!u.oculto;
+        if (u.oculto) return false;
         if (filtro === 'todos') return true;
         if (filtro === 'sinservicio') return this._sinServicio(u, fecha);
         return this._estadoTrabajador(u, fecha) === filtro;
@@ -5633,7 +5677,7 @@ const app = {
         const fecha = this._fechaOffset(this._puestosOffset);
         const esHoy = this._puestosOffset === 0;
         const orden = localStorage.getItem('ordenTrabajadores') || 'nombre';
-        const todos = Object.values(this._conductores || {}).filter(u => !u.oculto);
+        const todos = Object.values(this._conductores || {});
         const filtro = localStorage.getItem('filtroTrabajadores') || 'todos';
         this._renderFiltrosCond(todos, fecha);
         const lista = todos
@@ -5693,7 +5737,8 @@ const app = {
                     <div class="cond-id">
                         <div class="cond-nombre">${esc(u.nombre) || esc(u.email)}
                             ${turno ? `<span class="cond-turno ${turno}">${turno}</span>` : ''}
-                            ${u.ficticio ? '<span class="pr-badge2">PRUEBA</span>' : ''}</div>
+                            ${u.ficticio ? '<span class="pr-badge2">PRUEBA</span>' : ''}
+                            ${u.oculto ? '<span class="pr-badge2">OCULTO</span>' : ''}</div>
                         <div class="cond-num">${esc(u.conductor) || 'sin nº'}${
                             this._desviaciones(u) ? `<span class="cond-alerta" title="Horarios que no cuadran"
                                 onclick="event.stopPropagation();app.revisarHorarios('${esc(u.email)}')">❗${
@@ -5711,6 +5756,8 @@ const app = {
                             onclick="event.stopPropagation();app.editarVacaciones('${esc(u.email)}')">VC</button>
                     <button class="be-btn${enBaja ? ' on' : ''}" title="Fechas de baja"
                             onclick="event.stopPropagation();app.editarBajas('${esc(u.email)}')">BE</button>
+                    <button class="be-btn" title="${u.oculto ? 'Mostrar en Trabajadores' : 'Ocultar de Trabajadores'}"
+                            onclick="event.stopPropagation();app._toggleOcultoTrabajador('${esc(u.email)}')">${u.oculto ? '🙈' : '👁️'}</button>
                     <span class="cond-chev">▾</span>
                 </div>
                 <div class="cond-cuerpo">
@@ -5734,7 +5781,7 @@ const app = {
         // todo el que no estuviera de baja —los de vacaciones incluidos— y el
         // filtro llamaba activos solo a los que trabajan ese día.
         const porEstado = { activo: 0, libre: 0, be: 0, vacaciones: 0 };
-        todos.forEach(u => { porEstado[this._estadoTrabajador(u, fecha)]++; });
+        todos.filter(u => !u.oculto).forEach(u => { porEstado[this._estadoTrabajador(u, fecha)]++; });
         const cnt = document.getElementById('trabajCnt');
         if (cnt) {
             // Los libres no van aquí: caben en el filtro de abajo y esta línea
@@ -6671,7 +6718,7 @@ const app = {
         if (locs.length === 0 || !navigator.geolocation) return;
         if (this.gpsMode === 'off') return;
         if (this.gpsMode === 'schedule' && !this._isInGpsSchedule()) return;
-        const todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const todayId = this._hoyId();
         if (localStorage.getItem('lastRegisteredDate') === todayId) return;
         if (this._historialFull[todayId]) return;
         navigator.geolocation.getCurrentPosition((pos) => {
@@ -6739,7 +6786,7 @@ const app = {
                 const ahora = Date.now();
                 if (ahora - this._lastGeoCheck < this.gpsInterval * 60 * 1000) return;
                 this._lastGeoCheck = ahora;
-                const todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                const todayId = this._hoyId();
                 if (localStorage.getItem('lastRegisteredDate') === todayId) return;
                 if (this._historialFull[todayId]) return;
                 const locs = this._getWorkLocations();
@@ -6844,7 +6891,7 @@ const app = {
         let minutos = (h2 * 60 + m2) - (h1 * 60 + m1);
         if (minutos <= 0) minutos += 24 * 60;
         const horas = Math.round(minutos / 6) / 10;
-        const fecha = new Date().toISOString().slice(0, 10);
+        const fecha = this._hoyISO();
         const registroId = fecha.replace(/-/g, '');
         try {
             const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
@@ -7315,7 +7362,10 @@ const app = {
         try {
             const r = await fetch(VERSION_URL, { cache: 'no-store' });
             if (r.ok) {
-                const build = (await r.json())?.build ?? null;
+                // El fichero guarda un número por app —trabajadores y gestión
+                // tienen su propia numeración de builds— para que publicar
+                // una no toque el reparto de la otra.
+                const build = (await r.json())?.gestion ?? null;
                 localStorage.setItem('buildPublicado', JSON.stringify(build));
                 return { ok: true, build };
             }

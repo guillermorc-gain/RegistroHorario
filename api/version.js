@@ -41,7 +41,7 @@ export default async function handler(req, res) {
       res.setHeader('Cache-Control', 'no-store');
       // null means "nothing published yet": the app then falls back to the
       // newest release, which is how it behaved before this existed.
-      return res.status(200).json(data || { build: null });
+      return res.status(200).json(data || { worker: null, gestion: null });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
@@ -52,16 +52,23 @@ export default async function handler(req, res) {
   const adminEmail = await exigirAdmin(req, res, ADMIN_EMAIL);
   if (!adminEmail) return;
 
-  const { build } = req.body || {};
+  // Cada app tiene su propia numeración de builds, así que publicar una no
+  // puede tocar el reparto de la otra: antes compartían un solo número y
+  // publicar la del trabajador dejaba a gestión con el reparto de aquélla.
+  const { app: cual, build } = req.body || {};
+  if (cual !== 'worker' && cual !== 'gestion') {
+    return res.status(400).json({ error: 'Falta indicar la app (worker o gestion)' });
+  }
   if (build !== null && !Number.isInteger(build)) {
     return res.status(400).json({ error: 'Build inválido' });
   }
 
   try {
-    const { sha } = await getFile();
-    const payload = { build, actualizado: new Date().toISOString(), publicadoPor: adminEmail };
+    const { data, sha } = await getFile();
+    const payload = { ...(data || {}), [cual]: build,
+      actualizado: new Date().toISOString(), publicadoPor: adminEmail };
     const content = Buffer.from(JSON.stringify(payload, null, 2) + '\n').toString('base64');
-    const body = { message: `Publicar versión ${build === null ? '(ninguna)' : build}`, content, branch: BRANCH };
+    const body = { message: `Publicar ${cual} ${build === null ? '(ninguna)' : build}`, content, branch: BRANCH };
     if (sha) body.sha = sha;
     const r = await fetch(
       `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}`,

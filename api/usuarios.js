@@ -435,7 +435,7 @@ export default async function handler(req, res) {
     if (req.method === 'PATCH' || req.method === 'DELETE') {
       if (!await exigirAdmin(req, res, ADMIN_EMAIL)) return;
       const { email, puesto, ficticio, baja, bajas, vacaciones, nota, fecha,
-              desde, hasta, dias, grupo, horario, mes, revisiones } = req.body || {};
+              desde, hasta, dias, grupo, horario, mes, revisiones, oculto } = req.body || {};
       const clave = (email || '').toLowerCase().trim();
       if (!clave) return res.status(400).json({ error: 'Falta el email' });
       // Los usuarios de prueba solo pueden vivir bajo este dominio, para que no
@@ -474,6 +474,10 @@ export default async function handler(req, res) {
           data[clave].baja  = enBajaHoy(data[clave].bajas);
         }
         else if (data[clave] && baja !== undefined) data[clave].baja = !!baja;
+        // Ocultar un trabajador real de la pestaña Trabajadores, sin borrar sus
+        // datos: para el que ya no está en plantilla pero cuya nómina o
+        // jornadas siguen queriéndose consultar.
+        else if (data[clave] && oculto !== undefined) data[clave].oculto = !!oculto;
         // Días de la semana: se sella la hora para que gane el último que los
         // toque, venga del cuadrante o de la app del trabajador.
         else if (data[clave] && dias !== undefined) {
@@ -544,6 +548,7 @@ export default async function handler(req, res) {
       }, req.method === 'DELETE' ? `Quitar ${clave}`
          : ficticio ? `Usuario de prueba ${clave}`
          : baja !== undefined ? `${baja ? 'Baja' : 'Alta'} de ${clave}`
+         : oculto !== undefined ? `${oculto ? 'Ocultar' : 'Mostrar'} a ${clave}`
          : nota !== undefined ? `Descripción de ${clave}`
          : vacaciones !== undefined ? `Vacaciones de ${clave}`
          : bajas !== undefined ? `Bajas de ${clave}`

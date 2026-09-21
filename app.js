@@ -1702,6 +1702,13 @@ const app = {
         return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     },
 
+    // El mismo día de hoy, en el formato compacto de los ids del historial
+    // (AAAAMMDD). Con toISOString() el día sale en UTC, que entre la
+    // medianoche local y que UTC alcance la suya (hasta 2h con la hora de
+    // verano) todavía marca el día de ayer: registrabas hoy pero el aviso de
+    // "¿ya has fichado?" seguía sin verlo y avisaba otra vez.
+    _hoyId() { return this._hoyISO().replace(/-/g, ''); },
+
     _periodoVacacionesActivo() {
         const hoy = this._hoyISO();
         return this._getVacaciones().find(v => hoy >= v.desde && hoy <= v.hasta) || null;
@@ -3722,9 +3729,20 @@ const app = {
             this._mostrarToast(`✅ Enviado a ${email}`, 3000);
             return;
         } catch (e) {
-            // Sin sesión de Google, permiso de Gmail sin dar todavía, o sin
-            // red: se cae a compartir el archivo, que siempre funciona.
             console.error('Gmail API:', e.message);
+            // Quien entró en la app antes de que existiera el envío por Gmail
+            // tiene un token sin ese permiso, y no hay forma de dárselo en
+            // silencio (renovarlo por detrás no amplía lo que ya se concedió):
+            // solo lo consigue volviendo a entrar y aceptándolo.
+            if (/insufficient|permission/i.test(e.message || '')) {
+                if (confirm('Para enviar el correo sin salir de la app hace falta darle '
+                    + 'permiso de Gmail, y tu sesión es de antes de que existiera eso.\n\n'
+                    + '¿Vuelves a entrar ahora para dárselo? De momento se comparte '
+                    + 'el archivo de otra forma.')) {
+                    this.login(false);
+                    return;
+                }
+            }
         }
         try {
             const blob = new Blob([p.contenido], { type: p.tipo });
@@ -4408,7 +4426,7 @@ const app = {
     COMPANEROS_TTL: 10 * 60 * 1000,
 
     _claveCompaneros() {
-        return `${this._clavePuesto(this._lugarDeHoy())}|${new Date().toISOString().slice(0, 10)}`;
+        return `${this._clavePuesto(this._lugarDeHoy())}|${this._hoyISO()}`;
     },
 
     _companerosEnCache() {
@@ -5161,7 +5179,7 @@ const app = {
         const restantes = t.restantes;
         const pct       = (t.anualReal / this.horasAnualesCustom) * 100;
         // Ocultar el banner de proximidad si ya hay registro hoy
-        const _todayId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const _todayId = this._hoyId();
         if (this._hayRegistroEnFecha(_todayId)) {
             document.getElementById('workBanner')?.classList.remove('show');
             localStorage.setItem('lastRegisteredDate', _todayId);
@@ -5521,7 +5539,7 @@ const app = {
             const t = this._calcTotales(hist);
             // Horario de hoy si lo hay; si no, el del último día registrado.
             // Gestión lo usa para ver si el puesto queda cubierto.
-            const hoyId = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            const hoyId = this._hoyId();
             const deHoy = Object.entries(hist)
                 .filter(([id]) => this._fechaDeId(id) === hoyId)
                 .map(([, r]) => r);
@@ -5849,7 +5867,7 @@ const app = {
     // Los lugares en los que ya ha registrado hoy, por nombre. De aquí sale
     // que no vuelva a avisar donde ya ha fichado pero sí en uno nuevo.
     _lugaresRegistradosHoy() {
-        const hoy = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const hoy = this._hoyId();
         const sitios = new Set();
         Object.entries(this._historialFull || {}).forEach(([id, r]) => {
             if (this._fechaDeId(id) !== hoy) return;
@@ -5885,7 +5903,7 @@ const app = {
 
     // ¿Toca avisar por este lugar? `i` es su sitio en la lista de ubicaciones.
     _tocaAvisar(i) {
-        const hoy = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const hoy = this._hoyId();
         // Una jornada a medias es la que se ha empezado y no se ha cerrado:
         // mientras no tenga salida, sigue teniendo sentido avisar.
         if (this.avisoLugar === 'una') {
@@ -5900,7 +5918,7 @@ const app = {
 
     // Lo mismo, para el aviso nativo que corre con la app cerrada
     _publicarLugaresHoy() {
-        const hoy = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const hoy = this._hoyId();
         const sitios = [...this._lugaresRegistradosHoy()].join('|');
         window.AndroidBridge?.saveToPrefs?.('avisoLugar', this.avisoLugar);
         window.AndroidBridge?.saveToPrefs?.('lugaresHoy', `${hoy}~${sitios}`);
@@ -6177,7 +6195,7 @@ const app = {
         let minutos = (h2 * 60 + m2) - (h1 * 60 + m1);
         if (minutos <= 0) minutos += 24 * 60;
         const horas = Math.round(minutos / 6) / 10;
-        const fecha = new Date().toISOString().slice(0, 10);
+        const fecha = this._hoyISO();
         const registroId = fecha.replace(/-/g, '');
         try {
             const datos = await this._readDriveFile() || { horasTrabajadas: 0, historial: {} };
@@ -6689,7 +6707,10 @@ const app = {
         try {
             const r = await fetch(VERSION_URL, { cache: 'no-store' });
             if (r.ok) {
-                const build = (await r.json())?.build ?? null;
+                // El fichero guarda un número por app —trabajadores y gestión
+                // tienen su propia numeración de builds— para que publicar
+                // una no toque el reparto de la otra.
+                const build = (await r.json())?.worker ?? null;
                 localStorage.setItem('buildPublicado', JSON.stringify(build));
                 return { ok: true, build };
             }
