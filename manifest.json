@@ -3,7 +3,7 @@
   "name": "Horas Realizadas",
   "short_name": "Horas",
   "description": "Control de horas de trabajo EMT",
-  "start_url": "/",
+  "start_url": "/?app=trabajador",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

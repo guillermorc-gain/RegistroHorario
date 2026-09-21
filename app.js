@@ -129,6 +129,7 @@ const app = {
     _updateApkUrl: null,
 
     async init() {
+        this._preguntarConQueApp();
         this._instalarFirmaApi();
         // The update check must run even if any earlier step throws, otherwise a
         // single bug anywhere above strands the user on an old build forever.
@@ -148,6 +149,43 @@ const app = {
         this._setupNotifChat();           // y las del chat, por lo mismo
         this._initGoogleAuth();
         this._actualizarVersionDisplay();
+    },
+
+    // La dirección de siempre abre la app de los trabajadores, y quien es de
+    // gestión no tenía forma de saber que lo suyo está en otra. Así que al
+    // entrar por el navegador se pregunta primero. No se pregunta si se viene
+    // con un código de Google a medio camino —eso hay que dejarlo pasar—, ni
+    // desde la app instalada, ni desde la de escritorio, que ahí ya se eligió.
+    _preguntarConQueApp() {
+        if (window.Capacitor?.isNativePlatform?.()) return;
+        const q = new URLSearchParams(window.location.search);
+        if (q.get('app')) return;
+        if (q.has('code') || q.has('access_token') || q.has('error')
+            || window.location.hash.includes('access_token')) return;
+        try {
+            if (window.matchMedia?.('(display-mode: standalone)')?.matches
+                || window.navigator.standalone) return;
+        } catch (_) {}
+        const el = document.getElementById('rolScreen');
+        if (el) el.style.display = 'flex';
+    },
+
+    elegirRol(rol) {
+        const web = rol === 'gestion'
+            ? 'https://registro-horario-emt.vercel.app/gestion/'
+            : 'https://registro-horario-emt.vercel.app/?app=trabajador';
+        const paquete = rol === 'gestion'
+            ? 'com.guillermorc.gestionemt' : 'com.guillermorc.horasemt';
+        // En Android el propio enlace lleva escrito a dónde ir si la app no
+        // está instalada, así que no hay que andar adivinando si lo está.
+        if (/Android/i.test(navigator.userAgent)) {
+            window.location.href = 'intent://localhost/#Intent;scheme=https;package=' + paquete
+                + ';S.browser_fallback_url=' + encodeURIComponent(web) + ';end';
+            return;
+        }
+        if (rol === 'gestion') { window.location.href = web; return; }
+        const el = document.getElementById('rolScreen');
+        if (el) el.style.display = 'none';
     },
 
     _migrarUbicacionAntigua() {
@@ -3890,6 +3928,14 @@ const app = {
             return;
         } catch (e) {
             console.error('Gmail API:', e.message);
+            // Google contesta con un tocho en inglés cuando el proyecto no
+            // tiene activado el envío de correo. No es culpa de quien lo usa
+            // ni se arregla desde aquí, así que al menos que se entienda.
+            if (/has not been used in project|is disabled|accessNotConfigured/i.test(e.message || '')) {
+                this._mostrarToast('❌ El envío de correo no está activado en la cuenta de Google '
+                    + 'de la aplicación. Avisa a gestión. Mientras, se comparte el archivo.', 8000);
+                return this._compartirAdjunto(email, p);
+            }
             if (/insufficient|permission|scope/i.test(e.message || '')) {
                 // Lo que creíamos saber del permiso no vale: que se vuelva a
                 // preguntar la próxima vez en vez de dar por hecho que está.

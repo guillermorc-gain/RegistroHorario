@@ -4841,6 +4841,14 @@ const app = {
             return;
         } catch (e) {
             console.error('Gmail API:', e.message);
+            // Google contesta con un tocho en inglés cuando el proyecto no
+            // tiene activado el envío de correo. No es culpa de quien lo usa
+            // ni se arregla desde aquí, así que al menos que se entienda.
+            if (/has not been used in project|is disabled|accessNotConfigured/i.test(e.message || '')) {
+                this._mostrarToast('❌ El envío de correo no está activado en la cuenta de Google '
+                    + 'de la aplicación. Avisa a gestión. Mientras, se comparte el archivo.', 8000);
+                return this._compartirAdjunto(email, p);
+            }
             if (/insufficient|permission|scope/i.test(e.message || '')) {
                 // Lo que creíamos saber del permiso no vale: que se vuelva a
                 // preguntar la próxima vez en vez de dar por hecho que está.
