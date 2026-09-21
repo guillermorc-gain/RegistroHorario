@@ -2640,6 +2640,8 @@ const app = {
         // el sondeo de aquí arriba solo vive mientras la pantalla esté viva.
         window.AndroidBridge?.activarAvisoChat?.(
             this.usuarioActual.email, true, this.NOTAS_URL);
+        // Con qué nombre firma el visto que se dé desde el propio aviso
+        window.AndroidBridge?.saveToPrefs?.('chatNombre', this.usuarioActual?.name || '');
     },
 
     // Hasta dónde he leído, para que el aviso nativo no repita lo ya visto
@@ -2808,6 +2810,8 @@ const app = {
         const n = (this._notas || []).find(x => x.id === id);
         const ultimo = this._ultimoMensaje(n);
         if (!ultimo) return;
+        // Leído es leído: además de apuntarlo aquí, se le dice al otro.
+        if (!this._estaVista(n)) this._marcarVisto(id, true, true);
         const l = this._leidas();
         l[id] = ultimo.en || new Date().toISOString();
         localStorage.setItem('convLeidas', JSON.stringify(l));

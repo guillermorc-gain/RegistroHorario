@@ -704,10 +704,16 @@
            lado y había que arrastrarlo para ver la mitad de las cosas. */
         .edit-field input,.edit-field select{min-width:0;max-width:100%;}
         /* Y lo mismo los seis cuadros de abajo, que venían con flex-shrink:0
-           de la pantalla de registrar, donde tienen el ancho entero. Aquí se
-           dejan encoger y, si aun así no caben, se pasan a la línea de abajo. */
-        .toggle-row{flex-wrap:wrap;}
-        .toggle-row > *{flex:1 1 auto;min-width:0;flex-shrink:1;}
+           de la pantalla de registrar, donde tienen el ancho entero. Con base
+           cero se reparten el ancho que haya y caben siempre los seis en una
+           línea, estrechos si hace falta: dejándoles su ancho natural, el de
+           la baja se caía a la línea de abajo. */
+        .toggle-row{flex-wrap:nowrap;}
+        .toggle-row > *{flex:1 1 0;min-width:0;}
+        /* Un día en que no se fue a trabajar no es de PR, ni de vacaciones, ni
+           de baja: los demás se apagan. El festivo tampoco se toca a mano, que
+           ese lo pone la app sola cuando la fecha lo es. */
+        .toggle-row > *.bloqueado{opacity:0.38;pointer-events:none;}
         /* Red de seguridad: si algo se pasa de ancho, que se recorte y no que
            el cuadro entero se pueda arrastrar de lado. */
         .modal-body{overflow-x:hidden;}
@@ -1461,7 +1467,7 @@
         <div class="modal-body">
             <div class="edit-field">
                 <label>Fecha</label>
-                <input type="date" id="editModalFecha">
+                <input type="date" id="editModalFecha" onchange="app._comprobarFestivoEdit()">
             </div>
             <div class="edit-row">
                 <div class="edit-field">

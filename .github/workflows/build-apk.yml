@@ -73,7 +73,7 @@ jobs:
           sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>|' "$MANIFEST"
           sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
           sed -i 's|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />|' "$MANIFEST"
-          sed -i 's|</application>|    <receiver android:name=".MainActivity$GeofenceReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$ChatReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$BootReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/></intent-filter></receiver>\n    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
+          sed -i 's|</application>|    <receiver android:name=".MainActivity$GeofenceReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$ChatReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$LeidoReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$BootReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/></intent-filter></receiver>\n    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
 
       - name: Create FileProvider paths config
         run: |
@@ -1019,6 +1019,9 @@ jobs:
                       org.json.JSONArray arr = new org.json.JSONArray(sb.toString());
                       int nuevos = 0;
                       String masNuevo = visto;
+                      // De cuáles se avisa, para poder darlas por leídas desde
+                      // el propio aviso sin tener que abrir la app.
+                      StringBuilder ids = new StringBuilder();
                       for (int i = 0; i < arr.length(); i++) {
                           org.json.JSONObject n = arr.getJSONObject(i);
                           if (n.optBoolean("archivada", false)) continue;
@@ -1030,6 +1033,11 @@ jobs:
                           if (mio || en.isEmpty() || en.compareTo(visto) <= 0) continue;
                           nuevos++;
                           if (en.compareTo(masNuevo) > 0) masNuevo = en;
+                          String id = n.optString("id", "");
+                          if (!id.isEmpty()) {
+                              if (ids.length() > 0) ids.append(",");
+                              ids.append(id);
+                          }
                       }
                       if (nuevos == 0) return;
                       prefs.edit().putString("chatVisto", masNuevo).apply();
@@ -1046,14 +1054,82 @@ jobs:
                       oi.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
                       oi.putExtra("abrirNotas", true);
                       PendingIntent pi = PendingIntent.getActivity(ctx, 2, oi, flags);
+                      // "Marcar leído" se resuelve aquí mismo: quita el aviso y
+                      // manda el visto. Antes tocarlo abría la app, que es justo
+                      // lo que no se quiere de un botón que dice "ya lo he visto".
+                      Intent li = new Intent(ctx, LeidoReceiver.class);
+                      li.putExtra("ids", ids.toString());
+                      li.putExtra("hasta", masNuevo);
+                      PendingIntent leidoPI = PendingIntent.getBroadcast(ctx, 4, li, flags);
                       nm.notify(1002, new NotificationCompat.Builder(ctx, CHAT_CHANNEL)
                           .setSmallIcon(R.drawable.ic_stat_chat)
                           .setContentTitle(nuevos == 1 ? "Tienes un mensaje" : "Tienes " + nuevos + " mensajes")
                           .setContentText("Toca para leerlo en la aplicación")
                           .setPriority(NotificationCompat.PRIORITY_HIGH)
                           .setContentIntent(pi)
+                          .addAction(0, "Marcar leído", leidoPI)
                           .setAutoCancel(true)
                           .build());
+                  }
+              }
+
+              // Dar por leído desde el aviso, sin abrir nada. Quita el aviso al
+              // momento y por detrás le dice al otro que ya está visto, que es
+              // lo que esperaba ver de vuelta.
+              public static class LeidoReceiver extends BroadcastReceiver {
+                  @Override
+                  public void onReceive(Context ctx, Intent intent) {
+                      final Context app = ctx.getApplicationContext();
+                      final String ids   = intent == null ? "" : intent.getStringExtra("ids");
+                      final String hasta = intent == null ? "" : intent.getStringExtra("hasta");
+                      NotificationManager nm =
+                          (NotificationManager) app.getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (nm != null) nm.cancel(1002);
+                      if (hasta != null && !hasta.isEmpty()) {
+                          app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                             .edit().putString("chatVisto", hasta).apply();
+                      }
+                      // goAsync da unos segundos para terminar la petición: sin
+                      // esto Android puede matar el proceso en cuanto vuelve de
+                      // onReceive y el visto no llegaría a salir.
+                      final PendingResult pendiente = goAsync();
+                      new Thread(() -> {
+                          try { mandarVisto(app, ids); } catch (Exception ignored) {}
+                          finally { pendiente.finish(); }
+                      }).start();
+                  }
+
+                  private void mandarVisto(Context ctx, String ids) throws Exception {
+                      if (ids == null || ids.isEmpty()) return;
+                      SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                      String url    = prefs.getString("chatUrl", "");
+                      String email  = prefs.getString("chatEmail", "");
+                      String nombre = prefs.getString("chatNombre", "");
+                      if (url.isEmpty() || email.isEmpty()) return;
+                      String token = obtenerTokenValido(ctx);
+                      for (String id : ids.split(",")) {
+                          if (id.isEmpty()) continue;
+                          java.net.HttpURLConnection c =
+                              (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                          // POST con la cabecera que dice lo que de verdad es:
+                          // HttpURLConnection no sabe mandar un PATCH.
+                          c.setRequestMethod("POST");
+                          c.setRequestProperty("X-Metodo", "PATCH");
+                          c.setRequestProperty("Content-Type", "application/json");
+                          c.setRequestProperty("X-User-Email", email);
+                          if (token != null && !token.isEmpty())
+                              c.setRequestProperty("Authorization", "Bearer " + token);
+                          c.setConnectTimeout(15000);
+                          c.setReadTimeout(15000);
+                          c.setDoOutput(true);
+                          org.json.JSONObject body = new org.json.JSONObject();
+                          body.put("id", id);
+                          body.put("visto", true);
+                          body.put("nombre", nombre);
+                          c.getOutputStream().write(body.toString().getBytes("UTF-8"));
+                          c.getResponseCode();
+                          c.disconnect();
+                      }
                   }
               }
 
