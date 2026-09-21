@@ -48,41 +48,6 @@
     "gestor": "Guillermo Ríos Correa",
     "estado": "pendiente"
   },
-  "20260921185534682-w16ri-0": {
-    "id": "20260921185534682-w16ri-0",
-    "email": "g.rioscorrea@gmail.com",
-    "creado": "2026-09-21T18:55:34.682Z",
-    "nombre": "Desarrollador",
-    "conductor": "💻",
-    "mensajes": [
-      {
-        "de": "guillermo.rc82@gmail.com",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Hhh",
-        "adjuntos": [],
-        "en": "2026-09-21T18:55:34.682Z"
-      },
-      {
-        "de": "guillermo.rc82@gmail.com",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Ttt",
-        "adjuntos": [],
-        "en": "2026-09-21T18:57:35.750Z"
-      }
-    ],
-    "archivada": false,
-    "de": "trabajador",
-    "tipo": "companero",
-    "deEmail": "guillermo.rc82@gmail.com",
-    "deNombre": "Guillermo Ríos Correa",
-    "deConductor": "1418-3",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "g.rioscorrea@gmail.com",
-      "nombre": "Guillermo Ríos Correa",
-      "en": "2026-09-21T19:01:22.541Z"
-    }
-  },
   "20260921185641173-g3h51-0": {
     "id": "20260921185641173-g3h51-0",
     "email": "guillermo.rcxx@gmail.com",
