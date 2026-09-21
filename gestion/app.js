@@ -1899,7 +1899,6 @@ const app = {
         document.querySelectorAll('.tab-panel').forEach(panel => {
             panel.classList.toggle('active', panel.id === 'tabPanel' + idx);
         });
-        localStorage.setItem('activeTab', String(idx));
         if (idx === 0) this._cargarConductores();
         if (idx === 1) this._cargarCuadrante();
         if (idx === 2) this._cargarNotasGestor();
@@ -1963,8 +1962,10 @@ const app = {
                 });
             }
         } catch(_) {}
-        const activa = parseInt(localStorage.getItem('activeTab') || '0', 10);
-        this.switchTab(Number.isInteger(activa) ? activa : 0);
+        // Siempre se abre por Trabajadores, que es lo primero que se mira al
+        // entrar. Antes se quedaba donde lo dejaste la última vez, y volver a
+        // la app te dejaba en la pestaña de hace dos días.
+        this.switchTab(0);
     },
 
     _tabDragOver(e) {
@@ -2581,7 +2582,7 @@ const app = {
         const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
         const lista = this._destinatariosVisibles();
         const cont = document.getElementById('destLista');
-        const dev = this._filaDesarrollador();
+        const dev = this._filaDesarrollador() + this._filaAGestion();
         cont.innerHTML = dev + (lista.length ? lista.map(u => {
             const on = this._elegidos.includes(u.email);
             return `<div class="dest-fila${on ? ' on' : ''}"
@@ -2630,7 +2631,30 @@ const app = {
         if ((email || '').toLowerCase() === this.DEV_EMAIL) {
             return { email: this.DEV_EMAIL, nombre: this.DEV_NOMBRE, conductor: '💻' };
         }
+        if (email === this.A_GESTION) return { email: this.A_GESTION, nombre: 'Gestión', conductor: '🛠️' };
         return (this._conductores || {})[email] || null;
+    },
+
+    // Escribirle a gestión desde aquí solo tiene sentido para el
+    // desarrollador, que no es gestor de la empresa: es su manera de contarles
+    // algo. Un gestor escribiéndose a la bandeja en la que ya está no.
+    A_GESTION: '__gestion__',
+
+    _filaAGestion() {
+        if (!this._soyElDesarrollador()) return '';
+        const q = (document.getElementById('destBuscar')?.value || '').toLowerCase().trim();
+        if (q && !'gestión gestion'.includes(q)) return '';
+        const on = this._elegidos.includes(this.A_GESTION);
+        return `<div class="dest-fila${on ? ' on' : ''}"
+            onclick="app._alternarDest('${this.A_GESTION}')">
+            <span class="dest-marca">${on ? '✓' : ''}</span>
+            <span class="nt-num">🛠️</span>
+            <span class="nt-nom">Gestión</span>
+        </div>`;
+    },
+
+    _soyElDesarrollador() {
+        return (this.usuarioActual?.email || '').toLowerCase() === this.DEV_EMAIL;
     },
 
     _escribirA(quienes) {
@@ -2648,7 +2672,10 @@ const app = {
             : `${lista.length} trabajadores · cada uno recibirá su propia nota`;
         document.getElementById('respOriginal').textContent = '';
         document.getElementById('respTexto').value = '';
-        document.getElementById('respFirma').textContent = `Firmarás como ${this._nombreGestor()}.`;
+        document.getElementById('respFirma').textContent = this._soyElDesarrollador()
+            ? 'Firmarás como Desarrollador. Es una conversación tuya: no sale en '
+              + 'la bandeja de gestión y la sigues desde la app de trabajadores.'
+            : `Firmarás como ${this._nombreGestor()}.`;
         document.getElementById('respModal').classList.add('show');
         if (this.darkMode) document.getElementById('respModalContent').classList.add('dark');
     },
@@ -2656,28 +2683,48 @@ const app = {
     async _enviarNotaAGestor() {
         const texto = (document.getElementById('respTexto').value || '').trim();
         if (!texto) { this._mostrarToast('Escribe algo', 3000); return; }
-        const para = Array.isArray(this._notaPara) ? this._notaPara : [this._notaPara];
+        const todos = Array.isArray(this._notaPara) ? this._notaPara : [this._notaPara];
         document.getElementById('respModal').classList.remove('show');
-        try {
+        // Al desarrollador no le corresponde firmar como gestión: lo que
+        // escribe es suyo, va a su nombre y la conversación es entre los dos.
+        // Ni sale en esta bandeja ni la contestación se va al gestor.
+        const comoPersona = this._soyElDesarrollador();
+        const paraGestion = todos.includes(this.A_GESTION);
+        const para = todos.filter(e => e !== this.A_GESTION);
+        const enviar = async cuerpo => {
             const r = await fetch(this.NOTAS_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json',
                            'X-User-Email': this.usuarioActual?.email || '' },
-                // Los nombres van en paralelo a los correos para que cada hilo
-                // se titule con el suyo y no con el correo.
-                body: JSON.stringify({ texto, para,
-                    gestor: this._nombreGestor(),
-                    nombres:     para.map(e => this._fichaDe(e)?.nombre || ''),
-                    conductores: para.map(e => this._fichaDe(e)?.conductor || '') })
+                body: JSON.stringify({ texto, ...cuerpo }),
             });
             const data = await r.json();
-            if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return; }
-            const nuevas = Array.isArray(data) ? data : [data];
-            this._notas = [...nuevas, ...this._notas];
+            if (!r.ok) throw new Error(data.error || r.status);
+            return Array.isArray(data) ? data : [data];
+        };
+        try {
+            const nuevas = [];
+            if (para.length) {
+                // Los nombres van en paralelo a los correos para que cada hilo
+                // se titule con el suyo y no con el correo.
+                nuevas.push(...await enviar({ para,
+                    nombres:     para.map(e => this._fichaDe(e)?.nombre || ''),
+                    conductores: para.map(e => this._fichaDe(e)?.conductor || ''),
+                    ...(comoPersona
+                        ? { tipo: 'companero', deNombre: this.DEV_NOMBRE, deConductor: '💻' }
+                        : { gestor: this._nombreGestor() }) }));
+            }
+            if (paraGestion) {
+                nuevas.push(...await enviar({ nombre: this.DEV_NOMBRE, conductor: '💻' }));
+            }
+            if (!nuevas.length) return;
+            // Lo personal no vive en esta bandeja: se lee en la app de
+            // trabajadores, como cualquier conversación entre dos.
+            this._notas = [...nuevas.filter(x => x.tipo !== 'companero'), ...this._notas];
             this._renderNotasGestor();
             this._mostrarToast(nuevas.length === 1 ? '📨 Nota enviada'
-                : `📨 Nota enviada a ${nuevas.length} trabajadores`, 2500);
-        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
+                : `📨 Nota enviada a ${nuevas.length}`, 2500);
+        } catch (e) { this._mostrarToast('❌ ' + e.message, 4000); }
     },
 
     // ── Estar al tanto de los mensajes ───────────────────────────────────────
@@ -2820,13 +2867,32 @@ const app = {
     },
 
     // Un aviso por conversación sin leer que no se haya avisado ya
+    // Lo ya avisado se guarda: al arrancar, la lista en memoria estaba vacía
+    // y la app volvía a lanzar el aviso —con su sonido— de mensajes de los
+    // que la barra ya había avisado con la app cerrada. Ese era el segundo
+    // sonido al abrir.
+    _cargarNotificadas() {
+        if (this._notificadasListas) return;
+        this._notificadasListas = true;
+        try { this._notificadas = JSON.parse(localStorage.getItem('notificadas') || '{}') || {}; }
+        catch (_) { this._notificadas = {}; }
+    },
+
+    _guardarNotificadas() {
+        try { localStorage.setItem('notificadas', JSON.stringify(this._notificadas)); } catch (_) {}
+    },
+
     async _avisarEnLaBarra() {
         const LN = window.Capacitor?.Plugins?.LocalNotifications;
         if (!LN?.schedule || !window.Capacitor?.isNativePlatform?.()) return;
+        this._cargarNotificadas();
         const pendientes = (this._notas || []).filter(n => !n.archivada && this._sinLeer(n));
         const vivas = new Set(pendientes.map(n => n.id));
         // Las que ya se han leído en otro sitio dejan de molestar
         Object.keys(this._notificadas).forEach(id => { if (!vivas.has(id)) this._retirarAviso(id); });
+        // Con la app delante no hace falta la barra: está la campana y el
+        // sonido de dentro. El aviso de la barra es para cuando no se está.
+        if (!document.hidden) return;
 
         const avisos = [];
         const reciénAvisadas = [];
@@ -2850,7 +2916,10 @@ const app = {
             });
         }
         if (!avisos.length) return;
-        const apuntar = () => reciénAvisadas.forEach(([id, en]) => { this._notificadas[id] = en; });
+        const apuntar = () => {
+            reciénAvisadas.forEach(([id, en]) => { this._notificadas[id] = en; });
+            this._guardarNotificadas();
+        };
         try {
             await LN.schedule({ notifications: avisos });
             apuntar();
@@ -2959,7 +3028,11 @@ const app = {
         const n = this._totalSinLeer();
         const antes = this._sinLeerPrevio ?? n;
         this._sinLeerPrevio = n;
-        if (n > antes && this.notifSoundChat !== 'ninguno') {
+        // Lo que ya estaba sin leer al abrir no es nuevo: de eso avisó la
+        // barra mientras la app estaba cerrada, y volver a sonar aquí era
+        // sonar dos veces por lo mismo. Y si la app no está delante, quien
+        // avisa es la barra, no esto.
+        if (n > antes && this.notifSoundChat !== 'ninguno' && !document.hidden) {
             try { this._previewNotifSound(this.notifSoundChat); } catch (_) {}
         }
         this._pintarCampana();
