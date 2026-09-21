@@ -72,7 +72,7 @@ jobs:
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>|' "$MANIFEST"
           sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
-          sed -i 's|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />|' "$MANIFEST"
+          sed -i 's|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />|' "$MANIFEST"
           sed -i 's|</application>|    <receiver android:name=".MainActivity$GeofenceReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$ChatReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$LeidoReceiver" android:exported="false" />\n    <receiver android:name=".MainActivity$BootReceiver" android:exported="false"><intent-filter><action android:name="android.intent.action.BOOT_COMPLETED"/></intent-filter></receiver>\n    <receiver android:name=".MainActivity$RegistrarReceiver" android:exported="false"><intent-filter><action android:name="com.guillermorc.horasemt.REGISTRAR"/></intent-filter></receiver>\n    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
 
       - name: Create FileProvider paths config
@@ -656,6 +656,44 @@ jobs:
                               ((android.app.Activity) ctx).runOnUiThread(() ->
                                   Toast.makeText(ctx, "No se pudo compartir el archivo", Toast.LENGTH_LONG).show());
                           }
+                      }
+
+                      // El ahorro de batería de Android se lleva por delante la
+                      // alarma que mira si hay avisos con la app cerrada, y en
+                      // bastantes móviles lo hace sin avisar. Aquí se mira cómo
+                      // está y se puede pedir que la dejen en paz.
+                      @JavascriptInterface
+                      public boolean bateriaSinRestriccion() {
+                          try {
+                              if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true;
+                              android.os.PowerManager pm =
+                                  (android.os.PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
+                              return pm == null || pm.isIgnoringBatteryOptimizations(ctx.getPackageName());
+                          } catch (Exception e) {
+                              // Sin saberlo, mejor no dar la lata: se dice que sí
+                              return true;
+                          }
+                      }
+
+                      @JavascriptInterface
+                      public void pedirBateriaSinRestriccion() {
+                          ((android.app.Activity) ctx).runOnUiThread(() -> {
+                              try {
+                                  Intent i = new Intent(
+                                      android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                                  i.setData(android.net.Uri.parse("package:" + ctx.getPackageName()));
+                                  ctx.startActivity(i);
+                              } catch (Exception e) {
+                                  // Hay móviles que no traen ese cuadro: se abre la
+                                  // lista entera y que se busque ahí.
+                                  try {
+                                      ctx.startActivity(new Intent(android.provider.Settings
+                                          .ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+                                  } catch (Exception e2) {
+                                      Toast.makeText(ctx, "Búscalo en Ajustes › Batería", Toast.LENGTH_LONG).show();
+                                  }
+                              }
+                          });
                       }
 
                       @JavascriptInterface

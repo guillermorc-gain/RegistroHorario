@@ -456,6 +456,7 @@ const app = {
                 return;
             }
             this.mostrarApp();
+            this._pedirBateriaSiHaceFalta();
             this._pintarAvisoCambio();
             this.actualizarBotonesPerfil();
             this._actualizarCabeceraUsuario();
@@ -4656,6 +4657,33 @@ const app = {
     _avisoVisto() {
         try { return JSON.parse(localStorage.getItem('avisoVisto') || 'null'); }
         catch (_) { return null; }
+    },
+
+    // Los avisos con la app cerrada van con una alarma que el ahorro de batería
+    // se lleva por delante en bastantes móviles, y entonces no llega nada y no
+    // hay forma de saber por qué. Se pide una sola vez, recién instalada, que
+    // es cuando se entiende para qué es.
+    _pedirBateriaSiHaceFalta() {
+        if (!window.AndroidBridge?.pedirBateriaSinRestriccion) return;
+        if (localStorage.getItem('bateriaPedida')) return;
+        try {
+            if (window.AndroidBridge.bateriaSinRestriccion?.() !== false) {
+                localStorage.setItem('bateriaPedida', '1');
+                return;
+            }
+        } catch (_) { return; }
+        // Con un respiro: recién abierta la app hay bastante en pantalla ya
+        setTimeout(() => {
+            if (localStorage.getItem('bateriaPedida')) return;
+            localStorage.setItem('bateriaPedida', '1');
+            if (confirm('Para que te lleguen los avisos con la aplicación cerrada '
+                + '—los mensajes y los cambios de jornada— el móvil tiene que dejarla '
+                + 'funcionar en segundo plano. Por defecto no la deja.\n\n'
+                + '¿Lo permites ahora? Es un toque, y no gasta apenas: la aplicación '
+                + 'solo mira cada cinco minutos.')) {
+                try { window.AndroidBridge.pedirBateriaSinRestriccion(); } catch (_) {}
+            }
+        }, 3000);
     },
 
     _pintarAvisoCambio() {
