@@ -34,50 +34,6 @@
     "gestor": "Guillermo Ríos Correa",
     "estado": "pendiente"
   },
-  "20260921184335805-s5i0j-0": {
-    "id": "20260921184335805-s5i0j-0",
-    "email": "g.rioscorrea@gmail.com",
-    "creado": "2026-09-21T18:43:35.805Z",
-    "nombre": "Desarrollador",
-    "conductor": "💻",
-    "mensajes": [
-      {
-        "de": "guillermo.rcxx@gmail.com",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Ggg",
-        "adjuntos": [],
-        "en": "2026-09-21T18:43:35.805Z"
-      },
-      {
-        "de": "g.rioscorrea@gmail.com",
-        "autor": "",
-        "texto": "Ttg",
-        "adjuntos": [],
-        "en": "2026-09-21T18:44:54.794Z"
-      },
-      {
-        "de": "g.rioscorrea@gmail.com",
-        "autor": "",
-        "texto": "Ttt",
-        "adjuntos": [],
-        "en": "2026-09-21T18:45:18.469Z"
-      },
-      {
-        "de": "guillermo.rcxx@gmail.com",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Ggg",
-        "adjuntos": [],
-        "en": "2026-09-21T18:46:05.869Z"
-      }
-    ],
-    "archivada": false,
-    "de": "trabajador",
-    "tipo": "companero",
-    "deEmail": "guillermo.rcxx@gmail.com",
-    "deNombre": "Guillermo Ríos Correa",
-    "deConductor": "1234-5",
-    "estado": "pendiente"
-  },
   "20260921184613983-sp5fz-0": {
     "id": "20260921184613983-sp5fz-0",
     "email": "guillermo.rcxx@gmail.com",
