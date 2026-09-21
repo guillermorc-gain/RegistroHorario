@@ -53,6 +53,11 @@
     "deEmail": "guillermo.rcxx@gmail.com",
     "deNombre": "Guillermo Ríos Correa",
     "deConductor": "1234-5",
-    "estado": "pendiente"
+    "estado": "visto",
+    "vistoPor": {
+      "email": "g.rioscorrea@gmail.com",
+      "nombre": "Guillermo Ríos Correa",
+      "en": "2026-09-21T18:44:52.825Z"
+    }
   }
 }
