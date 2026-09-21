@@ -160,27 +160,6 @@
       "en": "2026-09-21T12:43:15.811Z"
     }
   },
-  "20260921124803989-pjkdl-0": {
-    "id": "20260921124803989-pjkdl-0",
-    "email": "guillermo.rc82@gmail.com",
-    "creado": "2026-09-21T12:48:03.989Z",
-    "nombre": "Guillermo Ríos Correa",
-    "conductor": "1418-3",
-    "mensajes": [
-      {
-        "de": "gestor",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "Jkk",
-        "adjuntos": [],
-        "en": "2026-09-21T12:48:03.989Z"
-      }
-    ],
-    "archivada": false,
-    "de": "gestor",
-    "tipo": "gestion",
-    "gestor": "Guillermo Ríos Correa",
-    "estado": "pendiente"
-  },
   "20260921134706019-fh44k-0": {
     "id": "20260921134706019-fh44k-0",
     "email": "guillermo.rcxx@gmail.com",
