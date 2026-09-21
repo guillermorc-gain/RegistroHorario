@@ -473,6 +473,9 @@ const app = {
             this._iniciarSondeoChat();
             this._cargarNotas();
             this.cargarDatos();
+            // Ya está dentro: si el navegador ofreció instalar mientras elegía
+            // aplicación, el cartel sale ahora y no antes.
+            try { window._ofrecerInstalarSiToca?.(); } catch (_) {}
         } catch(e) {
             this.mostrarAuth();
             this.mostrarMensaje('Error de red: ' + e.message, 'error');
@@ -7652,8 +7655,27 @@ window._deferredPrompt = null;
 const _isIOS        = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 const _isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
 
+// Ofrecer instalar antes de entrar no vale para nada: desde la pantalla de
+// "¿con cuál entras?" no se sabe cuál de las dos aplicaciones quiere, y son
+// dos distintas. Así que el cartel espera a que haya iniciado sesión: para
+// entonces ya está en la suya.
+function _puedeOfrecerInstalar() {
+    if (_isStandalone) return false;
+    const rol = document.getElementById('rolScreen');
+    if (rol && rol.offsetParent !== null) return false;
+    return !!(typeof app !== 'undefined' && app?.usuarioActual?.email);
+}
+
+// Se llama al entrar: si el navegador ya ofreció instalar mientras estaba en
+// la pantalla de elegir, el cartel sale ahora.
+window._ofrecerInstalarSiToca = function() {
+    if (!_puedeOfrecerInstalar()) return;
+    if (window._deferredPrompt) _showInstallBanner(false);
+    else if (_isIOS) _showInstallBanner(true);
+};
+
 function _showInstallBanner(ios) {
-    if (_isStandalone) return;
+    if (!_puedeOfrecerInstalar()) return;
     const banner = document.getElementById('installBanner');
     document.getElementById('installBannerMsg').textContent = ios ? 'Toca Compartir ↑ → "Añadir a inicio"' : 'Instala la app para acceso rápido';
     const bannerBtn = document.getElementById('installBannerBtn');
