@@ -1384,13 +1384,13 @@
     "nombre": "Guillermo Ríos Correa",
     "conductor": "1234-5",
     "avatar": null,
-    "version": "build-269",
+    "version": "build-270",
     "horasMes": 21,
     "horasTotales": 21,
     "diasMes": 4,
     "turno": "T",
     "puesto": "",
-    "actualizado": "2026-09-21T12:42:44.747Z",
+    "actualizado": "2026-09-21T12:48:43.486Z",
     "horaInicio": "14:00",
     "horaFin": "21:00",
     "horarioDe": "hoy",
@@ -1401,7 +1401,7 @@
         "i": "17:00",
         "o": "22:00",
         "n": 1,
-        "pu": "Calle"
+        "pu": "Control de acceso"
       },
       {
         "f": "20260917",
@@ -1409,7 +1409,7 @@
         "i": "17:00",
         "o": "22:00",
         "n": 1,
-        "pu": "Calle"
+        "pu": "Control de acceso"
       },
       {
         "f": "20260918",
@@ -1417,7 +1417,7 @@
         "i": "18:00",
         "o": "22:00",
         "n": 1,
-        "pu": "Calle"
+        "pu": "Control de acceso"
       },
       {
         "f": "20260921",
@@ -1425,7 +1425,7 @@
         "i": "14:00",
         "o": "21:00",
         "n": 0,
-        "pu": "Calle"
+        "pu": "Control de acceso"
       }
     ],
     "horasAnuales": 1700,
