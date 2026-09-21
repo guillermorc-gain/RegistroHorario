@@ -501,6 +501,11 @@ jobs:
                                   wv.getSettings().setJavaScriptEnabled(true);
                                   wv.getSettings().setDomStorageEnabled(true);
                                   wv.getSettings().setUserAgentString("Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
+                                  // Entrar con Google va saltando entre dominios suyos, y sin
+                                  // cookies de terceros la sesión no se sostiene: cada vez
+                                  // tocaba escribir el correo entero en vez de elegirlo.
+                                  android.webkit.CookieManager.getInstance().setAcceptCookie(true);
+                                  android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true);
                                   final android.app.Dialog[] dlgRef = {null};
                                   final boolean[] handled = {false};
                                   if (!isSilent) {
@@ -515,6 +520,10 @@ jobs:
                                       private void reportResult(final String queryOrFragment) {
                                           if (handled[0]) return;
                                           handled[0] = true;
+                                          // Guardarlas en disco antes de cerrar el cuadro: si no,
+                                          // la sesión se va con él y la próxima vez Google vuelve
+                                          // a preguntar el correo desde cero.
+                                          try { android.webkit.CookieManager.getInstance().flush(); } catch (Exception e) {}
                                           if (dlgRef[0] != null) try { dlgRef[0].dismiss(); } catch (Exception e) {}
                                           ((android.app.Activity) ctx).runOnUiThread(new Runnable() {
                                               @Override public void run() {
