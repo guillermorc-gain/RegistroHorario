@@ -7604,7 +7604,7 @@ const app = {
     },
 
     _debePreguntarModo() {
-        if (window.Capacitor?.isNativePlatform?.()) return false;
+        if (_enLaApp()) return false;
         const enIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
         // En iPhone el APK no sirve de nada, así que no se le pregunta.
         if (enIOS) return false;
@@ -7802,7 +7802,15 @@ const _isStandalone = window.navigator.standalone === true || window.matchMedia(
 // dos distintas. Así que el cartel espera a que haya iniciado sesión: para
 // entonces ya está en la suya. Tampoco sale encima de la pantalla en la que
 // está eligiendo si se la descarga.
+// Dentro del APK no hay nada que ofrecer: ya la tiene instalada. Ni el
+// cartel de abajo, ni la opción de Opciones, ni la pantalla de "¿cómo
+// quieres usarla?".
+function _enLaApp() {
+    return !!(window.Capacitor?.isNativePlatform?.() || window.AndroidBridge);
+}
+
 function _puedeOfrecerInstalar() {
+    if (_enLaApp()) return false;
     if (_isStandalone) return false;
     for (const id of ['rolScreen', 'modoScreen']) {
         const p = document.getElementById(id);

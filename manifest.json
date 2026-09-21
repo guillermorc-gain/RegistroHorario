@@ -5,7 +5,7 @@
   "description": "Control de horas de trabajo EMT",
   "start_url": "/?app=trabajador",
   "scope": "/",
-  "display": "standalone",
+  "display": "browser",
   "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#0052CC",
