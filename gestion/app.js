@@ -477,8 +477,13 @@ const app = {
             code_challenge: challenge,
             code_challenge_method: 'S256',
             access_type: 'offline',
-            // Pedir un permiso nuevo no puede costar los que ya estaban dados
-            include_granted_scopes: 'true',
+            // Solo al pedir un permiso de más: así el que se añade no cuesta
+            // los que ya estaban dados. En la entrada normal NO, y es
+            // importante: con esto puesto Google mete en la petición todo lo
+            // que esa cuenta hubiera concedido alguna vez —incluidos los
+            // permisos sensibles de antes— y vuelve a salir el aviso de
+            // aplicación no verificada a quien ya había entrado.
+            ...(permisoExtra ? { include_granted_scopes: 'true' } : {}),
             state: ANDROID_PACKAGE,
             // Sin select_account, y con el correo de la última sesión metido
             // de pista, Google entraba con esa cuenta sin preguntar: quien
@@ -1006,6 +1011,13 @@ const app = {
             this._updateGpsState();
             this._cargarConductores();
             this._cargarLugares();
+            // Y las notas. Esto faltaba, y es lo que dejaba a media gestión sin
+            // avisos: el sondeo cada minuto y el aviso nativo con la app
+            // cerrada se ponen en marcha desde aquí dentro, así que hasta que
+            // alguien no abría la pestaña de notas —o salía y volvía a entrar
+            // en la app— no se enteraba de nada. Quien la abre a diario no lo
+            // notaba; quien no, no recibía un solo aviso.
+            this._cargarNotasGestor();
             this._pedirPermisosIniciales();
             if (this._pendingNotifAction === 'registro-rapido') {
                 this._pendingNotifAction = null;
@@ -4861,12 +4873,29 @@ const app = {
         document.getElementById('emailModal').classList.remove('show');
 
         if (!this._puedeEnviarGmail()) {
-            if (confirm('Para mandar el correo desde la propia app hace falta darle '
-                + 'permiso de Gmail, y no se pide al entrar.\n\n'
-                + '¿Entras otra vez para dárselo? Google avisará de que la aplicación '
-                + 'no está verificada: es esta misma.\n\n'
-                + 'Si no, se comparte el archivo con la app de correo que elijas, '
-                + 'ya adjuntado.')) {
+            if (confirm(
+                  'ENVIAR EL CORREO DESDE LA PROPIA APLICACIÓN\n\n'
+                + 'Para esto hay que darle permiso a Gmail. Se pide solo aquí, '
+                + 'cuando hace falta, y solo a quien lo vaya a usar.\n\n'
+                + 'QUÉ VAS A VER\n'
+                + 'Google abrirá una pantalla diciendo que "no ha verificado esta '
+                + 'aplicación". Sale porque es una aplicación de casa, hecha para '
+                + 'la EMT, que no está en ninguna tienda y no ha pasado por la '
+                + 'revisión de Google. No quiere decir que sea peligrosa.\n\n'
+                + 'QUÉ TIENES QUE TOCAR\n'
+                + '1. Configuración avanzada\n'
+                + '2. Ir a registro-horario-emt.vercel.app\n'
+                + '3. Permitir\n\n'
+                + 'QUÉ PUEDE HACER CON ESE PERMISO\n'
+                + 'Solo enviar el correo que tú le mandes enviar, con tu archivo '
+                + 'adjunto. No puede leer tu correo, ni abrirlo, ni borrar nada. '
+                + 'El desarrollador es guillermo.rc82@gmail.com, el mismo que sale '
+                + 'en la pantalla de Google.\n\n'
+                + 'SI PREFIERES NO DARLO\n'
+                + 'No pasa absolutamente nada. Lo único que no podrás es enviarlo '
+                + 'desde aquí: el archivo se comparte igual con la aplicación de '
+                + 'correo que uses, ya adjunto, y lo mandas tú.\n\n'
+                + '¿Se lo damos?')) {
                 this.login(false, GMAIL_SCOPE);
                 return;
             }

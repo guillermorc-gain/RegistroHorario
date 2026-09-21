@@ -501,8 +501,13 @@ const app = {
             code_challenge: challenge,
             code_challenge_method: 'S256',
             access_type: 'offline',
-            // Pedir un permiso nuevo no puede costar los que ya estaban dados
-            include_granted_scopes: 'true',
+            // Solo al pedir un permiso de más: así el que se añade no cuesta
+            // los que ya estaban dados. En la entrada normal NO, y es
+            // importante: con esto puesto Google mete en la petición todo lo
+            // que esa cuenta hubiera concedido alguna vez —incluidos los
+            // permisos sensibles de antes— y vuelve a salir el aviso de
+            // aplicación no verificada a quien ya había entrado.
+            ...(permisoExtra ? { include_granted_scopes: 'true' } : {}),
             state: ANDROID_PACKAGE,
             // Sin select_account, y con el correo de la última sesión metido
             // de pista, Google entraba con esa cuenta sin preguntar: quien
@@ -2663,7 +2668,13 @@ const app = {
     _iniciarSondeoChat() {
         this._pararSondeoChat();
         if (!this.usuarioActual?.email) return;
-        this._timerChat = setInterval(() => this._sondearChat(), this.SONDEO_CHAT);
+        this._timerChat = setInterval(() => {
+            this._sondearChat();
+            // Y si le han cambiado el sitio o la hora. Antes solo se miraba al
+            // entrar y al volver a la app, así que con la app abierta un
+            // cambio de gestión no llegaba nunca.
+            this._cargarAsignacion();
+        }, this.SONDEO_CHAT);
         // Y el aviso nativo, que es el que sigue mirando con la app de fondo:
         // el sondeo de aquí arriba solo vive mientras la pantalla esté viva.
         window.AndroidBridge?.activarAvisoChat?.(
@@ -3908,12 +3919,29 @@ const app = {
         document.getElementById('emailModal').classList.remove('show');
 
         if (!this._puedeEnviarGmail()) {
-            if (confirm('Para mandar el correo desde la propia app hace falta darle '
-                + 'permiso de Gmail, y no se pide al entrar.\n\n'
-                + '¿Entras otra vez para dárselo? Google avisará de que la aplicación '
-                + 'no está verificada: es esta misma.\n\n'
-                + 'Si no, se comparte el archivo con la app de correo que elijas, '
-                + 'ya adjuntado.')) {
+            if (confirm(
+                  'ENVIAR EL CORREO DESDE LA PROPIA APLICACIÓN\n\n'
+                + 'Para esto hay que darle permiso a Gmail. Se pide solo aquí, '
+                + 'cuando hace falta, y solo a quien lo vaya a usar.\n\n'
+                + 'QUÉ VAS A VER\n'
+                + 'Google abrirá una pantalla diciendo que "no ha verificado esta '
+                + 'aplicación". Sale porque es una aplicación de casa, hecha para '
+                + 'la EMT, que no está en ninguna tienda y no ha pasado por la '
+                + 'revisión de Google. No quiere decir que sea peligrosa.\n\n'
+                + 'QUÉ TIENES QUE TOCAR\n'
+                + '1. Configuración avanzada\n'
+                + '2. Ir a registro-horario-emt.vercel.app\n'
+                + '3. Permitir\n\n'
+                + 'QUÉ PUEDE HACER CON ESE PERMISO\n'
+                + 'Solo enviar el correo que tú le mandes enviar, con tu archivo '
+                + 'adjunto. No puede leer tu correo, ni abrirlo, ni borrar nada. '
+                + 'El desarrollador es guillermo.rc82@gmail.com, el mismo que sale '
+                + 'en la pantalla de Google.\n\n'
+                + 'SI PREFIERES NO DARLO\n'
+                + 'No pasa absolutamente nada. Lo único que no podrás es enviarlo '
+                + 'desde aquí: el archivo se comparte igual con la aplicación de '
+                + 'correo que uses, ya adjunto, y lo mandas tú.\n\n'
+                + '¿Se lo damos?')) {
                 this.login(false, GMAIL_SCOPE);
                 return;
             }
@@ -4626,9 +4654,10 @@ const app = {
         if (!cambiaLugar && !cambiaHora) return;
 
         const partes = [];
-        if (cambiaLugar) partes.push(lugarAhora ? `Ahora te toca en ${lugarAhora}` : 'Te han quitado el lugar');
-        if (cambiaHora)  partes.push(horaAhora ? `Horario ${horaAhora}` : 'Te han quitado el horario');
-        const cuerpo = partes.join(' · ');
+        if (cambiaLugar) partes.push(lugarAhora || 'sin lugar');
+        if (cambiaHora)  partes.push(horaAhora || 'sin horario');
+        const cuerpo = 'Se te asigna este servicio y horario: ' + partes.join(' · ')
+            + '. Confirma como leído. Gracias.';
         this._mostrarToast('📍 ' + cuerpo, 7000);
         // Y se queda un aviso en pantalla hasta que lo dé por leído: lo que
         // gestión necesita saber no es que se lo mandaron, es que se enteró.
@@ -5203,6 +5232,12 @@ const app = {
         if (cb) cb.checked = this.sinAsistenciaActivo;
         // No haber ido es un día sin horas, igual que vacaciones o una baja:
         // se ponen a cero solas en vez de tener que borrarlas a mano.
+        if (!this.sinAsistenciaActivo) {
+            // Al desmarcarlo se recuperan las horas que salen del horario: se
+            // habían puesto a cero al marcarlo y se quedaban así, con lo que
+            // registrar después la jornada de verdad daba cero horas.
+            this.calcularHorasPorTiempo?.();
+        }
         if (this.sinAsistenciaActivo) {
             const h = document.getElementById('horasInput');
             if (h) h.value = '0';
@@ -5529,6 +5564,10 @@ const app = {
         if (el.checked && (nombre === 'Vacaciones' || nombre === 'Be' || nombre === 'SinAsistencia')) {
             const h = document.getElementById('editModalHoras');
             if (h) h.value = '0';
+        } else if (!el.checked && nombre === 'SinAsistencia') {
+            // Desmarcarlo devuelve las horas del horario, que se habían puesto
+            // a cero al marcarlo y se quedaban así.
+            this.calcularHorasModalPorTiempo?.();
         }
         this._pintarTogglesEdit();
     },
