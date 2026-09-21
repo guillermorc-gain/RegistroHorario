@@ -3350,24 +3350,76 @@ const app = {
     },
 
     // ── Exportar las nóminas ─────────────────────────────────────────────────
-    CABECERAS_EXPORT_NOM: ['Nómina', 'Devengado', 'Deducciones', 'Líquido', 'Base de cotización',
-        'Salario base €/día', 'Antigüedad %', 'Horas extra', 'Horas nocturnas', 'Sindicato €'],
+    // Una fila por concepto, igual que se ve en la propia nómina, con un
+    // bloque por cada nómina elegida.
+    CABECERAS_EXPORT_NOM: ['Nómina / concepto', 'Días u horas', 'Precio', 'Importe'],
 
+    _nomExportSel: null,   // null = todas
+
+    _nomExportElegidas() {
+        const claves = this._clavesNominasGuardadas();
+        return this._nomExportSel ? claves.filter(c => this._nomExportSel.has(c)) : claves;
+    },
+
+    _renderSelectorExportNom() {
+        const cont = document.getElementById('expNomLista');
+        if (!cont) return;
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const claves = this._clavesNominasGuardadas();
+        const elegidas = this._nomExportElegidas();
+        const todo = elegidas.length === claves.length;
+        cont.innerHTML = `<label class="exp-col exp-todo">
+                <input type="checkbox" ${todo ? 'checked' : ''} onchange="app._marcarTodoExportNom(this.checked)">
+                <span>Todas</span></label>`
+            + claves.map(clave => `<label class="exp-col">
+                <input type="checkbox" value="${clave}" ${elegidas.includes(clave) ? 'checked' : ''}
+                       onchange="app._toggleExportNom('${clave}',this.checked)">
+                <span>${esc(this._nombreMes(clave))}</span></label>`).join('');
+    },
+
+    _toggleExportNom(clave, on) {
+        if (!this._nomExportSel) this._nomExportSel = new Set(this._clavesNominasGuardadas());
+        if (on) this._nomExportSel.add(clave); else this._nomExportSel.delete(clave);
+        this._renderSelectorExportNom();
+    },
+
+    _marcarTodoExportNom(on) {
+        this._nomExportSel = on ? null : new Set();
+        this._renderSelectorExportNom();
+    },
+
+    // El mismo desglose de la nómina —devengos, deducciones, líquido—, uno
+    // detrás de otro por cada nómina elegida.
     _filasExportNom() {
-        return this._clavesNominasGuardadas().map(clave => {
+        const filas = [];
+        this._nomExportElegidas().forEach(clave => {
             const c = this._calcNomina(clave, this._misNominas[clave]);
-            return [this._nombreMes(clave), c.devengado, c.aDeducir, c.liquido, c.base,
-                c.precios.porDia.base, c.pctBienios, c.hExtra, c.hNoct, c.sindicato];
+            filas.push([`Nómina: ${this._nombreMes(clave)}`, '', '', '']);
+            c.devengos.forEach(l => filas.push([l.c, l.d ? `${l.d}${l.horas ? 'h' : ''}` : '', l.p || '', l.i]));
+            filas.push(['Devengado', '', '', c.devengado]);
+            c.deducciones.forEach(l => filas.push([l.c, l.pct ? `${l.pct} %` : '', '', -l.i]));
+            filas.push(['A deducir', '', '', -c.aDeducir]);
+            filas.push(['Líquido', '', '', c.liquido]);
+            filas.push(['', '', '', '']);
         });
+        return filas;
     },
 
     mostrarExportarNominas() {
         if (!this._clavesNominasGuardadas().length) { this._mostrarToast('No hay nóminas que exportar', 3000); return; }
+        this._nomExportSel = null;
+        this._renderSelectorExportNom();
         document.getElementById('expNomModal').classList.add('show');
         if (this.darkMode) document.getElementById('expNomModalContent').classList.add('dark');
     },
 
+    _hayNomElegidas() {
+        if (!this._nomExportElegidas().length) { this._mostrarToast('Elige al menos una nómina', 3000); return false; }
+        return true;
+    },
+
     exportarNomCSV() {
+        if (!this._hayNomElegidas()) return;
         document.getElementById('expNomModal').classList.remove('show');
         this._descargar(this._csvDe(this.CABECERAS_EXPORT_NOM, this._filasExportNom()),
             this._nombreExport('csv').replace('jornadas', 'nominas'), 'text/csv;charset=utf-8;');
@@ -3375,6 +3427,7 @@ const app = {
     },
 
     exportarNomXLS() {
+        if (!this._hayNomElegidas()) return;
         document.getElementById('expNomModal').classList.remove('show');
         const ok = this._descargarBinario(this._xlsxDe('Nóminas', this.CABECERAS_EXPORT_NOM, this._filasExportNom()),
             this._nombreExport('xlsx').replace('jornadas', 'nominas'),
@@ -3384,6 +3437,7 @@ const app = {
     },
 
     async exportarNomSheets() {
+        if (!this._hayNomElegidas()) return;
         document.getElementById('expNomModal').classList.remove('show');
         this._mostrarToast('☁️ Creando hoja en Drive...', 3000);
         try {
@@ -3434,7 +3488,7 @@ const app = {
     },
 
     prepararEmailNominas() {
-        if (!this._clavesNominasGuardadas().length) { this._mostrarToast('No hay nóminas que exportar', 3000); return; }
+        if (!this._hayNomElegidas()) return;
         document.getElementById('expNomModal').classList.remove('show');
         this.mostrarEnviarEmail(this._csvDe(this.CABECERAS_EXPORT_NOM, this._filasExportNom()),
             this._nombreExport('csv').replace('jornadas', 'nominas'),
