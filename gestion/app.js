@@ -376,6 +376,11 @@ const app = {
         this.tokenExpiry = Date.now() + (parseInt(response.expires_in) - 60) * 1000;
         localStorage.setItem('gAccessToken', this.accessToken);
         localStorage.setItem('gTokenExpiry', this.tokenExpiry);
+        // Lo que Google ha concedido de verdad. Hay permisos que no se piden
+        // al entrar, y sin esto la app no tiene forma de saber si los tiene.
+        if (typeof response.scope === 'string' && response.scope) {
+            localStorage.setItem('gScopes', response.scope);
+        }
         if (response.refresh_token) {
             this.refreshToken = response.refresh_token;
             localStorage.setItem('gRefreshToken', this.refreshToken);
@@ -4696,10 +4701,36 @@ const app = {
         }
     },
 
+    // El permiso de Gmail no se pide al entrar, a propósito: es de los que
+    // hacen salir el aviso de aplicación no verificada, y no tiene sentido que
+    // lo vea todo el mundo por algo que casi nadie usa. Google dice en cada
+    // token qué ha concedido de verdad, así que se mira antes de intentarlo:
+    // enterarse por un error a medio envío no explica nada. Sin esa lista
+    // —sesión de antes de que se guardara— se prueba igual, que ya dirá Google.
+    _puedeEnviarGmail() {
+        const dados = localStorage.getItem('gScopes');
+        if (dados === null) return true;
+        return dados.split(/\s+/).includes(GMAIL_SCOPE);
+    },
+
     async _enviarAContacto(email) {
         const p = this._emailPendiente;
         if (!p) return;
         document.getElementById('emailModal').classList.remove('show');
+
+        if (!this._puedeEnviarGmail()) {
+            if (confirm('Para mandar el correo desde la propia app hace falta darle '
+                + 'permiso de Gmail, y no se pide al entrar.\n\n'
+                + '¿Entras otra vez para dárselo? Google avisará de que la aplicación '
+                + 'no está verificada: es esta misma.\n\n'
+                + 'Si no, se comparte el archivo con la app de correo que elijas, '
+                + 'ya adjuntado.')) {
+                this.login(false, GMAIL_SCOPE);
+                return;
+            }
+            return this._compartirAdjunto(email, p);
+        }
+
         this._mostrarToast('✉️ Enviando...', 2000);
         try {
             await this._enviarGmailApi(email,
@@ -4709,21 +4740,34 @@ const app = {
             return;
         } catch (e) {
             console.error('Gmail API:', e.message);
-            // El permiso de Gmail no se pide al entrar, a propósito: es de los
-            // que hacen salir el aviso de aplicación no verificada, y no tiene
-            // sentido que lo vea todo el mundo por algo que casi nadie usa. Se
-            // pide aquí, cuando de verdad hace falta. Ampliarlo en silencio no
-            // se puede: renovar el token por detrás no añade permisos.
-            if (/insufficient|permission/i.test(e.message || '')) {
-                if (confirm('Para enviar el correo sin salir de la app hace falta darle '
-                    + 'permiso de Gmail, y no se pide al entrar: Google avisa de '
-                    + 'aplicación no verificada a quien se lo concede.\n\n'
-                    + '¿Vuelves a entrar ahora para dárselo? De momento se comparte '
-                    + 'el archivo de otra forma.')) {
+            if (/insufficient|permission|scope/i.test(e.message || '')) {
+                // Lo que creíamos saber del permiso no vale: que se vuelva a
+                // preguntar la próxima vez en vez de dar por hecho que está.
+                localStorage.removeItem('gScopes');
+                if (confirm('Google no ha dejado enviarlo: falta el permiso de Gmail.\n\n'
+                    + '¿Entras otra vez para dárselo? Mientras, se comparte el archivo '
+                    + 'con la app de correo que elijas.')) {
                     this.login(false, GMAIL_SCOPE);
                     return;
                 }
+            } else {
+                this._mostrarToast('❌ No se pudo enviar: ' + e.message, 4000);
             }
+        }
+        return this._compartirAdjunto(email, p);
+    },
+
+    // Compartir el archivo ya adjuntado, con la app de correo que elija. Antes
+    // esto acababa descargándolo y abriendo un correo vacío: se llegaba a la
+    // app de correo y el archivo no estaba, había que ir a buscarlo a
+    // Descargas y adjuntarlo a mano, que es justo lo que no se quería.
+    async _compartirAdjunto(email, p) {
+        if (window.AndroidBridge?.compartirArchivo) {
+            try {
+                window.AndroidBridge.compartirArchivo(
+                    p.nombre, p.tipo, this._base64(p.contenido), p.asunto, email || '');
+                return;
+            } catch (_) { /* si el móvil no puede, queda lo de abajo */ }
         }
         try {
             const blob = new Blob([p.contenido], { type: p.tipo });
@@ -4733,12 +4777,12 @@ const app = {
                 return;
             }
         } catch (_) { return; }   // el usuario cerró la hoja de compartir: no pasa nada
-        // Sin compartir archivos: se descarga y se abre el correo para adjuntarlo a mano
+        // Último recurso: se descarga y se abre el correo para adjuntarlo a mano
         this._descargar(p.contenido, p.nombre, p.tipo);
         const asunto = encodeURIComponent(p.asunto);
         const cuerpo = encodeURIComponent(`Te adjunto ${p.nombre}, que se acaba de descargar.`);
         window.open(`mailto:${email}?subject=${asunto}&body=${cuerpo}`, '_blank');
-        this._mostrarToast('📎 No se pudo enviar solo — descargado, adjúntalo al correo que se ha abierto', 5500);
+        this._mostrarToast('📎 No se ha podido adjuntar solo — está en Descargas, adjúntalo al correo que se ha abierto', 6500);
     },
 
     ordenarRegistro(modo) {
@@ -7557,19 +7601,14 @@ const app = {
             }
             const lista = res.lista;
             const re = new RegExp('^' + RELEASE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
-            // El gestor siempre ve la última, para poder probarla antes de
-            // publicarla; el resto solo ven la que él haya publicado.
-            const soyGestor = (this.usuarioActual?.email || '').toLowerCase() === SUPER_USER_EMAIL.toLowerCase();
+            // Aquí todos reciben la última que haya. El reparto escalonado es
+            // para la app de los trabajadores, que es lo que decide "Versión
+            // para los usuarios"; a esta nunca se le publicó ninguna, así que
+            // quien no fuera el gestor se quedaba clavado en la que hubiera
+            // apuntada y no podía actualizar nunca. Los que entran aquí son
+            // los que llevan la aplicación: no hay a quién proteger de una
+            // versión recién salida.
             let publicada = null;
-            if (!soyGestor) {
-                const pub = await this._buildPublicado();
-                if (!pub.ok) {
-                    if (showFeedback) this._mostrarToast(
-                        '⏳ No se ha podido comprobar qué versión toca instalar. Prueba más tarde.', 4500);
-                    return;
-                }
-                publicada = pub.build;
-            }
             let release = null, latestNum = 0, latestTag = '';
             (Array.isArray(lista) ? lista : []).forEach(r => {
                 const m = re.exec(r.tag_name || '');

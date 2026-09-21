@@ -26,5 +26,6 @@ export default async function handler(req, res) {
   return res.status(200).json({
     access_token: data.access_token,
     expires_in: data.expires_in,
+    scope: data.scope || '',
   });
 }

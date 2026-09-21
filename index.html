@@ -271,6 +271,11 @@
         .profile-btn{width:42px;height:42px;border-radius:50%;border:2px solid rgba(255,255,255,0.4);cursor:pointer;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;flex-shrink:0;color:white;overflow:hidden;padding:0;}
 
         .app-content{flex:1;min-height:0;padding:10px;overflow:hidden;display:flex;flex-direction:column;gap:8px;}
+        .cambio-aviso{display:flex;align-items:center;gap:10px;margin:8px 10px 0;padding:10px 12px;background:#fff4e5;border:1px solid #e67e22;border-radius:12px;flex:none;}
+        .cambio-txt{flex:1;display:flex;flex-direction:column;gap:2px;font-size:12.5px;color:#7a4b10;line-height:1.35;}
+        .cambio-btn{flex:none;background:#e67e22;color:white;border:none;border-radius:9px;padding:10px 12px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;}
+        .cambio-aviso.dark{background:#3a2a12;border-color:#b3701f;}
+        .cambio-aviso.dark .cambio-txt{color:#f0c99a;}
         .app-content.dark{background:#111827;}
 
         /* ── STATS ROW ── */
@@ -422,7 +427,13 @@
         .modal-card.dark .hm-mes-c,.app-content.dark .hm-mes-c{background:rgba(255,255,255,0.12);color:#93a1b3;}
         .hist-sec-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:#7f8c8d;margin:14px 2px 6px;}
         .app-content.dark .hist-sec-title{color:#a0a0a0;}
-        .hist-lista{background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
+        /* flex:none es lo que deja bajar por el historial. La pestaña es una
+           columna flex que hace scroll, y overflow:hidden aquí —que está para
+           redondear las esquinas— permitía que la lista se encogiera hasta
+           quedarse sin sitio en vez de empujar hacia abajo: las jornadas de
+           más abajo se recortaban y no había manera de llegar a ellas. */
+        .hist-lista{flex:none;background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
+        .hist-sec-title{flex:none;}
         .app-content.dark .hist-lista{background:#1e2a3a;}
         /* ── HISTORY ENTRY STRIPES ── */
         .hm-stripe-festivo{border-left:4px solid #e67e22!important;padding-left:10px!important;}
@@ -628,7 +639,11 @@
         /* ── MODALS ── */
         .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:1000;justify-content:center;align-items:center;padding:15px;}
         .modal.show{display:flex;}
-        .modal-card{background:white;border-radius:16px;width:100%;max-width:440px;overflow:hidden;max-height:90vh;display:flex;flex-direction:column;}
+        /* dvh es lo que mide la pantalla ahora mismo, con la barra del
+           navegador donde esté; vh es la de un navegador sin barras y deja el
+           cuadro más alto que el hueco. Se deja vh de reserva para los que no
+           entiendan dvh. */
+        .modal-card{background:white;border-radius:16px;width:100%;max-width:440px;overflow:hidden;max-height:90vh;max-height:calc(100dvh - 30px);display:flex;flex-direction:column;}
         .modal-card.dark{background:#1e2a3a;color:#e0e0e0;}
         .jm-op{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid #f2f2f2;cursor:pointer;font-size:14.5px;font-weight:700;color:#2c3e50;}
         .modal-card.dark .jm-op{color:#e0e0e0;border-color:#2d3561;}
@@ -788,6 +803,17 @@
                 <button class="campana" id="campanaBtn" onclick="app.irANotas()" title="Mensajes sin leer">🔔<span class="campana-n" id="campanaN"></span></button>
                 <button class="profile-btn" id="profileBtn" onclick="app.mostrarOpciones()"></button>
             </div>
+        </div>
+
+        <!-- Cambio de jornada sin dar por leído. Se queda puesto hasta que lo
+             confirme: lo que gestión necesita saber no es que se lo mandaron,
+             es que se ha enterado. -->
+        <div class="cambio-aviso" id="cambioJornadaAviso" style="display:none;">
+            <div class="cambio-txt">
+                <b>Te han cambiado la jornada de hoy</b>
+                <span id="cambioJornadaTxt"></span>
+            </div>
+            <button class="cambio-btn" onclick="app.confirmarCambioJornada()">Lo he leído</button>
         </div>
 
         <div class="app-content" id="appContent">
@@ -1458,15 +1484,44 @@
                 <button class="lugar-add" onclick="app._nuevoTramoEdit()">➕ Añadir otro lugar del día</button>
                 <div class="lugar-resto" id="editModalLugarResto"></div>
             </div>
-            <div style="display:flex;align-items:center;gap:16px;margin-top:6px;flex-wrap:wrap;">
-                <div style="display:flex;align-items:center;gap:6px;">
-                    <input type="checkbox" id="editModalPR" style="width:16px;height:16px;accent-color:#3498db;cursor:pointer;">
-                    <label for="editModalPR" style="font-size:13px;font-weight:600;color:#2980b9;cursor:pointer;">PR</label>
+            <!-- Los mismos seis de la pantalla de registrar: aquí solo había
+                 PR y festivo, así que lo demás no se podía corregir luego. -->
+            <div class="toggle-row" id="editToggleRow" style="margin-top:6px;">
+                <div class="noasist-compact" id="editNoAsistCompact" onclick="app._toggleEdit('SinAsistencia')" title="No fui a trabajar (no cobra el plus de asistencia)">
+                    <span>🚫</span>
+                    <input type="checkbox" id="editModalSinAsistencia" style="pointer-events:none;width:14px;height:14px;accent-color:#8d6e63;">
                 </div>
-                <div style="display:flex;align-items:center;gap:6px;">
-                    <input type="checkbox" id="editModalFestivo" style="width:16px;height:16px;accent-color:#e67e22;cursor:pointer;">
-                    <label for="editModalFestivo" style="font-size:13px;font-weight:600;color:#d35400;cursor:pointer;">🎉 Festivo</label>
+                <div class="pr-compact" id="editPrCompact" onclick="app._toggleEdit('PR')" title="Permiso Retribuido">
+                    <span>PR</span>
+                    <input type="checkbox" id="editModalPR" style="pointer-events:none;width:14px;height:14px;accent-color:#3498db;">
                 </div>
+                <div class="festivo-compact" id="editFestivoCompact" onclick="app._toggleEdit('Festivo')" title="Festivo">
+                    <span>🎉</span>
+                    <input type="checkbox" id="editModalFestivo" style="pointer-events:none;width:14px;height:14px;accent-color:#e67e22;">
+                </div>
+                <div class="extra-compact" id="editExtraCompact" onclick="app._toggleEdit('Extra')" title="Horas extras">
+                    <span>⏱️</span>
+                    <input type="checkbox" id="editModalExtra" style="pointer-events:none;width:14px;height:14px;accent-color:#8e44ad;">
+                </div>
+                <div class="vacaciones-compact" id="editVacCompact" onclick="app._toggleEdit('Vacaciones')" title="Vacaciones (registra 0 horas)">
+                    <span>🏖️</span>
+                    <input type="checkbox" id="editModalVacaciones" style="pointer-events:none;width:14px;height:14px;accent-color:#16a085;">
+                </div>
+                <div class="be-compact" id="editBeCompact" onclick="app._toggleEdit('Be')" title="Baja (registra 0 horas)">
+                    <span>🩺</span>
+                    <input type="checkbox" id="editModalBe" style="pointer-events:none;width:14px;height:14px;accent-color:#7f8c8d;">
+                </div>
+            </div>
+            <div class="extra-panel" id="editExtraPanel">
+                <div class="extra-panel-t">¿Dónde van estas horas?</div>
+                <label class="extra-opt">
+                    <input type="radio" name="editExtraDestino" value="anual" checked>
+                    <span>Descontar de las <b id="editExtraOptAnual">777h</b> anuales</span>
+                </label>
+                <label class="extra-opt">
+                    <input type="radio" name="editExtraDestino" value="extras">
+                    <span>Sumar a <b>horas extras</b></span>
+                </label>
             </div>
         </div>
         <div class="modal-footer">

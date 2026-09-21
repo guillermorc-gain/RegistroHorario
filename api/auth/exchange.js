@@ -35,5 +35,9 @@ export default async function handler(req, res) {
     access_token: data.access_token,
     expires_in: data.expires_in,
     refresh_token: data.refresh_token || null,
+    // Qué ha concedido de verdad: hay permisos que no se piden al entrar y la
+    // app necesita saber si los tiene antes de contar con ellos, en vez de
+    // enterarse por un error a medio enviar un correo.
+    scope: data.scope || '',
   });
 }
