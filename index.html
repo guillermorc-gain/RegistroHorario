@@ -270,6 +270,21 @@
         .cv-punto{width:8px;height:8px;border-radius:50%;background:#e74c3c;flex-shrink:0;}
         .profile-btn{width:42px;height:42px;border-radius:50%;border:2px solid rgba(255,255,255,0.4);cursor:pointer;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:16px;flex-shrink:0;color:white;overflow:hidden;padding:0;}
 
+        /* Elegir con qué app se entra. La dirección de siempre llevaba a la
+           de los trabajadores y quien es de gestión no tenía manera de saber
+           que lo suyo está en otro sitio. */
+        .rol-screen{position:fixed;inset:0;z-index:2000;background:linear-gradient(160deg,#0d47a1,#1565C0);display:flex;align-items:center;justify-content:center;padding:22px;}
+        .rol-card{width:100%;max-width:400px;display:flex;flex-direction:column;gap:12px;text-align:center;color:#fff;}
+        .rol-logo{font-size:52px;line-height:1;}
+        .rol-t{font-size:21px;font-weight:800;margin:0;}
+        .rol-s{font-size:13.5px;opacity:0.85;margin:0 0 6px;}
+        .rol-btn{display:flex;align-items:center;gap:13px;width:100%;padding:15px 16px;border:none;border-radius:14px;background:#fff;cursor:pointer;font-family:inherit;text-align:left;box-shadow:0 2px 10px rgba(0,0,0,0.18);}
+        .rol-btn:active{transform:scale(0.985);}
+        .rol-ico{font-size:27px;flex:none;}
+        .rol-txt{display:flex;flex-direction:column;gap:2px;min-width:0;}
+        .rol-txt b{font-size:16px;font-weight:800;color:#1a2b3c;}
+        .rol-txt span{font-size:12px;color:#7f8c8d;}
+        .rol-pie{font-size:11.5px;line-height:1.5;opacity:0.8;margin:6px 2px 0;}
         .app-content{flex:1;min-height:0;padding:10px;overflow:hidden;display:flex;flex-direction:column;gap:8px;}
         .cambio-aviso{display:flex;align-items:center;gap:10px;margin:8px 10px 0;padding:10px 12px;background:#fff4e5;border:1px solid #e67e22;border-radius:12px;flex:none;}
         .cambio-txt{flex:1;display:flex;flex-direction:column;gap:2px;font-size:12.5px;color:#7a4b10;line-height:1.35;}
@@ -770,6 +785,23 @@
 <div class="container">
 
     <!-- ── AUTH ── -->
+    <div class="rol-screen" id="rolScreen" style="display:none;">
+        <div class="rol-card">
+            <div class="rol-logo">🚌</div>
+            <h1 class="rol-t">EMT · Movilidad</h1>
+            <p class="rol-s">¿Con cuál entras?</p>
+            <button class="rol-btn" onclick="app.elegirRol('trabajador')">
+                <span class="rol-ico">🕐</span>
+                <span class="rol-txt"><b>Trabajador</b><span>Registrar mis jornadas</span></span>
+            </button>
+            <button class="rol-btn" onclick="app.elegirRol('gestion')">
+                <span class="rol-ico">🛠️</span>
+                <span class="rol-txt"><b>Gestión</b><span>Llevar la plantilla</span></span>
+            </button>
+            <p class="rol-pie">Si tienes la aplicación instalada se abre ella. Si no, se abre aquí mismo, en el navegador.</p>
+        </div>
+    </div>
+
     <div class="auth-screen" id="authScreen">
         <svg class="logo" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
             <rect width="512" height="512" rx="96" fill="#0052CC"/>
