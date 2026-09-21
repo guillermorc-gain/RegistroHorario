@@ -45,6 +45,13 @@
         "texto": "Ggg",
         "adjuntos": [],
         "en": "2026-09-21T18:43:35.805Z"
+      },
+      {
+        "de": "g.rioscorrea@gmail.com",
+        "autor": "",
+        "texto": "Ttg",
+        "adjuntos": [],
+        "en": "2026-09-21T18:44:54.794Z"
       }
     ],
     "archivada": false,
@@ -53,11 +60,6 @@
     "deEmail": "guillermo.rcxx@gmail.com",
     "deNombre": "Guillermo Ríos Correa",
     "deConductor": "1234-5",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "g.rioscorrea@gmail.com",
-      "nombre": "Guillermo Ríos Correa",
-      "en": "2026-09-21T18:44:53.714Z"
-    }
+    "estado": "pendiente"
   }
 }
