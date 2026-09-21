@@ -2421,12 +2421,10 @@ const app = {
         try {
             const r = await fetch(this.NOTAS_URL, { cache: 'no-store' });
             if (!r.ok) throw new Error(r.status);
-            // Lo que se escriben entre compañeros no pasa por aquí, salvo lo
-            // que le manden a uno mismo: es como le llegan al desarrollador
-            // las notas que se le escriben desde la app de los trabajadores.
-            const mio = (this.usuarioActual?.email || '').toLowerCase();
-            this._notas = (await r.json()).filter(n =>
-                n.tipo !== 'companero' || (n.email || '').toLowerCase() === mio);
+            // Lo que se escriben entre compañeros no pasa por aquí, ni siquiera
+            // lo que le escriban al desarrollador: eso es suyo y lo lee en la
+            // app de trabajadores. Aquí solo está lo que va con gestión.
+            this._notas = (await r.json()).filter(n => n.tipo !== 'companero');
             localStorage.setItem('notasCache', JSON.stringify(this._notas));
         } catch (_) {
             try { this._notas = JSON.parse(localStorage.getItem('notasCache') || '[]'); } catch (__) {}
@@ -2626,15 +2624,24 @@ const app = {
         this._escribirA(this._elegidos.slice());
     },
 
+    // Quién es el destinatario: un trabajador de la plantilla, o el
+    // desarrollador, que no está en ella y va con nombre propio.
+    _fichaDe(email) {
+        if ((email || '').toLowerCase() === this.DEV_EMAIL) {
+            return { email: this.DEV_EMAIL, nombre: this.DEV_NOMBRE, conductor: '💻' };
+        }
+        return (this._conductores || {})[email] || null;
+    },
+
     _escribirA(quienes) {
         const lista = (Array.isArray(quienes) ? quienes : [quienes])
-            .filter(e => (this._conductores || {})[e]);
+            .filter(e => this._fichaDe(e));
         if (!lista.length) return;
         document.getElementById('destModal').classList.remove('show');
         // Se reutiliza el cuadro de responder: es el mismo diálogo
         this._notaRespondiendo = null;
         this._notaPara = lista;
-        const u = this._conductores[lista[0]];
+        const u = this._fichaDe(lista[0]);
         document.getElementById('respTitulo').textContent = '✉️ Escribir a';
         document.getElementById('respQuien').textContent = lista.length === 1
             ? this._quienEs(u, lista[0])
@@ -2660,8 +2667,8 @@ const app = {
                 // se titule con el suyo y no con el correo.
                 body: JSON.stringify({ texto, para,
                     gestor: this._nombreGestor(),
-                    nombres:     para.map(e => this._conductores?.[e]?.nombre || ''),
-                    conductores: para.map(e => this._conductores?.[e]?.conductor || '') })
+                    nombres:     para.map(e => this._fichaDe(e)?.nombre || ''),
+                    conductores: para.map(e => this._fichaDe(e)?.conductor || '') })
             });
             const data = await r.json();
             if (!r.ok) { this._mostrarToast('❌ ' + (data.error || r.status), 4000); return; }
@@ -2974,11 +2981,13 @@ const app = {
 
     // Alinear a la derecha lo que he escrito yo
     _esMiMensaje(m, n) {
-        // En las conversaciones de gestión lo propio va firmado como "gestor".
-        // En las que le llegan a uno como persona —las que le escriben al
-        // desarrollador desde la app de los trabajadores— va con su correo.
-        if (m.de === 'gestor') return true;
         const mio = (this.usuarioActual?.email || '').toLowerCase();
+        // Una nota que va a nombre de uno mismo se lee al revés: es la que el
+        // desarrollador le escribe a gestión desde su app, así que lo suyo es
+        // lo que firma como trabajador y lo de gestión viene del otro lado.
+        if (mio && (n?.email || '').toLowerCase() === mio) return m.de === 'trabajador';
+        // En las conversaciones de gestión lo propio va firmado como "gestor".
+        if (m.de === 'gestor') return true;
         return !!mio && (m.de || '').toLowerCase() === mio;
     },
 
@@ -7402,6 +7411,19 @@ const app = {
             L.push(listo ? '✅ El aviso con la app cerrada está armado'
                          : '❌ El aviso con la app cerrada no está armado'
                          + '\n   → Cierra la app del todo y vuelve a abrirla');
+            // Lo que de verdad dice si esto funciona: cuándo miró por última
+            // vez sin que nadie abriera la app. Si es "nunca" o hace horas,
+            // el móvil no la está dejando trabajar de fondo.
+            let ultimo = 0;
+            try { ultimo = Number(window.AndroidBridge?.ultimoAvisoFondo?.() || 0); } catch (_) {}
+            if (!ultimo) {
+                L.push('❌ Todavía no ha mirado ni una vez con la app cerrada'
+                     + '\n   → Déjala cerrada un cuarto de hora y vuelve a este repaso');
+            } else {
+                const min = Math.round((Date.now() - ultimo) / 60000);
+                L.push((min <= 30 ? '✅' : '⚠️') + ` Última comprobación de fondo: hace ${min} min`
+                     + (min > 30 ? '\n   → El móvil la está parando: quítale el ahorro de batería' : ''));
+            }
         }
 
         const sinLeer = this._totalSinLeer();

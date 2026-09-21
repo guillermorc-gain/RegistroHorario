@@ -257,7 +257,11 @@ export default async function handler(req, res) {
         const m = n.mensajes || [];
         const ult = m.length ? m[m.length - 1] : null;
         return { id: n.id, n: m.length, en: ult ? ult.en : n.creado,
-                 de: ult ? ult.de : '', estado: n.estado, archivada: !!n.archivada };
+                 de: ult ? ult.de : '', estado: n.estado, archivada: !!n.archivada,
+                 // Y de qué tipo es: el gestor pide el resumen entero y con
+                 // esto sabe cuáles no son suyas —lo que se escriben entre
+                 // ellos— para no avisar de conversaciones ajenas.
+                 tipo: n.tipo === 'companero' ? 'companero' : 'gestion' };
       });
       if (hayBaseDeDatos()) {
         const notas = (await leerNotas(quien)).map(normalizar);
