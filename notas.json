@@ -238,26 +238,6 @@
       "en": "2026-09-21T13:27:17.849Z"
     }
   },
-  "20260921133523346-hwxhc-0": {
-    "id": "20260921133523346-hwxhc-0",
-    "email": "guillermo.rcxx@gmail.com",
-    "creado": "2026-09-21T13:35:23.346Z",
-    "nombre": "Guillermo Ríos Correa",
-    "conductor": "1234-5",
-    "mensajes": [
-      {
-        "de": "trabajador",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "✅ He leído el cambio de jornada: Ahora te toca en Taller · Horario 20:00–03:00",
-        "adjuntos": [],
-        "en": "2026-09-21T13:35:23.346Z"
-      }
-    ],
-    "archivada": false,
-    "de": "trabajador",
-    "tipo": "gestion",
-    "estado": "pendiente"
-  },
   "20260921134706019-fh44k-0": {
     "id": "20260921134706019-fh44k-0",
     "email": "guillermo.rcxx@gmail.com",
