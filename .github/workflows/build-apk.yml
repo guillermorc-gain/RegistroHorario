@@ -1149,7 +1149,11 @@ jobs:
                       String horas = "";
                       if (h != null && !h.optString("i", "").isEmpty() && !h.optString("f", "").isEmpty())
                           horas = h.optString("i") + "\u2013" + h.optString("f");
-                      String ahora = fecha + "|" + lugar + "|" + horas;
+                      // El sello de cuándo se le asignó entra en la huella: volver a
+                      // ponerle la misma jornada que ya tenía es un cambio, y hasta ahora
+                      // no se avisaba porque el antes y el después salían idénticos.
+                      String rev = String.valueOf(a.optLong("rev", 0));
+                      String ahora = fecha + "|" + lugar + "|" + horas + "|" + rev;
 
                       String visto = prefs.getString("jornadaVista", "");
                       if (ahora.equals(visto)) return;
@@ -1167,6 +1171,12 @@ jobs:
                       if (!antes[2].equals(horas)) {
                           String t = horas.isEmpty() ? "Te han quitado el horario" : "Horario " + horas;
                           texto = texto.isEmpty() ? t : texto + " \u00b7 " + t;
+                      }
+                      // Sin cambios pero reasignada: alguien le ha tocado la jornada y
+                      // tiene que enterarse igual.
+                      if (texto.isEmpty() && antes.length > 3 && !antes[3].equals(rev)) {
+                          texto = (lugar.isEmpty() ? "Sin lugar" : lugar)
+                                + (horas.isEmpty() ? "" : " \u00b7 " + horas);
                       }
                       if (texto.isEmpty()) return;
 
