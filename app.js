@@ -62,6 +62,10 @@ function aplicarCatalogoLugares(cat) {
     });
 }
 
+// De qué aplicación se trata; aquí siempre la de trabajador, pero se lee
+// igual que en la otra para que el mismo código valga en las dos.
+const ROL_APP = (document.querySelector('meta[name="app-rol"]')?.content || 'trabajador').trim();
+
 const SUPER_USER_EMAIL = 'guillermo.rc82@gmail.com';
 const ALLOWLIST_APP    = 'movilidad';
 const LUGARES_URL      = 'https://registro-horario-emt.vercel.app/api/lugares';
@@ -472,6 +476,10 @@ const app = {
             // mensajes no tienen nada que ver con Drive.
             this._iniciarSondeoChat();
             this._cargarNotas();
+            // Los lugares tampoco tienen nada que ver con Drive. Colgados de
+            // la carga de datos, el desplegable de "lugar" se pintaba antes de
+            // que llegara el catálogo y salían cuatro de los diez que hay.
+            this._cargarLugares();
             this.cargarDatos();
             // Ya está dentro: si el navegador ofreció instalar mientras elegía
             // aplicación, el cartel sale ahora y no antes.
@@ -548,7 +556,7 @@ const app = {
     // /gestion/ por ser el mismo origen, así que el intercambio del código
     // funciona igual desde allí.
     _rebotarAGestion(pkgDestino, searchParams) {
-        if (pkgDestino !== 'com.guillermorc.gestionemt') return false;
+        if (!['com.guillermorc.gestionemt','com.guillermorc.devemt'].includes(pkgDestino)) return false;
         if (window.Capacitor?.isNativePlatform?.()) return false;
         if (/Android/i.test(navigator.userAgent)) return false;   // ahí se vuelve por intent
         if (window.location.pathname.startsWith('/gestion')) return false;
@@ -557,7 +565,7 @@ const app = {
     },
 
     _paqueteDestino(searchParams) {
-        const permitidos = ['com.guillermorc.horasemt','com.guillermorc.gestionemt'];
+        const permitidos = ['com.guillermorc.horasemt','com.guillermorc.gestionemt','com.guillermorc.devemt'];
         const s = searchParams?.get('state');
         return permitidos.includes(s) ? s : ANDROID_PACKAGE;
     },
@@ -1144,7 +1152,6 @@ const app = {
             this._updateGpsState();
             this._exportarMesesPendientes();
             this._publicarResumen();
-            this._cargarLugares();
             this._pedirPermisosIniciales();
             if (this._pendingNotifAction === 'registro-rapido') {
                 this._pendingNotifAction = null;
@@ -2557,6 +2564,11 @@ const app = {
                 ? 'No has archivado ninguna conversación.'
                 : 'Todavía no hay conversaciones.'}</div>`;
             return;
+        }
+        const cnt = document.getElementById('ntCnt');
+        if (cnt) {
+            const pend = this._totalSinLeer();
+            cnt.textContent = pend ? `${pend} sin ver` : 'al día';
         }
         const etiqueta = { visto: 'Vista', pendiente: 'Sin ver' };
         cont.innerHTML = lista.map(n => {
@@ -4971,6 +4983,14 @@ const app = {
         if (nom) nom.textContent = this.usuarioActual?.name || '';
         const num = document.getElementById('cabeceraNum');
         if (num) num.textContent = this.numConductor || '';
+        // Quien lleva la aplicación entra aquí a probarla, y la cabecera lo
+        // dice: con tres aplicaciones parecidas abiertas, conviene saber en
+        // cuál se está y con qué cuenta.
+        const tit = document.getElementById('cabeceraTitulo');
+        if (tit) {
+            tit.textContent = this._soyElDesarrollador()
+                ? '⚙️ Desarrollador Movilidad EMT' : '🚌 EMT - Movilidad';
+        }
 
         const a = this._asignacionDeHoy();
         const lugar = this._lugarDeHoy();
@@ -6139,6 +6159,25 @@ const app = {
             // Sin red se tira de lo último que se vio, que es mejor que nada
             try { aplicarCatalogoLugares(JSON.parse(localStorage.getItem('lugaresCatalogo') || '{}')); } catch (_) {}
         }
+        // Y se repinta: el desplegable puede llevar un rato en pantalla con la
+        // lista corta de antes de que llegara el catálogo.
+        this._refrescarOpcionesLugar();
+    },
+
+    _refrescarOpcionesLugar() {
+        const sel = document.getElementById('lugarJornada');
+        if (sel) {
+            const elegido = sel.value || this._lugarPropuesto();
+            sel.innerHTML = this._opcionesLugar(elegido);
+            sel.value = elegido || '';
+        }
+        const edit = document.getElementById('editModalLugar');
+        if (edit) {
+            const elegido = edit.value;
+            edit.innerHTML = this._opcionesLugar(elegido);
+            edit.value = elegido || '';
+        }
+        try { this._renderTramos(); } catch (_) {}
     },
 
     // Lugar del catálogo cuya ubicación cae más cerca, dentro de su radio. Si

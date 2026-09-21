@@ -86,12 +86,21 @@ function aplicarCatalogoLugares(cat) {
     });
 }
 
+// De qué aplicación se trata. La de desarrollador se compila del mismo sitio
+// que la de gestión, así que lo único que las distingue es esta etiqueta, que
+// el propio montaje cambia. Sin ella, gestión.
+const ROL_APP = (document.querySelector('meta[name="app-rol"]')?.content || 'gestion').trim();
+
 const SUPER_USER_EMAIL = 'g.rioscorrea@gmail.com';
 const ALLOWLIST_APP    = 'gestion';
 const LUGARES_URL      = 'https://registro-horario-emt.vercel.app/api/lugares';
 const VERSION_URL      = 'https://registro-horario-emt.vercel.app/api/version';
-const ANDROID_PACKAGE  = 'com.guillermorc.gestionemt';
-const RELEASE_PREFIX   = 'gestion-build-';
+// La de desarrollador se compila de aquí mismo: mismo código, otro paquete y
+// otra numeración de versiones, para poder tener las dos instaladas a la vez
+// y probar en una sin tocar la que usa la gente.
+const ES_APP_DEV       = ROL_APP === 'desarrollador';
+const ANDROID_PACKAGE  = ES_APP_DEV ? 'com.guillermorc.devemt' : 'com.guillermorc.gestionemt';
+const RELEASE_PREFIX   = ES_APP_DEV ? 'dev-build-' : 'gestion-build-';
 const DRIVE_FILE_NAME  = 'gestion-emt-movilidad.json';
 const HORAS_ANUALES    = 777;
 
@@ -521,7 +530,7 @@ const app = {
     // code, so without this every login would come back to apk2. Google echoes
     // `state` verbatim, so it tells us which app to reopen.
     _paqueteDestino(searchParams) {
-        const permitidos = ['com.guillermorc.horasemt','com.guillermorc.gestionemt'];
+        const permitidos = ['com.guillermorc.horasemt','com.guillermorc.gestionemt','com.guillermorc.devemt'];
         const s = searchParams?.get('state');
         return permitidos.includes(s) ? s : ANDROID_PACKAGE;
     },
@@ -1720,8 +1729,14 @@ const app = {
     _actualizarCabeceraUsuario() {
         const nom = document.getElementById('cabeceraNombre');
         const num = document.getElementById('cabeceraNum');
+        const tit = document.getElementById('cabeceraTitulo');
         if (nom) nom.textContent = this.usuarioActual?.name || '';
-        if (num) num.textContent = this.numConductor || '';
+        // En la app de desarrollador no hay número de trabajador: no lo es.
+        if (num) num.textContent = ROL_APP === 'desarrollador' ? '' : (this.numConductor || '');
+        if (tit) {
+            tit.textContent = (ROL_APP === 'desarrollador' || this._soyElDesarrollador())
+                ? '⚙️ Desarrollador Movilidad EMT' : '🛠️ Gestión EMT Movilidad';
+        }
     },
 
     // A la app de gestión entra más gente que el gestor. Los usuarios de
@@ -7938,6 +7953,7 @@ const app = {
                 // El fichero guarda un número por app —trabajadores y gestión
                 // tienen su propia numeración de builds— para que publicar
                 // una no toque el reparto de la otra.
+                if (ES_APP_DEV) return { ok: true, build: null };
                 const build = (await r.json())?.gestion ?? null;
                 localStorage.setItem('buildPublicado', JSON.stringify(build));
                 return { ok: true, build };
