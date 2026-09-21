@@ -1386,15 +1386,15 @@
     "conductor": "1234-5",
     "avatar": null,
     "version": "build-273",
-    "horasMes": 21,
-    "horasTotales": 21,
-    "diasMes": 4,
+    "horasMes": 14,
+    "horasTotales": 14,
+    "diasMes": 3,
     "turno": "T",
     "puesto": "",
-    "actualizado": "2026-09-21T13:22:57.670Z",
-    "horaInicio": "14:00",
-    "horaFin": "21:00",
-    "horarioDe": "hoy",
+    "actualizado": "2026-09-21T13:25:24.295Z",
+    "horaInicio": "18:00",
+    "horaFin": "22:00",
+    "horarioDe": "anterior",
     "jornadas": [
       {
         "f": "20260915",
@@ -1402,7 +1402,7 @@
         "i": "17:00",
         "o": "22:00",
         "n": 1,
-        "pu": "Calle"
+        "pu": ""
       },
       {
         "f": "20260917",
@@ -1410,7 +1410,7 @@
         "i": "17:00",
         "o": "22:00",
         "n": 1,
-        "pu": "Calle"
+        "pu": ""
       },
       {
         "f": "20260918",
@@ -1418,15 +1418,7 @@
         "i": "18:00",
         "o": "22:00",
         "n": 1,
-        "pu": "Calle"
-      },
-      {
-        "f": "20260921",
-        "h": 7,
-        "i": "14:00",
-        "o": "21:00",
-        "n": 0,
-        "pu": "Calle"
+        "pu": ""
       }
     ],
     "horasAnuales": 1700,
@@ -1465,7 +1457,11 @@
       }
     },
     "tramosDia": {},
-    "avisoVisto": null
+    "avisoVisto": {
+      "clave": "20260921|Calle|05:30–13:00",
+      "texto": "Ahora te toca en Calle · Horario 05:30–13:00",
+      "en": "2026-09-21T13:25:24.295Z"
+    }
   },
   "prueba-1789758756867@prueba.local": {
     "nombre": "Toni Rodríguez",
