@@ -2820,10 +2820,14 @@ const app = {
         Object.keys(this._notificadas).forEach(id => { if (!vivas.has(id)) this._retirarAviso(id); });
 
         const avisos = [];
+        const reciénAvisadas = [];
         for (const n of pendientes) {
             const ultimo = this._ultimoMensaje(n);
             if (!ultimo || this._notificadas[n.id] === ultimo.en) continue;
-            this._notificadas[n.id] = ultimo.en;
+            // Se apunta al final, cuando de verdad haya salido: dándolo por
+            // avisado antes, un fallo del móvil dejaba ese mensaje sin aviso
+            // para siempre, porque ya constaba como dado.
+            reciénAvisadas.push([n.id, ultimo.en]);
             avisos.push({
                 id: this._idAviso(n.id),
                 title: this._tituloHilo(n),
@@ -2837,7 +2841,24 @@ const app = {
             });
         }
         if (!avisos.length) return;
-        try { await LN.schedule({ notifications: avisos }); } catch (e) { console.error('aviso chat:', e); }
+        const apuntar = () => reciénAvisadas.forEach(([id, en]) => { this._notificadas[id] = en; });
+        try {
+            await LN.schedule({ notifications: avisos });
+            apuntar();
+        } catch (e) {
+            // Casi siempre es el canal de sonido elegido, que en ese móvil no
+            // llegó a crearse. Antes de rendirse, se prueba sin sonido: más
+            // vale un aviso soso que ninguno.
+            try {
+                await LN.schedule({
+                    notifications: avisos.map(({ channelId, sound, ...resto }) => resto),
+                });
+                apuntar();
+            } catch (e2) {
+                console.error('aviso chat:', e2);
+                this._mostrarToast('⚠️ El móvil no ha dejado poner el aviso: ' + (e2?.message || e2), 6000);
+            }
+        }
     },
     // ── Sin leer ─────────────────────────────────────────────────────────────
     // De cada conversación se guarda la hora del último mensaje que se ha
@@ -7344,6 +7365,64 @@ const app = {
         } catch(e) {
             this._mostrarToast('❌ Error al registrar: ' + e.message, 4000);
         }
+    },
+
+    // Un repaso a la cadena entera de los avisos, en cristiano. "No me llegan
+    // las notificaciones" puede romperse en seis sitios distintos y desde
+    // fuera todos se ven igual: esto dice en cuál.
+    async diagnosticarAvisos() {
+        const L = [];
+        const nativo = !!window.Capacitor?.isNativePlatform?.();
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        L.push(nativo ? '✅ App instalada en el móvil'
+                      : '⚠️ Estás en el navegador: los avisos de la barra solo van en la app del móvil');
+
+        let permiso = '?';
+        try { permiso = (await LN?.checkPermissions?.())?.display || '?'; } catch (_) {}
+        if (permiso === 'granted') L.push('✅ Permiso de notificaciones concedido');
+        else {
+            L.push('❌ Permiso de notificaciones: ' + permiso
+                 + '\n   → Ajustes del móvil › Aplicaciones › esta app › Notificaciones');
+        }
+
+        if (nativo && window.AndroidBridge?.bateriaSinRestriccion) {
+            let libre = true;
+            try { libre = window.AndroidBridge.bateriaSinRestriccion() !== false; } catch (_) {}
+            L.push(libre ? '✅ El ahorro de batería la deja en paz'
+                         : '❌ El ahorro de batería la está frenando'
+                         + '\n   → Ajustes › Aplicaciones › esta app › Batería › Sin restricciones');
+        }
+
+        // Lo que necesita la parte que mira con la app cerrada
+        const pref = k => { try { return window.AndroidBridge?.getPref?.(k) || ''; } catch (_) { return ''; } };
+        if (nativo) {
+            const listo = !!pref('chatEmail') && !!pref('chatUrl');
+            L.push(listo ? '✅ El aviso con la app cerrada está armado'
+                         : '❌ El aviso con la app cerrada no está armado'
+                         + '\n   → Cierra la app del todo y vuelve a abrirla');
+        }
+
+        const sinLeer = this._totalSinLeer();
+        L.push(`📬 Conversaciones sin leer ahora mismo: ${sinLeer}`);
+
+        // Y el de verdad: por el mismo camino que uno real
+        let prueba = '';
+        if (LN?.schedule && nativo) {
+            const aviso = { id: 9998, title: 'Prueba de aviso',
+                            body: 'Si ves esto en la barra, los avisos funcionan.',
+                            smallIcon: 'ic_stat_chat' };
+            try {
+                await LN.schedule({ notifications: [aviso] });
+                prueba = '✅ Aviso de prueba lanzado: míralo en la barra';
+            } catch (e) {
+                prueba = '❌ El móvil ha rechazado el aviso: ' + (e?.message || e);
+            }
+        } else {
+            prueba = '⚠️ Sin app del móvil no se puede probar la barra';
+        }
+        L.push(prueba);
+
+        alert('AVISOS — REPASO\n\n' + L.join('\n\n'));
     },
 
     async probarNotificacion() {
