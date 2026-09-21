@@ -1387,6 +1387,18 @@
                 </div>
             </div>
 
+            <!-- Versión publicada de esta misma app -->
+            <div class="ops-section" id="sectionVersionesGestion">
+                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._cargarVersionesGestion()">🛠️ Versión para gestión <span class="ops-chevron">›</span></button>
+                <div class="ops-body">
+                    <div class="ops-field">
+                        <span class="ops-field-sub">Lo mismo, pero para esta app. Los demás que entran en gestión reciben la que publiques aquí; tú siempre ves la más reciente, así que si una sale mal la pruebas tú y a ellos no les llega.</span>
+                        <div id="versionGestionActual" class="ver-actual">Comprobando…</div>
+                    </div>
+                    <div id="versionesGestionList"></div>
+                </div>
+            </div>
+
             <!-- Lugares de trabajo: turnos y ubicación -->
             <div class="ops-section" id="sectionLugares">
                 <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._renderLugares()">🧩 Lugares de trabajo <span class="ops-chevron">›</span></button>
