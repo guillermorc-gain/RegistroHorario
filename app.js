@@ -127,6 +127,7 @@ const app = {
         this.setupUI();
         if (this.darkMode) this.aplicarDarkMode();
         this._restaurarTabs();
+        this._initSwipeTabs();
         this._restaurarMensual();
         this._cargarCuadrante();
         this._aplicarModoVacaciones();
@@ -1030,6 +1031,9 @@ const app = {
         const horasRaw = document.getElementById('horasInput').value;
         let   horas = parseFloat(horasRaw) || 0;
         const fecha = document.getElementById('fechaInput').value;
+        const hastaGrupo = document.getElementById('fechaHastaGroup');
+        const hastaVal    = document.getElementById('fechaHastaInput')?.value || '';
+        const fechaHasta  = (hastaGrupo && hastaGrupo.style.display !== 'none' && hastaVal) ? hastaVal : fecha;
         const esFestivo      = this.festivoActivo;
         const esVacaciones   = this.vacacionesActivo;
         const esBaja         = this.bajaActiva;
@@ -1039,6 +1043,9 @@ const app = {
             alert('❌ Introduce fecha y horas válidas'); return;
         }
         if (horas < 0) { alert('❌ Las horas no pueden ser negativas'); return; }
+        if (fechaHasta < fecha) { alert('❌ La fecha "hasta" no puede ser anterior a la de inicio'); return; }
+        const fechas = this._rangoDeFechas(fecha, fechaHasta);
+        if (fechas.length > 62) { alert('❌ El rango es demasiado largo (máximo dos meses)'); return; }
         const horaInicio     = document.getElementById('horaInicio').value;
         let   horaFin        = document.getElementById('horaFin').value;
         // Todos los sitios del día, el del desplegable incluido
@@ -1064,35 +1071,47 @@ const app = {
             // abrir el lápiz de una jornada, cerrarlo sin guardar y registrar
             // otra del mismo día borraba la primera y la dejaba en una sola,
             // sin aviso ni rastro.
-            const fechaFormato = new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            const fechaKey     = fecha.replace(/-/g, '');
-            const registroId   = this._nuevoRegistroId(datos.historial, fechaKey);
-            datos.historial[registroId] = {
-                fecha: fechaFormato, horas,
-                timestamp: new Date(fecha + 'T12:00:00').getTime(),
-                ...(horaInicio && horaFin ? { horaInicio, horaFin } : {}),
-                ...(horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
-                ...(esPR ? { pr: true } : {}),
-                ...(esFestivo ? { festivo: true } : {}),
-                ...(this.puestoTrabajo ? { puesto: this.puestoTrabajo } : {}),
-                ...(esExtra ? { extraManual: true, extraDestino } : {}),
-                ...(esVacaciones ? { vacaciones: true } : {}),
-                ...(esBaja ? { be: true } : {}),
-                ...(esSinAsistencia ? { sinAsistencia: true } : {}),
-                ...(tramos.length ? { tramos } : {})
-            };
-            if (esPR && this._prUsados(datos.historial) > this.PR_ANUALES) {
-                delete datos.historial[registroId];
-                alert(`❌ Ya has usado los ${this.PR_ANUALES} permisos retribuidos de este año`);
-                return;
+            // Con un rango se repite la misma jornada en cada día, para ponerse
+            // al día con lo que se olvidó de registrar; por defecto es un solo
+            // día, así que casi siempre esto da una sola vuelta.
+            let guardados = 0, ultimaFechaKey = '';
+            for (const fechaDia of fechas) {
+                const fechaFormato = new Date(fechaDia + 'T12:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                const fechaKey     = fechaDia.replace(/-/g, '');
+                const registroId   = this._nuevoRegistroId(datos.historial, fechaKey);
+                datos.historial[registroId] = {
+                    fecha: fechaFormato, horas,
+                    timestamp: new Date(fechaDia + 'T12:00:00').getTime(),
+                    ...(horaInicio && horaFin ? { horaInicio, horaFin } : {}),
+                    ...(horasNocturnas > 0 ? { horasNocturnas, precioNoche, extraNoche } : {}),
+                    ...(esPR ? { pr: true } : {}),
+                    ...(esFestivo ? { festivo: true } : {}),
+                    ...(this.puestoTrabajo ? { puesto: this.puestoTrabajo } : {}),
+                    ...(esExtra ? { extraManual: true, extraDestino } : {}),
+                    ...(esVacaciones ? { vacaciones: true } : {}),
+                    ...(esBaja ? { be: true } : {}),
+                    ...(esSinAsistencia ? { sinAsistencia: true } : {}),
+                    ...(tramos.length ? { tramos } : {})
+                };
+                if (esPR && this._prUsados(datos.historial) > this.PR_ANUALES) {
+                    delete datos.historial[registroId];
+                    if (!guardados) { alert(`❌ Ya has usado los ${this.PR_ANUALES} permisos retribuidos de este año`); return; }
+                    break;
+                }
+                const tot = this._calcTotales(datos.historial);
+                if (tot.anualReal > this.horasAnualesCustom + tot.topeExtras) {
+                    delete datos.historial[registroId];
+                    if (!guardados) {
+                        alert(`❌ Superarías el tope anual + 30% de extras (${(this.horasAnualesCustom + tot.topeExtras).toFixed(1)}h)`);
+                        return;
+                    }
+                    break;
+                }
+                datos.horasTrabajadas = tot.anualReal;
+                guardados++;
+                ultimaFechaKey = fechaKey;
             }
-            const tot = this._calcTotales(datos.historial);
-            if (tot.anualReal > this.horasAnualesCustom + tot.topeExtras) {
-                delete datos.historial[registroId];
-                alert(`❌ Superarías el tope anual + 30% de extras (${(this.horasAnualesCustom + tot.topeExtras).toFixed(1)}h)`);
-                return;
-            }
-            datos.horasTrabajadas = tot.anualReal;
+            if (!guardados) return;
 
             if (horaInicio && horaFin) {
                 if (!datos.prefs) datos.prefs = {};
@@ -1100,8 +1119,8 @@ const app = {
                 datos.prefs.horaFin = horaFin;
             }
             await this._writeDriveFile(datos);
-            localStorage.setItem('lastRegisteredDate', fechaKey);
-            window.AndroidBridge?.saveToPrefs('lastRegisteredDate', fechaKey);
+            localStorage.setItem('lastRegisteredDate', ultimaFechaKey);
+            window.AndroidBridge?.saveToPrefs('lastRegisteredDate', ultimaFechaKey);
             if (horaInicio) localStorage.setItem('lastHoraInicio', horaInicio);
             const horaFinVal = document.getElementById('horaFin').value;
             if (horaFinVal) localStorage.setItem('lastHoraFin', horaFinVal);
@@ -1111,13 +1130,19 @@ const app = {
             this.cancelarEdicion();
             this._publicarResumen();
             this._comprobarLugarPorUbicacion();
-            // Decir qué ha quedado: con dos jornadas en un día es la única
-            // forma de saber si se han guardado las dos.
-            const delDia = Object.keys(datos.historial)
-                .filter(id => this._fechaDeId(id) === fechaKey).length;
-            this._mostrarToast(delDia > 1
-                ? `✅ Guardada · ${delDia} jornadas ese día`
-                : '✅ Jornada guardada', 3000);
+            if (fechas.length > 1) {
+                this._mostrarToast(guardados < fechas.length
+                    ? `✅ Guardados ${guardados} de ${fechas.length} días · se paró al llegar al tope`
+                    : `✅ ${guardados} días guardados`, 3000);
+            } else {
+                // Decir qué ha quedado: con dos jornadas en un día es la única
+                // forma de saber si se han guardado las dos.
+                const delDia = Object.keys(datos.historial)
+                    .filter(id => this._fechaDeId(id) === ultimaFechaKey).length;
+                this._mostrarToast(delDia > 1
+                    ? `✅ Guardada · ${delDia} jornadas ese día`
+                    : '✅ Jornada guardada', 3000);
+            }
         } catch(e) {
             alert('❌ Error al guardar: ' + e.message);
         }
@@ -1428,9 +1453,62 @@ const app = {
         const y = hoy.getFullYear();
         const m = String(hoy.getMonth() + 1).padStart(2, '0');
         const d = String(hoy.getDate()).padStart(2, '0');
-        document.getElementById('fechaInput').value = `${y}-${m}-${d}`;
-        document.getElementById('fechaInput').max   = `${y}-${m}-${d}`;
+        const hoyISO = `${y}-${m}-${d}`;
+        document.getElementById('fechaInput').value = hoyISO;
+        document.getElementById('fechaInput').max   = hoyISO;
+        const hasta = document.getElementById('fechaHastaInput');
+        if (hasta) hasta.max = hoyISO;
         this.comprobarFestivo();
+        this._sincronizarHastaMin();
+    },
+
+    // El rango de fechas es para ponerse al día con jornadas atrasadas: por
+    // defecto está oculto y solo se registra la de hoy, y hasta vuelve a
+    // esconderse después de registrar para no dejarlo puesto por error.
+    _toggleRangoFechas() {
+        const grupo = document.getElementById('fechaHastaGroup');
+        const link  = document.getElementById('fechaRangoToggle');
+        if (!grupo) return;
+        const abierto = grupo.style.display !== 'none';
+        grupo.style.display = abierto ? 'none' : 'flex';
+        if (link) link.textContent = abierto ? '📅 Registrar varios días' : '📅 Solo un día';
+        if (!abierto) {
+            const desde = document.getElementById('fechaInput');
+            const hasta = document.getElementById('fechaHastaInput');
+            if (desde && hasta && !hasta.value) hasta.value = desde.value;
+        }
+    },
+
+    _sincronizarHastaMin() {
+        const desde = document.getElementById('fechaInput')?.value;
+        const hasta = document.getElementById('fechaHastaInput');
+        if (!desde || !hasta) return;
+        hasta.min = desde;
+        if (hasta.value && hasta.value < desde) hasta.value = desde;
+    },
+
+    _ocultarRangoFechas() {
+        const grupo = document.getElementById('fechaHastaGroup');
+        const link  = document.getElementById('fechaRangoToggle');
+        const hasta = document.getElementById('fechaHastaInput');
+        if (grupo) grupo.style.display = 'none';
+        if (link) link.textContent = '📅 Registrar varios días';
+        if (hasta) hasta.value = '';
+    },
+
+    // Todas las fechas entre dos, las dos incluidas. Con el constructor local
+    // de Date el cambio de mes o de año sale solo, sin líos de zona horaria.
+    _rangoDeFechas(desde, hasta) {
+        const out = [];
+        let [y, m, d] = desde.split('-').map(Number);
+        for (let guard = 0; guard < 400; guard++) {
+            const key = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            out.push(key);
+            if (key >= hasta) break;
+            const sig = new Date(y, m - 1, d + 1);
+            y = sig.getFullYear(); m = sig.getMonth() + 1; d = sig.getDate();
+        }
+        return out;
     },
 
     actualizarFecha() {
@@ -4543,6 +4621,33 @@ const app = {
         if (idx === 3) this._cargarMisNominas();
     },
 
+    // El dedo puede arrastrar tanto sobre el orden visual de la barra
+    // (puede estar reordenada) como quedarse quieto sobre algo que se
+    // desplaza de lado (el propio _sobreCarrusel se encarga de eso).
+    _initSwipeTabs() {
+        const cont = document.getElementById('appContent');
+        if (!cont || cont._swipeTabs) return;
+        cont._swipeTabs = true;
+        let x0 = 0, y0 = 0, activo = false;
+        cont.addEventListener('touchstart', e => {
+            if (e.touches.length !== 1 || this._sobreCarrusel(e.target, cont)) { activo = false; return; }
+            x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; activo = true;
+        }, { passive: true });
+        cont.addEventListener('touchend', e => {
+            if (!activo) return;
+            activo = false;
+            const t = e.changedTouches[0];
+            const dx = t.clientX - x0, dy = t.clientY - y0;
+            if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+            const btns = [...document.querySelectorAll('#tabBar .tab-btn')];
+            const actualIdx = btns.findIndex(b => b.classList.contains('active'));
+            if (actualIdx === -1) return;
+            const destino = dx < 0 ? actualIdx + 1 : actualIdx - 1;
+            if (destino < 0 || destino >= btns.length) return;
+            this.switchTab(parseInt(btns[destino].dataset.tab, 10));
+        }, { passive: true });
+    },
+
     _tabDragStart(e) {
         this._dragSrcTab = e.currentTarget;
         e.currentTarget.classList.add('dragging');
@@ -4714,6 +4819,7 @@ const app = {
         // anterior. No debe reabrir el cajón nocturno aunque ese horario lo sea.
         const manteniaFestivo = this.festivoActivo;
         this.establecerFechaHoy();
+        this._ocultarRangoFechas();
         const lastInicio = localStorage.getItem('lastHoraInicio') || '';
         const lastFin    = localStorage.getItem('lastHoraFin') || '';
         document.getElementById('horaInicio').value = lastInicio;
