@@ -1188,7 +1188,7 @@ const app = {
             this.actualizarUI(datos);
             this._publicarResumen();
             if (this.editingId === id) this.editingId = null;
-            if (document.getElementById('historialModal').classList.contains('show')) this._renderHistorialModal();
+            this._renderHistorialModal();
         }
     },
 
@@ -4538,7 +4538,7 @@ const app = {
             panel.classList.toggle('active', panel.id === 'tabPanel' + idx);
         });
         localStorage.setItem('activeTab', String(idx));
-        if (idx === 1) this._cargarCuadrante();
+        if (idx === 1) { this._cargarCuadrante(); this._renderHistorialModal(); }
         if (idx === 2) { this._pintarDestino(); this._cargarNotas(); }
         if (idx === 3) this._cargarMisNominas();
     },
@@ -4763,8 +4763,7 @@ const app = {
     cancelarEdicion() { this.editingId = null; this.limpiarInput(); },
 
     mostrarHistorialModal() {
-        document.getElementById('historialModal').classList.add('show');
-        if (this.darkMode) document.getElementById('historialModalContent').classList.add('dark');
+        this.switchTab(1);
         this._renderHistorialModal();
     },
 
@@ -4865,7 +4864,6 @@ const app = {
                 </div>`;
             li.querySelector('.hm-nota').addEventListener('click', () => this.editarNota(id));
             li.querySelector('.hm-edit').addEventListener('click', () => {
-                document.getElementById('historialModal').classList.remove('show');
                 this.editarRegistro(id);
             });
             li.querySelector('.hm-del').addEventListener('click', () => this.borrarRegistro(id));
@@ -5098,10 +5096,26 @@ const app = {
     CUADRANTE_URL: 'https://registro-horario-emt.vercel.app/api/cuadrante',
 
     async _cargarCuadrante() {
+        // El propio primero —si ha subido uno, es el que quiere ver—, y si no
+        // hay, el que haya publicado gestión.
+        let data = null;
+        if (this.usuarioActual?.email && await this._ensureToken()) {
+            try {
+                const rp = await fetch(`${this.CUADRANTE_URL}?mio=1`, {
+                    cache: 'no-store',
+                    headers: { Authorization: `Bearer ${this.accessToken}` },
+                });
+                if (rp.ok) {
+                    const p = await rp.json();
+                    if (p?.imagen) data = p;
+                }
+            } catch (_) {}
+        }
         try {
-            const resp = await fetch(this.CUADRANTE_URL, { cache: 'no-store' });
-            if (!resp.ok) return;
-            const data = await resp.json();
+            if (!data) {
+                const resp = await fetch(this.CUADRANTE_URL, { cache: 'no-store' });
+                if (resp.ok) data = await resp.json();
+            }
             this._pintarCuadrante(data);
             if (data?.imagen) localStorage.setItem('cuadranteCache', JSON.stringify(data));
         } catch (_) {
@@ -5117,16 +5131,58 @@ const app = {
         const img   = document.getElementById('cuadImg');
         const vacio = document.getElementById('cuadVacio');
         const fecha = document.getElementById('cuadFecha');
-        const borrar= document.getElementById('cuadBorrar');
         const hay = !!(data && data.imagen);
         if (img)   { img.style.display = hay ? 'block' : 'none'; if (hay) img.src = data.imagen; }
         if (vacio) vacio.style.display = hay ? 'none' : 'flex';
-        if (borrar) borrar.style.display = hay ? 'inline-block' : 'none';
         if (fecha) {
-            fecha.textContent = hay && data.actualizado
+            // La fecha solo tiene sentido para el que ha publicado gestión;
+            // el que ha subido cada uno para sí mismo no la lleva.
+            fecha.textContent = hay && data.publicadoPor && data.actualizado
                 ? new Date(data.actualizado).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })
                 : '';
         }
+    },
+
+    async _onCuadranteFileElegido(event) {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) return;
+        if (!file.type.startsWith('image/')) { alert('❌ Elige una imagen'); return; }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const img = new Image();
+            img.onload = async () => {
+                const MAX = 1400;
+                const escala = Math.min(1, MAX / Math.max(img.width, img.height));
+                const w = Math.round(img.width * escala), h = Math.round(img.height * escala);
+                const canvas = document.createElement('canvas');
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                let calidad = 0.82, dataUrl = canvas.toDataURL('image/jpeg', calidad);
+                while (dataUrl.length > 430 * 1024 && calidad > 0.35) {
+                    calidad -= 0.12;
+                    dataUrl = canvas.toDataURL('image/jpeg', calidad);
+                }
+                if (dataUrl.length > 430 * 1024) { alert('❌ La imagen sigue siendo muy grande'); return; }
+                try {
+                    if (!await this._ensureToken()) throw new Error('Sin sesión de Google');
+                    const resp = await fetch(`${this.CUADRANTE_URL}?mio=1`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ imagen: dataUrl, nombre: file.name }),
+                    });
+                    const data = await resp.json();
+                    if (!resp.ok) { alert('❌ ' + (data.error || resp.status)); return; }
+                    this._pintarCuadrante(data);
+                    localStorage.setItem('cuadranteCache', JSON.stringify(data));
+                    this._mostrarToast?.('✅ Cuadrante subido', 2500);
+                } catch (err) {
+                    alert('❌ No se pudo subir: ' + err.message);
+                }
+            };
+            img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
     },
 
     verCuadranteGrande() {
@@ -5140,18 +5196,25 @@ const app = {
     zoomCuadrante(ev) {
         const img = document.getElementById('cuadVisorImg');
         if (!img) return;
+        const yaAmpliada = img.classList.contains('zoom');
+        // La proporción del punto tocado se toma antes de ampliar, que es
+        // cuando el tamaño de la imagen todavía es el pequeño.
+        const ratioX = !yaAmpliada && ev ? ev.offsetX / (img.clientWidth  || 1) : 0.5;
+        const ratioY = !yaAmpliada && ev ? ev.offsetY / (img.clientHeight || 1) : 0.5;
         const ampliada = img.classList.toggle('zoom');
         const ayuda = document.getElementById('cuadVisorAyuda');
         if (ayuda) ayuda.textContent = ampliada
             ? 'Arrastra para moverte · toca para reducir'
             : 'Toca la imagen para ampliar · pellizca para acercar';
-        // Al ampliar, centrar en el punto tocado
-        if (ampliada && ev) {
-            const visor = document.getElementById('cuadVisor');
+        const visor = document.getElementById('cuadVisor');
+        if (ampliada) {
             requestAnimationFrame(() => {
-                visor.scrollLeft = (img.scrollWidth - visor.clientWidth) / 2;
-                visor.scrollTop  = Math.max(0, ev.offsetY * (img.clientHeight / (img.clientHeight || 1)) - visor.clientHeight / 2);
+                visor.scrollLeft = img.scrollWidth  * ratioX - visor.clientWidth  / 2;
+                visor.scrollTop  = img.scrollHeight * ratioY - visor.clientHeight / 2;
             });
+        } else {
+            visor.scrollLeft = 0;
+            visor.scrollTop = 0;
         }
     },
 
@@ -5496,7 +5559,7 @@ const app = {
     aplicarDarkMode() {
         document.body.classList.add('dark');
         ['#appHeader','#appContent','#tabBar','#optionsHeader','#optionsContent','#modalContent',
-         '#editModalContent','#historialModalContent','#avatarModalContent']
+         '#editModalContent','#avatarModalContent']
             .forEach(s => { const e = document.querySelector(s); if(e) e.classList.add('dark'); });
         document.querySelector('.container')?.classList.add('dark');
     },
@@ -5504,7 +5567,7 @@ const app = {
     removerDarkMode() {
         document.body.classList.remove('dark');
         ['#appHeader','#appContent','#tabBar','#optionsHeader','#optionsContent','#modalContent',
-         '#editModalContent','#historialModalContent','#avatarModalContent']
+         '#editModalContent','#avatarModalContent']
             .forEach(s => { const e = document.querySelector(s); if(e) e.classList.remove('dark'); });
         document.querySelector('.container')?.classList.remove('dark');
     },

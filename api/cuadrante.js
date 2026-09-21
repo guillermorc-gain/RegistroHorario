@@ -1,4 +1,4 @@
-import { exigirAdmin } from './_auth.js';
+import { exigirAdmin, emailDelToken, tokenDe } from './_auth.js';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO         = 'guillermorc-gain/RegistroHorario';
@@ -6,7 +6,8 @@ const REPO         = 'guillermorc-gain/RegistroHorario';
 // que cancelaba el despliegue del código que fuera por medio.
 const BRANCH       = 'datos';
 const FILE_PATH    = 'cuadrante.json';
-// Only the gestor publishes the roster; every driver just reads it.
+// El de gestión publica el de todos; cada trabajador puede además subir el
+// suyo propio (uno personal, que solo ve él).
 const ADMIN_EMAIL  = 'g.rioscorrea@gmail.com';
 // A data URL costs ~33% more than the raw bytes, and GitHub's contents API
 // starts failing around 1 MB of base64, so keep the payload well under it.
@@ -24,8 +25,8 @@ const ghHeaders = () => ({
 
 async function getFile() {
   const r = await fetch(
-    `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}?ref=${BRANCH}`,
-    { headers: ghHeaders() }
+    `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}?ref=${BRANCH}&t=${Date.now()}`,
+    { headers: ghHeaders(), cache: 'no-store' }
   );
   if (!r.ok) return { data: null, sha: null };
   const meta = await r.json();
@@ -36,60 +37,119 @@ async function getFile() {
   }
 }
 
+async function save(payload, sha, mensaje) {
+  const content = Buffer.from(JSON.stringify(payload) + '\n').toString('base64');
+  const body = { message: mensaje, content, branch: BRANCH };
+  if (sha) body.sha = sha;
+  const r = await fetch(
+    `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}`,
+    { method: 'PUT', headers: { ...ghHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+  );
+  return r.status;
+}
+
+const global_ = data => ({
+  imagen: data?.imagen ?? null,
+  nombre: data?.nombre || '',
+  actualizado: data?.actualizado || null,
+  publicadoPor: data?.publicadoPor || null,
+});
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Email, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  if (req.method === 'GET') {
-    try {
-      const { data } = await getFile();
-      res.setHeader('Cache-Control', 'no-store');
-      return res.status(200).json(data || { imagen: null });
-    } catch (e) {
-      return res.status(500).json({ error: e.message });
-    }
-  }
-
-  if (!await exigirAdmin(req, res, ADMIN_EMAIL)) return;
+  const esMio = req.query?.mio !== undefined || req.body?.mio === true;
 
   try {
-    const { sha } = await getFile();
+    // El personal: cada uno el suyo, y ninguno el de los demás. El correo
+    // sale del token, no de lo que diga la petición.
+    if (esMio) {
+      const email = await emailDelToken(tokenDe(req));
+      if (!email) return res.status(401).json({ error: 'Vuelve a entrar en la app' });
 
-    if (req.method === 'DELETE') {
-      const payload = { imagen: null, actualizado: new Date().toISOString() };
-      const ok = await save(payload, sha);
-      return res.status(ok ? 200 : 500).json(ok ? payload : { error: 'No se pudo borrar' });
+      if (req.method === 'GET') {
+        const { data } = await getFile();
+        res.setHeader('Cache-Control', 'no-store');
+        return res.status(200).json(data?.porTrabajador?.[email] || { imagen: null });
+      }
+
+      return await guardarPersonal(req, res, email);
     }
 
-    const { imagen, nombre } = req.body || {};
-    if (typeof imagen !== 'string' || !imagen.startsWith('data:image/')) {
-      return res.status(400).json({ error: 'Imagen inválida' });
+    // El de gestión, para todos: cualquiera lo puede leer sin identificarse.
+    if (req.method === 'GET') {
+      const { data } = await getFile();
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).json(global_(data));
     }
-    if (imagen.length > MAX_CHARS) {
-      return res.status(413).json({ error: 'La imagen es demasiado grande' });
-    }
-    const payload = {
-      imagen,
-      nombre: (nombre || '').slice(0, 120),
-      actualizado: new Date().toISOString(),
-      publicadoPor: adminEmail,
-    };
-    const ok = await save(payload, sha);
-    return res.status(ok ? 200 : 500).json(ok ? payload : { error: 'No se pudo guardar' });
+
+    const adminEmail = await exigirAdmin(req, res, ADMIN_EMAIL);
+    if (!adminEmail) return;
+    return await guardarGlobal(req, res, adminEmail);
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
 }
 
-async function save(payload, sha) {
-  const content = Buffer.from(JSON.stringify(payload) + '\n').toString('base64');
-  const body = { message: 'Actualizar cuadrante', content, branch: BRANCH };
-  if (sha) body.sha = sha;
-  const r = await fetch(
-    `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}`,
-    { method: 'PUT', headers: { ...ghHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-  );
-  return r.ok;
+async function guardarGlobal(req, res, adminEmail) {
+  for (let intento = 0; intento < 3; intento++) {
+    const { data, sha } = await getFile();
+
+    let payload;
+    if (req.method === 'DELETE') {
+      payload = { ...(data || {}), imagen: null, nombre: '', actualizado: new Date().toISOString(), publicadoPor: null };
+    } else {
+      const { imagen, nombre } = req.body || {};
+      if (typeof imagen !== 'string' || !imagen.startsWith('data:image/')) {
+        return res.status(400).json({ error: 'Imagen inválida' });
+      }
+      if (imagen.length > MAX_CHARS) {
+        return res.status(413).json({ error: 'La imagen es demasiado grande' });
+      }
+      payload = {
+        ...(data || {}),
+        imagen,
+        nombre: (nombre || '').slice(0, 120),
+        actualizado: new Date().toISOString(),
+        publicadoPor: adminEmail,
+      };
+    }
+    const status = await save(payload, sha,
+      req.method === 'DELETE' ? 'Quitar el cuadrante' : 'Actualizar el cuadrante');
+    if (status >= 200 && status < 300) return res.status(200).json(global_(payload));
+    if (status !== 409) break;
+  }
+  return res.status(500).json({ error: req.method === 'DELETE' ? 'No se pudo borrar' : 'No se pudo guardar' });
+}
+
+async function guardarPersonal(req, res, email) {
+  for (let intento = 0; intento < 3; intento++) {
+    const { data, sha } = await getFile();
+    const porTrabajador = { ...(data?.porTrabajador || {}) };
+
+    let payload;
+    if (req.method === 'DELETE') {
+      delete porTrabajador[email];
+      payload = { imagen: null };
+    } else {
+      const { imagen, nombre } = req.body || {};
+      if (typeof imagen !== 'string' || !imagen.startsWith('data:image/')) {
+        return res.status(400).json({ error: 'Imagen inválida' });
+      }
+      if (imagen.length > MAX_CHARS) {
+        return res.status(413).json({ error: 'La imagen es demasiado grande' });
+      }
+      payload = { imagen, nombre: (nombre || '').slice(0, 120), actualizado: new Date().toISOString() };
+      porTrabajador[email] = payload;
+    }
+    const nuevo = { ...(data || {}), porTrabajador };
+    const status = await save(nuevo, sha,
+      req.method === 'DELETE' ? `Quitar el cuadrante personal de ${email}` : `Cuadrante personal de ${email}`);
+    if (status >= 200 && status < 300) return res.status(200).json(payload);
+    if (status !== 409) break;
+  }
+  return res.status(500).json({ error: req.method === 'DELETE' ? 'No se pudo borrar' : 'No se pudo guardar' });
 }

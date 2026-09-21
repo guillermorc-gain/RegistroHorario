@@ -410,15 +410,19 @@
         /* ── HISTORY MONTH HEADERS ── */
         .hm-mes{position:sticky;top:0;z-index:2;background:#eef1f6;color:#5d6d7e;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;padding:8px 14px;display:flex;align-items:center;gap:7px;border-bottom:1px solid #dde1e9;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
         .hm-mes:active{background:#e2e7ef;}
-        .modal-card.dark .hm-mes{background:#161f2e;color:#93a1b3;border-bottom-color:#2d3561;}
-        .modal-card.dark .hm-mes:active{background:#1d2738;}
+        .modal-card.dark .hm-mes,.app-content.dark .hm-mes{background:#161f2e;color:#93a1b3;border-bottom-color:#2d3561;}
+        .modal-card.dark .hm-mes:active,.app-content.dark .hm-mes:active{background:#1d2738;}
         .hm-mes-chev{font-size:10px;width:10px;flex-shrink:0;}
         .hm-mes-n{flex:1;}
         .hm-mes-tot{font-weight:800;color:var(--g1);letter-spacing:0;display:flex;align-items:center;gap:6px;}
         .hm-mes-c{background:rgba(93,109,126,0.16);color:#5d6d7e;border-radius:9px;padding:1px 6px;font-size:9.5px;letter-spacing:0;}
         .hm-mes-ext{background:#fdebd0;color:#d35400;border-radius:9px;padding:1px 6px;font-size:9.5px;letter-spacing:0;font-weight:800;}
         .hm-mes-noc{background:#fff3cd;color:#856404;border-radius:9px;padding:1px 6px;font-size:9.5px;letter-spacing:0;font-weight:800;}
-        .modal-card.dark .hm-mes-c{background:rgba(255,255,255,0.12);color:#93a1b3;}
+        .modal-card.dark .hm-mes-c,.app-content.dark .hm-mes-c{background:rgba(255,255,255,0.12);color:#93a1b3;}
+        .hist-sec-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:#7f8c8d;margin:14px 2px 6px;}
+        .app-content.dark .hist-sec-title{color:#a0a0a0;}
+        .hist-lista{background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.07);}
+        .app-content.dark .hist-lista{background:#1e2a3a;}
         /* ── HISTORY ENTRY STRIPES ── */
         .hm-stripe-festivo{border-left:4px solid #e67e22!important;padding-left:10px!important;}
         .hm-stripe-pr{border-left:4px solid #3498db!important;padding-left:10px!important;}
@@ -547,7 +551,8 @@
         .app-content.dark .cuad-box{background:#1e2a3a;}
         .cuad-img{max-width:100%;border-radius:8px;cursor:zoom-in;display:block;}
         .cuad-box #cuadVacio{margin:auto;}
-        .cuad-acciones{display:flex;gap:6px;flex-shrink:0;}
+        .cuad-acciones{display:flex;gap:6px;flex-shrink:0;margin-top:8px;}
+        .cuad-acciones button{flex:1;}
         .cuad-visor{display:none;position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:99999;align-items:center;justify-content:center;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pinch-zoom;}
         .cuad-visor.show{display:flex;}
         .cuad-visor img{max-width:100%;max-height:100%;object-fit:contain;transform-origin:center center;transition:transform .18s ease;}
@@ -950,16 +955,9 @@
                 <div id="mensualTable"><div style="text-align:center;color:#95a5a6;font-size:12px;padding:6px;">Sin datos</div></div>
             </div>
 
-            <!-- History bar (collapsed by default) -->
-            <div class="historial-bar" onclick="app.mostrarHistorialModal()">
-                <span class="historial-bar-title">Jornadas anteriores</span>
-                <span class="historial-count" id="historialCount">—</span>
-                <button class="historial-toggle" title="Ver registros">▼</button>
-            </div>
-
         </div><!-- end tabPanel0 -->
 
-        <!-- ── TAB: Cuadrante ── -->
+        <!-- ── TAB: Historial (cuadrante + jornadas anteriores) ── -->
         <div class="tab-panel" id="tabPanel1">
             <div class="cuad-head">
                 <span class="cuad-title">🗓️ Cuadrante</span>
@@ -974,8 +972,13 @@
                 <img id="cuadImg" class="cuad-img" style="display:none" onclick="app.verCuadranteGrande()">
             </div>
             <div class="cuad-acciones">
+                <button class="btn-secondary" onclick="document.getElementById('cuadranteFileInput').click()">📤 Subir foto/archivo</button>
                 <button class="btn-main" onclick="app.exportarRegistro()">📊 Exportar mis jornadas</button>
             </div>
+            <input type="file" id="cuadranteFileInput" accept="image/*" style="display:none" onchange="app._onCuadranteFileElegido(event)">
+
+            <div class="hist-sec-title">Jornadas anteriores</div>
+            <ul id="historialModalList" class="hist-lista" style="list-style:none;padding:0;margin:0;"></ul>
         </div>
 
         <!-- ── TAB: Notas ── -->
@@ -1019,7 +1022,7 @@
                     ondragstart="app._tabDragStart(event)" ondragend="app._tabDragEnd(event)"
                     ondragover="app._tabDragOver(event)" ondragleave="app._tabDragLeave(event)"
                     ondrop="app._tabDrop(event)">
-                <span class="tab-ico">🗓️</span><span class="tab-lbl">Cuadrante</span>
+                <span class="tab-ico">🗓️</span><span class="tab-lbl">Historial</span>
             </button>
             <button class="tab-btn" data-tab="2" draggable="true"
                     onclick="app.switchTab(2)"
@@ -1390,19 +1393,6 @@
         <div class="modal-buttons">
             <button class="modal-btn-cl" type="button" onclick="app.cerrarModal()">Cancelar</button>
             <button class="modal-btn-cf" type="button" onclick="app.confirmarModal()">Confirmar</button>
-        </div>
-    </div>
-</div>
-
-<!-- Historial Modal -->
-<div class="modal" id="historialModal">
-    <div class="modal-card" id="historialModalContent">
-        <div class="modal-header">
-            <h3>📋 Todas las jornadas</h3>
-            <button class="modal-close" onclick="document.getElementById('historialModal').classList.remove('show')">×</button>
-        </div>
-        <div class="modal-body" style="padding:0;">
-            <ul id="historialModalList" style="list-style:none;"></ul>
         </div>
     </div>
 </div>
