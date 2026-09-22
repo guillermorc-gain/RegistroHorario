@@ -1117,6 +1117,8 @@ jobs:
                       String email = prefs.getString("chatEmail", "");
                       if (email.isEmpty()) return;
                       boolean esGestor = prefs.getBoolean("chatEsGestor", false);
+                      boolean sinCompaneros = esGestor
+                          || "1".equals(prefs.getString("chatSinCompaneros", ""));
                       String visto = prefs.getString("chatVisto", "");
                       String url = prefs.getString("chatUrl", "") + "?resumen=1"
                           + (esGestor ? "" : "&email=" + java.net.URLEncoder.encode(email, "UTF-8"));
@@ -1146,7 +1148,9 @@ jobs:
                           // conversaciones entre compañeros —las que le escriben al
                           // desarrollador, por ejemplo—. Esas no son suyas: ni salen en
                           // su bandeja ni le tienen que sonar en el móvil.
-                          if (esGestor && "companero".equals(n.optString("tipo", ""))) continue;
+                          // Y en la de desarrollador tampoco: lo que le escriban a él
+                          // como persona lo avisa la app de trabajadores, no esta.
+                          if (sinCompaneros && "companero".equals(n.optString("tipo", ""))) continue;
                           // Lo que he escrito yo no me lo tiene que avisar nadie
                           boolean mio = esGestor ? "gestor".equals(de)
                                                  : (email.equalsIgnoreCase(de) || "trabajador".equals(de));

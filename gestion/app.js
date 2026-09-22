@@ -2482,9 +2482,25 @@ const app = {
     NOTAS_URL: 'https://registro-horario-emt.vercel.app/api/notas',
     _notas: [],
 
+    // La bandeja de gestión es de gestión. En la app de desarrollador no
+    // pinta nada: ahí solo están sus conversaciones —lo que él le escribe a
+    // gestión y lo que gestión le contesta—, que es lo que devuelve la API
+    // cuando se le pide con el correo. Si abre la app de gestión en modo
+    // desarrollador sigue viendo la bandeja entera, que para eso la prueba:
+    // lo que manda es de qué aplicación se trata, no quién la abre.
+    _urlNotas(extra) {
+        const base = this.NOTAS_URL + (extra ? '?' + extra : '');
+        if (!ES_APP_DEV) return base;
+        return base + (extra ? '&' : '?')
+            + 'email=' + encodeURIComponent(this.usuarioActual?.email || '');
+    },
+
     async _cargarNotasGestor() {
+        // Sin correo, pedirlas en la app de desarrollador devolvería la
+        // bandeja de gestión entera. Mejor no pedir nada.
+        if (ES_APP_DEV && !this.usuarioActual?.email) return;
         try {
-            const r = await fetch(this.NOTAS_URL, { cache: 'no-store' });
+            const r = await fetch(this._urlNotas(), { cache: 'no-store' });
             if (!r.ok) throw new Error(r.status);
             // Lo que se escriben entre compañeros no pasa por aquí, ni siquiera
             // lo que le escriban al desarrollador: eso es suyo y lo lee en la
@@ -2808,8 +2824,13 @@ const app = {
         this._timerChat = setInterval(() => this._sondearChat(), this.SONDEO_CHAT);
         // Y el aviso nativo, que es el que sigue mirando con la app de fondo:
         // el sondeo de aquí arriba solo vive mientras la pantalla esté viva.
+        // Lo mismo para el aviso con la app cerrada: de gestor solo tiene la
+        // bandeja quien está en la app de gestión. Al desarrollador se le
+        // avisa de lo suyo, y de las conversaciones entre dos no —esas las
+        // lee y las tiene avisadas en la app de trabajadores—.
         window.AndroidBridge?.activarAvisoChat?.(
-            this.usuarioActual.email, true, this.NOTAS_URL);
+            this.usuarioActual.email, !ES_APP_DEV, this.NOTAS_URL);
+        window.AndroidBridge?.saveToPrefs?.('chatSinCompaneros', ES_APP_DEV ? '1' : '');
         // Con qué nombre firma el visto que se dé desde el propio aviso
         window.AndroidBridge?.saveToPrefs?.('chatNombre', this.usuarioActual?.name || '');
     },
@@ -2831,7 +2852,7 @@ const app = {
     async _sondearChat() {
         if (!this.usuarioActual?.email || document.hidden) return;
         try {
-            const r = await fetch(`${this.NOTAS_URL}?resumen=1`, { cache: 'no-store' });
+            const r = await fetch(this._urlNotas('resumen=1'), { cache: 'no-store' });
             if (!r.ok) return;
             const huella = JSON.stringify(await r.json());
             if (huella === this._huellaChat) return;    // nada nuevo, ni se baja
