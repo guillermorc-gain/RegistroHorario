@@ -1349,7 +1349,7 @@
       "20260803": "Control de acceso",
       "20260804": "Control de acceso",
       "20260921": "Taller",
-      "20260922": "Son Rossinyol"
+      "20260922": "Control"
     },
     "vacaciones": [
       {
@@ -1470,8 +1470,8 @@
         "f": "03:00"
       },
       "20260922": {
-        "i": "20:00",
-        "f": "03:00"
+        "i": "09:00",
+        "f": "12:30"
       },
       "20260923": {
         "i": "09:00",
@@ -1511,6 +1511,9 @@
       "clave": "20260921|Taller|20:00–03:00",
       "texto": "Se te asigna este servicio y horario: Taller · 20:00–03:00. Confirma como leído. Gracias.",
       "en": "2026-09-21T22:02:54.584Z"
+    },
+    "asignadoDia": {
+      "20260922": 1790070626342
     }
   },
   "guillermo.rcxx@gmail.com": {
