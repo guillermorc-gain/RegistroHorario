@@ -10,10 +10,10 @@
     "diasMes": 16,
     "turno": "M",
     "puesto": "Control",
-    "actualizado": "2026-09-22T09:05:25.137Z",
+    "actualizado": "2026-09-23T08:34:40.829Z",
     "horaInicio": "09:00",
     "horaFin": "12:30",
-    "horarioDe": "hoy",
+    "horarioDe": "anterior",
     "jornadas": [
       {
         "f": "20260303",
@@ -1209,7 +1209,7 @@
         "i": "09:00",
         "o": "12:30",
         "n": 0,
-        "pu": "Son Rossinyol"
+        "pu": "Control"
       }
     ],
     "horasAnuales": 777,
@@ -1508,9 +1508,9 @@
     },
     "tramosDia": {},
     "avisoVisto": {
-      "clave": "20260921|Taller|20:00–03:00",
-      "texto": "Se te asigna este servicio y horario: Taller · 20:00–03:00. Confirma como leído. Gracias.",
-      "en": "2026-09-21T22:02:54.584Z"
+      "clave": "20260922|Son Rossinyol|09:00–12:30|1790070796886",
+      "texto": "Se te asigna este servicio y horario: Son Rossinyol. Confirma como leído. Gracias.",
+      "en": "2026-09-23T08:34:40.829Z"
     },
     "asignadoDia": {
       "20260922": 1790070796886
