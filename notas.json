@@ -27,31 +27,6 @@
     "gestor": "Guillermo Ríos Correa",
     "estado": "pendiente"
   },
-  "20260922095035048-e7by8-0": {
-    "id": "20260922095035048-e7by8-0",
-    "email": "guillermo.rc82@gmail.com",
-    "creado": "2026-09-22T09:50:35.048Z",
-    "nombre": "Guillermo Ríos Correa",
-    "conductor": "1418-3",
-    "mensajes": [
-      {
-        "de": "trabajador",
-        "autor": "Guillermo Ríos Correa",
-        "texto": "✅ He leído el cambio de jornada: Se te asigna este servicio y horario: Control · 09:00–12:30. Confirma como leído. Gracias.",
-        "adjuntos": [],
-        "en": "2026-09-22T09:50:35.048Z"
-      }
-    ],
-    "archivada": false,
-    "de": "trabajador",
-    "tipo": "gestion",
-    "estado": "visto",
-    "vistoPor": {
-      "email": "guillermo.rcvpn@gmail.com",
-      "nombre": "Guillermo Rios",
-      "en": "2026-09-22T09:50:42.553Z"
-    }
-  },
   "20260922095409409-el5le-0": {
     "id": "20260922095409409-el5le-0",
     "email": "guillermo.rc82@gmail.com",
