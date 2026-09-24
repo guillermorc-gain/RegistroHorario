@@ -10,10 +10,10 @@
     "diasMes": 17,
     "turno": "M",
     "puesto": "Control",
-    "actualizado": "2026-09-23T08:34:53.852Z",
+    "actualizado": "2026-09-24T16:21:50.749Z",
     "horaInicio": "09:00",
     "horaFin": "12:30",
-    "horarioDe": "hoy",
+    "horarioDe": "anterior",
     "jornadas": [
       {
         "f": "20260303",
