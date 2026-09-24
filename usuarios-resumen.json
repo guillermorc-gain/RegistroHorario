@@ -7,13 +7,13 @@
     "version": "build-306",
     "horasMes": 58.5,
     "horasTotales": 555.5,
-    "diasMes": 17,
+    "diasMes": 18,
     "turno": "M",
     "puesto": "Control",
-    "actualizado": "2026-09-24T16:21:50.749Z",
+    "actualizado": "2026-09-24T16:21:59.695Z",
     "horaInicio": "09:00",
     "horaFin": "12:30",
-    "horarioDe": "anterior",
+    "horarioDe": "hoy",
     "jornadas": [
       {
         "f": "20260303",
@@ -1213,6 +1213,14 @@
       },
       {
         "f": "20260923",
+        "h": 0,
+        "i": "09:00",
+        "o": "12:30",
+        "n": 0,
+        "pu": "Control"
+      },
+      {
+        "f": "20260924",
         "h": 0,
         "i": "09:00",
         "o": "12:30",
