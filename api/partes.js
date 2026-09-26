@@ -6,7 +6,7 @@
 // Se guarda uno por día y turno, con sus anotaciones dentro:
 //   { "20260926-M": { fecha, turno, email, nombre, conductor,
 //                     notas, anotaciones: [ { hora, tipo, que, quien, obs } ] } }
-import { emailDelToken, tokenDe, esGestor } from './_auth.js';
+import { emailDelToken, tokenDe, esGestorControl, esDelPuesto } from './_auth.js';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO         = 'guillermorc-gain/RegistroHorario';
@@ -140,7 +140,14 @@ export default async function handler(req, res) {
     // que aquí no lee nadie sin identificarse: el correo sale del token.
     const quien = await emailDelToken(tokenDe(req));
     if (!quien) return res.status(401).json({ error: 'Vuelve a entrar en la app' });
-    const mandaEl = await esGestor(quien);
+    // Y solo la gente del puesto: el que hace el turno en la garita y el que
+    // lleva el puesto. Tener cuenta de Google no da acceso a esto.
+    if (!await esDelPuesto(quien)) {
+      return res.status(403).json({ error: `Esta cuenta (${quien}) no tiene acceso al puesto de control de acceso` });
+    }
+    // Quien manda aquí es quien lleva el puesto, que no es quien gestiona a
+    // los conductores: su lista es la de gestión control de acceso.
+    const mandaEl = await esGestorControl(quien);
 
     if (req.method === 'GET') {
       res.setHeader('Cache-Control', 'no-store');
@@ -182,16 +189,21 @@ export default async function handler(req, res) {
     if (!esFecha(fecha) || !turno) {
       return res.status(400).json({ error: 'Falta el día o el turno' });
     }
-    // Escribir el parte de otro solo lo puede hacer gestión; el resto, el suyo.
-    const dueno = mandaEl && b.email ? String(b.email).toLowerCase().trim() : quien;
+    // Escribir el parte de otro solo lo puede hacer quien lleva el puesto; el
+    // resto, el suyo.
+    const pedido = mandaEl && b.email ? String(b.email).toLowerCase().trim() : '';
     const clave = claveDe(fecha, turno);
     const ahora = new Date().toISOString();
 
     const nuevo = await guardarConReintento(data => {
       const previo = data[clave] ? normalizar(data[clave]) : null;
-      // El parte es de quien lo abrió. Otro trabajador no puede escribir
-      // encima del turno de un compañero; gestión sí, para corregirlo.
-      if (previo && previo.email && previo.email !== dueno && !mandaEl) {
+      // El parte sigue siendo de quien lo abrió aunque lo corrija el jefe del
+      // puesto: corregir no es quedárselo. Solo cambia de dueño si se dice a
+      // quién, y eso solo lo puede hacer él.
+      const dueno = pedido || previo?.email || quien;
+      // Otro trabajador no puede escribir encima del turno de un compañero;
+      // el que lleva el puesto sí, para corregirlo.
+      if (previo && previo.email && previo.email !== quien && !mandaEl) {
         return null;
       }
       const previas = new Map((previo?.anotaciones || []).map(a => [a.id, a]));

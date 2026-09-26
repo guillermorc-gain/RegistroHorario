@@ -1,0 +1,593 @@
+name: Build APK Control de acceso
+
+on:
+  push:
+    branches: [main]
+    # Solo lo que acaba dentro de estos APK: tocar la app de los conductores o
+    # la de gestión no tiene por qué publicar una versión nueva de éstas.
+    paths:
+      - 'control/**'
+      - 'scripts/build-www-control.js'
+      - 'capacitor.control.config.json'
+      - '.github/workflows/build-control.yml'
+      # Comunes a todas las apps
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/debug.keystore.b64'
+  workflow_dispatch:
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    # De aquí salen las dos aplicaciones del puesto de control de acceso, con
+    # el mismo código: la de quien hace el turno en la garita y la de quien
+    # lleva el puesto. Cambia el paquete, el nombre, el icono y la numeración;
+    # lo demás es idéntico, y por eso va en un solo montaje en vez de en dos
+    # ficheros que habría que tocar a la vez.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rol: control
+            appid: com.guillermorc.controlemt
+            nombre: Control de acceso EMT - Movilidad
+            bg: "24,106,59"
+            color: "#186A3B"
+            icono: "icons/icon-192.png"
+            iconoApk: "icons/icon-512.png"
+            iconoFg: "icons/icon-fg-512.png"
+            rotulo: "🛡️ Control de acceso"
+            tag: control-build-
+            apk: control-acceso-emt
+          - rol: gestion-control
+            appid: com.guillermorc.gcontrolemt
+            nombre: Gestión control de acceso EMT - Movilidad
+            bg: "123,36,28"
+            color: "#7B241C"
+            icono: "icons/icon-gc-192.png"
+            iconoApk: "icons/icon-gc-512.png"
+            iconoFg: "icons/icon-gc-fg-512.png"
+            rotulo: "🗝️ Gestión del puesto"
+            tag: gcontrol-build-
+            apk: gestion-control-acceso-emt
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inject build version
+        run: echo "const APP_VERSION = 'build-${{ github.run_number }}';" > control/version.js
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build www/
+        run: npm run build:www:control
+
+      - name: Configuración de Capacitor para esta aplicación
+        run: |
+          cat > capacitor.config.json << 'CAPEOF'
+          {
+            "appId": "${{ matrix.appid }}",
+            "appName": "${{ matrix.nombre }}",
+            "webDir": "www-control",
+            "server": { "androidScheme": "https" }
+          }
+          CAPEOF
+          cat capacitor.config.json
+
+      - name: Decirle a la web cuál de las dos es
+        run: |
+          W="www-control/index.html"
+          sed -i 's|<meta name="app-rol" content="[^"]*">|<meta name="app-rol" content="${{ matrix.rol }}">|' "$W"
+          sed -i 's|<div class="splash-rol" id="splashRol">[^<]*</div>|<div class="splash-rol" id="splashRol">${{ matrix.rotulo }}</div>|' "$W"
+          sed -i 's|id="authLogo" src="[^"]*"|id="authLogo" src="${{ matrix.icono }}"|' "$W"
+          sed -i 's|<title>[^<]*</title>|<title>${{ matrix.nombre }}</title>|' "$W"
+          grep -o 'app-rol[^>]*' "$W" | head -1
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Patch variables.gradle — targetSdkVersion 34
+        run: |
+          VARS="android/variables.gradle"
+          sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 34/' "$VARS"
+          sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 34/' "$VARS"
+
+      - name: Patch build.gradle — versionCode/versionName from build number
+        run: |
+          GRADLE="android/app/build.gradle"
+          N=${{ github.run_number }}
+          MAJOR=$((N / 100)); MINOR=$((N % 100))
+          sed -i "s/versionCode [0-9]*/versionCode $N/" "$GRADLE"
+          VER="$MAJOR.$(printf '%02d' $MINOR)"
+          sed -i "s/versionName \"[^\"]*\"/versionName \"$VER\"/" "$GRADLE"
+          grep -E "versionCode|versionName" "$GRADLE"
+          echo "APP_VER=$VER" >> $GITHUB_ENV
+
+      - name: Patch AndroidManifest — permisos, vuelta de Google y FileProvider
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          # Ni GPS ni avisos: aquí no hay geovallas ni mensajes. Solo lo que
+          # hace falta para poder instalar la actualización y avisar de ella.
+          sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>|' "$MANIFEST"
+          # Por aquí vuelve la entrada de Google desde la pestaña del navegador
+          sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
+          sed -i 's|</application>|    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
+
+      - name: Create FileProvider paths config
+        run: |
+          mkdir -p android/app/src/main/res/xml
+          cat > android/app/src/main/res/xml/file_paths.xml << 'XMLEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths>
+              <cache-path name="apk_downloads" path="." />
+          </paths>
+          XMLEOF
+
+      - name: Patch MainActivity — entrada de Google, descargas y actualización
+        # El paquete entra por aquí y no metido en el script: con un ${{ }}
+        # dentro, Actions tiene que tratar el bloque entero como plantilla y
+        # da por inválido el fichero. Entonces no se monta ninguna de las dos.
+        env:
+          APPID: ${{ matrix.appid }}
+        run: |
+          cat > /tmp/MainActivity.java << 'JAVAEOF'
+          package com.guillermorc.controlemt;
+
+          import android.content.ContentValues;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.Environment;
+          import android.os.Handler;
+          import android.os.Looper;
+          import android.provider.MediaStore;
+          import android.webkit.JavascriptInterface;
+          import android.widget.Toast;
+          import androidx.core.app.ActivityCompat;
+          import androidx.core.content.FileProvider;
+          import com.getcapacitor.BridgeActivity;
+          import java.io.OutputStream;
+
+          // El puesto de control de acceso no lleva geovallas, ni avisos, ni
+          // servicio en segundo plano: solo se entra, se escribe el parte y se
+          // guarda. Así que aquí está lo justo —la entrada con Google, guardar
+          // un archivo en Descargas y la actualización de la propia app— y no
+          // una copia de todo lo de la app de los conductores.
+          public class MainActivity extends BridgeActivity {
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  pedirPermisoAvisos();
+                  handleOAuthIntent(getIntent());
+                  setupJavascriptInterface();
+              }
+
+              @Override
+              protected void onNewIntent(Intent intent) {
+                  super.onNewIntent(intent);
+                  setIntent(intent);
+                  handleOAuthIntent(intent);
+              }
+
+              private void pedirPermisoAvisos() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                      if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
+                              != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                          ActivityCompat.requestPermissions(this,
+                              new String[]{ android.Manifest.permission.POST_NOTIFICATIONS }, 1);
+                      }
+                  }
+              }
+
+              // La vuelta de Google entra como enlace a https://localhost/ con
+              // el código dentro; se le pasa a la web tal cual.
+              private void handleOAuthIntent(Intent intent) {
+                  if (intent == null || getBridge() == null) return;
+                  Uri data = intent.getData();
+                  if (data == null) return;
+                  String code = data.getQueryParameter("code");
+                  if (code == null || code.isEmpty()) return;
+                  String url = "https://localhost/?code=" + Uri.encode(code);
+                  getBridge().getWebView().post(() -> getBridge().getWebView().loadUrl(url));
+              }
+
+              private void setupJavascriptInterface() {
+                  if (getBridge() == null || getBridge().getWebView() == null) return;
+                  final Context ctx = this;
+                  getBridge().getWebView().addJavascriptInterface(new Object() {
+
+                      @JavascriptInterface
+                      public void saveFile(String content, String filename) {
+                          byte[] bytes;
+                          try { bytes = content.getBytes("UTF-8"); }
+                          catch (Exception e) { bytes = content.getBytes(); }
+                          guardarEnDescargas(bytes, filename);
+                      }
+
+                      private void guardarEnDescargas(byte[] data, String filename) {
+                          final String fname = (filename != null && !filename.isEmpty())
+                              ? filename : "partes-control-acceso.csv";
+                          try {
+                              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                  ContentValues v = new ContentValues();
+                                  v.put(MediaStore.Downloads.DISPLAY_NAME, fname);
+                                  // El tipo debe seguir a la extensión: Android le pone
+                                  // al fichero la del tipo que se le declara, y un CSV
+                                  // guardado como otra cosa no lo abre la hoja de
+                                  // cálculo.
+                                  v.put(MediaStore.Downloads.MIME_TYPE,
+                                      fname.endsWith(".csv") ? "text/csv"
+                                      : fname.endsWith(".pdf") ? "application/pdf"
+                                      : fname.endsWith(".json") ? "application/json"
+                                      : "application/octet-stream");
+                                  Uri uri = ctx.getContentResolver().insert(
+                                      MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                                  if (uri == null) return;
+                                  try (OutputStream os = ctx.getContentResolver().openOutputStream(uri)) {
+                                      if (os != null) os.write(data);
+                                  }
+                              } else {
+                                  java.io.File f = new java.io.File(
+                                      Environment.getExternalStoragePublicDirectory(
+                                          Environment.DIRECTORY_DOWNLOADS), fname);
+                                  try (java.io.FileOutputStream fos = new java.io.FileOutputStream(f)) {
+                                      fos.write(data);
+                                  }
+                                  android.media.MediaScannerConnection.scanFile(
+                                      ctx, new String[]{f.getAbsolutePath()}, null, null);
+                              }
+                              new Handler(Looper.getMainLooper()).post(() ->
+                                  Toast.makeText(ctx, "Guardado en Descargas: " + fname, Toast.LENGTH_LONG).show());
+                          } catch (Exception e) {
+                              new Handler(Looper.getMainLooper()).post(() ->
+                                  Toast.makeText(ctx, "Error al guardar", Toast.LENGTH_SHORT).show());
+                          }
+                      }
+
+                      @JavascriptInterface
+                      public void openExternalUrl(String url) {
+                          try {
+                              Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                              intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                              ctx.startActivity(intent);
+                          } catch (Exception e) {}
+                      }
+
+                      @JavascriptInterface
+                      public void downloadAndInstallApk(String url) {
+                          new Thread(() -> {
+                              try {
+                                  java.net.URL apkUrl = new java.net.URL(url);
+                                  java.net.HttpURLConnection conn = (java.net.HttpURLConnection) apkUrl.openConnection();
+                                  conn.setRequestProperty("User-Agent", "ControlEMT/1.0");
+                                  conn.setInstanceFollowRedirects(true);
+                                  // Sin estos topes, una conexión que se cae a medias
+                                  // deja el read() esperando para siempre: la barra se
+                                  // queda clavada y no salta ningún error.
+                                  conn.setConnectTimeout(20000);
+                                  conn.setReadTimeout(30000);
+                                  conn.connect();
+                                  int totalSize = conn.getContentLength();
+                                  java.io.File apkFile = new java.io.File(ctx.getCacheDir(), "update.apk");
+                                  try (java.io.InputStream in = conn.getInputStream();
+                                       java.io.FileOutputStream out = new java.io.FileOutputStream(apkFile)) {
+                                      byte[] buf = new byte[65536];
+                                      int read; long downloaded = 0; int ultimoPct = -1;
+                                      while ((read = in.read(buf)) != -1) {
+                                          out.write(buf, 0, read);
+                                          downloaded += read;
+                                          if (totalSize > 0) {
+                                              final int pct = (int)(downloaded * 100L / totalSize);
+                                              // Solo cuando cambia el número: evaluar
+                                              // JavaScript en cada trozo atasca el hilo
+                                              // de la interfaz y parece que no avanza.
+                                              if (pct != ultimoPct) {
+                                                  ultimoPct = pct;
+                                                  ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                                      try {
+                                                          ((BridgeActivity) ctx).getBridge().getWebView()
+                                                              .evaluateJavascript("app._onUpdateProgress(" + pct + ")", null);
+                                                      } catch (Exception ignored) {}
+                                                  });
+                                              }
+                                          }
+                                      }
+                                  }
+                                  conn.disconnect();
+                                  Uri apkUri = FileProvider.getUriForFile(ctx,
+                                      ctx.getPackageName() + ".fileprovider", apkFile);
+                                  Intent install = new Intent(Intent.ACTION_VIEW);
+                                  install.setDataAndType(apkUri, "application/vnd.android.package-archive");
+                                  install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                                  install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                  ctx.startActivity(install);
+                              } catch (Exception e) {
+                                  ((android.app.Activity) ctx).runOnUiThread(() -> {
+                                      Toast.makeText(ctx, "Error al descargar: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                                      try {
+                                          ((BridgeActivity) ctx).getBridge().getWebView()
+                                              .evaluateJavascript("app._onUpdateError()", null);
+                                      } catch (Exception ignored) {}
+                                  });
+                              }
+                          }).start();
+                      }
+
+                      private boolean abrirPestanaNavegador(String authUrl) {
+                          try {
+                              Intent i = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(authUrl));
+                              // Los extras de "pestaña personalizada": si el navegador
+                              // los entiende se abre dentro de la app, y si no, se abre
+                              // el navegador de siempre. En los dos casos comparte la
+                              // sesión de Google del teléfono, que es lo que se busca.
+                              android.os.Bundle extras = new android.os.Bundle();
+                              extras.putBinder("android.support.customtabs.extra.SESSION", null);
+                              i.putExtras(extras);
+                              i.putExtra("android.support.customtabs.extra.TOOLBAR_COLOR", 0xFF186A3B);
+                              if (!(ctx instanceof android.app.Activity))
+                                  i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                              ctx.startActivity(i);
+                              return true;
+                          } catch (Exception e) {
+                              return false;
+                          }
+                      }
+
+                      @JavascriptInterface
+                      public void performOAuthInWebView(final String authUrl, final boolean isSilent) {
+                          // La entrada normal se abre en el navegador del teléfono,
+                          // como una pestaña dentro de la app: así Google ve la sesión
+                          // que ya hay en el móvil y ofrece las cuentas para elegir. La
+                          // renovación callada va por el cuadro de aquí abajo, que no
+                          // puede abrir nada a la vista.
+                          if (!isSilent && abrirPestanaNavegador(authUrl)) return;
+                          ((android.app.Activity) ctx).runOnUiThread(new Runnable() {
+                              @Override public void run() {
+                                  final android.webkit.WebView wv = new android.webkit.WebView(ctx);
+                                  wv.getSettings().setJavaScriptEnabled(true);
+                                  wv.getSettings().setDomStorageEnabled(true);
+                                  wv.getSettings().setUserAgentString("Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36");
+                                  // Entrar con Google va saltando entre dominios suyos,
+                                  // y sin cookies de terceros la sesión no se sostiene.
+                                  android.webkit.CookieManager.getInstance().setAcceptCookie(true);
+                                  android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true);
+                                  final android.app.Dialog[] dlgRef = {null};
+                                  final boolean[] handled = {false};
+                                  if (!isSilent) {
+                                      android.app.Dialog dlg = new android.app.Dialog(ctx, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+                                      android.widget.FrameLayout fl = new android.widget.FrameLayout(ctx);
+                                      fl.addView(wv, new android.widget.FrameLayout.LayoutParams(-1, -1));
+                                      dlg.setContentView(fl);
+                                      if (dlg.getWindow() != null) dlg.getWindow().setLayout(-1, -1);
+                                      dlgRef[0] = dlg;
+                                  }
+                                  wv.setWebViewClient(new android.webkit.WebViewClient() {
+                                      // El sitio cambió de nombre y Google puede devolver la
+                                      // entrada por cualquiera de los dos mientras la dirección
+                                      // vieja siga apuntada allí. Valen los dos.
+                                      private boolean esNuestro(String host) {
+                                          return "emt-palma-movilidad.vercel.app".equals(host)
+                                              || "registro-horario-emt.vercel.app".equals(host);
+                                      }
+                                      private void reportResult(final String queryOrFragment) {
+                                          if (handled[0]) return;
+                                          handled[0] = true;
+                                          // Guardarlas en disco antes de cerrar el cuadro: si no,
+                                          // la sesión se va con él y la próxima vez Google vuelve
+                                          // a preguntar el correo desde cero.
+                                          try { android.webkit.CookieManager.getInstance().flush(); } catch (Exception e) {}
+                                          if (dlgRef[0] != null) try { dlgRef[0].dismiss(); } catch (Exception e) {}
+                                          ((android.app.Activity) ctx).runOnUiThread(new Runnable() {
+                                              @Override public void run() {
+                                                  try {
+                                                      String code = null;
+                                                      if (queryOrFragment != null) {
+                                                          for (String p : queryOrFragment.split("&")) {
+                                                              String[] kv = p.split("=", 2);
+                                                              if (kv.length < 2) continue;
+                                                              if ("code".equals(kv[0])) { try { code = java.net.URLDecoder.decode(kv[1], "UTF-8"); } catch (Exception e) { code = kv[1]; } }
+                                                          }
+                                                      }
+                                                      final String js = code != null
+                                                          ? "app._onOAuthCode('" + code.replace("'", "\\'") + "'," + isSilent + ")"
+                                                          : "app._onOAuthCode(null," + isSilent + ")";
+                                                      ((BridgeActivity) ctx).getBridge().getWebView().evaluateJavascript(js, null);
+                                                  } catch (Exception e) {}
+                                              }
+                                          });
+                                      }
+                                      @Override
+                                      public boolean shouldOverrideUrlLoading(android.webkit.WebView view, android.webkit.WebResourceRequest req) {
+                                          if (handled[0]) return true;
+                                          String u = req.getUrl().toString();
+                                          String host = req.getUrl().getHost() == null ? "" : req.getUrl().getHost();
+                                          String qry  = req.getUrl().getQuery() == null ? "" : req.getUrl().getQuery();
+                                          // La vuelta de Google es la que trae el código a la
+                                          // dirección de la app. Que la URL nombre el dominio no
+                                          // basta: el enlace de continuar de algunos avisos de
+                                          // Google también lo nombra.
+                                          if (esNuestro(host)
+                                                  && (qry.contains("code=") || qry.contains("error="))) {
+                                              reportResult(qry);
+                                              return true;
+                                          }
+                                          if (u.contains("silent_failed=1") || u.contains("error=access_denied") || u.contains("error=interaction_required")) {
+                                              reportResult(null); return true;
+                                          }
+                                          return false;
+                                      }
+                                      @Override
+                                      public void onPageFinished(android.webkit.WebView view, String pageUrl) {
+                                          if (handled[0] || pageUrl == null) return;
+                                          if (!esNuestro(android.net.Uri.parse(pageUrl).getHost())) return;
+                                          view.evaluateJavascript(
+                                              "(function(){var q=(window.location.search||'').replace(/^\\?/,'');return q.indexOf('code=')>=0?q:'';})();",
+                                              new android.webkit.ValueCallback<String>() {
+                                                  @Override public void onReceiveValue(String val) {
+                                                      if (val != null && !val.equals("null") && !val.equals("\"\"") && val.length() > 4) {
+                                                          String clean = val.startsWith("\"") ? val.substring(1, val.length()-1) : val;
+                                                          reportResult(clean);
+                                                      }
+                                                      // Sin código no se da por perdida la entrada:
+                                                      // puede ser una parada de camino, y cerrar
+                                                      // aquí el cuadro dejaba fuera a quien seguía.
+                                                  }
+                                              }
+                                          );
+                                      }
+                                  });
+                                  wv.loadUrl(authUrl);
+                                  if (dlgRef[0] != null) dlgRef[0].show();
+                              }
+                          });
+                      }
+                  }, "AndroidBridge");
+              }
+          }
+          JAVAEOF
+          # El mismo código, con el paquete que le toca a esta aplicación
+          PKGDIR="android/app/src/main/java/$(echo "$APPID" | tr . /)"
+          mkdir -p "$PKGDIR"
+          sed "s/com\.guillermorc\.controlemt/$APPID/g" \
+              /tmp/MainActivity.java > "$PKGDIR/MainActivity.java"
+          head -2 "$PKGDIR/MainActivity.java"
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Set native splash background color
+        env:
+          COLOR: ${{ matrix.color }}
+        run: |
+          COLORS="android/app/src/main/res/values/colors.xml"
+          STYLES="android/app/src/main/res/values/styles.xml"
+          if [ -f "$COLORS" ]; then
+            grep -q 'colorPrimary' "$COLORS" || \
+              sed -i "s|</resources>|    <color name=\"colorPrimary\">$COLOR</color>\n</resources>|" "$COLORS"
+          else
+            mkdir -p "$(dirname "$COLORS")"
+            printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="colorPrimary">%s</color>\n</resources>\n' "$COLOR" > "$COLORS"
+          fi
+          # Al arrancar se ve el color de la app y no un blanco o un negro
+          if [ -f "$STYLES" ]; then
+            grep -q 'windowBackground' "$STYLES" || \
+              sed -i 's|<style name="AppTheme.NoActionBar">|<style name="AppTheme.NoActionBar">\n        <item name="android:windowBackground">@color/colorPrimary</item>|' "$STYLES"
+          fi
+
+      - name: Restore signing keystore
+        run: |
+          mkdir -p ~/.android
+          base64 -d .github/debug.keystore.b64 > ~/.android/debug.keystore
+
+      - name: Set Android launcher icon
+        run: |
+          pip install Pillow -q
+          ICONO='www-control/${{ matrix.iconoApk }}' ICONO_FG='www-control/${{ matrix.iconoFg }}' ICON_BG='${{ matrix.bg }}' python3 << 'PYEOF'
+          from PIL import Image
+          import os
+
+          # El icono del móvil es exactamente el mismo fichero que usa la web:
+          # uno solo para las dos formas de instalarla.
+          BG   = tuple(int(x) for x in os.environ['ICON_BG'].split(',')[:3])
+          full = Image.open(os.environ['ICONO']).convert('RGB')
+          fg   = Image.open(os.environ['ICONO_FG']).convert('RGBA')
+          res_base = 'android/app/src/main/res'
+
+          sizes = {
+              'mipmap-mdpi':    (48,  108),
+              'mipmap-hdpi':    (72,  162),
+              'mipmap-xhdpi':   (96,  216),
+              'mipmap-xxhdpi':  (144, 324),
+              'mipmap-xxxhdpi': (192, 432),
+          }
+
+          for dir_name, (size, asize) in sizes.items():
+              path = f'{res_base}/{dir_name}'
+              os.makedirs(path, exist_ok=True)
+
+              cuadro = full.resize((size, size), Image.LANCZOS)
+              cuadro.save(f'{path}/ic_launcher.png')
+              cuadro.save(f'{path}/ic_launcher_round.png')
+
+              # Adaptativo: el sistema recorta a dos tercios del lienzo, así que
+              # el dibujo va justo a ese tamaño y centrado. El fondo, del color
+              # de la aplicación, es lo único que asoma por las esquinas.
+              d = asize * 2 // 3
+              adapt = Image.new('RGBA', (asize, asize), (*BG, 255))
+              chico = fg.resize((d, d), Image.LANCZOS)
+              off = (asize - d) // 2
+              adapt.paste(chico, (off, off), chico)
+              adapt.convert('RGB').save(f'{path}/ic_launcher_foreground.png')
+
+              Image.new('RGB', (asize, asize), BG).save(f'{path}/ic_launcher_background.png')
+
+          print("Icons generated OK")
+          PYEOF
+
+          RES="android/app/src/main/res"
+          mkdir -p "$RES/mipmap-anydpi-v26"
+          cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" << 'ICONEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@mipmap/ic_launcher_background"/>
+              <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+          </adaptive-icon>
+          ICONEOF
+          cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          # Los repositorios de Maven fallan de vez en cuando y tiran el build
+          # entero sin que haya nada mal en el código. Reintentar lo absorbe.
+          for intento in 1 2 3; do
+            if ./gradlew assembleDebug --no-daemon; then exit 0; fi
+            echo "::warning::Build fallido (intento $intento). Reintentando en 20s…"
+            sleep 20
+          done
+          echo "::error::El build ha fallado tres veces"
+          exit 1
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.apk }}-${{ github.run_number }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
+      - name: Renombrar el APK con su versión
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk ${{ matrix.apk }}-${{ env.APP_VER }}.apk
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ matrix.tag }}${{ github.run_number }}
+          name: "${{ matrix.nombre }} — Build ${{ github.run_number }}"
+          body: "APK generado automáticamente en build #${{ github.run_number }}."
+          files: ${{ matrix.apk }}-${{ env.APP_VER }}.apk
+          fail_on_unmatched_files: true

@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Control de acceso EMT - Movilidad</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#186A3B">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <!-- Cuál de las dos aplicaciones del puesto es. Las dos salen de aquí, y
+         el montaje del APK cambia esta etiqueta: control es la de quien hace
+         el turno en la garita, gestion-control la de quien lleva el puesto. -->
+    <meta name="app-rol" content="control">
+    <meta name="apple-mobile-web-app-title" content="Control de acceso EMT">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <style>
+        :root{--c1:#1E8449;--c2:#186A3B;--card:#fff;--txt:#1b2a33;--txt2:#6b7a85;--bord:#e4e8eb;--fondo:#f5f7f8;}
+        body.rol-gc{--c1:#943126;--c2:#7B241C;}
+        body.dark{--card:#1b2430;--txt:#e6eaee;--txt2:#93a1ad;--bord:#2b3644;--fondo:#121a24;}
+
+        *{margin:0;padding:0;box-sizing:border-box;}
+        [hidden]{display:none !important;}
+        html,body{height:100%;width:100%;}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+             background:linear-gradient(135deg,var(--c1),var(--c2));color:var(--txt);}
+        body.dark{background:linear-gradient(135deg,#16202b,#0d141c);}
+        input,select,textarea,button{font-family:inherit;color:var(--txt);}
+
+        .container{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;
+                   height:100%;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+                   background:var(--fondo);display:flex;flex-direction:column;overflow:hidden;}
+        @media (min-width:700px){.container{max-width:660px;}}
+        @media (min-width:1000px){.container{max-width:840px;}}
+
+        /* ── Entrada ── */
+        .auth-screen{display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;
+                     padding:22px;gap:16px;background:var(--card);}
+        .auth-screen.hidden{display:none;}
+        .logo{width:76px;height:76px;border-radius:18px;display:block;}
+        .auth-screen h1{font-size:21px;font-weight:800;margin-bottom:4px;text-align:center;}
+        .auth-screen p{color:var(--txt2);font-size:13px;text-align:center;}
+        .auth-form{width:100%;max-width:340px;display:flex;flex-direction:column;gap:10px;margin-top:6px;}
+        .btn-google{display:flex;align-items:center;justify-content:center;gap:10px;padding:13px;background:#fff;
+                    color:#3c4043;border:1.5px solid #dadce0;border-radius:9px;font-size:14.5px;font-weight:600;
+                    cursor:pointer;width:100%;box-shadow:0 1px 3px rgba(0,0,0,0.08);}
+        .msg{display:none;font-size:13px;padding:11px 13px;border-radius:10px;line-height:1.45;
+             max-width:340px;width:100%;text-align:center;}
+        .msg.show{display:block;}
+        .msg.error{background:#fdecea;color:#a93226;}
+        .msg.success{background:#e8f6ef;color:#186a3b;}
+
+        /* ── Cabecera ── */
+        .app-screen{display:none;flex-direction:column;height:100%;overflow:hidden;}
+        .app-screen.active{display:flex;}
+        .app-header{background:linear-gradient(135deg,var(--c1),var(--c2));color:#fff;padding:12px 15px;
+                    display:flex;align-items:center;gap:10px;flex-shrink:0;}
+        .app-header-tit{font-size:15.5px;font-weight:800;line-height:1.25;}
+        .app-header-sub{font-size:11.5px;opacity:0.82;}
+        .app-header-btn{margin-left:auto;background:rgba(255,255,255,0.18);border:none;color:#fff;
+                        width:36px;height:36px;border-radius:50%;font-size:17px;cursor:pointer;flex:none;}
+
+        .contenido{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:13px 13px 20px;}
+        .tab{display:none;}
+        .tab.active{display:block;}
+
+        /* ── Barra de pestañas ── */
+        .tab-bar{display:flex;background:var(--card);border-top:1px solid var(--bord);flex-shrink:0;
+                 padding-bottom:env(safe-area-inset-bottom,0px);}
+        .tab-btn{flex:1;background:none;border:none;padding:9px 4px 11px;cursor:pointer;display:flex;
+                 flex-direction:column;align-items:center;gap:3px;}
+        .tab-ico{font-size:20px;line-height:1;filter:grayscale(1);opacity:0.5;}
+        .tab-lbl{font-size:10.5px;font-weight:700;color:var(--txt2);}
+        .tab-btn.active .tab-ico{filter:none;opacity:1;}
+        .tab-btn.active .tab-lbl{color:var(--c1);}
+
+        /* ── Tarjetas y campos ── */
+        .card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:12px;
+              box-shadow:0 1px 3px rgba(0,0,0,0.06);}
+        .card h2{font-size:14px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:7px;}
+        .fila2{display:flex;gap:9px;}
+        .fila2>*{flex:1;min-width:0;}
+        label.lbl{display:block;font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:4px;
+                  text-transform:uppercase;letter-spacing:0.4px;}
+        input[type=text],input[type=date],input[type=time],input[type=number],select,textarea{
+            width:100%;padding:10px 11px;border:1.5px solid var(--bord);border-radius:10px;font-size:14px;
+            background:var(--card);}
+        textarea{resize:vertical;min-height:70px;}
+        input:focus,select:focus,textarea:focus{outline:none;border-color:var(--c1);}
+        .sub{font-size:11.5px;color:var(--txt2);line-height:1.5;}
+
+        .btn{width:100%;padding:13px;border:none;border-radius:11px;font-size:15px;font-weight:700;
+             cursor:pointer;background:linear-gradient(135deg,var(--c1),var(--c2));color:#fff;}
+        .btn:active{transform:scale(0.99);}
+        .btn.sec{background:var(--card);color:var(--txt);border:1.5px solid var(--bord);}
+        .btn.peli{background:linear-gradient(135deg,#e74c3c,#a93226);}
+        .btn.chico{padding:10px;font-size:13.5px;}
+
+        /* ── Turnos ── */
+        .turnos{display:flex;gap:7px;}
+        .turno-op{flex:1;padding:9px 4px;border:1.5px solid var(--bord);border-radius:10px;background:var(--card);
+                  cursor:pointer;text-align:center;}
+        .turno-op b{display:block;font-size:13.5px;font-weight:800;}
+        .turno-op span{font-size:10px;color:var(--txt2);}
+        .turno-op.sel{border-color:var(--c1);background:color-mix(in srgb,var(--c1) 12%,transparent);}
+        .turno-op.sel b{color:var(--c1);}
+
+        /* ── Anotaciones ── */
+        /* En un móvil no caben la hora, el tipo y tres textos en una línea: la
+           hora y el tipo van arriba y lo escrito debajo, a todo lo ancho. */
+        .an-fila{display:flex;gap:8px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--bord);}
+        .an-fila:first-child{border-top:none;}
+        .an-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;}
+        .an-cab{display:flex;gap:7px;}
+        /* Gana al ancho suelto de los campos, que va más abajo en la hoja */
+        .an-cab .an-hora{flex:0 0 126px;width:126px;padding-left:8px;padding-right:6px;}
+        .an-cab select{flex:1;min-width:0;}
+        .an-x{flex:none;background:none;border:none;color:#c0392b;font-size:17px;cursor:pointer;padding:8px 2px;}
+        .an-vacio{font-size:12.5px;color:var(--txt2);padding:6px 0;}
+
+        /* ── Lista de partes ── */
+        .pa-card{background:var(--card);border-radius:13px;padding:12px 13px;margin-bottom:9px;cursor:pointer;
+                 box-shadow:0 1px 3px rgba(0,0,0,0.06);border-left:4px solid var(--c1);}
+        .pa-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px;}
+        .pa-dia{font-size:13.5px;font-weight:800;}
+        .pa-turno{font-size:10.5px;font-weight:800;background:var(--c1);color:#fff;border-radius:20px;padding:2px 9px;}
+        .pa-n{font-size:11px;color:var(--txt2);margin-left:auto;}
+        .pa-quien{font-size:12px;color:var(--txt2);}
+        .pa-res{font-size:12px;color:var(--txt2);margin-top:5px;line-height:1.45;}
+        .pa-vacio{text-align:center;color:var(--txt2);font-size:13px;padding:30px 16px;line-height:1.6;}
+
+        /* ── Opciones ── */
+        .options-screen{display:none;flex-direction:column;height:100%;overflow:hidden;}
+        .options-screen.active{display:flex;}
+        .ops-row{display:flex;align-items:center;gap:11px;padding:12px 0;border-top:1px solid var(--bord);}
+        .ops-row:first-of-type{border-top:none;}
+        .ops-row-t{flex:1;min-width:0;}
+        .ops-row-t b{display:block;font-size:13.5px;font-weight:700;}
+        .ops-row-t span{font-size:11.5px;color:var(--txt2);}
+        .sw{position:relative;width:46px;height:26px;flex:none;}
+        .sw input{opacity:0;width:0;height:0;}
+        .sw i{position:absolute;inset:0;background:#c9d2d8;border-radius:26px;transition:0.2s;}
+        .sw i::before{content:'';position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;
+                      border-radius:50%;transition:0.2s;}
+        .sw input:checked+i{background:var(--c1);}
+        .sw input:checked+i::before{transform:translateX(20px);}
+
+        /* ── Cuadros ── */
+        .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:900;
+               align-items:center;justify-content:center;padding:16px;}
+        .modal.show{display:flex;}
+        .modal-card{background:var(--card);border-radius:16px;width:100%;max-width:480px;max-height:88vh;
+                    display:flex;flex-direction:column;overflow:hidden;}
+        .modal-head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--bord);}
+        .modal-head h3{font-size:15.5px;font-weight:800;flex:1;}
+        .modal-x{background:none;border:none;font-size:24px;color:var(--txt2);cursor:pointer;line-height:1;}
+        .modal-body{padding:14px 16px;overflow-y:auto;flex:1;}
+        .modal-pie{padding:12px 16px;border-top:1px solid var(--bord);display:flex;gap:9px;}
+        .modal-pie>*{flex:1;}
+
+        #splashScreen{position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,var(--c1),var(--c2));
+                      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+                      transition:opacity 0.35s ease;}
+        #splashScreen.fade-out{opacity:0;pointer-events:none;}
+        .splash-t{color:#fff;font-size:23px;font-weight:800;}
+        .splash-rol{color:rgba(255,255,255,0.92);font-size:13.5px;font-weight:800;letter-spacing:2px;
+                    text-transform:uppercase;}
+        .splash-m{color:rgba(255,255,255,0.7);font-size:12.5px;}
+    </style>
+</head>
+<body>
+
+<div id="splashScreen">
+    <div class="splash-t">EMT · Movilidad</div>
+    <div class="splash-rol" id="splashRol">🛡️ Control de acceso</div>
+    <div class="splash-m" id="splashMsg">Iniciando...</div>
+</div>
+
+<div class="container" id="container">
+
+    <!-- ── ENTRADA ── -->
+    <div class="auth-screen" id="authScreen">
+        <img class="logo" id="authLogo" src="icons/icon-192.png" alt="">
+        <div>
+            <h1 id="authTitulo">Control de acceso EMT - Movilidad</h1>
+            <p id="authSub">Parte del puesto · EMT Palma</p>
+        </div>
+        <div id="authError" class="msg error"></div>
+        <div id="authSuccess" class="msg success"></div>
+        <div class="auth-form">
+            <p class="sub" style="text-align:center;">Entra con la cuenta que tengas autorizada para el puesto</p>
+            <button type="button" class="btn-google" onclick="app.login()">
+                <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+                Continuar con Google
+            </button>
+        </div>
+    </div>
+
+    <!-- ── APLICACIÓN ── -->
+    <div class="app-screen" id="appScreen">
+        <div class="app-header">
+            <div>
+                <div class="app-header-tit" id="cabeceraTitulo">🛡️ Control de acceso</div>
+                <div class="app-header-sub" id="cabeceraSub"></div>
+            </div>
+            <button class="app-header-btn" onclick="app.mostrarOpciones()" title="Opciones">⚙️</button>
+        </div>
+
+        <div class="contenido" id="contenido">
+
+            <!-- Pestaña: el parte del turno -->
+            <div class="tab active" id="tab0">
+                <div class="card">
+                    <h2>🗓️ Turno</h2>
+                    <div class="fila2" style="margin-bottom:11px;">
+                        <div>
+                            <label class="lbl" for="pFecha">Día</label>
+                            <input type="date" id="pFecha" onchange="app.cambiarTurnoParte()">
+                        </div>
+                        <div id="pDuenoBox" style="display:none;">
+                            <label class="lbl" for="pDueno">Parte de</label>
+                            <input type="text" id="pDueno" placeholder="correo del trabajador" inputmode="email">
+                        </div>
+                    </div>
+                    <label class="lbl">Turno</label>
+                    <div class="turnos" id="pTurnos"></div>
+                </div>
+
+                <div class="card">
+                    <h2>🧍 Quién está en el puesto</h2>
+                    <div class="fila2">
+                        <div>
+                            <label class="lbl" for="pNombre">Nombre</label>
+                            <input type="text" id="pNombre" maxlength="80" placeholder="Nombre y apellido">
+                        </div>
+                        <div style="max-width:120px;">
+                            <label class="lbl" for="pConductor">Nº</label>
+                            <input type="text" id="pConductor" maxlength="20" inputmode="numeric" placeholder="1234">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>📋 Anotaciones <span class="sub" id="pCuantas"></span></h2>
+                    <div id="pAnotaciones"></div>
+                    <button class="btn sec chico" style="margin-top:10px;" onclick="app.anadirAnotacion()">＋ Apuntar algo</button>
+                </div>
+
+                <div class="card">
+                    <h2>📝 Observaciones del turno</h2>
+                    <textarea id="pNotas" maxlength="1000" placeholder="Lo que haya que dejar dicho al siguiente turno"></textarea>
+                </div>
+
+                <button class="btn" onclick="app.guardarParte()">💾 Guardar el parte</button>
+                <p class="sub" id="pFirma" style="text-align:center;margin-top:9px;"></p>
+            </div>
+
+            <!-- Pestaña: los partes -->
+            <div class="tab" id="tab1">
+                <div class="card" id="paFiltros" style="display:none;">
+                    <h2>🔎 Buscar</h2>
+                    <div class="fila2">
+                        <div>
+                            <label class="lbl" for="paDesde">Desde</label>
+                            <input type="date" id="paDesde" onchange="app.cargarPartes(true)">
+                        </div>
+                        <div>
+                            <label class="lbl" for="paHasta">Hasta</label>
+                            <input type="date" id="paHasta" onchange="app.cargarPartes(true)">
+                        </div>
+                    </div>
+                    <div class="fila2" style="margin-top:11px;">
+                        <button class="btn sec chico" onclick="app.limpiarFiltros()">Todos</button>
+                        <button class="btn sec chico" onclick="app.exportarPartes()">⬇️ Exportar</button>
+                    </div>
+                </div>
+                <div style="display:flex;gap:9px;margin-bottom:11px;">
+                    <button class="btn sec chico" onclick="app.cargarPartes(true)">🔄 Actualizar</button>
+                    <button class="btn chico" onclick="app.nuevoParte()">＋ Parte nuevo</button>
+                </div>
+                <div id="paLista"></div>
+            </div>
+        </div>
+
+        <div class="tab-bar" id="tabBar">
+            <button class="tab-btn active" data-tab="0" onclick="app.irA(0)">
+                <span class="tab-ico">📋</span><span class="tab-lbl">Parte</span>
+            </button>
+            <button class="tab-btn" data-tab="1" onclick="app.irA(1)">
+                <span class="tab-ico">🗂️</span><span class="tab-lbl" id="tabLblPartes">Mis partes</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ── OPCIONES ── -->
+    <div class="options-screen" id="optionsScreen">
+        <div class="app-header">
+            <div>
+                <div class="app-header-tit">⚙️ Opciones</div>
+                <div class="app-header-sub" id="opsQuien"></div>
+            </div>
+            <button class="app-header-btn" onclick="app.mostrarApp()" title="Volver">✕</button>
+        </div>
+        <div class="contenido">
+            <div class="card">
+                <h2>🎨 Apariencia</h2>
+                <div class="ops-row">
+                    <div class="ops-row-t"><b>Modo oscuro</b><span>Más cómodo en el turno de noche</span></div>
+                    <label class="sw"><input type="checkbox" id="darkModeToggle" onchange="app.toggleDarkMode()"><i></i></label>
+                </div>
+            </div>
+            <div class="card">
+                <h2>📱 Aplicación</h2>
+                <div class="ops-row">
+                    <div class="ops-row-t"><b id="versionTxt">Versión</b><span id="versionSub">Comprueba si hay una más nueva</span></div>
+                    <button class="btn sec chico" style="width:auto;padding:9px 13px;" onclick="app._checkForUpdates(true)">Comprobar</button>
+                </div>
+            </div>
+            <button class="btn peli" onclick="app.confirmarCerrarSesion()">Cerrar sesión</button>
+        </div>
+    </div>
+
+    <!-- Aviso de versión nueva -->
+    <div id="updateModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99998;align-items:center;justify-content:center;padding:20px;">
+        <div style="background:var(--card);border-radius:18px;padding:26px 22px;width:100%;max-width:340px;text-align:center;">
+            <div style="font-size:38px;margin-bottom:8px;">🚀</div>
+            <div style="font-size:17px;font-weight:800;margin-bottom:6px;color:#e67e22;">Nueva versión disponible</div>
+            <div id="updateModalMsg" style="font-size:13px;color:var(--txt2);margin-bottom:20px;line-height:1.5;"></div>
+            <button class="btn" style="background:linear-gradient(135deg,#f39c12,#e67e22);margin-bottom:8px;" onclick="app._descargarActualizacion()">Actualizar ahora</button>
+            <button style="width:100%;padding:11px;background:transparent;color:var(--txt2);border:none;cursor:pointer;font-size:13px;font-weight:600;" onclick="app._posponerActualizacion()">Más tarde</button>
+        </div>
+    </div>
+
+    <div id="updateProgressOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99999;align-items:center;justify-content:center;">
+        <div style="background:var(--card);border-radius:18px;padding:28px 24px;width:82%;max-width:320px;text-align:center;">
+            <div style="font-size:28px;margin-bottom:10px;">🔄</div>
+            <div style="font-size:15px;font-weight:700;margin-bottom:6px;color:#e67e22;">Actualizando app</div>
+            <div id="updateProgressTxt" style="font-size:13px;color:var(--txt2);margin-bottom:14px;min-height:36px;">Descargando nueva versión...</div>
+            <div style="background:var(--bord);border-radius:100px;height:10px;overflow:hidden;margin-bottom:8px;">
+                <div id="updateProgressBar" style="height:100%;background:linear-gradient(90deg,#f39c12,#e67e22);width:0%;transition:width 0.3s ease;border-radius:100px;"></div>
+            </div>
+            <div id="updateProgressPct" style="font-size:12px;color:var(--txt2);margin-bottom:18px;">0%</div>
+            <button id="updateProgressClose" class="btn sec chico" style="display:none;" onclick="document.getElementById('updateProgressOverlay').style.display='none'">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Cuadro de confirmar -->
+<div class="modal" id="modal">
+    <div class="modal-card" style="max-width:360px;">
+        <div class="modal-head"><h3 id="modalTitle"></h3></div>
+        <div class="modal-body"><p class="sub" id="modalMessage"></p></div>
+        <div class="modal-pie">
+            <button class="btn sec chico" onclick="app.cerrarModal()">Cancelar</button>
+            <button class="btn chico" onclick="app.confirmarModal()">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<script src="version.js"></script>
+<script src="app.js?v=1"></script>
+<script>
+// El trabajador de servicio hace que el navegador se ofrezca a instalar la
+// página como aplicación, y aquí no interesa: la aplicación es el APK. Solo
+// se registra para que la página sirva estando sin cobertura, y va siempre a
+// la red a por el código. Dentro del APK no, que ahí los ficheros son suyos.
+(function () {
+    if (!('serviceWorker' in navigator)) return;
+    if (window.Capacitor || location.hostname === 'localhost') return;
+    var recargando = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (recargando) return;
+        recargando = true;
+        location.reload();
+    });
+    window.addEventListener('load', function () {
+        navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' })
+            .then(function (r) { return r.update(); })
+            .catch(function () {});
+    });
+})();
+</script>
+</body>
+</html>

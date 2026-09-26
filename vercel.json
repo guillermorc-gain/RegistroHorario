@@ -97,6 +97,55 @@
           "value": "public, max-age=0, must-revalidate"
         }
       ]
+    },
+    {
+      "source": "/control/app.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/control/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/control",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/control/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/control/manifest.json",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     }
   ],
   "rewrites": [
@@ -109,7 +158,15 @@
       "destination": "/gestion/index.html"
     },
     {
-      "source": "/((?!api/|gestion/|icons/|screenshots/|manifest\\.json|service-worker\\.js|app\\.js).*)",
+      "source": "/control",
+      "destination": "/control/index.html"
+    },
+    {
+      "source": "/control/",
+      "destination": "/control/index.html"
+    },
+    {
+      "source": "/((?!api/|gestion/|control/|icons/|screenshots/|manifest\\.json|service-worker\\.js|app\\.js).*)",
       "destination": "/index.html"
     }
   ],

@@ -591,7 +591,11 @@ const app = {
     // code, so without this every login would come back to apk2. Google echoes
     // `state` verbatim, so it tells us which app to reopen.
     _paqueteDestino(searchParams) {
-        const permitidos = ['com.guillermorc.horasemt','com.guillermorc.gestionemt','com.guillermorc.devemt'];
+        const permitidos = ['com.guillermorc.horasemt','com.guillermorc.gestionemt','com.guillermorc.devemt',
+                            // Las dos del puesto de control de acceso: la vuelta de
+                            // Google pasa por esta misma página, y sin estar aquí
+                            // volvería a la app de los conductores.
+                            'com.guillermorc.controlemt','com.guillermorc.gcontrolemt'];
         const s = String(searchParams?.get('state') || '').replace(/^(app|web):/, '');
         return permitidos.includes(s) ? s : ANDROID_PACKAGE;
     },
