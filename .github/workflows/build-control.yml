@@ -69,6 +69,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # El puesto no lleva geovallas ni avisos, pero los complementos son los
+      # mismos para todas las apps del repositorio y Capacitor mete en el APK
+      # el manifiesto de cada uno: el de geolocalización trae los permisos de
+      # ubicación, el arranque con el móvil y un servicio en segundo plano. En
+      # la garita eso no pinta nada y sale en la lista de permisos de la app.
+      # Se quitan de esta copia del código; package.json en el repositorio no
+      # se toca, que lo comparten las demás.
+      - name: Fuera los complementos que aquí no se usan
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            delete p.dependencies['@capacitor-community/background-geolocation'];
+            delete p.dependencies['@capacitor/local-notifications'];
+            fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
+          "
+          rm -rf node_modules/@capacitor-community node_modules/@capacitor/local-notifications
+          node -e "console.log(Object.keys(require('./package.json').dependencies).join(' '))"
+
       - name: Build www/
         run: npm run build:www:control
 
