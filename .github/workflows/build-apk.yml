@@ -371,7 +371,15 @@ jobs:
                                       : fname.endsWith(".xlsx")
                                         ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                       : fname.endsWith(".xls") ? "application/vnd.ms-excel"
-                                      : "application/json");
+                                      : fname.endsWith(".pdf") ? "application/pdf"
+                                      : fname.endsWith(".json") ? "application/json"
+                                      // Lo que no se reconozca se guarda como
+                                      // archivo a secas. Antes caía en JSON, y
+                                      // Android le pone al fichero la
+                                      // extensión del tipo que se le declara:
+                                      // el PDF acababa descargándose como
+                                      // .json.
+                                      : "application/octet-stream");
                                   Uri uri = ctx.getContentResolver().insert(
                                       MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
                                   if (uri == null) return;
