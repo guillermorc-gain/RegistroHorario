@@ -785,9 +785,14 @@
         .cuad-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.7px;color:#7f8c8d;}
         .app-content.dark .cuad-title{color:#a0a0a0;}
         .cuad-fecha{font-size:10.5px;font-weight:700;color:var(--g1);}
-        .cuad-box{flex:0 0 auto;max-height:44vh;min-height:130px;display:flex;align-items:flex-start;justify-content:center;background:white;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);overflow:auto;padding:6px;}
+        /* La foto del cuadrante se veía a trozos: la caja se quedaba con el
+           hueco que sobrara y la imagen, a su tamaño, había que recorrerla
+           dentro. Ahora la caja tiene su sitio reservado y la foto se mete
+           entera dentro —se ve de un vistazo—; para leerla, un toque abre el
+           visor, que ya amplía con dos dedos. */
+        .cuad-box{flex:0 0 auto;max-height:52vh;min-height:150px;display:flex;align-items:center;justify-content:center;background:white;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.07);overflow:hidden;padding:6px;}
         .app-content.dark .cuad-box{background:#1e2a3a;}
-        .cuad-img{max-width:100%;border-radius:8px;cursor:zoom-in;display:block;}
+        .cuad-img{max-width:100%;max-height:50vh;object-fit:contain;border-radius:8px;cursor:zoom-in;display:block;}
         .cuad-box #cuadVacio{margin:auto;}
         .cuad-acciones{display:flex;gap:6px;flex-shrink:0;}
         /* touch-action:none para que el pellizco y el arrastre lleguen a la
@@ -2044,7 +2049,7 @@
 </div>
 
 <script src="version.js"></script>
-<script src="app.js?v=36"></script>
+<script src="app.js?v=37"></script>
 <script>
 // Lo que hace que el navegador ofrezca instalar la aplicación es tener un
 // trabajador de servicio registrado. La aplicación dejó de registrarlo hace
