@@ -68,8 +68,13 @@ const ROL_APP = (document.querySelector('meta[name="app-rol"]')?.content || 'tra
 
 const SUPER_USER_EMAIL = 'guillermo.rc82@gmail.com';
 const ALLOWLIST_APP    = 'movilidad';
-const LUGARES_URL      = 'https://registro-horario-emt.vercel.app/api/lugares';
-const VERSION_URL      = 'https://registro-horario-emt.vercel.app/api/version';
+// A dónde devuelve Google la entrada cuando se hace desde la aplicación. Esta
+// dirección exacta tiene que estar dada de alta en la consola de Google como
+// URI de redirección autorizada: si no coincide, Google no devuelve a nadie.
+// De ahí que esté aquí sola, en un sitio, y no repetida por el fichero.
+const RETORNO_APP = 'https://emt-palma-movilidad.vercel.app/';
+const LUGARES_URL      = 'https://emt-palma-movilidad.vercel.app/api/lugares';
+const VERSION_URL      = 'https://emt-palma-movilidad.vercel.app/api/version';
 const ANDROID_PACKAGE  = 'com.guillermorc.horasemt';
 const RELEASE_PREFIX   = 'build-';
 const DRIVE_FILE_NAME  = 'horas-emt.json';
@@ -182,8 +187,8 @@ const app = {
     // lado. Quien la tenga instalada la abre desde su icono, que para eso está.
     elegirRol(rol) {
         const web = rol === 'gestion'
-            ? 'https://registro-horario-emt.vercel.app/gestion/'
-            : 'https://registro-horario-emt.vercel.app/?app=trabajador';
+            ? 'https://emt-palma-movilidad.vercel.app/gestion/'
+            : 'https://emt-palma-movilidad.vercel.app/?app=trabajador';
         if (rol === 'gestion') { window.location.href = web; return; }
         const el = document.getElementById('rolScreen');
         if (el) el.style.display = 'none';
@@ -370,7 +375,7 @@ const app = {
     // el servidor saca de ahí quién eres en vez de creerse una cabecera. Se
     // engancha en fetch, en un único sitio, para que no se pueda olvidar en
     // ninguna llamada nueva.
-    API_BASE: 'https://registro-horario-emt.vercel.app/api/',
+    API_BASE: 'https://emt-palma-movilidad.vercel.app/api/',
 
     _instalarFirmaApi() {
         if (this._fetchOriginal) return;
@@ -520,9 +525,7 @@ const app = {
 
     async login(silent = false, permisoExtra = '') {
         const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
-        const redirectUri = isAndroidNative
-            ? 'https://registro-horario-emt.vercel.app/'
-            : window.location.origin + '/';
+        const redirectUri = isAndroidNative ? RETORNO_APP : window.location.origin + '/';
         const email = this.usuarioActual?.email || localStorage.getItem('gUserEmail') || '';
         const verifier = this._generateVerifier();
         localStorage.setItem('pkceVerifier', verifier);
@@ -608,11 +611,9 @@ const app = {
         localStorage.removeItem('pkceVerifier');
         if (!verifier) { this.mostrarAuth(); return; }
         const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
-        const redirectUri = isAndroidNative
-            ? 'https://registro-horario-emt.vercel.app/'
-            : window.location.origin + '/';
+        const redirectUri = isAndroidNative ? RETORNO_APP : window.location.origin + '/';
         try {
-            const resp = await fetch('https://registro-horario-emt.vercel.app/api/auth/exchange', {
+            const resp = await fetch('https://emt-palma-movilidad.vercel.app/api/auth/exchange', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ code, code_verifier: verifier, redirect_uri: redirectUri })
@@ -650,7 +651,7 @@ const app = {
     async _silentReauth() {
         if (this.refreshToken) {
             try {
-                const resp = await fetch('https://registro-horario-emt.vercel.app/api/auth/refresh', {
+                const resp = await fetch('https://emt-palma-movilidad.vercel.app/api/auth/refresh', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ refresh_token: this.refreshToken })
@@ -2542,7 +2543,7 @@ const app = {
     // El trabajador escribe y gestión contesta. La fecha y la hora las pone el
     // servidor, para que no dependan del reloj del móvil.
 
-    NOTAS_URL: 'https://registro-horario-emt.vercel.app/api/notas',
+    NOTAS_URL: 'https://emt-palma-movilidad.vercel.app/api/notas',
     _notas: [],
 
     // Marcar leído desde el aviso del móvil se apunta en el servidor, no aquí:
@@ -3292,7 +3293,7 @@ const app = {
     // El servidor solo devuelve la de uno mismo; pedir la de otro no lleva a
     // ninguna parte porque el correo sale del token, no de la petición.
 
-    NOMINAS_URL: 'https://registro-horario-emt.vercel.app/api/nominas',
+    NOMINAS_URL: 'https://emt-palma-movilidad.vercel.app/api/nominas',
     _misNominas: null,
     _miNomMes: null,
 
@@ -4424,7 +4425,7 @@ const app = {
                 + 'revisión de Google. No quiere decir que sea peligrosa.\n\n'
                 + 'QUÉ TIENES QUE TOCAR\n'
                 + '1. Configuración avanzada\n'
-                + '2. Ir a registro-horario-emt.vercel.app\n'
+                + '2. Ir a emt-palma-movilidad.vercel.app\n'
                 + '3. Permitir\n\n'
                 + 'QUÉ PUEDE HACER CON ESE PERMISO\n'
                 + 'Solo enviar el correo que tú le mandes enviar, con tu archivo '
@@ -6301,7 +6302,7 @@ const app = {
 
     // ── Cuadrante ────────────────────────────────────────────────────────────
 
-    CUADRANTE_URL: 'https://registro-horario-emt.vercel.app/api/cuadrante',
+    CUADRANTE_URL: 'https://emt-palma-movilidad.vercel.app/api/cuadrante',
 
     async _cargarCuadrante() {
         // El propio primero —si ha subido uno, es el que quiere ver—, y si no
@@ -6565,7 +6566,7 @@ const app = {
 
     // ── Resumen para la app de gestión ───────────────────────────────────────
 
-    USUARIOS_URL: 'https://registro-horario-emt.vercel.app/api/usuarios',
+    USUARIOS_URL: 'https://emt-palma-movilidad.vercel.app/api/usuarios',
 
     // Turno según la hora de entrada habitual: mañana 6–13, tarde 13–20
     _minutos(hhmm) {
@@ -7903,7 +7904,7 @@ const app = {
     async _checkUserAuthorized(email) {
         if (email.toLowerCase() === SUPER_USER_EMAIL.toLowerCase()) return true;
         try {
-            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, { cache: 'no-store' });
+            const resp = await fetch('https://emt-palma-movilidad.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, { cache: 'no-store' });
             if (!resp.ok) return true;
             const allowed = await resp.json();
             if (!Array.isArray(allowed) || allowed.length === 0) return true;
@@ -7916,7 +7917,7 @@ const app = {
         if (!el) return;
         el.innerHTML = '<div style="color:#888;font-size:12px;padding:4px 0;">Cargando...</div>';
         try {
-            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, { cache: 'no-store' });
+            const resp = await fetch('https://emt-palma-movilidad.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, { cache: 'no-store' });
             if (!resp.ok) throw new Error(resp.status);
             this._allowedUsersLocal = await resp.json();
             this._renderAllowedUsers();
@@ -7948,7 +7949,7 @@ const app = {
         const btn = document.querySelector('#sectionAcceso .ops-body button[onclick*="_addUserAcceso"]');
         if (btn) btn.disabled = true;
         try {
-            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, {
+            const resp = await fetch('https://emt-palma-movilidad.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-Admin-Email': this.usuarioActual?.email || '' },
                 body: JSON.stringify({ email, app: ALLOWLIST_APP })
@@ -7965,7 +7966,7 @@ const app = {
 
     async _removeUserAcceso(email) {
         try {
-            const resp = await fetch('https://registro-horario-emt.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, {
+            const resp = await fetch('https://emt-palma-movilidad.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json', 'X-Admin-Email': this.usuarioActual?.email || '' },
                 body: JSON.stringify({ email, app: ALLOWLIST_APP })
