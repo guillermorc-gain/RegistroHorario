@@ -165,7 +165,7 @@ const app = {
         poner('splashRol', '⚙️ Desarrollador');
         const logo = document.getElementById('authLogo');
         if (logo) logo.src = 'icons/icon-dev-192.png';
-        document.title = 'Desarrollador Movilidad EMT';
+        document.title = 'Desarrollador EMT - Movilidad';
     },
 
     async init() {
@@ -1278,11 +1278,11 @@ const app = {
             return;
         }
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-            try { await navigator.share({ title: 'Copia Gestión EMT Movilidad', files: [file] }); this._mostrarToast('✅ Copia exportada', 3000); return; }
+            try { await navigator.share({ title: 'Copia Gestión EMT - Movilidad', files: [file] }); this._mostrarToast('✅ Copia exportada', 3000); return; }
             catch(e) { if (e.name === 'AbortError') return; }
         }
         if (navigator.share) {
-            try { await navigator.share({ title: 'Copia Gestión EMT Movilidad', text: json }); this._mostrarToast('✅ Copia exportada', 3000); return; }
+            try { await navigator.share({ title: 'Copia Gestión EMT - Movilidad', text: json }); this._mostrarToast('✅ Copia exportada', 3000); return; }
             catch(e) { if (e.name === 'AbortError') return; }
         }
         try {
@@ -1786,8 +1786,8 @@ const app = {
             // En su propia aplicación basta con el nombre: ya se sabe cuál es
             // por el icono y la bienvenida, y así cabe el nombre de la cuenta.
             tit.textContent = ROL_APP === 'desarrollador' ? '⚙️ Desarrollador'
-                : this._soyElDesarrollador() ? '⚙️ Desarrollador Movilidad EMT'
-                : '🛠️ Gestión EMT Movilidad';
+                : this._soyElDesarrollador() ? '⚙️ Desarrollador EMT - Movilidad'
+                : '🛠️ Gestión EMT - Movilidad';
         }
     },
 
@@ -7457,7 +7457,7 @@ const app = {
             try {
                 const notif = {
                     id: 1001,
-                    title: '📍 Gestión EMT Movilidad',
+                    title: '📍 Gestión EMT - Movilidad',
                     body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
                     actionTypeId: 'TRABAJO_CERCANO',
                 };
@@ -7472,14 +7472,14 @@ const app = {
         if (!('Notification' in window) || Notification.permission !== 'granted') return;
         try {
             const reg = await navigator.serviceWorker.ready;
-            reg.showNotification('📍 Gestión EMT Movilidad', {
+            reg.showNotification('📍 Gestión EMT - Movilidad', {
                 body: 'Parece que estás en el trabajo. ¿Registras la jornada?',
                 icon: '/icons/icon-192.png', badge: '/icons/badge.svg',
                 tag: 'trabajo-cercano', requireInteraction: true,
                 actions: [{ action: 'abrir', title: 'Abrir app' }]
             });
         } catch(_) {
-            new Notification('📍 Gestión EMT Movilidad', { body: 'Parece que estás en el trabajo.', icon: '/icons/icon-192.png' });
+            new Notification('📍 Gestión EMT - Movilidad', { body: 'Parece que estás en el trabajo.', icon: '/icons/icon-192.png' });
         }
     },
 
@@ -7491,7 +7491,7 @@ const app = {
         try {
             this._geoWatcherId = await BGGeo.addWatcher({
                 backgroundMessage: '',
-                backgroundTitle: 'Gestión EMT Movilidad',
+                backgroundTitle: 'Gestión EMT - Movilidad',
                 requestPermissions: true,
                 stale: false,
                 distanceFilter: 200
@@ -7543,7 +7543,7 @@ const app = {
         try {
             const notif = {
                 id: 1001,
-                title: '📍 Gestión EMT Movilidad',
+                title: '📍 Gestión EMT - Movilidad',
                 body: 'Parece que estás en el trabajo. ¿Registras la jornada de hoy?',
                 actionTypeId: 'TRABAJO_CERCANO',
             };
@@ -7717,7 +7717,7 @@ const app = {
                 await LN.requestPermissions();
                 const notif = {
                     id: 9999,
-                    title: '🔔 Gestión EMT Movilidad — prueba',
+                    title: '🔔 Gestión EMT - Movilidad — prueba',
                     body: 'Las notificaciones funcionan correctamente.',
                 };
                 if (this.notifSound && this.notifSound !== 'default') {
@@ -7738,13 +7738,13 @@ const app = {
         if (Notification.permission === 'denied') { alert('❌ Las notificaciones están bloqueadas. Actívalas en los ajustes del navegador.'); return; }
         try {
             const reg = await navigator.serviceWorker.ready;
-            await reg.showNotification('🔔 Gestión EMT Movilidad — prueba', {
+            await reg.showNotification('🔔 Gestión EMT - Movilidad — prueba', {
                 body: 'Las notificaciones funcionan correctamente.',
                 icon: '/icons/icon-192.png', badge: '/icons/badge.svg',
                 tag: 'test-notif'
             });
         } catch(_) {
-            new Notification('🔔 Gestión EMT Movilidad — prueba', { body: 'Las notificaciones funcionan correctamente.', icon: '/icons/icon-192.png' });
+            new Notification('🔔 Gestión EMT - Movilidad — prueba', { body: 'Las notificaciones funcionan correctamente.', icon: '/icons/icon-192.png' });
         }
     },
 
