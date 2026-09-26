@@ -365,6 +365,9 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-User-Email, X-Admin-Email, Authorization');
+  // La firma de la sesión obliga al navegador a preguntar antes en cada
+  // petición; sin esto repetiría esa pregunta cada pocos segundos.
+  res.setHeader('Access-Control-Max-Age', '86400');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
