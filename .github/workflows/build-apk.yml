@@ -1122,6 +1122,65 @@ jobs:
                           .putLong("avisoFondoUltimo", System.currentTimeMillis()).apply();
                       try { mirarChat(ctx); } catch (Exception ignored) {}
                       try { mirarJornada(ctx); } catch (Exception ignored) {}
+                      try { mirarCuadrante(ctx); } catch (Exception ignored) {}
+                  }
+
+
+                  // Cuando gestión publica el cuadrante del mes, que se entere
+                  // aunque tenga la app cerrada. Se aprovecha el mismo
+                  // despertar que el de los mensajes: no cuesta otra alarma.
+                  // La primera vez no avisa: se apunta lo que hay y a partir de
+                  // ahí, lo que llegue nuevo.
+                  static void mirarCuadrante(Context ctx) throws Exception {
+                      SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                      String url = prefs.getString("cuadranteUrl", "");
+                      if (url.isEmpty()) return;
+
+                      java.net.HttpURLConnection c =
+                          (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                      c.setConnectTimeout(15000);
+                      c.setReadTimeout(15000);
+                      c.setRequestProperty("User-Agent", "HorasEMT/1.0");
+                      if (c.getResponseCode() != 200) { c.disconnect(); return; }
+                      StringBuilder sb = new StringBuilder();
+                      java.io.BufferedReader br = new java.io.BufferedReader(
+                          new java.io.InputStreamReader(c.getInputStream(), "UTF-8"));
+                      String linea;
+                      while ((linea = br.readLine()) != null) sb.append(linea);
+                      br.close(); c.disconnect();
+
+                      org.json.JSONObject o = new org.json.JSONObject(sb.toString());
+                      // Solo el que publica gestión: el que se haya subido uno
+                      // para sí mismo no lleva quién lo publicó.
+                      if (o.optString("publicadoPor", "").isEmpty()) return;
+                      String cuando = o.optString("actualizado", "");
+                      if (cuando.isEmpty()) return;
+                      String visto = prefs.getString("cuadranteVisto", "");
+                      prefs.edit().putString("cuadranteVisto", cuando).apply();
+                      if (visto.isEmpty() || cuando.compareTo(visto) <= 0) return;
+
+                      NotificationManager nm =
+                          (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (nm == null) return;
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          nm.createNotificationChannel(new NotificationChannel(
+                              CHAT_CHANNEL, "Mensajes", NotificationManager.IMPORTANCE_HIGH));
+                      }
+                      String texto = "Ya est\u00e1 el cuadrante del mes. M\u00edralo en Historial.";
+                      int flags = PendingIntent.FLAG_UPDATE_CURRENT
+                          | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
+                      Intent oi = new Intent(ctx, MainActivity.class);
+                      oi.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                      PendingIntent pi = PendingIntent.getActivity(ctx, 4, oi, flags);
+                      nm.notify(1004, new NotificationCompat.Builder(ctx, CHAT_CHANNEL)
+                          .setSmallIcon(R.drawable.ic_stat_chat)
+                          .setContentTitle("Cuadrante del mes publicado")
+                          .setContentText(texto)
+                          .setStyle(new NotificationCompat.BigTextStyle().bigText(texto))
+                          .setPriority(NotificationCompat.PRIORITY_HIGH)
+                          .setContentIntent(pi)
+                          .setAutoCancel(true)
+                          .build());
                   }
 
 

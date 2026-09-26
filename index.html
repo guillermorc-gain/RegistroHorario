@@ -600,10 +600,12 @@
         .cuad-box #cuadVacio{margin:auto;}
         .cuad-acciones{display:flex;gap:6px;flex-shrink:0;margin-top:8px;}
         .cuad-acciones button{flex:1;}
-        .cuad-visor{display:none;position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:99999;align-items:center;justify-content:center;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pinch-zoom;}
-        .cuad-visor.show{display:flex;}
-        .cuad-visor img{max-width:100%;max-height:100%;object-fit:contain;transform-origin:center center;transition:transform .18s ease;}
-        .cuad-visor img.zoom{max-width:none;max-height:none;width:260%;height:auto;object-fit:initial;}
+        /* touch-action:none para que el pellizco y el arrastre lleguen a la
+           app: sobre una capa fija el navegador no hace su propio zoom, y si
+           no se le quita el gesto de las manos tampoco lo deja pasar. */
+        .cuad-visor{display:none;position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:99999;overflow:hidden;touch-action:none;}
+        .cuad-visor.show{display:block;}
+        .cuad-visor img{position:absolute;top:50%;left:50%;max-width:100%;max-height:100%;object-fit:contain;transform:translate(-50%,-50%);transform-origin:center center;will-change:transform;-webkit-user-select:none;user-select:none;-webkit-user-drag:none;}
         .cuad-visor-ayuda{position:absolute;bottom:calc(14px + env(safe-area-inset-bottom,0px));left:0;right:0;text-align:center;color:rgba(255,255,255,.65);font-size:11.5px;pointer-events:none;}
         .cuad-visor-x{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:14px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;border:none;font-size:22px;cursor:pointer;}
 
@@ -1097,7 +1099,7 @@
                 <img id="cuadImg" class="cuad-img" style="display:none" onclick="app.verCuadranteGrande()">
             </div>
             <div class="cuad-acciones">
-                <button class="btn-secondary" onclick="document.getElementById('cuadranteFileInput').click()">📤 Subir foto/archivo</button>
+                <button class="btn-secondary" onclick="document.getElementById('cuadranteFileInput').click()">📤 Subir foto o archivo del cuadrante mensual</button>
                 <button class="btn-main" onclick="app.exportarRegistro()">📊 Exportar mis jornadas</button>
             </div>
             <input type="file" id="cuadranteFileInput" accept="image/*" style="display:none" onchange="app._onCuadranteFileElegido(event)">
@@ -1897,14 +1899,14 @@
 </div>
 
 <!-- Visor del cuadrante -->
-<div class="cuad-visor" id="cuadVisor" onclick="app.cerrarCuadranteGrande()">
+<div class="cuad-visor" id="cuadVisor">
     <button class="cuad-visor-x" onclick="event.stopPropagation();app.cerrarCuadranteGrande()">×</button>
-    <img id="cuadVisorImg" onclick="event.stopPropagation();app.zoomCuadrante(event)">
-    <div class="cuad-visor-ayuda" id="cuadVisorAyuda">Toca la imagen para ampliar · pellizca para acercar</div>
+    <img id="cuadVisorImg">
+    <div class="cuad-visor-ayuda" id="cuadVisorAyuda">Pellizca o haz doble toque para ampliar</div>
 </div>
 
 <script src="version.js"></script>
-<script src="app.js?v=35"></script>
+<script src="app.js?v=36"></script>
 <script>
 // Lo que hace que el navegador ofrezca instalar la aplicación es tener un
 // trabajador de servicio registrado. La aplicación dejó de registrarlo hace

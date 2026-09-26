@@ -113,6 +113,10 @@ async function guardarGlobal(req, res, adminEmail) {
       }
       payload = {
         ...(data || {}),
+        // El cuadrante nuevo de gestión es el que vale: lo que se hubiera
+        // subido cada uno por su cuenta era para mientras no lo hubiera, y
+        // dejarlo ahí significaba que el suyo le tapaba el bueno.
+        porTrabajador: {},
         imagen,
         nombre: (nombre || '').slice(0, 120),
         actualizado: new Date().toISOString(),
