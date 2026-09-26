@@ -386,9 +386,17 @@ const app = {
             }
             const op = { ...(opciones || {}) };
             const metodo = (op.method || 'GET').toUpperCase();
-            if (metodo !== 'GET' && metodo !== 'OPTIONS') {
-                // Si está caducado se renueva antes: enviarlo vencido sería un 401
-                if (app.accessToken && Date.now() >= app.tokenExpiry) {
+            // La firma iba solo en lo que escribe, y hay lecturas que también
+            // piden saber quién llama: la nómina de uno mismo y su cuadrante
+            // personal, sin ir más lejos. Sin firma el servidor respondía 401
+            // y la app se quedaba con lo último que tuviera guardado en el
+            // móvil —en uno recién instalado, nada—, así que la nómina había
+            // que rellenarla otra vez y no había ninguna que exportar.
+            if (metodo !== 'OPTIONS') {
+                // Si está caducado se renueva antes: enviarlo vencido sería un
+                // 401. Solo al escribir: el sondeo de mensajes pasa por aquí
+                // cada minuto y no puede acabar sacando la pantalla de entrar.
+                if (metodo !== 'GET' && app.accessToken && Date.now() >= app.tokenExpiry) {
                     try { await app._silentReauth(); } catch (_) {}
                 }
                 // Las cabeceras pueden venir como objeto o como Headers, y
