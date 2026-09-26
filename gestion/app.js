@@ -477,8 +477,22 @@ const app = {
             localStorage.setItem('gUserEmail', this.usuarioActual.email);
             const authorized = await this._checkUserAuthorized(this.usuarioActual.email);
             if (!authorized) {
+                const conQue = this.usuarioActual.email;
                 this.mostrarAuth();
-                this.mostrarMensaje('❌ La cuenta ' + this.usuarioActual.email + ' no tiene acceso a esta aplicación.', 'error');
+                // En la de desarrollador se dice con cuál hay que entrar: el
+                // problema siempre es haber elegido otra cuenta sin querer,
+                // y "no tiene acceso" a secas no ayuda a caer en ello.
+                this.mostrarMensaje(ES_APP_DEV
+                    ? `❌ Has entrado con ${conQue}. Esta aplicación es solo para ${SUPER_USER_EMAIL}.`
+                    : `❌ La cuenta ${conQue} no tiene acceso a esta aplicación.`, 'error');
+                // Y que la próxima vez vuelva a preguntar la cuenta: si se queda
+                // guardada la sesión, al abrir entra sola otra vez con la que no
+                // vale y se vuelve a quedar a medias sin decir por qué.
+                this.accessToken  = null;
+                this.tokenExpiry  = 0;
+                this.refreshToken = null;
+                ['gAccessToken', 'gTokenExpiry', 'gRefreshToken', 'gUserEmail']
+                    .forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
                 return;
             }
             this.mostrarApp();
@@ -8374,6 +8388,11 @@ const app = {
     // can never lock the gestor out.
     async _checkUserAuthorized(email) {
         if (email.toLowerCase() === SUPER_USER_EMAIL.toLowerCase()) return true;
+        // En la app de desarrollador no entra nadie más. Comparte código con
+        // la de gestión, así que hasta ahora dejaba pasar a cualquiera de la
+        // lista de gestión: se entraba con otra cuenta sin darse cuenta y la
+        // app salía a medias, que es lo que pasó.
+        if (ES_APP_DEV) return false;
         try {
             const resp = await fetch('https://emt-palma-movilidad.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, { cache: 'no-store' });
             if (!resp.ok) return false;
