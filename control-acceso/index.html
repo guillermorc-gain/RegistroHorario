@@ -23,7 +23,7 @@
         .cab{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between;max-width:1200px;margin:0 auto;}
         .mes{display:flex;align-items:center;gap:6px;}
         .mes button{background:rgba(255,255,255,.18);border:0;color:#fff;width:34px;height:34px;border-radius:8px;font-size:18px;cursor:pointer;}
-        .mes input{background:rgba(255,255,255,.95);border:0;border-radius:8px;padding:6px 8px;font-size:15px;color:#1c2533;}
+        .mes select{background:rgba(255,255,255,.95);border:0;border-radius:8px;padding:6px 8px;font-size:15px;color:#1c2533;}
         nav{display:flex;gap:4px;max-width:1200px;margin:12px auto 0;overflow-x:auto;}
         nav button{flex:1;min-width:max-content;background:rgba(255,255,255,.14);color:#fff;border:0;border-radius:10px 10px 0 0;padding:10px 12px;font-size:15px;font-weight:600;cursor:pointer;}
         nav button.activa{background:var(--fondo);color:var(--azul);}
@@ -90,7 +90,8 @@
             <h1>📋 Control de acceso</h1>
             <div class="mes">
                 <button type="button" onclick="ca.moverMes(-1)" aria-label="Mes anterior">‹</button>
-                <input type="month" id="mes" onchange="ca.cambiarMes(this.value)">
+                <select id="selMes" aria-label="Mes" onchange="ca.elegirMes()"></select>
+                <select id="selAnio" aria-label="Año" onchange="ca.elegirMes()"></select>
                 <button type="button" onclick="ca.moverMes(1)" aria-label="Mes siguiente">›</button>
             </div>
         </div>
@@ -109,14 +110,14 @@
                 <h2>Nueva entrada</h2>
                 <p class="ayuda">Escribe la matrícula o el nombre: si está en Datos, se rellena el resto, como la macro del Excel. Si es alguien nuevo, se guarda en Datos para la próxima vez.</p>
                 <form class="formulario" id="formEntrada" onsubmit="event.preventDefault(); ca.anadirEntrada()" style="margin-top:10px">
-                    <label>Fecha<input type="date" name="fecha" required></label>
+                    <label>Fecha<input type="date" name="fecha" data-tipo="fecha" required></label>
                     <label>Matrícula<input name="matricula" autocomplete="off" list="dl-matriculas" placeholder="1234-ABC"></label>
                     <label>Nombre y apellidos<input name="nombre" autocomplete="off" list="dl-nombres"></label>
                     <label>DNI<input name="dni" autocomplete="off"></label>
                     <label>Marca y modelo<input name="marca" autocomplete="off"></label>
                     <label>Empresa<input name="empresa" autocomplete="off" list="dl-empresas"></label>
-                    <label>H. Entrada<input type="time" name="entrada"></label>
-                    <label>H. Salida<input type="time" name="salida"></label>
+                    <label>H. Entrada<input type="time" name="entrada" data-tipo="hora"></label>
+                    <label>H. Salida<input type="time" name="salida" data-tipo="hora"></label>
                     <label>Motivo de acceso<input name="motivo" autocomplete="off" list="dl-motivos"></label>
                     <label>Observaciones<input name="obs" autocomplete="off"></label>
                 </form>
@@ -156,7 +157,7 @@
             <div class="tarjeta">
                 <h2>Filas de la hoja</h2>
                 <div class="formulario" style="grid-template-columns:repeat(auto-fit,minmax(160px,220px));margin-bottom:10px">
-                    <label>Fecha de la hoja<input type="date" id="fechaHoja" onchange="ca.fechaBorrador(this.value)"></label>
+                    <label>Fecha de la hoja<input type="date" id="fechaHoja" data-tipo="fecha" onchange="ca.fechaBorrador(this)"></label>
                 </div>
                 <p class="ayuda">En <span class="leyenda"></span> amarillo, las filas cuya matrícula no está en Datos (nueva o mal leída).</p>
                 <div class="tabla-caja" style="margin-top:10px">
@@ -220,6 +221,17 @@
     <datalist id="dl-motivos"></datalist>
     <div class="toast" id="toast" hidden></div>
 
+    <div id="fallo" hidden style="position:fixed;top:0;left:0;right:0;background:#c0392b;color:#fff;padding:12px 16px;font-size:14px;z-index:20"></div>
+    <script>
+        // Si algo falla al cargar, que se vea en pantalla y no se quede la
+        // página muerta sin decir nada. ES5 a propósito: tiene que funcionar
+        // incluso donde el resto no.
+        window.onerror = function (msg, src, linea) {
+            var d = document.getElementById('fallo');
+            d.hidden = false;
+            d.textContent = 'Error en la página: ' + msg + (linea ? ' (línea ' + linea + ')' : '') + ' — ' + navigator.userAgent;
+        };
+    </script>
     <script src="vendor/xlsx.full.min.js"></script>
     <script src="app.js"></script>
 </body>

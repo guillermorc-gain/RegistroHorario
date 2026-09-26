@@ -33,6 +33,37 @@ const TESS = {
 };
 
 const $ = id => document.getElementById(id);
+const vaciar = el => { while (el.firstChild) el.removeChild(el.firstChild); };
+const filaDe = el => { const tr = el.closest('tr'); return tr ? tr.dataset.id : ''; };
+// Safari de Mac antiguo, Firefox de escritorio y navegadores viejos no tienen
+// selector de fecha u hora: ahí esos campos son de texto y se escriben a mano
+// (dd/mm/aaaa y hh:mm). Todo lo que lee o escribe fechas y horas pasa por
+// leer() y poner() para que dé igual cuál de los dos haya.
+const soporta = t => { const i = document.createElement('input'); i.setAttribute('type', t); return i.type === t; };
+const NATIVO = { fecha: soporta('date'), hora: soporta('time') };
+const textoAFecha = v => {
+    const m = String(v || '').trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})$/);
+    if (m && +m[1] >= 1 && +m[1] <= 31 && +m[2] >= 1 && +m[2] <= 12) return `${m[3].length === 2 ? '20' + m[3] : m[3]}-${dos(m[2])}-${dos(m[1])}`;
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '').trim()) ? String(v).trim() : '';
+};
+const aHora = v => {
+    const s = String(v || '').trim();
+    const m = s.match(/^(\d{1,2})\s*[:.,hH]?\s*(\d{2})$/);
+    if (m && +m[1] < 24 && +m[2] < 60) return `${dos(m[1])}:${m[2]}`;
+    return s;   // «-» y cosas así se dejan como están
+};
+const leer = inp => {
+    const t = inp.dataset.tipo, v = inp.value.trim();
+    if (t === 'fecha') return NATIVO.fecha ? v : textoAFecha(v);
+    if (t === 'hora') return aHora(v);
+    return v;
+};
+const poner = (inp, v) => {
+    const t = inp.dataset.tipo;
+    if (t === 'fecha' && !NATIVO.fecha) { inp.value = /^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v.split('-').reverse().join('/') : ''; inp.placeholder = 'dd/mm/aaaa'; }
+    else if (t === 'hora' && !NATIVO.hora) { inp.value = v || ''; inp.placeholder = 'hh:mm'; }
+    else inp.value = v || '';
+};
 const dos = n => String(n).padStart(2, '0');
 const hoy = () => { const d = new Date(); return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`; };
 const ahora = () => { const d = new Date(); return `${dos(d.getHours())}:${dos(d.getMinutes())}`; };
@@ -72,15 +103,17 @@ const ca = {
         } catch (_) { /* sin almacenamiento: se trabaja en memoria */ }
 
         const f = $('formEntrada');
-        f.fecha.value = this.mes === hoy().slice(0, 7) ? hoy() : this.mes + '-01';
-        f.entrada.value = ahora();
+        poner(f.fecha, this.mes === hoy().slice(0, 7) ? hoy() : this.mes + '-01');
+        poner(f.entrada, ahora());
+        poner(f.salida, '');
+        this._pintarSelectorMes();
         f.matricula.addEventListener('input', () => this._completarForm('matricula'));
         f.nombre.addEventListener('input', () => this._completarForm('nombre'));
         for (const id of ['tablaListado', 'tablaDatos', 'tablaBorrador']) {
             $(id).addEventListener('change', e => this._editar(e, id));
             $(id).addEventListener('click', e => this._accion(e, id));
         }
-        $('fechaHoja').value = this.borrador.fecha || hoy();
+        poner($('fechaHoja'), this.borrador.fecha || hoy());
         this.pintar();
     },
 
@@ -102,8 +135,27 @@ const ca = {
         this.mes = valor;
         try { localStorage.setItem(CLAVE + '.mes', valor); } catch (_) {}
         const f = $('formEntrada');
-        if (f.fecha.value.slice(0, 7) !== valor) f.fecha.value = valor === hoy().slice(0, 7) ? hoy() : valor + '-01';
+        if (leer(f.fecha).slice(0, 7) !== valor) poner(f.fecha, valor === hoy().slice(0, 7) ? hoy() : valor + '-01');
         this.pintar();
+    },
+
+    // Mes y año en dos desplegables: el selector de mes del navegador no
+    // existe en Safari de Mac ni en Firefox.
+    _pintarSelectorMes() {
+        const sm = $('selMes'), sa = $('selAnio');
+        if (!sm.options.length) MESES.forEach((m, i) => sm.add(new Option(m[0].toUpperCase() + m.slice(1), dos(i + 1))));
+        const anios = new Set(Object.keys(this.estado.meses).map(k => +k.slice(0, 4)));
+        const actual = new Date().getFullYear();
+        for (let a = actual - 2; a <= actual + 1; a++) anios.add(a);
+        anios.add(+this.mes.slice(0, 4));
+        vaciar(sa);
+        [...anios].sort().forEach(a => sa.add(new Option(String(a), String(a))));
+        sm.value = this.mes.slice(5, 7);
+        sa.value = this.mes.slice(0, 4);
+    },
+
+    elegirMes() {
+        this.cambiarMes(`${$('selAnio').value}-${$('selMes').value}`);
     },
 
     moverMes(paso) {
@@ -174,8 +226,8 @@ const ca = {
     anadirEntrada() {
         const f = $('formEntrada');
         const fila = { id: nuevoId() };
-        for (const c of CAMPOS_LISTADO) fila[c] = f[c].value.trim();
-        if (!fila.fecha) return;
+        for (const c of CAMPOS_LISTADO) fila[c] = leer(f[c]);
+        if (!fila.fecha) { this.aviso('Pon la fecha (dd/mm/aaaa).', true); return; }
         if (!util(fila.matricula) && !util(fila.nombre)) { this.aviso('Pon al menos la matrícula o el nombre.', true); return; }
         fila.matricula = fmtMat(fila.matricula);
         const nuevo = this.registrarEnDatos(fila);
@@ -183,7 +235,7 @@ const ca = {
         this.guardar();
         if (fila.fecha.slice(0, 7) !== this.mes) this.cambiarMes(fila.fecha.slice(0, 7));
         for (const c of CAMPOS_LISTADO) if (c !== 'fecha') { f[c].value = ''; f[c].classList.remove('auto'); }
-        f.entrada.value = ahora();
+        poner(f.entrada, ahora());
         $('estadoBusqueda').textContent = '';
         this.pintar();
         this.aviso(nuevo ? 'Añadido al listado y guardado en Datos.' : 'Añadido al listado.');
@@ -192,7 +244,7 @@ const ca = {
 
     // ── Pintado ─────────────────────────────────────────────────────────
     pintar() {
-        $('mes').value = this.mes;
+        this._pintarSelectorMes();
         const l = this.listado();
         $('nListado').textContent = l.length ? `(${l.length})` : '';
         $('nDatos').textContent = this.estado.datos.length ? `(${this.estado.datos.length})` : '';
@@ -212,8 +264,9 @@ const ca = {
     _input(campo, valor) {
         const inp = document.createElement('input');
         inp.dataset.campo = campo;
-        inp.type = campo === 'fecha' ? 'date' : campo === 'entrada' || campo === 'salida' ? 'time' : 'text';
-        inp.value = valor || '';
+        if (campo === 'fecha') { inp.dataset.tipo = 'fecha'; if (NATIVO.fecha) inp.type = 'date'; }
+        else if (campo === 'entrada' || campo === 'salida') { inp.dataset.tipo = 'hora'; if (NATIVO.hora) inp.type = 'time'; }
+        poner(inp, valor);
         return inp;
     },
 
@@ -232,7 +285,7 @@ const ca = {
 
     pintarListado() {
         const tbody = $('tablaListado');
-        tbody.replaceChildren();
+        vaciar(tbody);
         const filas = this._ordenar(this.listado());
         if (!filas.length) { this._vacio(tbody, 11, `El listado de ${nombreMes(this.mes)} está vacío.`); return; }
         filas.forEach((f, i) => {
@@ -259,7 +312,7 @@ const ca = {
 
     pintarDatos() {
         const tbody = $('tablaDatos');
-        tbody.replaceChildren();
+        vaciar(tbody);
         const q = clave($('filtroDatos').value);
         const qm = normMat($('filtroDatos').value);
         const filas = this.estado.datos.filter(d => !q ||
@@ -288,7 +341,7 @@ const ca = {
 
     pintarBorrador() {
         const tbody = $('tablaBorrador');
-        tbody.replaceChildren();
+        vaciar(tbody);
         if (!this.borrador.filas.length) {
             this._vacio(tbody, 11, 'Sin filas. Añádelas mirando la foto, o prueba la lectura automática.');
             return;
@@ -322,7 +375,7 @@ const ca = {
         const dias = new Set(l.map(f => f.fecha)).size;
         const personas = new Set(l.map(f => normMat(f.matricula) || clave(f.nombre)).filter(Boolean)).size;
         const res = $('resumenMes');
-        res.replaceChildren();
+        vaciar(res);
         for (const [n, t] of [[l.length, 'entradas'], [dias, 'días'], [personas, 'personas distintas'], [this.estado.datos.length, 'en Datos']]) {
             const d = document.createElement('div');
             d.className = 'dato';
@@ -335,7 +388,7 @@ const ca = {
     _pintarListas() {
         const llenar = (id, valores) => {
             const dl = $(id);
-            dl.replaceChildren();
+            vaciar(dl);
             for (const [v, etiqueta] of valores) {
                 const o = document.createElement('option');
                 o.value = v; if (etiqueta) o.label = etiqueta;
@@ -359,13 +412,14 @@ const ca = {
 
     _editar(e, tabla) {
         const inp = e.target;
-        const id = inp.closest('tr')?.dataset.id;
+        const id = filaDe(inp);
         const lista = this._coleccion(tabla);
         const f = lista.find(x => x.id === id);
         const campo = inp.dataset.campo;
         if (!f || !campo) return;
-        let v = inp.value.trim();
+        let v = leer(inp);
         if (campo === 'matricula') v = fmtMat(v);
+        if (inp.dataset.tipo === 'fecha' && !v) { this.aviso('Esa fecha no se entiende: escríbela como dd/mm/aaaa.', true); this.pintar(); return; }
         f[campo] = v;
         // En el listado y en la hoja, cambiar matrícula o nombre trae el resto
         // de Datos (lo que hacía la macro); en Datos no, que ahí se corrige.
@@ -386,7 +440,7 @@ const ca = {
     _accion(e, tabla) {
         const b = e.target.closest('button[data-accion]');
         if (!b) return;
-        const id = b.closest('tr')?.dataset.id;
+        const id = filaDe(b);
         const lista = this._coleccion(tabla);
         const i = lista.findIndex(x => x.id === id);
         if (i < 0) return;
@@ -405,7 +459,8 @@ const ca = {
         $('filtroDatos').value = '';
         this.guardar();
         this.pintarDatos();
-        $('tablaDatos').querySelector('input')?.focus();
+        const primero = $('tablaDatos').querySelector('input');
+        if (primero) primero.focus();
     },
 
     vaciarMes() {
@@ -425,7 +480,7 @@ const ca = {
 
     _pintarFotos(activa) {
         const caja = $('fotos');
-        caja.replaceChildren();
+        vaciar(caja);
         this.fotoActiva = activa;
         this.fotos.forEach((f, i) => {
             const fig = document.createElement('figure');
@@ -441,8 +496,8 @@ const ca = {
         if (hay) $('visorImg').src = this.fotos[activa].url;
     },
 
-    fechaBorrador(v) {
-        this.borrador.fecha = v;
+    fechaBorrador(inp) {
+        this.borrador.fecha = leer(inp);
         this.guardar();
     },
 
@@ -453,7 +508,7 @@ const ca = {
         this.guardar();
         this.pintarBorrador();
         const inputs = $('tablaBorrador').querySelectorAll('tr:last-child input');
-        inputs[0]?.focus();
+        if (inputs[0]) inputs[0].focus();
     },
 
     descartarBorrador() {
@@ -464,8 +519,8 @@ const ca = {
     },
 
     pasarBorrador() {
-        const fecha = $('fechaHoja').value;
-        if (!fecha) { this.aviso('Pon la fecha de la hoja.', true); return; }
+        const fecha = leer($('fechaHoja'));
+        if (!fecha) { this.aviso('Pon la fecha de la hoja (dd/mm/aaaa).', true); return; }
         const vale = f => ['nombre', 'matricula', 'marca', 'empresa'].some(k => util(f[k]));
         const filas = this.borrador.filas.filter(vale);
         const pendientes = this.borrador.filas.filter(f => !vale(f));
@@ -523,7 +578,7 @@ const ca = {
             const lienzo = await this._prepararImagen(foto.archivo);
             const { data } = await worker.recognize(lienzo);
             const { filas, fecha } = this.interpretar(data.text || '');
-            if (fecha) { $('fechaHoja').value = fecha; this.borrador.fecha = fecha; }
+            if (fecha) { poner($('fechaHoja'), fecha); this.borrador.fecha = fecha; }
             this.borrador.filas.push(...filas);
             this.guardar();
             this.pintarBorrador();
@@ -534,7 +589,7 @@ const ca = {
         } catch (e) {
             estado.textContent = 'No se ha podido leer: ' + (e.message || e);
         } finally {
-            try { await worker?.terminate(); } catch (_) {}
+            try { if (worker) await worker.terminate(); } catch (_) {}
             btn.disabled = false; barra.hidden = true; progreso(0);
         }
     },
@@ -611,7 +666,8 @@ const ca = {
             }
             const horas = [];
             const lh = L.replace(/[OQD]/g, '0').replace(/[IL|]/g, '1');
-            for (const h of lh.matchAll(/(?:^|[^0-9])([01]?\d|2[0-3])\s*[:.,H']\s*([0-5]\d)(?![0-9])/g)) horas.push(`${dos(h[1])}:${h[2]}`);
+            const reHora = /(?:^|[^0-9])([01]?\d|2[0-3])\s*[:.,H']\s*([0-5]\d)(?![0-9])/g;
+            for (let h = reHora.exec(lh); h; h = reHora.exec(lh)) horas.push(`${dos(h[1])}:${h[2]}`);
             // Una línea con horas es casi seguro una entrada aunque no se haya
             // entendido la matrícula: se deja la fila para completarla a mano.
             if (!matricula && !persona) {
@@ -679,8 +735,9 @@ const ca = {
             if (!util(d.nombre) && !util(d.matricula)) return;
             d.matricula = fmtMat(d.matricula);
             const celda = ws[XLSX.utils.encode_cell({ r: c.cab + 1 + i, c: Math.max(c.nombre, 0) })];
-            const tema = celda?.s?.fgColor?.theme;
-            if (celda?.s?.patternType === 'solid' && colores[tema]) d.color = colores[tema];
+            const estilo = celda && celda.s;
+            const tema = estilo && estilo.fgColor ? estilo.fgColor.theme : null;
+            if (estilo && estilo.patternType === 'solid' && colores[tema]) d.color = colores[tema];
             const ya = util(d.matricula) ? this.porMatricula(d.matricula) : this.porNombre(d.nombre);
             if (ya) { if (!ya.color && d.color) ya.color = d.color; return; }
             this.estado.datos.push(d);
