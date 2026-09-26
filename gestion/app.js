@@ -2503,6 +2503,27 @@ const app = {
             + 'email=' + encodeURIComponent(this.usuarioActual?.email || '');
     },
 
+    // Marcar leído desde el aviso del móvil se apunta en el servidor, no aquí:
+    // el móvil manda el visto y ya está. Al abrir la app, esto no lo sabía y
+    // la conversación seguía contando como pendiente, así que volvía a sonar y
+    // a salir el aviso de algo que ya se había leído. Lo que el servidor dice
+    // que he visto yo se da por leído aquí también.
+    _fundirVistosDelServidor() {
+        const yo = (this.usuarioActual?.email || '').toLowerCase();
+        if (!yo) return;
+        const leidas = this._leidas();
+        let cambia = false;
+        (this._notas || []).forEach(n => {
+            const v = n?.vistoPor;
+            if (!v || (v.email || '').toLowerCase() !== yo) return;
+            const cuando = v.en || '';
+            if (cuando && cuando > (leidas[n.id] || '')) { leidas[n.id] = cuando; cambia = true; }
+        });
+        if (cambia) {
+            try { localStorage.setItem('convLeidas', JSON.stringify(leidas)); } catch (_) {}
+        }
+    },
+
     async _cargarNotasGestor() {
         // Sin correo, pedirlas en la app de desarrollador devolvería la
         // bandeja de gestión entera. Mejor no pedir nada.
@@ -2518,6 +2539,7 @@ const app = {
         } catch (_) {
             try { this._notas = JSON.parse(localStorage.getItem('notasCache') || '[]'); } catch (__) {}
         }
+        this._fundirVistosDelServidor();
         this._renderNotasGestor();
         // Con la conversación abierta, lo que llegue se ve ahí mismo: antes
         // había que cerrarla y volver a entrar para leer la respuesta.
@@ -4073,42 +4095,143 @@ const app = {
             n ? `🔄 Grupo ${n}` : 'Sin grupo');
     },
 
+    // ── El cuadrante en grande ───────────────────────────────────────────────
+    // Ampliar con dos dedos y moverse por la imagen no salía gratis: el visor
+    // va sobre una capa fija, y sobre eso el navegador no aplica su propio
+    // zoom. Lo que había —una clase que ponía la imagen al 260 % y confiaba en
+    // el scroll de la caja— no respondía al pellizco y, con la caja centrada,
+    // tampoco dejaba llegar al borde de arriba ni al de la izquierda. Así que
+    // el gesto se lleva aquí: pellizco, arrastre y doble toque, moviendo la
+    // imagen con transform.
+    _cuadZoom: null,
+
     verCuadranteGrande() {
         const img = document.getElementById('cuadImg');
         if (!img?.src) return;
         document.getElementById('cuadVisorImg').src = img.src;
         document.getElementById('cuadVisor').classList.add('show');
-    },
-
-
-    zoomCuadrante(ev) {
-        const img = document.getElementById('cuadVisorImg');
-        if (!img) return;
-        const yaAmpliada = img.classList.contains('zoom');
-        // La proporción del punto tocado se toma antes de ampliar, que es
-        // cuando el tamaño de la imagen todavía es el pequeño.
-        const ratioX = !yaAmpliada && ev ? ev.offsetX / (img.clientWidth  || 1) : 0.5;
-        const ratioY = !yaAmpliada && ev ? ev.offsetY / (img.clientHeight || 1) : 0.5;
-        const ampliada = img.classList.toggle('zoom');
-        const ayuda = document.getElementById('cuadVisorAyuda');
-        if (ayuda) ayuda.textContent = ampliada
-            ? 'Arrastra para moverte · toca para reducir'
-            : 'Toca la imagen para ampliar · pellizca para acercar';
-        const visor = document.getElementById('cuadVisor');
-        if (ampliada) {
-            requestAnimationFrame(() => {
-                visor.scrollLeft = img.scrollWidth  * ratioX - visor.clientWidth  / 2;
-                visor.scrollTop  = img.scrollHeight * ratioY - visor.clientHeight / 2;
-            });
-        } else {
-            visor.scrollLeft = 0;
-            visor.scrollTop = 0;
-        }
+        this._montarVisorCuadrante();
+        this._cuadPoner(1, 0, 0);
     },
 
     cerrarCuadranteGrande() {
         document.getElementById('cuadVisor')?.classList.remove('show');
-        document.getElementById('cuadVisorImg')?.classList.remove('zoom');
+        this._cuadPoner(1, 0, 0);
+    },
+
+    // Deja la imagen donde toca, sin salirse: ampliada se puede arrastrar lo
+    // que sobra por cada lado y ni un pixel más; a tamaño normal va centrada.
+    _cuadPoner(k, x, y) {
+        const img = document.getElementById('cuadVisorImg');
+        const visor = document.getElementById('cuadVisor');
+        if (!img || !visor) return;
+        const z = this._cuadZoom = this._cuadZoom || {};
+        z.k = Math.min(6, Math.max(1, k));
+        const sobraX = Math.max(0, (img.clientWidth  * z.k - visor.clientWidth)  / 2);
+        const sobraY = Math.max(0, (img.clientHeight * z.k - visor.clientHeight) / 2);
+        z.x = Math.min(sobraX, Math.max(-sobraX, x));
+        z.y = Math.min(sobraY, Math.max(-sobraY, y));
+        img.style.transform =
+            `translate(-50%, -50%) translate(${z.x.toFixed(1)}px, ${z.y.toFixed(1)}px) scale(${z.k.toFixed(3)})`;
+        const ayuda = document.getElementById('cuadVisorAyuda');
+        if (ayuda) ayuda.textContent = z.k > 1.02
+            ? 'Arrastra para moverte · doble toque para reducir'
+            : 'Pellizca o haz doble toque para ampliar';
+    },
+
+    _montarVisorCuadrante() {
+        const visor = document.getElementById('cuadVisor');
+        const img = document.getElementById('cuadVisorImg');
+        if (!visor || !img || visor.dataset.montado) return;
+        visor.dataset.montado = '1';
+        this._cuadZoom = { k: 1, x: 0, y: 0 };
+
+        const dedos = e => [...e.touches];
+        const separacion = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+        const centro = t => t.length > 1
+            ? { x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 }
+            : { x: t[0].clientX, y: t[0].clientY };
+        // El punto que se toca, medido desde el centro del visor: es el que
+        // tiene que quedarse quieto mientras se pellizca.
+        const relativo = p => {
+            const c = visor.getBoundingClientRect();
+            return { x: p.x - (c.left + c.width / 2), y: p.y - (c.top + c.height / 2) };
+        };
+
+        let sep0 = 0, k0 = 1, ancla = null, desde = null, movido = 0, ultimoToque = 0;
+
+        visor.addEventListener('touchstart', e => {
+            const t = dedos(e);
+            const z = this._cuadZoom;
+            movido = 0;
+            if (t.length === 2) {
+                sep0 = separacion(t) || 1;
+                k0 = z.k;
+                const c = relativo(centro(t));
+                // Dónde cae ese punto dentro de la imagen, con el aumento de
+                // ahora: es lo que hay que respetar al cambiarlo.
+                ancla = { pantalla: c, img: { x: (c.x - z.x) / z.k, y: (c.y - z.y) / z.k } };
+                e.preventDefault();
+            } else if (t.length === 1) {
+                desde = { x: t[0].clientX - z.x, y: t[0].clientY - z.y };
+            }
+        }, { passive: false });
+
+        visor.addEventListener('touchmove', e => {
+            const t = dedos(e);
+            const z = this._cuadZoom;
+            if (t.length === 2 && ancla) {
+                const k = k0 * (separacion(t) / sep0);
+                const c = relativo(centro(t));
+                this._cuadPoner(k, c.x - ancla.img.x * Math.min(6, Math.max(1, k)),
+                                   c.y - ancla.img.y * Math.min(6, Math.max(1, k)));
+                movido = 99;
+                e.preventDefault();
+            } else if (t.length === 1 && desde && z.k > 1.02) {
+                movido += Math.abs(t[0].clientX - desde.x - z.x) + Math.abs(t[0].clientY - desde.y - z.y);
+                this._cuadPoner(z.k, t[0].clientX - desde.x, t[0].clientY - desde.y);
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        visor.addEventListener('touchend', e => {
+            if (e.touches.length === 0) { ancla = null; desde = null; }
+            if (e.touches.length === 1) {
+                // Levantar un dedo del pellizco: el que queda sigue arrastrando
+                const z = this._cuadZoom;
+                desde = { x: e.touches[0].clientX - z.x, y: e.touches[0].clientY - z.y };
+                ancla = null;
+            }
+        });
+
+        // Doble toque: amplía donde se ha tocado, o vuelve a tamaño normal
+        img.addEventListener('click', ev => {
+            ev.stopPropagation();
+            const ahora = Date.now();
+            const doble = ahora - ultimoToque < 320;
+            ultimoToque = ahora;
+            if (!doble || movido > 12) return;
+            const z = this._cuadZoom;
+            if (z.k > 1.02) { this._cuadPoner(1, 0, 0); return; }
+            const c = relativo({ x: ev.clientX, y: ev.clientY });
+            this._cuadPoner(2.6, -c.x * 1.6, -c.y * 1.6);
+        });
+
+        // En el ordenador, con la rueda
+        visor.addEventListener('wheel', ev => {
+            ev.preventDefault();
+            const z = this._cuadZoom;
+            const k = z.k * (ev.deltaY < 0 ? 1.15 : 1 / 1.15);
+            const c = relativo({ x: ev.clientX, y: ev.clientY });
+            const enImg = { x: (c.x - z.x) / z.k, y: (c.y - z.y) / z.k };
+            const kk = Math.min(6, Math.max(1, k));
+            this._cuadPoner(kk, c.x - enImg.x * kk, c.y - enImg.y * kk);
+        }, { passive: false });
+
+        // Tocar el fondo cierra; tocar la imagen, no
+        visor.addEventListener('click', ev => {
+            if (ev.target === visor) this.cerrarCuadranteGrande();
+        });
     },
 
     // Downscale before upload: a phone photo is several MB and the store caps
