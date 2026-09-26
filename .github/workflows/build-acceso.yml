@@ -1,0 +1,249 @@
+name: Build APK Control de acceso
+
+on:
+  push:
+    branches: [main, claude/digitalize-entry-records-p2tqkq]
+    # Solo lo que acaba dentro de estas dos aplicaciones
+    paths:
+      - 'control-acceso/**'
+      - 'scripts/build-www-acceso.js'
+      - 'scripts/acceso/**'
+      - '.github/workflows/build-acceso.yml'
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    # La misma web hace de dos aplicaciones: la del trabajador, que apunta en
+    # la garita, y la de gestión, que lo revisa y saca los Excel. Cambia el
+    # paquete, el nombre, el icono y el rol; lo demás es idéntico.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rol: trabajador
+            appid: com.guillermorc.accesoemt
+            nombre: EMT - Movilidad (Control de acceso)
+            bg: "21,101,192"
+            color: "#1565C0"
+            icono: icon
+            tag: acceso-build-
+            apk: control-acceso-emt
+          - rol: gestion
+            appid: com.guillermorc.gestionaccesoemt
+            nombre: Gestion (Control de acceso)
+            bg: "108,52,131"
+            color: "#6C3483"
+            icono: icon-gestion
+            tag: acceso-gestion-build-
+            apk: gestion-control-acceso
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inject build version
+        run: echo "const APP_VERSION = 'build-${{ github.run_number }}';" > control-acceso/version.js
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build www-acceso/
+        run: node scripts/build-www-acceso.js
+
+      - name: Configuración de Capacitor para esta aplicación
+        run: |
+          cat > capacitor.config.json << 'CAPEOF'
+          {
+            "appId": "${{ matrix.appid }}",
+            "appName": "${{ matrix.nombre }}",
+            "webDir": "www-acceso",
+            "server": { "androidScheme": "https" }
+          }
+          CAPEOF
+          cat capacitor.config.json
+
+      - name: Decirle a la web cuál de las dos es
+        run: |
+          W="www-acceso/index.html"
+          sed -i 's|<meta name="app-rol" content="[^"]*">|<meta name="app-rol" content="${{ matrix.rol }}">|' "$W"
+          sed -i 's|<meta name="app-paquete" content="[^"]*">|<meta name="app-paquete" content="${{ matrix.appid }}">|' "$W"
+          sed -i 's|<title>[^<]*</title>|<title>${{ matrix.nombre }}</title>|' "$W"
+          grep -o '<meta name="app-[^>]*>' "$W"
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Patch variables.gradle — targetSdkVersion 34
+        run: |
+          VARS="android/variables.gradle"
+          sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 34/' "$VARS"
+          sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 34/' "$VARS"
+
+      - name: Patch build.gradle — versionCode/versionName from build number
+        run: |
+          GRADLE="android/app/build.gradle"
+          N=${{ github.run_number }}
+          MAJOR=$((N / 100)); MINOR=$((N % 100))
+          sed -i "s/versionCode [0-9]*/versionCode $N/" "$GRADLE"
+          VER="$MAJOR.$(printf '%02d' $MINOR)"
+          sed -i "s/versionName \"[^\"]*\"/versionName \"$VER\"/" "$GRADLE"
+          grep -E "versionCode|versionName" "$GRADLE"
+          echo "APP_VER=$VER" >> $GITHUB_ENV
+
+      - name: Patch AndroidManifest — vuelta de Google, instalar versiones y FileProvider
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          # La vuelta de Google llega como https://localhost/?code=…
+          sed -i 's|</activity>|        <intent-filter>\n            <action android:name="android.intent.action.VIEW" />\n            <category android:name="android.intent.category.DEFAULT" />\n            <category android:name="android.intent.category.BROWSABLE" />\n            <data android:scheme="https" android:host="localhost" />\n        </intent-filter>\n    </activity>|' "$MANIFEST"
+          sed -i 's|<uses-permission android:name="android.permission.INTERNET" />|<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />|' "$MANIFEST"
+          sed -i 's|</application>|    <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths"/></provider>\n    </application>|' "$MANIFEST"
+          cat "$MANIFEST"
+
+      - name: Create FileProvider paths config
+        run: |
+          mkdir -p android/app/src/main/res/xml
+          cat > android/app/src/main/res/xml/file_paths.xml << 'XMLEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths>
+              <cache-path name="apk_downloads" path="." />
+          </paths>
+          XMLEOF
+
+      - name: MainActivity de esta aplicación
+        env:
+          APPID: ${{ matrix.appid }}
+        run: |
+          PKGDIR="android/app/src/main/java/$(echo "$APPID" | tr . /)"
+          mkdir -p "$PKGDIR"
+          sed "s/^package com\.guillermorc\.accesoemt;/package $APPID;/" \
+              scripts/acceso/MainActivity.java > "$PKGDIR/MainActivity.java"
+          head -1 "$PKGDIR/MainActivity.java"
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Set native splash background color
+        run: |
+          COLORS="android/app/src/main/res/values/colors.xml"
+          STYLES="android/app/src/main/res/values/styles.xml"
+          if [ -f "$COLORS" ]; then
+            grep -q 'colorPrimary' "$COLORS" || \
+              sed -i 's|</resources>|    <color name="colorPrimary">${{ matrix.color }}</color>\n</resources>|' "$COLORS"
+          else
+            mkdir -p "$(dirname "$COLORS")"
+            printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="colorPrimary">${{ matrix.color }}</color>\n</resources>\n' > "$COLORS"
+          fi
+          if [ -f "$STYLES" ]; then
+            grep -q 'windowBackground' "$STYLES" || \
+              sed -i 's|<style name="AppTheme.NoActionBar">|<style name="AppTheme.NoActionBar">\n        <item name="android:windowBackground">@color/colorPrimary</item>|' "$STYLES"
+          fi
+
+      - name: Restore signing keystore
+        run: |
+          mkdir -p ~/.android
+          base64 -d .github/debug.keystore.b64 > ~/.android/debug.keystore
+
+      - name: Set Android launcher icon
+        run: |
+          pip install Pillow -q
+          ICONO='www-acceso/icons/${{ matrix.icono }}-512.png' ICONO_FG='www-acceso/icons/${{ matrix.icono }}-fg-512.png' ICON_BG='${{ matrix.bg }}' python3 << 'PYEOF'
+          from PIL import Image
+          import os
+
+          # El mismo dibujo que las otras aplicaciones; solo cambia la
+          # insignia (aquí, una barrera).
+          BG   = tuple(int(x) for x in os.environ['ICON_BG'].split(',')[:3])
+          full = Image.open(os.environ['ICONO']).convert('RGB')
+          fg   = Image.open(os.environ['ICONO_FG']).convert('RGBA')
+          res_base = 'android/app/src/main/res'
+
+          sizes = {
+              'mipmap-mdpi':    (48,  108),
+              'mipmap-hdpi':    (72,  162),
+              'mipmap-xhdpi':   (96,  216),
+              'mipmap-xxhdpi':  (144, 324),
+              'mipmap-xxxhdpi': (192, 432),
+          }
+
+          for dir_name, (size, asize) in sizes.items():
+              path = f'{res_base}/{dir_name}'
+              os.makedirs(path, exist_ok=True)
+              cuadro = full.resize((size, size), Image.LANCZOS)
+              cuadro.save(f'{path}/ic_launcher.png')
+              cuadro.save(f'{path}/ic_launcher_round.png')
+              # Adaptativo: el sistema recorta a dos tercios del lienzo, así que
+              # el dibujo va justo a ese tamaño y centrado.
+              d = asize * 2 // 3
+              adapt = Image.new('RGBA', (asize, asize), (*BG, 255))
+              chico = fg.resize((d, d), Image.LANCZOS)
+              off = (asize - d) // 2
+              adapt.paste(chico, (off, off), chico)
+              adapt.convert('RGB').save(f'{path}/ic_launcher_foreground.png')
+              Image.new('RGB', (asize, asize), BG).save(f'{path}/ic_launcher_background.png')
+
+          print("Icons generated OK")
+          PYEOF
+
+          RES="android/app/src/main/res"
+          mkdir -p "$RES/mipmap-anydpi-v26"
+          cat > "$RES/mipmap-anydpi-v26/ic_launcher.xml" << 'ICONEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@mipmap/ic_launcher_background"/>
+              <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+          </adaptive-icon>
+          ICONEOF
+          cp "$RES/mipmap-anydpi-v26/ic_launcher.xml" "$RES/mipmap-anydpi-v26/ic_launcher_round.xml"
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          # Los repositorios de Maven fallan de vez en cuando; reintentar lo absorbe
+          for intento in 1 2 3; do
+            if ./gradlew assembleDebug --no-daemon; then exit 0; fi
+            echo "::warning::Build fallido (intento $intento). Reintentando en 20s…"
+            sleep 20
+          done
+          echo "::error::El build ha fallado tres veces"
+          exit 1
+
+      - name: Renombrar el APK con su versión
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk ${{ matrix.apk }}-${{ env.APP_VER }}.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.apk }}-${{ github.run_number }}
+          path: ${{ matrix.apk }}-${{ env.APP_VER }}.apk
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ matrix.tag }}${{ github.run_number }}
+          name: "${{ matrix.nombre }} — Build ${{ github.run_number }}"
+          body: "APK generado automáticamente en build #${{ github.run_number }}."
+          files: ${{ matrix.apk }}-${{ env.APP_VER }}.apk
+          fail_on_unmatched_files: true

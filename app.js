@@ -224,6 +224,9 @@ const app = {
         const token = hashParams?.get('access_token') || searchParams?.get('access_token');
         const error = hashParams?.get('error') || searchParams?.get('error');
 
+        // Las aplicaciones de Control de acceso vuelven de Google por aquí,
+        // como todas; en el navegador lo suyo sigue en su página.
+        if ((code || error) && this._rebotarAAcceso(searchParams)) return;
         if (code) {
             const pkgDestino = this._paqueteDestino(searchParams);
             if (this._rebotarAGestion(pkgDestino, searchParams)) return;
@@ -584,8 +587,17 @@ const app = {
         return true;
     },
 
+    _rebotarAAcceso(searchParams) {
+        if (window.Capacitor?.isNativePlatform?.()) return false;
+        if (String(searchParams?.get('state') || '') !== 'web:acceso') return false;
+        if (window.location.pathname.startsWith('/control-acceso')) return false;
+        window.location.replace('/control-acceso/?' + searchParams.toString());
+        return true;
+    },
+
     _paqueteDestino(searchParams) {
-        const permitidos = ['com.guillermorc.horasemt','com.guillermorc.gestionemt','com.guillermorc.devemt'];
+        const permitidos = ['com.guillermorc.horasemt','com.guillermorc.gestionemt','com.guillermorc.devemt',
+            'com.guillermorc.accesoemt','com.guillermorc.gestionaccesoemt'];
         const s = String(searchParams?.get('state') || '').replace(/^(app|web):/, '');
         return permitidos.includes(s) ? s : ANDROID_PACKAGE;
     },

@@ -4,30 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Control de acceso</title>
+    <!-- Lo cambia el montaje de cada APK: trabajador o gestion. En la web,
+         gestión (y si la cuenta no es de gestión, la del trabajador). -->
+    <meta name="app-rol" content="web">
+    <meta name="app-paquete" content="">
     <meta name="theme-color" content="#003A99">
-    <link rel="icon" href="/icons/icon-192.png">
+    <link rel="icon" href="icons/icon-192.png">
     <style>
         :root{
             --azul:#1565C0;--azul-osc:#003A99;--fondo:#f3f6fb;--papel:#fff;--texto:#1c2533;--suave:#667085;
             --borde:#dde3ec;--aviso:#fff4cc;--aviso-borde:#e8c547;--ok:#1b7f4b;--error:#c0392b;--auto:#e8f5ee;
             --cab:#dae9f8;
         }
+        body.gestion{--azul:#6C3483;--azul-osc:#4a235a;--cab:#eadcf1;}
         @media (prefers-color-scheme: dark){
             :root{--fondo:#0e1522;--papel:#162033;--texto:#e6ebf3;--suave:#98a3b5;--borde:#2a3850;--aviso:#3b3316;--aviso-borde:#8a7426;--auto:#15372a;--cab:#1d3552;}
+            body.gestion{--cab:#3a2446;}
         }
         *{box-sizing:border-box;margin:0;padding:0;}
         [hidden]{display:none !important;}
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--fondo);color:var(--texto);min-height:100vh;}
         header{background:linear-gradient(135deg,var(--azul),var(--azul-osc));color:#fff;padding:14px 16px 0;padding-top:calc(14px + env(safe-area-inset-top,0px));}
-        header h1{font-size:19px;font-weight:700;}
+        header h1{font-size:18px;font-weight:700;}
         .cab{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between;max-width:1200px;margin:0 auto;}
         .mes{display:flex;align-items:center;gap:6px;}
         .mes button{background:rgba(255,255,255,.18);border:0;color:#fff;width:34px;height:34px;border-radius:8px;font-size:18px;cursor:pointer;}
         .mes select{background:rgba(255,255,255,.95);border:0;border-radius:8px;padding:6px 8px;font-size:15px;color:#1c2533;}
-        nav{display:flex;gap:4px;max-width:1200px;margin:12px auto 0;overflow-x:auto;}
+        .barra{display:flex;gap:10px;align-items:center;justify-content:space-between;max-width:1200px;margin:8px auto 0;font-size:12px;opacity:.95;flex-wrap:wrap;}
+        .barra button{background:rgba(255,255,255,.18);border:0;color:#fff;border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;}
+        nav{display:flex;gap:4px;max-width:1200px;margin:10px auto 0;overflow-x:auto;}
         nav button{flex:1;min-width:max-content;background:rgba(255,255,255,.14);color:#fff;border:0;border-radius:10px 10px 0 0;padding:10px 12px;font-size:15px;font-weight:600;cursor:pointer;}
         nav button.activa{background:var(--fondo);color:var(--azul);}
-        @media (prefers-color-scheme: dark){nav button.activa{color:#8fb8ff;}}
+        @media (prefers-color-scheme: dark){nav button.activa{color:#c9b3ff;}}
         main{max-width:1200px;margin:0 auto;padding:16px;}
         .tarjeta{background:var(--papel);border:1px solid var(--borde);border-radius:14px;padding:16px;margin-bottom:14px;}
         .tarjeta h2{font-size:16px;margin-bottom:8px;}
@@ -35,7 +43,7 @@
         .botones{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center;}
         .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:10px;padding:11px 16px;font-size:15px;font-weight:600;cursor:pointer;background:var(--azul);color:#fff;}
         .btn.sec{background:transparent;color:var(--azul);border:1.5px solid var(--azul);}
-        @media (prefers-color-scheme: dark){.btn.sec{color:#8fb8ff;border-color:#8fb8ff;}}
+        @media (prefers-color-scheme: dark){.btn.sec{color:#c9d8ff;border-color:#c9d8ff;}}
         .btn.peligro{background:transparent;color:var(--error);border:1.5px solid var(--error);}
         .btn:disabled{opacity:.5;cursor:default;}
         .formulario{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;align-items:end;}
@@ -43,7 +51,7 @@
         .formulario input{padding:9px 10px;border:1px solid var(--borde);border-radius:8px;font-size:15px;background:var(--papel);color:var(--texto);width:100%;font-family:inherit;}
         .formulario input.auto{background:var(--auto);}
         @media (max-width:760px){.formulario{grid-template-columns:1fr 1fr;}}
-        .estado-busqueda{font-size:13px;margin-top:10px;min-height:18px;}
+        .estado-busqueda{font-size:13px;min-height:18px;}
         .estado-busqueda.ok{color:var(--ok);}
         .estado-busqueda.nuevo{color:#9a6b00;}
         @media (prefers-color-scheme: dark){.estado-busqueda.nuevo{color:#e0b64a;}}
@@ -59,10 +67,14 @@
         tr.fin-dia td{border-bottom:1.5px solid var(--texto);}
         td input{width:100%;min-width:70px;border:1px solid transparent;background:transparent;color:var(--texto);font-size:14px;padding:6px 4px;border-radius:6px;font-family:inherit;text-align:center;}
         td input:focus{border-color:var(--azul);outline:none;background:var(--papel);}
+        td input:disabled{color:var(--texto);opacity:1;}
         td input[data-campo=nombre],td input[data-campo=marca],td input[data-campo=empresa],td input[data-campo=motivo],td input[data-campo=obs]{min-width:130px;}
         td.dia{font-weight:700;text-align:center;white-space:nowrap;padding:0 8px;}
-        td.leido{font-size:12px;color:var(--suave);min-width:160px;max-width:260px;padding:4px 8px;}
+        td.leido,td.autor{font-size:12px;color:var(--suave);padding:4px 8px;}
+        td.leido{min-width:160px;max-width:260px;}
+        td.autor{white-space:nowrap;}
         td.acc{width:1%;white-space:nowrap;text-align:right;}
+        tr.pendiente td.autor::before{content:'⏳ ';}
         tr.revisar td{background:var(--aviso);}
         tr.revisar td:first-child{box-shadow:inset 4px 0 0 var(--aviso-borde);}
         tr.color-7 td{background:#fdf1d8;} tr.color-8 td{background:#e3f1dd;} tr.color-10 td{background:#dcebf6;}
@@ -82,24 +94,73 @@
         .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#1c2533;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;max-width:calc(100% - 32px);box-shadow:0 6px 24px rgba(0,0,0,.25);z-index:10;}
         .toast.error{background:var(--error);}
         .leyenda{display:inline-block;width:12px;height:12px;background:var(--aviso);border:1px solid var(--aviso-borde);border-radius:3px;vertical-align:-1px;}
+        .entrar{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:32px 20px;text-align:center;background:linear-gradient(135deg,var(--azul),var(--azul-osc));color:#fff;}
+        .entrar img{width:132px;height:132px;border-radius:28px;box-shadow:0 8px 30px rgba(0,0,0,.25);}
+        .entrar h1{font-size:22px;}
+        .entrar p{opacity:.9;font-size:14px;max-width:360px;line-height:1.5;}
+        .entrar .btn{background:#fff;color:var(--azul);font-size:16px;padding:14px 24px;}
+        .entrar .mensaje{background:rgba(0,0,0,.25);border-radius:10px;padding:10px 14px;font-size:14px;}
+        .lista-correos{list-style:none;display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+        .lista-correos li{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--borde);border-radius:10px;padding:8px 12px;font-size:14px;}
+        .tarjetas{display:flex;flex-direction:column;gap:8px;}
+        .entrada{background:var(--papel);border:1px solid var(--borde);border-radius:12px;padding:12px 14px;display:flex;gap:12px;align-items:center;}
+        .entrada.fuera{opacity:.65;}
+        .entrada .horas{font-weight:700;font-size:15px;min-width:64px;text-align:center;line-height:1.3;}
+        .entrada .horas small{display:block;font-weight:400;color:var(--suave);font-size:12px;}
+        .entrada .quien{flex:1;min-width:0;}
+        .entrada .quien b{display:block;font-size:15px;}
+        .entrada .quien span{font-size:13px;color:var(--suave);}
+        .entrada .btn{padding:8px 12px;font-size:14px;}
+        .actualizar{background:#fff4cc;color:#5c4400;padding:10px 16px;font-size:14px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;}
     </style>
 </head>
 <body>
+    <div id="fallo" hidden style="position:fixed;top:0;left:0;right:0;background:#c0392b;color:#fff;padding:12px 16px;font-size:14px;z-index:20"></div>
+    <script>
+        // Si algo falla al cargar, que se vea en pantalla y no se quede la
+        // página muerta sin decir nada. ES5 a propósito: tiene que funcionar
+        // incluso donde el resto no.
+        window.onerror = function (msg, src, linea) {
+            var d = document.getElementById('fallo');
+            d.hidden = false;
+            d.textContent = 'Error en la página: ' + msg + (linea ? ' (línea ' + linea + ')' : '') + ' — ' + navigator.userAgent;
+        };
+    </script>
+
+    <!-- ── ENTRAR ──────────────────────────────────────────────── -->
+    <section class="entrar" id="pantallaEntrar" hidden>
+        <img id="logoEntrar" src="icons/icon-192.png" alt="">
+        <h1 id="tituloEntrar">Control de acceso</h1>
+        <p id="textoEntrar">Registro de quién entra y sale del recinto.</p>
+        <button class="btn" type="button" id="btnEntrar" onclick="ca.entrar()">Entrar con Google</button>
+        <div class="mensaje" id="mensajeEntrar" hidden></div>
+    </section>
+
+    <div id="pantallaApp" hidden>
+    <div class="actualizar" id="avisoVersion" hidden>
+        <span id="textoVersion">Hay una versión nueva.</span>
+        <button class="btn" type="button" style="padding:6px 12px;font-size:13px" onclick="ca.actualizar()">Actualizar</button>
+    </div>
     <header>
         <div class="cab">
-            <h1>📋 Control de acceso</h1>
-            <div class="mes">
+            <h1 id="titulo">🚧 Control de acceso</h1>
+            <div class="mes" id="selectorMes">
                 <button type="button" onclick="ca.moverMes(-1)" aria-label="Mes anterior">‹</button>
                 <select id="selMes" aria-label="Mes" onchange="ca.elegirMes()"></select>
                 <select id="selAnio" aria-label="Año" onchange="ca.elegirMes()"></select>
                 <button type="button" onclick="ca.moverMes(1)" aria-label="Mes siguiente">›</button>
             </div>
         </div>
-        <nav>
+        <div class="barra">
+            <span id="estadoSync">…</span>
+            <span><span id="quienSoy"></span> <button type="button" onclick="ca.salir()">Salir</button></span>
+        </div>
+        <nav id="pestanas">
             <button type="button" data-pestana="listado" class="activa" onclick="ca.pestana('listado')">Listado <span id="nListado"></span></button>
-            <button type="button" data-pestana="hoja" onclick="ca.pestana('hoja')">Hoja a mano</button>
-            <button type="button" data-pestana="datos" onclick="ca.pestana('datos')">Datos <span id="nDatos"></span></button>
-            <button type="button" data-pestana="excel" onclick="ca.pestana('excel')">Excel</button>
+            <button type="button" data-pestana="hoja" data-solo="gestion" onclick="ca.pestana('hoja')">Hoja a mano</button>
+            <button type="button" data-pestana="datos" data-solo="gestion" onclick="ca.pestana('datos')">Datos <span id="nDatos"></span></button>
+            <button type="button" data-pestana="excel" data-solo="gestion" onclick="ca.pestana('excel')">Excel</button>
+            <button type="button" data-pestana="personal" data-solo="gestion" onclick="ca.pestana('personal')">Trabajadores</button>
         </nav>
     </header>
 
@@ -108,7 +169,7 @@
         <section id="p-listado">
             <div class="tarjeta">
                 <h2>Nueva entrada</h2>
-                <p class="ayuda">Escribe la matrícula o el nombre: si está en Datos, se rellena el resto, como la macro del Excel. Si es alguien nuevo, se guarda en Datos para la próxima vez.</p>
+                <p class="ayuda">Escribe la matrícula o el nombre: si está en Datos, se rellena el resto. Si es alguien nuevo, se guarda en Datos para la próxima vez.</p>
                 <form class="formulario" id="formEntrada" onsubmit="event.preventDefault(); ca.anadirEntrada()" style="margin-top:10px">
                     <label>Fecha<input type="date" name="fecha" data-tipo="fecha" required></label>
                     <label>Matrícula<input name="matricula" autocomplete="off" list="dl-matriculas" placeholder="1234-ABC"></label>
@@ -126,9 +187,11 @@
                     <span class="estado-busqueda" id="estadoBusqueda"></span>
                 </div>
             </div>
-            <div class="tabla-caja">
+            <p class="ayuda" id="ayudaListado" style="margin:0 0 8px"></p>
+            <div class="tarjetas" id="tarjetasGarita" hidden></div>
+            <div class="tabla-caja" id="cajaListado">
                 <table>
-                    <thead><tr><th>Fecha</th><th>Nombre y apellidos</th><th>DNI</th><th>Matrícula</th><th>Marca y modelo</th><th>Empresa</th><th>H. Entrada</th><th>H. Salida</th><th>Motivo de acceso</th><th>Observaciones</th><th></th></tr></thead>
+                    <thead><tr><th>Fecha</th><th>Nombre y apellidos</th><th>DNI</th><th>Matrícula</th><th>Marca y modelo</th><th>Empresa</th><th>H. Entrada</th><th>H. Salida</th><th>Motivo de acceso</th><th>Observaciones</th><th>Apuntó</th><th></th></tr></thead>
                     <tbody id="tablaListado"></tbody>
                 </table>
             </div>
@@ -138,7 +201,7 @@
         <section id="p-hoja" hidden>
             <div class="tarjeta">
                 <h2>Pasar una hoja escrita a mano</h2>
-                <p class="ayuda">Haz una foto a la hoja. Con la foto delante vas completando las filas: al poner la matrícula se rellena el resto desde Datos. También puedes probar la lectura automática, que es gratis y se hace en el propio móvil (sin enviar la foto a ningún sitio): busca las matrículas y las horas, pero con letra a mano se equivoca a menudo, así que revisa cada fila.</p>
+                <p class="ayuda">Haz una foto a la hoja. Con la foto delante vas completando las filas: al poner la matrícula se rellena el resto desde Datos. La lectura automática es gratis y se hace en el propio móvil (la foto no se envía a ningún sitio): busca las matrículas y las horas, pero con letra a mano se equivoca a menudo, así que revisa cada fila.</p>
                 <div class="botones">
                     <button class="btn" type="button" onclick="document.getElementById('camara').click()">📷 Hacer foto</button>
                     <button class="btn sec" type="button" onclick="document.getElementById('archivos').click()">🖼️ Elegir fotos</button>
@@ -176,7 +239,7 @@
 
         <!-- ── DATOS ────────────────────────────────────────────── -->
         <section id="p-datos" hidden>
-            <p class="ayuda" style="margin-bottom:10px">Las personas que entran habitualmente. De aquí salen los datos al escribir una matrícula o un nombre en el listado. Es la misma para todos los meses.</p>
+            <p class="ayuda" style="margin-bottom:10px">Las personas que entran habitualmente. De aquí salen los datos al escribir una matrícula o un nombre en el listado, también en la app de los trabajadores.</p>
             <input class="filtro" id="filtroDatos" type="search" placeholder="Buscar por nombre, matrícula, vehículo o empresa…" oninput="ca.pintarDatos()">
             <div class="tabla-caja">
                 <table>
@@ -207,13 +270,22 @@
                 </div>
                 <input type="file" id="excel" accept=".xlsx,.xlsm,.xls" multiple hidden onchange="ca.cargarExcels(this.files); this.value=''">
             </div>
+        </section>
+
+        <!-- ── TRABAJADORES ─────────────────────────────────────── -->
+        <section id="p-personal" hidden>
             <div class="tarjeta">
-                <h2>Vaciar el mes</h2>
-                <p class="ayuda">Borra el listado del mes que tienes abierto (Datos no se toca). Descarga antes el Excel si lo quieres conservar.</p>
-                <div class="botones"><button class="btn peligro" type="button" onclick="ca.vaciarMes()">Vaciar el listado del mes</button></div>
+                <h2>Quién puede usar la app de la garita</h2>
+                <p class="ayuda">Los correos de Google de los trabajadores que apuntan las entradas en «EMT - Movilidad (Control de acceso)». Los de gestión entran siempre. Añadir y quitar solo puede hacerlo el gestor principal.</p>
+                <form class="formulario" style="grid-template-columns:1fr auto;margin-top:10px" onsubmit="event.preventDefault(); ca.altaTrabajador()">
+                    <label>Correo<input type="email" id="correoNuevo" placeholder="nombre@gmail.com" required></label>
+                    <button class="btn" type="submit">Dar de alta</button>
+                </form>
+                <ul class="lista-correos" id="listaTrabajadores"></ul>
             </div>
         </section>
     </main>
+    </div>
 
     <datalist id="dl-matriculas"></datalist>
     <datalist id="dl-nombres"></datalist>
@@ -221,17 +293,7 @@
     <datalist id="dl-motivos"></datalist>
     <div class="toast" id="toast" hidden></div>
 
-    <div id="fallo" hidden style="position:fixed;top:0;left:0;right:0;background:#c0392b;color:#fff;padding:12px 16px;font-size:14px;z-index:20"></div>
-    <script>
-        // Si algo falla al cargar, que se vea en pantalla y no se quede la
-        // página muerta sin decir nada. ES5 a propósito: tiene que funcionar
-        // incluso donde el resto no.
-        window.onerror = function (msg, src, linea) {
-            var d = document.getElementById('fallo');
-            d.hidden = false;
-            d.textContent = 'Error en la página: ' + msg + (linea ? ' (línea ' + linea + ')' : '') + ' — ' + navigator.userAgent;
-        };
-    </script>
+    <script src="version.js"></script>
     <script src="vendor/xlsx.full.min.js"></script>
     <script src="app.js"></script>
 </body>

@@ -11,6 +11,9 @@ const BRANCH       = 'datos';
 const APPS = {
   movilidad: { file: 'allowed-users.json',         admin: 'guillermo.rc82@gmail.com' },
   gestion:   { file: 'allowed-users-gestion.json', admin: 'g.rioscorrea@gmail.com'   },
+  // Quién puede apuntar en la garita (app Control de acceso). Los de gestión
+  // entran siempre; esta lista es para los trabajadores.
+  acceso:    { file: 'allowed-users-acceso.json',  admin: 'g.rioscorrea@gmail.com'   },
 };
 const appCfg = req => APPS[String((req.query?.app) || (req.body?.app) || '').toLowerCase()] || APPS.movilidad;
 

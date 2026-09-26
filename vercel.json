@@ -133,13 +133,18 @@
           "value": "public, max-age=0, must-revalidate"
         }
       ]
+    },
+    {
+      "source": "/control-acceso/version.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     }
   ],
   "rewrites": [
-    {
-      "source": "/control-acceso",
-      "destination": "/control-acceso/index.html"
-    },
     {
       "source": "/control-acceso/",
       "destination": "/control-acceso/index.html"
@@ -161,5 +166,12 @@
     "deploymentEnabled": {
       "datos": false
     }
-  }
+  },
+  "redirects": [
+    {
+      "source": "/control-acceso",
+      "destination": "/control-acceso/",
+      "permanent": false
+    }
+  ]
 }

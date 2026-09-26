@@ -1,28 +1,45 @@
-// Control de acceso: el Excel de siempre, pero rellenado desde el móvil.
+// Control de acceso: el registro de la garita (quién entra y sale del recinto)
+// y el Excel de siempre que sale de él.
 //
-// Datos es el fichero de las personas que entran (nombre, matrícula, vehículo,
-// empresa y motivo), el mismo para todos los meses. Listado es lo que se apunta
-// cada día. Igual que la macro del Excel, al escribir en el listado una
-// matrícula o un nombre que ya está en Datos se rellena el resto; y quien no
-// está se guarda en Datos para la próxima vez.
+// Es una sola web que hace de dos aplicaciones, igual que horas y gestión:
 //
-// Las hojas escritas a mano se pasan con la foto delante. La lectura
-// automática es Tesseract, que es gratis y funciona en el propio navegador: la
-// foto no sale del móvil. Con letra a mano falla bastante, así que solo
-// propone filas (sobre todo matrículas y horas) y cada una se revisa.
+//   · la del trabajador («EMT - Movilidad (Control de acceso)») apunta las
+//     entradas a mano en la garita;
+//   · la de gestión («Gestion (Control de acceso)») ve todo lo apuntado, lo
+//     corrige, pasa hojas escritas a mano con una foto, lleva Datos (el
+//     fichero de personas) y descarga o carga los Excel.
 //
-// El Excel que se descarga se hace sobre la plantilla de siempre (con su macro
-// y su formato): solo se cambian las filas.
+// Lo que se apunta se guarda primero en el móvil y se sube en cuanto hay
+// conexión (/api/acceso), así que la garita puede seguir apuntando aunque se
+// corte internet un rato. Gestión lo recibe al sincronizar.
 //
-// Todo se guarda en este navegador.
+// Datos funciona como la macro del Excel: al escribir una matrícula o un
+// nombre que ya está, se rellena el resto; quien no está se guarda en Datos
+// para la próxima vez.
+//
+// ES2017 a propósito (sin «?.» ni «??»): hay móviles y navegadores con los
+// que, si no, la página ni arranca.
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
     'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-const CLAVE = 'controlAcceso.v2';
 const CAMPOS_DATOS = ['nombre', 'matricula', 'marca', 'empresa', 'motivo'];
 const CAMPOS_LISTADO = ['fecha', 'nombre', 'dni', 'matricula', 'marca', 'empresa', 'entrada', 'salida', 'motivo', 'obs'];
 // Lo que se trae de Datos al reconocer a alguien (lo que rellenaba la macro)
 const DE_DATOS = ['nombre', 'matricula', 'marca', 'empresa', 'motivo'];
+
+const SERVIDOR = 'https://registro-horario-emt.vercel.app';
+const GOOGLE_CLIENT_ID = '563294598347-2sag5tsloqdrd9eh19kfnnc3nrc2gnja.apps.googleusercontent.com';
+const NATIVA = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+// Dentro del APK la página es https://localhost: la API está en el servidor.
+// En la web, la del mismo sitio (así también funciona en las de prueba).
+const API = NATIVA ? SERVIDOR : '';
+const meta = n => { const m = document.querySelector(`meta[name="${n}"]`); return m ? m.content.trim() : ''; };
+const ROL_APP = meta('app-rol') || 'web';          // trabajador | gestion | web
+const PAQUETE = meta('app-paquete');
+const VERSION = typeof APP_VERSION !== 'undefined' ? APP_VERSION : '0';
+const PREFIJO_RELEASE = ROL_APP === 'gestion' ? 'acceso-gestion-build-' : 'acceso-build-';
+const REPO_API = 'https://api.github.com/repos/guillermorc-gain/RegistroHorario/releases?per_page=100';
+
 // Tesseract se descarga la primera vez que se usa (unos 6 MB) y luego queda
 // en la caché del navegador. Versiones fijas para que no cambie solo.
 const TESS = {
@@ -32,9 +49,34 @@ const TESS = {
     langPath: 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/spa@1.0.0/4.0.0_best_int',
 };
 
+const CLAVE = 'controlAcceso.v3';
+const CLAVE_SESION = 'controlAcceso.sesion';
+
 const $ = id => document.getElementById(id);
 const vaciar = el => { while (el.firstChild) el.removeChild(el.firstChild); };
 const filaDe = el => { const tr = el.closest('tr'); return tr ? tr.dataset.id : ''; };
+const dos = n => String(n).padStart(2, '0');
+const hoy = () => { const d = new Date(); return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`; };
+const ayer = () => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`; };
+const ahora = () => { const d = new Date(); return `${dos(d.getHours())}:${dos(d.getMinutes())}`; };
+const nuevoId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+const sinAcentos = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+const clave = s => sinAcentos(s).toLowerCase().replace(/\s+/g, ' ').trim();
+const normMat = m => String(m || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+// Como se escriben en el Excel: 1234-ABC
+const fmtMat = m => {
+    const n = normMat(m);
+    if (/^\d{4}[A-Z]{3}$/.test(n)) return n.slice(0, 4) + '-' + n.slice(4);
+    return String(m || '').trim().toUpperCase();
+};
+// Un "-" o vacío no identifica a nadie
+const util = v => { const s = String(v || '').trim(); return s && s !== '-' ? s : ''; };
+const nombreMes = c => { const [a, m] = c.split('-'); return `${MESES[+m - 1][0].toUpperCase()}${MESES[+m - 1].slice(1)} ${a}`; };
+const fmtFechaCorta = iso => { const [a, m, d] = iso.split('-'); return `${d}/${m}/${a}`; };
+const escXml = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    // Caracteres de control: Excel se niega a abrir el archivo si aparecen
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+
 // Safari de Mac antiguo, Firefox de escritorio y navegadores viejos no tienen
 // selector de fecha u hora: ahí esos campos son de texto y se escriben a mano
 // (dd/mm/aaaa y hh:mm). Todo lo que lee o escribe fechas y horas pasa por
@@ -64,49 +106,49 @@ const poner = (inp, v) => {
     else if (t === 'hora' && !NATIVO.hora) { inp.value = v || ''; inp.placeholder = 'hh:mm'; }
     else inp.value = v || '';
 };
-const dos = n => String(n).padStart(2, '0');
-const hoy = () => { const d = new Date(); return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`; };
-const ahora = () => { const d = new Date(); return `${dos(d.getHours())}:${dos(d.getMinutes())}`; };
-const nuevoId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-const sinAcentos = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
-const clave = s => sinAcentos(s).toLowerCase().replace(/\s+/g, ' ').trim();
-const normMat = m => String(m || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-// Como se escriben en el Excel: 1234-ABC
-const fmtMat = m => {
-    const n = normMat(m);
-    if (/^\d{4}[A-Z]{3}$/.test(n)) return n.slice(0, 4) + '-' + n.slice(4);
-    return String(m || '').trim().toUpperCase();
-};
-// Un "-" o vacío no identifica a nadie
-const util = v => { const s = String(v || '').trim(); return s && s !== '-' ? s : ''; };
-const nombreMes = c => { const [a, m] = c.split('-'); return `${MESES[+m - 1][0].toUpperCase()}${MESES[+m - 1].slice(1)} ${a}`; };
-const fmtFecha = iso => { const [a, m, d] = iso.split('-'); return `${d}/${m}/${a.slice(2)}`; };
-const escXml = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-    // Caracteres de control: Excel se niega a abrir el archivo si aparecen
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+const guardarLocal = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (_) { return false; } };
+const leerLocal = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (_) { return null; } };
 
 const ca = {
-    estado: { datos: [], meses: {} },
+    // Lo que hay en el servidor (más lo pendiente de subir, ya aplicado)
+    personas: [],
+    meses: {},              // 'AAAA-MM' → [registros]
+    pendientes: [],         // cambios aún sin subir
+    yo: null,               // { email, gestor }
     mes: hoy().slice(0, 7),
     borrador: { fecha: hoy(), filas: [] },
-    fotos: [],          // {url, archivo} — solo en memoria
+    fotos: [],
+    sesion: null,           // { token, expira, refresh, email }
 
-    // ── Arranque y guardado ─────────────────────────────────────────────
-    iniciar() {
-        try {
-            const g = JSON.parse(localStorage.getItem(CLAVE) || 'null');
-            if (g && Array.isArray(g.datos) && g.meses) this.estado = g;
-            const b = JSON.parse(localStorage.getItem(CLAVE + '.borrador') || 'null');
-            if (b && Array.isArray(b.filas)) this.borrador = b;
-            const m = localStorage.getItem(CLAVE + '.mes');
-            if (/^\d{4}-\d{2}$/.test(m || '')) this.mes = m;
-        } catch (_) { /* sin almacenamiento: se trabaja en memoria */ }
+    get esGestion() {
+        if (ROL_APP === 'trabajador') return false;
+        if (ROL_APP === 'gestion') return true;
+        return !!(this.yo && this.yo.gestor);
+    },
+
+    // ── Arranque ────────────────────────────────────────────────────────
+    async iniciar() {
+        const g = leerLocal(CLAVE);
+        if (g) {
+            this.personas = g.personas || [];
+            this.meses = g.meses || {};
+            this.pendientes = g.pendientes || [];
+            this.yo = g.yo || null;
+            if (g.borrador && Array.isArray(g.borrador.filas)) this.borrador = g.borrador;
+            if (/^\d{4}-\d{2}$/.test(g.mes || '')) this.mes = g.mes;
+        }
+        this.sesion = leerLocal(CLAVE_SESION);
+
+        const nombre = ROL_APP === 'gestion' ? 'Gestion (Control de acceso)'
+            : ROL_APP === 'trabajador' ? 'EMT - Movilidad (Control de acceso)' : 'Control de acceso';
+        $('tituloEntrar').textContent = nombre;
+        document.title = nombre;
+        if (ROL_APP === 'gestion') { document.body.classList.add('gestion'); $('logoEntrar').src = 'icons/icon-gestion-192.png'; }
 
         const f = $('formEntrada');
-        poner(f.fecha, this.mes === hoy().slice(0, 7) ? hoy() : this.mes + '-01');
+        poner(f.fecha, hoy());
         poner(f.entrada, ahora());
         poner(f.salida, '');
-        this._pintarSelectorMes();
         f.matricula.addEventListener('input', () => this._completarForm('matricula'));
         f.nombre.addEventListener('input', () => this._completarForm('nombre'));
         for (const id of ['tablaListado', 'tablaDatos', 'tablaBorrador']) {
@@ -114,37 +156,314 @@ const ca = {
             $(id).addEventListener('click', e => this._accion(e, id));
         }
         poner($('fechaHoja'), this.borrador.fecha || hoy());
+        window.addEventListener('online', () => this.sincronizar());
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) this.sincronizar(); });
+        setInterval(() => { if (!document.hidden) this.sincronizar(); }, 30000);
+
+        // ¿Vuelve de Google con el código?
+        const q = new URLSearchParams(location.search);
+        if (q.get('code')) {
+            history.replaceState(null, '', location.pathname);
+            await this._canjear(q.get('code'));
+        } else if (q.get('error')) {
+            history.replaceState(null, '', location.pathname);
+            this._mostrarEntrar('No se ha completado la entrada con Google.');
+            return;
+        }
+        if (!this.sesion) { this._mostrarEntrar(); return; }
+        this._mostrarApp();
+        this.sincronizar();
+        this._buscarVersion();
+    },
+
+    _mostrarEntrar(mensaje) {
+        $('pantallaApp').hidden = true;
+        $('pantallaEntrar').hidden = false;
+        const m = $('mensajeEntrar');
+        m.hidden = !mensaje;
+        m.textContent = mensaje || '';
+    },
+
+    _mostrarApp() {
+        $('pantallaEntrar').hidden = true;
+        $('pantallaApp').hidden = false;
+        this._aplicarRol();
         this.pintar();
     },
 
+    // Gestión ve todo el mes y todas las pestañas; el trabajador, lo de su
+    // día en la garita.
+    _aplicarRol() {
+        const g = this.esGestion;
+        document.body.classList.toggle('gestion', g);
+        document.querySelectorAll('[data-solo="gestion"]').forEach(el => { el.hidden = !g; });
+        $('titulo').textContent = g ? '✏️ Control de acceso · Gestión' : '🚧 Control de acceso';
+        $('selectorMes').hidden = !g;
+        if (!g) this.pestana('listado');
+        $('quienSoy').textContent = this.sesion ? this.sesion.email || '' : '';
+    },
+
     guardar() {
-        try {
-            localStorage.setItem(CLAVE, JSON.stringify(this.estado));
-            localStorage.setItem(CLAVE + '.borrador', JSON.stringify(this.borrador));
-        } catch (_) { this.aviso('No se ha podido guardar en este navegador: descarga el Excel para no perderlo.', true); }
+        const ok = guardarLocal(CLAVE, {
+            personas: this.personas, meses: this.meses, pendientes: this.pendientes,
+            yo: this.yo, borrador: this.borrador, mes: this.mes,
+        });
+        if (!ok) this.aviso('No se ha podido guardar en el móvil: no cierres la app hasta que sincronice.', true);
     },
 
     listado(c = this.mes) {
-        if (!this.estado.meses[c]) this.estado.meses[c] = { listado: [] };
-        return this.estado.meses[c].listado;
+        if (!this.meses[c]) this.meses[c] = [];
+        return this.meses[c];
+    },
+
+    // ── Sesión con Google ───────────────────────────────────────────────
+    _verificador() {
+        const a = new Uint8Array(32);
+        crypto.getRandomValues(a);
+        return btoa(String.fromCharCode.apply(null, a)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    },
+
+    async _reto(v) {
+        const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v));
+        return btoa(String.fromCharCode.apply(null, new Uint8Array(h))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    },
+
+    // La vuelta de Google es siempre la página principal del servidor (es la
+    // que está dada de alta en Google). Desde allí se devuelve el código: a la
+    // aplicación del móvil por su paquete, o a esta página en el navegador.
+    async entrar() {
+        const v = this._verificador();
+        try { localStorage.setItem('controlAcceso.pkce', v); } catch (_) {}
+        const params = new URLSearchParams({
+            client_id: GOOGLE_CLIENT_ID,
+            redirect_uri: SERVIDOR + '/',
+            response_type: 'code',
+            scope: 'openid email profile',
+            code_challenge: await this._reto(v),
+            code_challenge_method: 'S256',
+            access_type: 'offline',
+            prompt: 'select_account consent',
+            state: NATIVA ? 'app:' + PAQUETE : 'web:acceso',
+        });
+        const url = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
+        if (NATIVA && window.AndroidBridge && window.AndroidBridge.performOAuthInWebView) {
+            window.AndroidBridge.performOAuthInWebView(url, false);
+        } else {
+            location.assign(url);
+        }
+    },
+
+    // La app nativa llama aquí si la entrada fue por su ventana propia
+    _onOAuthCode(code) {
+        if (code) this._canjear(code).then(() => { if (this.sesion) { this._mostrarApp(); this.sincronizar(); } });
+        else this._mostrarEntrar('No se ha completado la entrada con Google.');
+    },
+
+    async _canjear(code) {
+        let v = null;
+        try { v = localStorage.getItem('controlAcceso.pkce'); localStorage.removeItem('controlAcceso.pkce'); } catch (_) {}
+        if (!v) { this._mostrarEntrar('La entrada ha caducado. Vuelve a intentarlo.'); return; }
+        try {
+            const r = await fetch(SERVIDOR + '/api/auth/exchange', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, code_verifier: v, redirect_uri: SERVIDOR + '/' }),
+            });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(d.error || r.status);
+            this._guardarSesion(d);
+            const email = await this._correo(d.access_token);
+            this.sesion.email = email;
+            guardarLocal(CLAVE_SESION, this.sesion);
+            // Otra cuenta en el mismo móvil: fuera lo de la anterior
+            if (this.yo && this.yo.email && this.yo.email !== email) {
+                this.meses = {}; this.personas = []; this.pendientes = []; this.yo = null;
+                this.guardar();
+            }
+        } catch (e) {
+            this.sesion = null;
+            this._mostrarEntrar('No se ha podido entrar: ' + (e.message || e));
+        }
+    },
+
+    _guardarSesion(d) {
+        this.sesion = Object.assign({}, this.sesion || {}, {
+            token: d.access_token,
+            expira: Date.now() + (parseInt(d.expires_in, 10) - 60) * 1000,
+        });
+        if (d.refresh_token) this.sesion.refresh = d.refresh_token;
+        guardarLocal(CLAVE_SESION, this.sesion);
+    },
+
+    async _correo(token) {
+        try {
+            const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + token } });
+            const d = await r.json();
+            return String(d.email || '').toLowerCase();
+        } catch (_) { return ''; }
+    },
+
+    async token() {
+        const s = this.sesion;
+        if (!s) return null;
+        if (s.token && Date.now() < s.expira) return s.token;
+        if (!s.refresh) return null;
+        try {
+            const r = await fetch(SERVIDOR + '/api/auth/refresh', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refresh_token: s.refresh }),
+            });
+            if (r.status === 400) { this.sesion = null; guardarLocal(CLAVE_SESION, null); return null; }
+            if (!r.ok) return 'sin-red';
+            this._guardarSesion(await r.json());
+            return this.sesion.token;
+        } catch (_) { return 'sin-red'; }
+    },
+
+    salir() {
+        if (this.pendientes.length && !confirm(`Hay ${this.pendientes.length} cambios sin subir todavía. Si sales ahora se pierden. ¿Salir igualmente?`)) return;
+        this.sesion = null;
+        guardarLocal(CLAVE_SESION, null);
+        this.meses = {}; this.personas = []; this.pendientes = []; this.yo = null;
+        this.guardar();
+        this._mostrarEntrar();
+    },
+
+    // ── Sincronización ──────────────────────────────────────────────────
+    async _api(metodo, ruta, cuerpo) {
+        const t = await this.token();
+        if (t === 'sin-red') { const e = new Error('Sin conexión'); e.red = true; throw e; }
+        if (!t) { const e = new Error('Sesión caducada'); e.sesion = true; throw e; }
+        let r;
+        try {
+            r = await fetch(API + ruta, {
+                method: metodo,
+                headers: Object.assign({ Authorization: 'Bearer ' + t }, cuerpo ? { 'Content-Type': 'application/json' } : {}),
+                body: cuerpo ? JSON.stringify(cuerpo) : undefined,
+                cache: 'no-store',
+            });
+        } catch (_) { const e = new Error('Sin conexión'); e.red = true; throw e; }
+        const d = await r.json().catch(() => ({}));
+        if (r.status === 401) { const e = new Error(d.error || 'Sesión caducada'); e.sesion = true; throw e; }
+        if (r.status === 403) { const e = new Error(d.error || 'Sin acceso'); e.acceso = true; throw e; }
+        if (!r.ok) throw new Error(d.error || ('Error ' + r.status));
+        return d;
+    },
+
+    _estadoSync(texto) { $('estadoSync').textContent = texto; },
+
+    _anotar(op) {
+        // Un cambio nuevo sobre el mismo registro sustituye al anterior
+        if (op.t === 'g' || op.t === 'b') this.pendientes = this.pendientes.filter(p => !((p.t === 'g' || p.t === 'b') && p.id === op.id));
+        if (op.t === 'p' || op.t === 'pb') this.pendientes = this.pendientes.filter(p => !((p.t === 'p' || p.t === 'pb') && p.id === op.id));
+        this.pendientes.push(op);
+        this.guardar();
+        clearTimeout(this._tSync);
+        this._tSync = setTimeout(() => this.sincronizar(), 800);
+    },
+
+    async sincronizar() {
+        if (!this.sesion) return;
+        if (this._sincronizando) { this._otraVez = true; return; }
+        this._sincronizando = true;
+        this._estadoSync('⟳ Sincronizando…');
+        try {
+            await this._subir();
+            if (this.esGestion) await this.cargarMes(this.mes);
+            else {
+                // La garita trabaja con hoy (y con ayer, por quien sigue dentro)
+                this.mes = hoy().slice(0, 7);
+                await this.cargarMes(this.mes);
+                if (ayer().slice(0, 7) !== this.mes) await this.cargarMes(ayer().slice(0, 7));
+            }
+            this._estadoSync(`✓ Al día · ${ahora()}`);
+        } catch (e) {
+            if (e.sesion) { this.sesion = null; guardarLocal(CLAVE_SESION, null); this._mostrarEntrar('La sesión ha caducado. Vuelve a entrar (lo apuntado no se pierde).'); }
+            else if (e.acceso) { this._mostrarEntrar(e.message); }
+            else if (e.red) this._estadoSync(`📴 Sin conexión${this.pendientes.length ? ` · ${this.pendientes.length} por subir` : ''}`);
+            else this._estadoSync('⚠️ ' + e.message);
+        } finally {
+            this._sincronizando = false;
+            if (this._otraVez) { this._otraVez = false; setTimeout(() => this.sincronizar(), 200); }
+        }
+    },
+
+    async _subir() {
+        const lote = this.pendientes.slice();
+        if (!lote.length) return;
+        // Datos primero: si no, el servidor apunta como nuevas a las personas
+        // de los registros antes de recibirlas, y quedan repetidas.
+        const pers = lote.filter(p => p.t === 'p' || p.t === 'pb');
+        if (pers.length) {
+            await this._api('POST', '/api/acceso', {
+                accion: 'personas',
+                personas: pers.filter(p => p.t === 'p').map(p => p.p),
+                borrar: pers.filter(p => p.t === 'pb').map(p => p.id),
+            });
+            this._quitar(pers);
+        }
+        const guardar = lote.filter(p => p.t === 'g');
+        for (let i = 0; i < guardar.length; i += 200) {
+            const trozo = guardar.slice(i, i + 200);
+            const d = await this._api('POST', '/api/acceso', { accion: 'guardar', registros: trozo.map(p => p.r) });
+            const rechazados = d.rechazados || [];
+            if (rechazados.length) this.aviso(`${rechazados.length} registro(s) no se han podido guardar (demasiado antiguos para la garita o incompletos).`, true);
+            this._quitar(trozo);
+        }
+        const borrar = lote.filter(p => p.t === 'b');
+        const porMes = {};
+        borrar.forEach(p => { (porMes[p.mes] = porMes[p.mes] || []).push(p); });
+        for (const mes of Object.keys(porMes)) {
+            await this._api('POST', '/api/acceso', { accion: 'borrar', mes, ids: porMes[mes].map(p => p.id) });
+            this._quitar(porMes[mes]);
+        }
+    },
+
+    _quitar(ops) {
+        this.pendientes = this.pendientes.filter(p => ops.indexOf(p) < 0);
+        this.guardar();
+    },
+
+    // Lo del servidor manda, salvo lo que aún está por subir desde aquí
+    async cargarMes(mes) {
+        const d = await this._api('GET', '/api/acceso?mes=' + mes);
+        const antesGestion = this.esGestion;
+        this.yo = d.yo;
+        const regs = d.registros || [];
+        const porId = new Map(regs.map(r => [r.id, r]));
+        for (const p of this.pendientes) {
+            if (p.t === 'g' && p.r.fecha.slice(0, 7) === mes) porId.set(p.id, Object.assign({}, porId.get(p.id) || {}, p.r, { _pendiente: true }));
+            // Cambiado de mes aquí y aún sin subir: en el servidor sigue en el viejo
+            if (p.t === 'g' && p.r.fecha.slice(0, 7) !== mes) porId.delete(p.id);
+            if (p.t === 'b' && p.mes === mes) porId.delete(p.id);
+        }
+        this.meses[mes] = [...porId.values()];
+        const pers = new Map((d.personas || []).map(p => [p.id, p]));
+        for (const p of this.pendientes) {
+            if (p.t === 'p') pers.set(p.id, p.p);
+            if (p.t === 'pb') pers.delete(p.id);
+        }
+        this.personas = [...pers.values()];
+        this.guardar();
+        if (antesGestion !== this.esGestion) this._aplicarRol();
+        this.pintar();
+        return this.meses[mes];
     },
 
     // ── Mes y pestañas ──────────────────────────────────────────────────
     cambiarMes(valor) {
         if (!/^\d{4}-\d{2}$/.test(valor || '')) return;
         this.mes = valor;
-        try { localStorage.setItem(CLAVE + '.mes', valor); } catch (_) {}
+        this.guardar();
         const f = $('formEntrada');
-        if (leer(f.fecha).slice(0, 7) !== valor) poner(f.fecha, valor === hoy().slice(0, 7) ? hoy() : valor + '-01');
+        if (this.esGestion && leer(f.fecha).slice(0, 7) !== valor) poner(f.fecha, valor === hoy().slice(0, 7) ? hoy() : valor + '-01');
         this.pintar();
+        this.sincronizar();
     },
 
-    // Mes y año en dos desplegables: el selector de mes del navegador no
-    // existe en Safari de Mac ni en Firefox.
     _pintarSelectorMes() {
         const sm = $('selMes'), sa = $('selAnio');
         if (!sm.options.length) MESES.forEach((m, i) => sm.add(new Option(m[0].toUpperCase() + m.slice(1), dos(i + 1))));
-        const anios = new Set(Object.keys(this.estado.meses).map(k => +k.slice(0, 4)));
+        const anios = new Set(Object.keys(this.meses).map(k => +k.slice(0, 4)));
         const actual = new Date().getFullYear();
         for (let a = actual - 2; a <= actual + 1; a++) anios.add(a);
         anios.add(+this.mes.slice(0, 4));
@@ -154,9 +473,7 @@ const ca = {
         sa.value = this.mes.slice(0, 4);
     },
 
-    elegirMes() {
-        this.cambiarMes(`${$('selAnio').value}-${$('selMes').value}`);
-    },
+    elegirMes() { this.cambiarMes(`${$('selAnio').value}-${$('selMes').value}`); },
 
     moverMes(paso) {
         const [a, m] = this.mes.split('-').map(Number);
@@ -165,45 +482,68 @@ const ca = {
     },
 
     pestana(nombre) {
-        for (const p of ['listado', 'hoja', 'datos', 'excel']) $('p-' + p).hidden = p !== nombre;
+        for (const p of ['listado', 'hoja', 'datos', 'excel', 'personal']) $('p-' + p).hidden = p !== nombre;
         document.querySelectorAll('nav button').forEach(b => b.classList.toggle('activa', b.dataset.pestana === nombre));
+        this.pestanaActual = nombre;
+        if (nombre === 'personal') this.cargarTrabajadores();
+    },
+
+    // Atrás del móvil: primero vuelve al listado; en el listado, sale
+    atras() {
+        if (this.pestanaActual && this.pestanaActual !== 'listado') { this.pestana('listado'); return true; }
+        return false;
     },
 
     // ── Búsquedas en Datos ──────────────────────────────────────────────
     porMatricula(m) {
         const n = normMat(m);
         if (!n) return null;
-        // La última que se apuntó manda, por si alguien cambió de empresa
-        for (let i = this.estado.datos.length - 1; i >= 0; i--) {
-            if (normMat(this.estado.datos[i].matricula) === n) return this.estado.datos[i];
-        }
+        for (let i = this.personas.length - 1; i >= 0; i--) if (normMat(this.personas[i].matricula) === n) return this.personas[i];
         return null;
     },
 
     porNombre(nombre) {
         const k = clave(nombre);
         if (!k || k === '-') return null;
-        for (let i = this.estado.datos.length - 1; i >= 0; i--) {
-            if (clave(this.estado.datos[i].nombre) === k) return this.estado.datos[i];
-        }
+        for (let i = this.personas.length - 1; i >= 0; i--) if (clave(this.personas[i].nombre) === k) return this.personas[i];
         return null;
     },
 
-    // Quien no está en Datos se añade; quien está no se toca (lo que se
-    // corrija en Datos se corrige allí, a propósito).
-    registrarEnDatos(f) {
+    // Quien no está en Datos se añade (el servidor hace lo mismo al recibir
+    // el registro; aquí es para que salga ya sin esperar a sincronizar).
+    _registrarLocal(f) {
         const mat = util(f.matricula), nom = util(f.nombre);
         if (!mat && !nom) return false;
-        const ya = mat ? this.porMatricula(mat) : this.porNombre(nom);
-        if (ya) return false;
-        this.estado.datos.push({
-            id: nuevoId(), nombre: f.nombre || '', matricula: mat ? fmtMat(mat) : (f.matricula || ''),
-            marca: f.marca || '', empresa: f.empresa || '', motivo: f.motivo || '', color: 0,
-        });
+        if (mat ? this.porMatricula(mat) : this.porNombre(nom)) return false;
+        const p = { id: nuevoId(), color: 0 };
+        for (const c of CAMPOS_DATOS) p[c] = f[c] || '';
+        this.personas.push(p);
         return true;
     },
 
-    // ── Formulario del listado ──────────────────────────────────────────
+    // ── Registros ───────────────────────────────────────────────────────
+    _guardarRegistro(fila, anterior) {
+        const r = { id: fila.id };
+        for (const c of CAMPOS_LISTADO) r[c] = fila[c] || '';
+        r.matricula = fmtMat(r.matricula);
+        if (anterior) ['autor', 'creado', 'origen'].forEach(k => { if (anterior[k]) r[k] = anterior[k]; });
+        else { r.autor = this.sesion ? this.sesion.email : ''; r.origen = this.esGestion ? 'gestion' : 'garita'; }
+        const mes = r.fecha.slice(0, 7);
+        // Si cambió de mes, sale del viejo
+        if (anterior && anterior.fecha && anterior.fecha.slice(0, 7) !== mes) {
+            const viejo = this.listado(anterior.fecha.slice(0, 7));
+            const i = viejo.findIndex(x => x.id === r.id);
+            if (i >= 0) viejo.splice(i, 1);
+        }
+        const l = this.listado(mes);
+        const i = l.findIndex(x => x.id === r.id);
+        const local = Object.assign({}, anterior || {}, r, { _pendiente: true });
+        if (i >= 0) l[i] = local; else l.push(local);
+        const nuevo = this._registrarLocal(r);
+        this._anotar({ t: 'g', id: r.id, r });
+        return nuevo;
+    },
+
     _completarForm(desde) {
         const f = $('formEntrada');
         const p = desde === 'matricula' ? this.porMatricula(f.matricula.value) : this.porNombre(f.nombre.value);
@@ -211,7 +551,6 @@ const ca = {
         for (const campo of DE_DATOS) {
             if (campo === desde) continue;
             const inp = f[campo];
-            // Solo se pisa lo que rellenó la búsqueda, no lo escrito a mano
             if (inp.classList.contains('auto') || !inp.value) {
                 inp.value = p ? (campo === 'matricula' ? fmtMat(p.matricula) : p[campo] || '') : '';
                 inp.classList.toggle('auto', !!p);
@@ -228,32 +567,39 @@ const ca = {
         const fila = { id: nuevoId() };
         for (const c of CAMPOS_LISTADO) fila[c] = leer(f[c]);
         if (!fila.fecha) { this.aviso('Pon la fecha (dd/mm/aaaa).', true); return; }
-        if (!util(fila.matricula) && !util(fila.nombre)) { this.aviso('Pon al menos la matrícula o el nombre.', true); return; }
-        fila.matricula = fmtMat(fila.matricula);
-        const nuevo = this.registrarEnDatos(fila);
-        this.listado(fila.fecha.slice(0, 7)).push(fila);
-        this.guardar();
-        if (fila.fecha.slice(0, 7) !== this.mes) this.cambiarMes(fila.fecha.slice(0, 7));
+        if (!this.esGestion && fila.fecha !== hoy() && fila.fecha !== ayer()) { this.aviso('En la garita solo se apunta lo de hoy o de ayer.', true); return; }
+        if (!['nombre', 'matricula', 'marca', 'empresa'].some(k => util(fila[k]))) { this.aviso('Pon al menos la matrícula o el nombre.', true); return; }
+        const nuevo = this._guardarRegistro(fila, null);
+        if (this.esGestion && fila.fecha.slice(0, 7) !== this.mes) this.cambiarMes(fila.fecha.slice(0, 7));
         for (const c of CAMPOS_LISTADO) if (c !== 'fecha') { f[c].value = ''; f[c].classList.remove('auto'); }
         poner(f.entrada, ahora());
         $('estadoBusqueda').textContent = '';
         this.pintar();
-        this.aviso(nuevo ? 'Añadido al listado y guardado en Datos.' : 'Añadido al listado.');
+        this.aviso(nuevo ? 'Apuntado, y guardado en Datos.' : 'Apuntado.');
         f.matricula.focus();
     },
 
     // ── Pintado ─────────────────────────────────────────────────────────
     pintar() {
-        this._pintarSelectorMes();
-        const l = this.listado();
+        if (this.esGestion) this._pintarSelectorMes();
+        const l = this._filasVisibles();
         $('nListado').textContent = l.length ? `(${l.length})` : '';
-        $('nDatos').textContent = this.estado.datos.length ? `(${this.estado.datos.length})` : '';
+        $('nDatos').textContent = this.personas.length ? `(${this.personas.length})` : '';
         $('nombreExcel').textContent = `«${this._nombreArchivo()}»`;
         this.pintarListado();
         this.pintarDatos();
         this.pintarBorrador();
         this._pintarResumen();
         this._pintarListas();
+        if (this.pestanaActual === 'personal') this._pintarTrabajadores();
+    },
+
+    // El trabajador ve lo de hoy y lo de ayer que sigue dentro (sin salida)
+    _filasVisibles() {
+        if (this.esGestion) return this.listado();
+        const h = hoy(), a = ayer();
+        const todas = this.listado(h.slice(0, 7)).concat(a.slice(0, 7) !== h.slice(0, 7) ? this.listado(a.slice(0, 7)) : []);
+        return todas.filter(r => r.fecha === h || (r.fecha === a && !r.salida));
     },
 
     _ordenar(filas) {
@@ -261,12 +607,13 @@ const ca = {
             (a.fecha || '9999').localeCompare(b.fecha || '9999') || (a.entrada || '99').localeCompare(b.entrada || '99'));
     },
 
-    _input(campo, valor) {
+    _input(campo, valor, desactivado) {
         const inp = document.createElement('input');
         inp.dataset.campo = campo;
         if (campo === 'fecha') { inp.dataset.tipo = 'fecha'; if (NATIVO.fecha) inp.type = 'date'; }
         else if (campo === 'entrada' || campo === 'salida') { inp.dataset.tipo = 'hora'; if (NATIVO.hora) inp.type = 'time'; }
         poner(inp, valor);
+        if (desactivado) inp.disabled = true;
         return inp;
     },
 
@@ -286,27 +633,91 @@ const ca = {
     pintarListado() {
         const tbody = $('tablaListado');
         vaciar(tbody);
-        const filas = this._ordenar(this.listado());
-        if (!filas.length) { this._vacio(tbody, 11, `El listado de ${nombreMes(this.mes)} está vacío.`); return; }
+        const g = this.esGestion;
+        $('ayudaListado').textContent = g ? `Todo lo apuntado en ${nombreMes(this.mes)}, de todas las garitas.`
+            : 'Lo de hoy (y lo de ayer que no tiene salida). Toca ⏱ cuando alguien se vaya.';
+        const filas = this._ordenar(this._filasVisibles());
+        const yo = this.sesion ? this.sesion.email : '';
+        $('cajaListado').hidden = !g;
+        $('tarjetasGarita').hidden = g;
+        if (!g) { this._pintarTarjetas(filas, yo); return; }
+        if (!filas.length) { this._vacio(tbody, 12, `El listado de ${nombreMes(this.mes)} está vacío.`); return; }
         filas.forEach((f, i) => {
             const tr = document.createElement('tr');
             tr.dataset.id = f.id;
             const primera = i === 0 || filas[i - 1].fecha !== f.fecha;
-            if (i === filas.length - 1 || filas[i + 1].fecha !== f.fecha) tr.className = 'fin-dia';
+            const clases = [];
+            if (i === filas.length - 1 || filas[i + 1].fecha !== f.fecha) clases.push('fin-dia');
+            if (f._pendiente) clases.push('pendiente');
+            tr.className = clases.join(' ');
             for (const c of CAMPOS_LISTADO) {
                 const td = document.createElement('td');
-                // La fecha se ve solo en la primera fila del día, como en el
-                // Excel; para cambiarla se toca el día.
-                if (c === 'fecha' && !primera) { td.className = 'dia'; tr.append(td); continue; }
-                td.append(this._input(c, f[c]));
+                // La fecha se ve solo en la primera fila del día, como en el Excel
+                if (c === 'fecha' && !primera) { tr.append(td); continue; }
+                td.append(this._input(c, f[c], c === 'fecha' && !g));
                 tr.append(td);
             }
+            const autor = document.createElement('td');
+            autor.className = 'autor';
+            autor.textContent = f.autor ? f.autor.split('@')[0] : (f.origen === 'excel' ? 'Excel' : '');
+            autor.title = f._pendiente ? 'Pendiente de subir' : (f.autor || '');
+            tr.append(autor);
             const acc = document.createElement('td');
             acc.className = 'acc';
             if (!f.salida) acc.append(this._icono('⏱', 'salida', 'Poner la hora de salida ahora'));
-            acc.append(this._icono('🗑', 'borrar', 'Borrar fila'));
+            if (g || f.autor === yo) acc.append(this._icono('🗑', 'borrar', 'Borrar fila'));
             tr.append(acc);
             tbody.append(tr);
+        });
+    },
+
+    // En la garita, una tarjeta por entrada: se lee de un vistazo en el
+    // móvil y la salida se marca con un toque.
+    _pintarTarjetas(filas, yo) {
+        const caja = $('tarjetasGarita');
+        vaciar(caja);
+        if (!filas.length) {
+            const p = document.createElement('p');
+            p.className = 'vacio'; p.textContent = 'Hoy aún no hay nadie apuntado.';
+            caja.append(p); return;
+        }
+        // Lo último arriba, que es lo que se busca
+        filas.slice().reverse().forEach(f => {
+            const d = document.createElement('div');
+            d.className = 'entrada' + (f.salida ? ' fuera' : '');
+            d.dataset.id = f.id;
+            const horas = document.createElement('div');
+            horas.className = 'horas';
+            horas.textContent = f.entrada || '—';
+            const sal = document.createElement('small');
+            sal.textContent = f.salida ? 'sale ' + f.salida : (f.fecha !== hoy() ? 'desde ayer' : 'dentro');
+            horas.append(sal);
+            const quien = document.createElement('div');
+            quien.className = 'quien';
+            const bn = document.createElement('b');
+            bn.textContent = [fmtMat(f.matricula), util(f.nombre)].filter(util).join(' · ') || '—';
+            const sp = document.createElement('span');
+            sp.textContent = [f.empresa, f.marca, f.motivo].filter(util).join(' · ') + (f._pendiente ? '  ⏳ por subir' : '');
+            quien.append(bn, sp);
+            d.append(horas, quien);
+            if (!f.salida) {
+                const b = document.createElement('button');
+                b.type = 'button'; b.className = 'btn'; b.textContent = '⏱ Salida';
+                b.onclick = () => { this._guardarRegistro(Object.assign({}, f, { salida: ahora() }), f); this.pintar(); };
+                d.append(b);
+            }
+            if (f.autor === yo || f._pendiente) {
+                const x = this._icono('🗑', 'borrar', 'Borrar');
+                x.onclick = () => {
+                    if (!confirm(`¿Borrar la entrada de ${f.nombre || f.matricula || 'esta persona'}?`)) return;
+                    const l = this.listado(f.fecha.slice(0, 7));
+                    l.splice(l.indexOf(f), 1);
+                    this._anotar({ t: 'b', id: f.id, mes: f.fecha.slice(0, 7) });
+                    this.pintar();
+                };
+                d.append(x);
+            }
+            caja.append(d);
         });
     },
 
@@ -315,10 +726,10 @@ const ca = {
         vaciar(tbody);
         const q = clave($('filtroDatos').value);
         const qm = normMat($('filtroDatos').value);
-        const filas = this.estado.datos.filter(d => !q ||
+        const filas = this.personas.filter(d => !q ||
             CAMPOS_DATOS.some(c => clave(d[c]).includes(q)) || (qm && normMat(d.matricula).includes(qm)));
         if (!filas.length) {
-            this._vacio(tbody, 6, this.estado.datos.length ? 'Nada coincide con la búsqueda.'
+            this._vacio(tbody, 6, this.personas.length ? 'Nada coincide con la búsqueda.'
                 : 'Aún no hay nadie. Carga tu Excel en la pestaña Excel, o se irán añadiendo al apuntar entradas.');
             return;
         }
@@ -351,7 +762,6 @@ const ca = {
             tr.dataset.id = f.id;
             const conocido = util(f.matricula) ? this.porMatricula(f.matricula) : this.porNombre(f.nombre);
             if (!conocido || f.revisar) { tr.className = 'revisar'; tr.title = f.nota || 'No está en Datos: revisa la matrícula'; }
-            // Lo que leyó el lector y por qué hay que mirarla, a la vista
             const leido = document.createElement('td');
             leido.className = 'leido';
             leido.textContent = [f.leido ? `«${f.leido}»` : '', f.nota || ''].filter(Boolean).join(' — ') || '—';
@@ -376,7 +786,7 @@ const ca = {
         const personas = new Set(l.map(f => normMat(f.matricula) || clave(f.nombre)).filter(Boolean)).size;
         const res = $('resumenMes');
         vaciar(res);
-        for (const [n, t] of [[l.length, 'entradas'], [dias, 'días'], [personas, 'personas distintas'], [this.estado.datos.length, 'en Datos']]) {
+        for (const [n, t] of [[l.length, 'entradas'], [dias, 'días'], [personas, 'personas distintas'], [this.personas.length, 'en Datos']]) {
             const d = document.createElement('div');
             d.className = 'dato';
             const b = document.createElement('b'); b.textContent = n;
@@ -395,7 +805,7 @@ const ca = {
                 dl.append(o);
             }
         };
-        const d = this.estado.datos;
+        const d = this.personas;
         llenar('dl-matriculas', d.filter(x => util(x.matricula)).map(x => [fmtMat(x.matricula), [x.nombre, x.empresa].filter(util).join(' · ')]));
         llenar('dl-nombres', d.filter(x => util(x.nombre)).map(x => [x.nombre, [fmtMat(x.matricula), x.empresa].filter(util).join(' · ')]));
         const unicos = campo => [...new Set(d.map(x => x[campo]).filter(util))].sort().map(v => [v]);
@@ -404,58 +814,88 @@ const ca = {
     },
 
     // ── Edición en las tablas ───────────────────────────────────────────
-    _coleccion(tabla) {
-        if (tabla === 'tablaDatos') return this.estado.datos;
-        if (tabla === 'tablaBorrador') return this.borrador.filas;
-        return this.listado();
+    _buscarRegistro(id) {
+        for (const mes of Object.keys(this.meses)) {
+            const r = this.meses[mes].find(x => x.id === id);
+            if (r) return r;
+        }
+        return null;
     },
 
     _editar(e, tabla) {
         const inp = e.target;
         const id = filaDe(inp);
-        const lista = this._coleccion(tabla);
-        const f = lista.find(x => x.id === id);
         const campo = inp.dataset.campo;
-        if (!f || !campo) return;
+        if (!id || !campo) return;
         let v = leer(inp);
         if (campo === 'matricula') v = fmtMat(v);
         if (inp.dataset.tipo === 'fecha' && !v) { this.aviso('Esa fecha no se entiende: escríbela como dd/mm/aaaa.', true); this.pintar(); return; }
-        f[campo] = v;
-        // En el listado y en la hoja, cambiar matrícula o nombre trae el resto
-        // de Datos (lo que hacía la macro); en Datos no, que ahí se corrige.
-        if (tabla !== 'tablaDatos' && (campo === 'matricula' || campo === 'nombre')) {
+        const traerDeDatos = f => {
+            if (campo !== 'matricula' && campo !== 'nombre') return;
             const p = campo === 'matricula' ? this.porMatricula(v) : this.porNombre(v);
             if (p) for (const c of DE_DATOS) if (c !== campo) f[c] = c === 'matricula' ? fmtMat(p.matricula) : p[c] || '';
-            if (tabla === 'tablaBorrador' && p) { f.revisar = false; f.nota = ''; }
+            return p;
+        };
+        if (tabla === 'tablaDatos') {
+            const p = this.personas.find(x => x.id === id);
+            if (!p) return;
+            p[campo] = v;
+            this._anotar({ t: 'p', id: p.id, p: this._limpioPersona(p) });
+        } else if (tabla === 'tablaBorrador') {
+            const f = this.borrador.filas.find(x => x.id === id);
+            if (!f) return;
+            f[campo] = v;
+            if (traerDeDatos(f)) { f.revisar = false; f.nota = ''; }
+            this.guardar();
+        } else {
+            const antes = this._buscarRegistro(id);
+            if (!antes) return;
+            const f = Object.assign({}, antes);
+            f[campo] = v;
+            traerDeDatos(f);
+            this._guardarRegistro(f, antes);
+            if (campo === 'fecha' && this.esGestion && v.slice(0, 7) !== this.mes) this.aviso(`Fila movida a ${nombreMes(v.slice(0, 7))}.`);
         }
-        if (tabla === 'tablaListado' && campo === 'fecha' && v && v.slice(0, 7) !== this.mes) {
-            lista.splice(lista.indexOf(f), 1);
-            this.listado(v.slice(0, 7)).push(f);
-            this.aviso(`Fila movida a ${nombreMes(v.slice(0, 7))}.`);
-        }
-        this.guardar();
         this.pintar();
+    },
+
+    _limpioPersona(p) {
+        const out = { id: p.id, color: p.color || 0 };
+        for (const c of CAMPOS_DATOS) out[c] = p[c] || '';
+        return out;
     },
 
     _accion(e, tabla) {
         const b = e.target.closest('button[data-accion]');
         if (!b) return;
         const id = filaDe(b);
-        const lista = this._coleccion(tabla);
-        const i = lista.findIndex(x => x.id === id);
-        if (i < 0) return;
-        if (b.dataset.accion === 'borrar') {
-            if (tabla === 'tablaDatos' && !confirm(`¿Quitar a ${lista[i].nombre || lista[i].matricula || 'esta persona'} de Datos?`)) return;
-            lista.splice(i, 1);
-        } else if (b.dataset.accion === 'salida') {
-            lista[i].salida = ahora();
+        if (tabla === 'tablaDatos') {
+            const i = this.personas.findIndex(x => x.id === id);
+            if (i < 0) return;
+            if (!confirm(`¿Quitar a ${this.personas[i].nombre || this.personas[i].matricula || 'esta persona'} de Datos?`)) return;
+            this.personas.splice(i, 1);
+            this._anotar({ t: 'pb', id });
+        } else if (tabla === 'tablaBorrador') {
+            this.borrador.filas = this.borrador.filas.filter(x => x.id !== id);
+            this.guardar();
+        } else {
+            const r = this._buscarRegistro(id);
+            if (!r) return;
+            if (b.dataset.accion === 'borrar') {
+                if (!confirm(`¿Borrar la entrada de ${r.nombre || r.matricula || 'esta persona'}?`)) return;
+                const l = this.listado(r.fecha.slice(0, 7));
+                l.splice(l.indexOf(r), 1);
+                this._anotar({ t: 'b', id, mes: r.fecha.slice(0, 7) });
+            } else if (b.dataset.accion === 'salida') {
+                this._guardarRegistro(Object.assign({}, r, { salida: ahora() }), r);
+            }
         }
-        this.guardar();
         this.pintar();
     },
 
     filaDatos() {
-        this.estado.datos.unshift({ id: nuevoId(), nombre: '', matricula: '', marca: '', empresa: '', motivo: '', color: 0 });
+        const p = { id: nuevoId(), nombre: '', matricula: '', marca: '', empresa: '', motivo: '', color: 0 };
+        this.personas.unshift(p);
         $('filtroDatos').value = '';
         this.guardar();
         this.pintarDatos();
@@ -463,13 +903,52 @@ const ca = {
         if (primero) primero.focus();
     },
 
-    vaciarMes() {
-        const l = this.listado();
-        if (!l.length) return;
-        if (!confirm(`¿Borrar las ${l.length} entradas del listado de ${nombreMes(this.mes)}?`)) return;
-        delete this.estado.meses[this.mes];
-        this.guardar();
-        this.pintar();
+    // ── Trabajadores (quién usa la app de la garita) ────────────────────
+    async cargarTrabajadores() {
+        try {
+            const r = await fetch(API + '/api/allowlist?app=acceso', { cache: 'no-store' });
+            this.trabajadores = r.ok ? await r.json() : [];
+        } catch (_) { this.trabajadores = this.trabajadores || []; }
+        this._pintarTrabajadores();
+    },
+
+    _pintarTrabajadores() {
+        const ul = $('listaTrabajadores');
+        vaciar(ul);
+        const lista = this.trabajadores || [];
+        if (!lista.length) { const li = document.createElement('li'); li.textContent = 'Nadie todavía.'; ul.append(li); return; }
+        for (const email of lista) {
+            const li = document.createElement('li');
+            const s = document.createElement('span'); s.textContent = email;
+            const b = this._icono('🗑', 'quitar', 'Quitar acceso');
+            b.onclick = () => this.bajaTrabajador(email);
+            li.append(s, b); ul.append(li);
+        }
+    },
+
+    async _cambiarTrabajador(metodo, email) {
+        const t = await this.token();
+        if (!t || t === 'sin-red') { this.aviso('Sin conexión.', true); return; }
+        const r = await fetch(API + '/api/allowlist', {
+            method: metodo, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+            body: JSON.stringify({ app: 'acceso', email }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) { this.aviso(d.error || 'No se ha podido cambiar', true); return; }
+        this.trabajadores = d.emails || [];
+        this._pintarTrabajadores();
+    },
+
+    async altaTrabajador() {
+        const email = $('correoNuevo').value.trim().toLowerCase();
+        if (!email) return;
+        await this._cambiarTrabajador('POST', email);
+        $('correoNuevo').value = '';
+    },
+
+    async bajaTrabajador(email) {
+        if (!confirm(`¿Quitar el acceso a ${email}?`)) return;
+        await this._cambiarTrabajador('DELETE', email);
     },
 
     // ── Hoja a mano ─────────────────────────────────────────────────────
@@ -526,14 +1005,11 @@ const ca = {
         const pendientes = this.borrador.filas.filter(f => !vale(f));
         if (!filas.length) { this.aviso('No hay filas que pasar.', true); return; }
         let nuevos = 0;
-        const destino = this.listado(fecha.slice(0, 7));
         for (const f of filas) {
             const fila = { id: nuevoId() };
             for (const c of CAMPOS_LISTADO) fila[c] = f[c] || '';
             fila.fecha = fecha;
-            fila.matricula = fmtMat(fila.matricula);
-            if (this.registrarEnDatos(fila)) nuevos++;
-            destino.push(fila);
+            if (this._guardarRegistro(fila, null)) nuevos++;
         }
         // Las que siguen sin nombre ni matrícula se quedan para completarlas
         this.borrador.filas = pendientes;
@@ -544,7 +1020,7 @@ const ca = {
             + (pendientes.length ? `. Quedan ${pendientes.length} sin nombre ni matrícula por completar.` : '.'));
     },
 
-    // ── Lectura automática (Tesseract, en el navegador) ─────────────────
+    // ── Lectura automática (Tesseract, en el propio móvil) ──────────────
     async _tesseract() {
         if (window.Tesseract) return window.Tesseract;
         await new Promise((ok, ko) => {
@@ -576,8 +1052,8 @@ const ca = {
             // Bloque uniforme: la hoja es una tabla y así lee fila a fila
             await worker.setParameters({ tessedit_pageseg_mode: '6' });
             const lienzo = await this._prepararImagen(foto.archivo);
-            const { data } = await worker.recognize(lienzo);
-            const { filas, fecha } = this.interpretar(data.text || '');
+            const res = await worker.recognize(lienzo);
+            const { filas, fecha } = this.interpretar(res.data.text || '');
             if (fecha) { poner($('fechaHoja'), fecha); this.borrador.fecha = fecha; }
             this.borrador.filas.push(...filas);
             this.guardar();
@@ -633,7 +1109,7 @@ const ca = {
         let fecha = '';
         const aDigito = { O: '0', Q: '0', D: '0', U: '0', I: '1', L: '1', J: '1', T: '7', Z: '2', S: '5', B: '8', G: '6', A: '4' };
         const aLetra = { 0: 'D', 1: 'L', 2: 'Z', 4: 'A', 5: 'S', 6: 'G', 7: 'T', 8: 'B' };
-        const conocidas = this.estado.datos.map(d => normMat(d.matricula)).filter(m => /^\d{4}[A-Z]{3}$/.test(m));
+        const conocidas = this.personas.map(d => normMat(d.matricula)).filter(m => /^\d{4}[A-Z]{3}$/.test(m));
 
         for (const linea of texto.split('\n')) {
             const L = sinAcentos(linea).toUpperCase();
@@ -661,7 +1137,7 @@ const ca = {
             let persona = matricula ? this.porMatricula(matricula) : null;
             if (!matricula) {
                 const lin = clave(linea);
-                persona = this.estado.datos.find(d => util(d.nombre) && clave(d.nombre).length >= 5 && lin.includes(clave(d.nombre))) || null;
+                persona = this.personas.find(d => util(d.nombre) && clave(d.nombre).length >= 5 && lin.includes(clave(d.nombre))) || null;
                 if (persona) { revisar = true; nota = 'Reconocido por el nombre: comprueba la matrícula'; }
             }
             const horas = [];
@@ -685,7 +1161,7 @@ const ca = {
         return { filas, fecha };
     },
 
-    // ── Cargar un Excel de antes ────────────────────────────────────────
+    // ── Cargar un Excel de antes (gestión) ──────────────────────────────
     async cargarExcels(lista) {
         const todos = [];
         for (const archivo of [...(lista || [])]) {
@@ -694,17 +1170,16 @@ const ca = {
                 const hDatos = wb.SheetNames.find(n => /datos/i.test(n));
                 const hListado = wb.SheetNames.find(n => /listado/i.test(n)) || (!hDatos ? wb.SheetNames[0] : null);
                 const nDatos = hDatos ? this._importarDatos(wb.Sheets[hDatos]) : 0;
-                const { nuevas, meses } = hListado ? this._importarListado(wb.Sheets[hListado]) : { nuevas: 0, meses: [] };
-                this.guardar();
-                this.aviso(`${archivo.name}: ${nDatos} personas nuevas en Datos, ${nuevas} entradas${meses.length ? ' (' + meses.map(nombreMes).join(', ') + ')' : ''}.`);
+                const { nuevas, meses } = hListado ? await this._importarListado(wb.Sheets[hListado]) : { nuevas: 0, meses: [] };
+                this.aviso(`${archivo.name}: ${nDatos} personas nuevas en Datos, ${nuevas} entradas${meses.length ? ' (' + meses.map(nombreMes).join(', ') + ')' : ''}. Subiendo…`);
                 todos.push(...meses);
             } catch (e) {
                 this.aviso(`${archivo.name}: no se ha podido leer (${e.message}).`, true);
             }
         }
-        // Se abre el mes más reciente de lo cargado
         if (todos.length && !todos.includes(this.mes)) this.cambiarMes(todos.sort().pop());
         this.pintar();
+        this.sincronizar();
     },
 
     // Las columnas se buscan por el título, no por la posición
@@ -739,18 +1214,22 @@ const ca = {
             const tema = estilo && estilo.fgColor ? estilo.fgColor.theme : null;
             if (estilo && estilo.patternType === 'solid' && colores[tema]) d.color = colores[tema];
             const ya = util(d.matricula) ? this.porMatricula(d.matricula) : this.porNombre(d.nombre);
-            if (ya) { if (!ya.color && d.color) ya.color = d.color; return; }
-            this.estado.datos.push(d);
+            if (ya) {
+                if (!ya.color && d.color) { ya.color = d.color; this._anotar({ t: 'p', id: ya.id, p: this._limpioPersona(ya) }); }
+                return;
+            }
+            this.personas.push(d);
+            this._anotar({ t: 'p', id: d.id, p: this._limpioPersona(d) });
             n++;
         });
         return n;
     },
 
-    _importarListado(ws) {
+    async _importarListado(ws) {
         const c = this._columnas(ws);
         if (!c) return { nuevas: 0, meses: [] };
-        let nuevas = 0, fecha = '';
-        const meses = new Set();
+        let fecha = '';
+        const porMes = {};
         for (const r of c.filas.slice(c.cab + 1)) {
             const v = k => c[k] >= 0 ? r[c[k]] : '';
             const f = this._leerFecha(v('fecha'));
@@ -765,13 +1244,27 @@ const ca = {
             // Lo que no es una hora («-», «no salió»…) se deja como está
             fila.entrada = this._leerHora(v('entrada')) || fila.entrada;
             fila.salida = this._leerHora(v('salida')) || fila.salida;
-            const l = this.listado(fecha.slice(0, 7));
-            if (l.some(x => x.fecha === fila.fecha && x.entrada === fila.entrada && normMat(x.matricula) === normMat(fila.matricula) && clave(x.nombre) === clave(fila.nombre))) continue;
-            l.push(fila);
-            this.registrarEnDatos(fila);
-            nuevas++; meses.add(fecha.slice(0, 7));
+            (porMes[fecha.slice(0, 7)] = porMes[fecha.slice(0, 7)] || []).push(fila);
         }
-        return { nuevas, meses: [...meses].sort() };
+        let nuevas = 0;
+        for (const mes of Object.keys(porMes)) {
+            // Lo que ya hay en el servidor, para no duplicar si se carga dos veces
+            let l;
+            try { l = await this.cargarMes(mes); } catch (_) { l = this.listado(mes); }
+            const igual = (x, f) => x.fecha === f.fecha && x.entrada === f.entrada && normMat(x.matricula) === normMat(f.matricula) && clave(x.nombre) === clave(f.nombre);
+            for (const fila of porMes[mes]) {
+                if (l.some(x => igual(x, fila))) continue;
+                const r = { id: fila.id, origen: 'excel' };
+                for (const k of CAMPOS_LISTADO) r[k] = fila[k];
+                r.autor = '';
+                l.push(Object.assign({}, r, { _pendiente: true }));
+                this._registrarLocal(r);
+                this.pendientes.push({ t: 'g', id: r.id, r });
+                nuevas++;
+            }
+        }
+        this.guardar();
+        return { nuevas, meses: Object.keys(porMes).sort() };
     },
 
     _leerFecha(v) {
@@ -824,7 +1317,7 @@ const ca = {
 
     _filasDatos() {
         const letras = ['A', 'B', 'C', 'D', 'E'];
-        return this.estado.datos.map((d, i) => {
+        return this.personas.map((d, i) => {
             const r = i + 2, s = d.color || 1;
             const celdas = CAMPOS_DATOS.map((c, j) => this._celda(letras[j] + r, s, c === 'matricula' ? fmtMat(d[c]) : d[c]));
             return `<row r="${r}" spans="1:6" ht="21" customHeight="1">${celdas.join('')}</row>`;
@@ -865,22 +1358,69 @@ const ca = {
             if (!r.ok) throw new Error('no se encuentra la plantilla');
             const zip = XLSX.CFB.read(new Uint8Array(await r.arrayBuffer()), { type: 'array' });
             // Las rutas dentro del zip van con la barra delante
-            const leer = ruta => new TextDecoder().decode(XLSX.CFB.find(zip, '/' + ruta).content);
+            const leerZip = ruta => new TextDecoder().decode(XLSX.CFB.find(zip, '/' + ruta).content);
             const escribir = (ruta, texto) => { XLSX.CFB.find(zip, '/' + ruta).content = new TextEncoder().encode(texto); };
             // sheet1 es Datos y sheet2 es Listado (la que lleva la macro)
-            escribir('xl/worksheets/sheet1.xml', this._meterFilas(leer('xl/worksheets/sheet1.xml'), this._filasDatos(), 'E'));
-            escribir('xl/worksheets/sheet2.xml', this._meterFilas(leer('xl/worksheets/sheet2.xml'), this._filasListado(), 'J'));
+            escribir('xl/worksheets/sheet1.xml', this._meterFilas(leerZip('xl/worksheets/sheet1.xml'), this._filasDatos(), 'E'));
+            escribir('xl/worksheets/sheet2.xml', this._meterFilas(leerZip('xl/worksheets/sheet2.xml'), this._filasListado(), 'J'));
             const bytes = XLSX.CFB.write(zip, { fileType: 'zip', type: 'array', compression: true });
+            const nombre = this._nombreArchivo();
+            // En la app del móvil no hay descargas del navegador: el archivo
+            // va a Descargas por el puente nativo.
+            if (window.AndroidBridge && window.AndroidBridge.saveFileBase64) {
+                let bin = '';
+                const u8 = new Uint8Array(bytes);
+                for (let i = 0; i < u8.length; i += 32768) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 32768));
+                window.AndroidBridge.saveFileBase64(btoa(bin), nombre);
+                return;
+            }
             const blob = new Blob([bytes], { type: 'application/vnd.ms-excel.sheet.macroEnabled.12' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = this._nombreArchivo();
+            a.download = nombre;
             document.body.append(a); a.click(); a.remove();
             setTimeout(() => URL.revokeObjectURL(a.href), 10000);
         } catch (e) {
             this.aviso('No se ha podido crear el Excel: ' + (e.message || e), true);
         }
     },
+
+    // ── Versión nueva de la app ─────────────────────────────────────────
+    async _buscarVersion() {
+        const n = parseInt(String(VERSION).replace(/\D/g, ''), 10);
+        if (!NATIVA || !n) return;
+        try {
+            const r = await fetch(REPO_API);
+            if (!r.ok) return;
+            const lista = await r.json();
+            const re = new RegExp('^' + PREFIJO_RELEASE.replace(/[-]/g, '\\-') + '(\\d+)$');
+            let mejor = null;
+            for (const rel of lista) {
+                const m = re.exec(rel.tag_name || '');
+                if (m && +m[1] > n && (!mejor || +m[1] > mejor.n)) {
+                    const apk = (rel.assets || []).find(a => /\.apk$/.test(a.name));
+                    if (apk) mejor = { n: +m[1], url: apk.browser_download_url };
+                }
+            }
+            if (!mejor) return;
+            this._urlApk = mejor.url;
+            $('textoVersion').textContent = 'Hay una versión nueva de la app.';
+            $('avisoVersion').hidden = false;
+        } catch (_) { /* sin red: ya se mirará */ }
+    },
+
+    actualizar() {
+        if (!this._urlApk) return;
+        if (window.AndroidBridge && window.AndroidBridge.downloadAndInstallApk) {
+            $('textoVersion').textContent = 'Descargando… 0%';
+            window.AndroidBridge.downloadAndInstallApk(this._urlApk);
+        } else {
+            location.href = this._urlApk;
+        }
+    },
+
+    _onUpdateProgress(p) { $('textoVersion').textContent = `Descargando… ${p}%`; },
+    _onUpdateError() { $('textoVersion').textContent = 'No se ha podido descargar. Vuelve a probar.'; },
 
     // ── Avisos ──────────────────────────────────────────────────────────
     aviso(texto, error = false) {
@@ -894,4 +1434,6 @@ const ca = {
 };
 
 window.ca = ca;
+// La parte nativa del móvil llama a «app» (como en las otras aplicaciones)
+window.app = ca;
 ca.iniciar();
