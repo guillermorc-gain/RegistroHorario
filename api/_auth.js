@@ -74,47 +74,81 @@ const MENSAJES = {
 const REPO_DATOS    = 'guillermorc-gain/RegistroHorario';
 const RAMA_DATOS    = 'datos';
 const LISTA_GESTION = 'allowed-users-gestion.json';
+// El puesto de control de acceso lleva sus propias listas: los que hacen el
+// turno en la garita y los que llevan el puesto. Quien gestiona ahí no es
+// quien gestiona a los conductores, así que no vale la lista de gestión.
+const LISTA_CONTROL  = 'allowed-users-control.json';
+const LISTA_GCONTROL = 'allowed-users-gestion-control.json';
 export const GESTOR_PRINCIPAL = 'g.rioscorrea@gmail.com';
 
 // La lista cambia muy de tanto en tanto y esto se consulta en cada escritura:
 // un minuto de memoria evita ir a GitHub a cada petición.
-let listaCache = { emails: null, hasta: 0 };
+const listaCache = new Map();
 
-async function listaDeGestion() {
-  if (listaCache.emails && Date.now() < listaCache.hasta) return listaCache.emails;
+async function lista(fichero) {
+  const guardado = listaCache.get(fichero);
+  if (guardado?.emails && Date.now() < guardado.hasta) return guardado.emails;
   try {
     const r = await fetch(
-      `https://api.github.com/repos/${REPO_DATOS}/contents/${LISTA_GESTION}?ref=${RAMA_DATOS}`,
+      `https://api.github.com/repos/${REPO_DATOS}/contents/${fichero}?ref=${RAMA_DATOS}`,
       { headers: {
           'User-Agent': 'horasemt-app',
           Accept: 'application/vnd.github+json',
           ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
         } }
     );
+    // Una lista que todavía no existe es una lista vacía, no un fallo: la del
+    // puesto de control no está hasta que se dé de alta al primero.
+    if (r.status === 404) {
+      listaCache.set(fichero, { emails: [], hasta: Date.now() + 60 * 1000 });
+      return [];
+    }
     if (!r.ok) throw new Error(String(r.status));
     const data = await r.json();
     const emails = JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
-    listaCache = {
+    listaCache.set(fichero, {
       emails: (Array.isArray(emails) ? emails : []).map(e => String(e).toLowerCase().trim()),
       hasta: Date.now() + 60 * 1000,
-    };
+    });
   } catch (_) {
     // Si no se puede leer, no se estrena a nadie: se reusa la última buena un
     // rato corto, y si nunca hubo, solo pasa el gestor principal. Un corte con
     // GitHub no puede abrir la puerta, pero tampoco cerrársela a quien ya
     // estaba dentro.
-    if (!listaCache.emails) return null;
-    listaCache.hasta = Date.now() + 15 * 1000;
+    if (!guardado?.emails) return null;
+    guardado.hasta = Date.now() + 15 * 1000;
+    return guardado.emails;
   }
-  return listaCache.emails;
+  return listaCache.get(fichero).emails;
 }
 
-export async function esGestor(email) {
+// Está en una de esas listas, o es el que lleva todo esto.
+async function enAlguna(email, ficheros) {
   const e = String(email || '').toLowerCase().trim();
   if (!e) return false;
   if (e === GESTOR_PRINCIPAL) return true;
-  const lista = await listaDeGestion();
-  return !!lista && lista.includes(e);
+  for (const f of ficheros) {
+    const l = await lista(f);
+    if (l && l.includes(e)) return true;
+  }
+  return false;
+}
+
+export async function esGestor(email) {
+  return enAlguna(email, [LISTA_GESTION]);
+}
+
+// Quien lleva el puesto de control de acceso: repasa los partes de todos, los
+// corrige y los borra. Es otra gente que la que gestiona a los conductores.
+export async function esGestorControl(email) {
+  return enAlguna(email, [LISTA_GCONTROL]);
+}
+
+// Quien tiene algo que ver con el puesto: el que hace el turno y el que lo
+// lleva. El parte dice quién entra y quién sale de las instalaciones, así que
+// no lo abre cualquiera que tenga una cuenta de Google.
+export async function esDelPuesto(email) {
+  return enAlguna(email, [LISTA_CONTROL, LISTA_GCONTROL]);
 }
 
 // Para las acciones de gestión. Responde el error y devuelve '' si no pasa.

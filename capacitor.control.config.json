@@ -1,0 +1,13 @@
+{
+  "appId": "com.guillermorc.controlemt",
+  "appName": "Control de acceso EMT - Movilidad",
+  "webDir": "www-control",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "iconColor": "#186A3B"
+    }
+  }
+}
