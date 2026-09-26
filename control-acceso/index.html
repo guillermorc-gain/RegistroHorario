@@ -9,73 +9,79 @@
     <style>
         :root{
             --azul:#1565C0;--azul-osc:#003A99;--fondo:#f3f6fb;--papel:#fff;--texto:#1c2533;--suave:#667085;
-            --borde:#dde3ec;--dudoso:#fff4cc;--dudoso-borde:#e8c547;--ok:#1b7f4b;--error:#c0392b;
+            --borde:#dde3ec;--aviso:#fff4cc;--aviso-borde:#e8c547;--ok:#1b7f4b;--error:#c0392b;--auto:#e8f5ee;
+            --cab:#dae9f8;
         }
         @media (prefers-color-scheme: dark){
-            :root{--fondo:#0e1522;--papel:#162033;--texto:#e6ebf3;--suave:#98a3b5;--borde:#2a3850;--dudoso:#3b3316;--dudoso-borde:#8a7426;}
+            :root{--fondo:#0e1522;--papel:#162033;--texto:#e6ebf3;--suave:#98a3b5;--borde:#2a3850;--aviso:#3b3316;--aviso-borde:#8a7426;--auto:#15372a;--cab:#1d3552;}
         }
         *{box-sizing:border-box;margin:0;padding:0;}
         [hidden]{display:none !important;}
         body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--fondo);color:var(--texto);min-height:100vh;}
-        header{background:linear-gradient(135deg,var(--azul),var(--azul-osc));color:#fff;padding:14px 16px calc(12px) 16px;padding-top:calc(14px + env(safe-area-inset-top,0px));}
+        header{background:linear-gradient(135deg,var(--azul),var(--azul-osc));color:#fff;padding:14px 16px 0;padding-top:calc(14px + env(safe-area-inset-top,0px));}
         header h1{font-size:19px;font-weight:700;}
-        .cab{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between;max-width:1100px;margin:0 auto;}
+        .cab{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between;max-width:1200px;margin:0 auto;}
         .mes{display:flex;align-items:center;gap:6px;}
         .mes button{background:rgba(255,255,255,.18);border:0;color:#fff;width:34px;height:34px;border-radius:8px;font-size:18px;cursor:pointer;}
         .mes input{background:rgba(255,255,255,.95);border:0;border-radius:8px;padding:6px 8px;font-size:15px;color:#1c2533;}
-        .sesion{font-size:12px;opacity:.9;width:100%;max-width:1100px;margin:6px auto 0;}
-        .sesion a{color:#fff;}
-        nav{display:flex;gap:4px;max-width:1100px;margin:12px auto 0;}
-        nav button{flex:1;background:rgba(255,255,255,.14);color:#fff;border:0;border-radius:10px 10px 0 0;padding:10px 6px;font-size:15px;font-weight:600;cursor:pointer;}
+        nav{display:flex;gap:4px;max-width:1200px;margin:12px auto 0;overflow-x:auto;}
+        nav button{flex:1;min-width:max-content;background:rgba(255,255,255,.14);color:#fff;border:0;border-radius:10px 10px 0 0;padding:10px 12px;font-size:15px;font-weight:600;cursor:pointer;}
         nav button.activa{background:var(--fondo);color:var(--azul);}
         @media (prefers-color-scheme: dark){nav button.activa{color:#8fb8ff;}}
-        main{max-width:1100px;margin:0 auto;padding:16px;}
+        main{max-width:1200px;margin:0 auto;padding:16px;}
         .tarjeta{background:var(--papel);border:1px solid var(--borde);border-radius:14px;padding:16px;margin-bottom:14px;}
         .tarjeta h2{font-size:16px;margin-bottom:8px;}
         .ayuda{color:var(--suave);font-size:13px;line-height:1.45;}
-        .botones{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
+        .botones{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center;}
         .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:10px;padding:11px 16px;font-size:15px;font-weight:600;cursor:pointer;background:var(--azul);color:#fff;}
         .btn.sec{background:transparent;color:var(--azul);border:1.5px solid var(--azul);}
         @media (prefers-color-scheme: dark){.btn.sec{color:#8fb8ff;border-color:#8fb8ff;}}
         .btn.peligro{background:transparent;color:var(--error);border:1.5px solid var(--error);}
         .btn:disabled{opacity:.5;cursor:default;}
-        .btn.chico{padding:6px 10px;font-size:13px;}
-        .cola{list-style:none;margin-top:12px;display:flex;flex-direction:column;gap:8px;}
-        .cola li{border:1px solid var(--borde);border-radius:10px;padding:10px 12px;font-size:14px;display:flex;gap:10px;align-items:flex-start;}
-        .cola .est{font-size:18px;line-height:1;}
-        .cola .det{color:var(--suave);font-size:12px;margin-top:2px;}
+        .formulario{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;align-items:end;}
+        .formulario label{font-size:12px;color:var(--suave);display:flex;flex-direction:column;gap:4px;}
+        .formulario input{padding:9px 10px;border:1px solid var(--borde);border-radius:8px;font-size:15px;background:var(--papel);color:var(--texto);width:100%;font-family:inherit;}
+        .formulario input.auto{background:var(--auto);}
+        @media (max-width:760px){.formulario{grid-template-columns:1fr 1fr;}}
+        .estado-busqueda{font-size:13px;margin-top:10px;min-height:18px;}
+        .estado-busqueda.ok{color:var(--ok);}
+        .estado-busqueda.nuevo{color:#9a6b00;}
+        @media (prefers-color-scheme: dark){.estado-busqueda.nuevo{color:#e0b64a;}}
         .resumen{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
-        .dato{background:var(--papel);border:1px solid var(--borde);border-radius:12px;padding:10px 14px;min-width:120px;}
+        .dato{background:var(--papel);border:1px solid var(--borde);border-radius:12px;padding:10px 14px;min-width:110px;}
         .dato b{display:block;font-size:22px;}
         .dato span{font-size:12px;color:var(--suave);}
         .filtro{width:100%;padding:10px 12px;border:1px solid var(--borde);border-radius:10px;font-size:15px;background:var(--papel);color:var(--texto);margin-bottom:10px;}
         .tabla-caja{overflow-x:auto;border:1px solid var(--borde);border-radius:12px;background:var(--papel);}
-        table{border-collapse:collapse;width:100%;font-size:14px;min-width:640px;}
-        th{background:var(--azul);color:#fff;text-align:left;padding:8px;font-weight:600;position:sticky;top:0;white-space:nowrap;}
-        td{border-top:1px solid var(--borde);padding:2px 4px;vertical-align:middle;}
-        td input{width:100%;border:1px solid transparent;background:transparent;color:var(--texto);font-size:14px;padding:6px 4px;border-radius:6px;font-family:inherit;}
+        table{border-collapse:collapse;width:100%;font-size:14px;}
+        th{background:var(--cab);color:var(--texto);text-align:center;padding:8px 6px;font-weight:700;white-space:nowrap;position:sticky;top:0;}
+        td{border-top:1px solid var(--borde);padding:1px 2px;vertical-align:middle;}
+        tr.fin-dia td{border-bottom:1.5px solid var(--texto);}
+        td input{width:100%;min-width:70px;border:1px solid transparent;background:transparent;color:var(--texto);font-size:14px;padding:6px 4px;border-radius:6px;font-family:inherit;text-align:center;}
         td input:focus{border-color:var(--azul);outline:none;background:var(--papel);}
+        td input[data-campo=nombre],td input[data-campo=marca],td input[data-campo=empresa],td input[data-campo=motivo],td input[data-campo=obs]{min-width:130px;}
+        td.dia{font-weight:700;text-align:center;white-space:nowrap;padding:0 8px;}
+        td.leido{font-size:12px;color:var(--suave);min-width:160px;max-width:260px;padding:4px 8px;}
         td.acc{width:1%;white-space:nowrap;text-align:right;}
-        tr.dudoso td{background:var(--dudoso);}
-        tr.dudoso td:first-child{box-shadow:inset 4px 0 0 var(--dudoso-borde);}
+        tr.revisar td{background:var(--aviso);}
+        tr.revisar td:first-child{box-shadow:inset 4px 0 0 var(--aviso-borde);}
+        tr.color-7 td{background:#fdf1d8;} tr.color-8 td{background:#e3f1dd;} tr.color-10 td{background:#dcebf6;}
+        @media (prefers-color-scheme: dark){tr.color-7 td{background:#3a3222;} tr.color-8 td{background:#22361f;} tr.color-10 td{background:#1c3143;}}
         .icono{background:none;border:0;cursor:pointer;font-size:16px;padding:4px 6px;border-radius:6px;color:var(--suave);}
         .icono:hover{background:var(--borde);}
         .vacio{text-align:center;color:var(--suave);padding:26px 10px;font-size:14px;}
-        .form-listado{display:grid;grid-template-columns:repeat(5,1fr) auto;gap:8px;align-items:end;}
-        .form-listado label{font-size:12px;color:var(--suave);display:flex;flex-direction:column;gap:4px;}
-        .form-listado input{padding:9px 10px;border:1px solid var(--borde);border-radius:8px;font-size:15px;background:var(--papel);color:var(--texto);width:100%;}
-        .form-listado input.auto{background:#e8f5ee;}
-        @media (prefers-color-scheme: dark){.form-listado input.auto{background:#15372a;}}
-        .aviso-busqueda{font-size:13px;margin-top:8px;min-height:18px;}
-        .aviso-busqueda.ok{color:var(--ok);}
-        .aviso-busqueda.no{color:var(--error);}
-        @media (max-width:760px){
-            .form-listado{grid-template-columns:1fr 1fr;}
-            .form-listado .ancho{grid-column:1 / -1;}
-        }
+        .fotos{display:flex;gap:10px;overflow-x:auto;margin-top:12px;}
+        .fotos figure{flex:0 0 auto;position:relative;}
+        .fotos img{height:120px;border-radius:8px;border:2px solid var(--borde);cursor:pointer;display:block;}
+        .fotos img.activa{border-color:var(--azul);}
+        .visor{margin-top:12px;border:1px solid var(--borde);border-radius:12px;overflow:auto;max-height:60vh;background:#222;touch-action:pan-x pan-y pinch-zoom;}
+        .visor img{display:block;width:100%;}
+        .visor.grande img{width:220%;}
+        .progreso{height:8px;background:var(--borde);border-radius:4px;overflow:hidden;margin-top:10px;}
+        .progreso div{height:100%;background:var(--azul);width:0;transition:width .2s;}
         .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#1c2533;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;max-width:calc(100% - 32px);box-shadow:0 6px 24px rgba(0,0,0,.25);z-index:10;}
         .toast.error{background:var(--error);}
-        .leyenda{display:inline-block;width:12px;height:12px;background:var(--dudoso);border:1px solid var(--dudoso-borde);border-radius:3px;vertical-align:-1px;}
+        .leyenda{display:inline-block;width:12px;height:12px;background:var(--aviso);border:1px solid var(--aviso-borde);border-radius:3px;vertical-align:-1px;}
     </style>
 </head>
 <body>
@@ -88,90 +94,130 @@
                 <button type="button" onclick="ca.moverMes(1)" aria-label="Mes siguiente">›</button>
             </div>
         </div>
-        <div class="sesion" id="sesion"></div>
         <nav>
-            <button type="button" data-pestana="importar" class="activa" onclick="ca.pestana('importar')">Importar</button>
+            <button type="button" data-pestana="listado" class="activa" onclick="ca.pestana('listado')">Listado <span id="nListado"></span></button>
+            <button type="button" data-pestana="hoja" onclick="ca.pestana('hoja')">Hoja a mano</button>
             <button type="button" data-pestana="datos" onclick="ca.pestana('datos')">Datos <span id="nDatos"></span></button>
-            <button type="button" data-pestana="listado" onclick="ca.pestana('listado')">Listado <span id="nListado"></span></button>
+            <button type="button" data-pestana="excel" onclick="ca.pestana('excel')">Excel</button>
         </nav>
     </header>
 
     <main>
-        <!-- ── IMPORTAR ─────────────────────────────────────────── -->
-        <section id="p-importar">
+        <!-- ── LISTADO ──────────────────────────────────────────── -->
+        <section id="p-listado">
             <div class="tarjeta">
-                <h2>Leer hojas escritas a mano</h2>
-                <p class="ayuda">Haz una foto a la hoja de registros (o elige fotos o PDF). Se leen día, hora, matrícula, empresa y nombre, y cada fila va al mes que ponga en la hoja. Las filas que no se leen con seguridad salen en <span class="leyenda"></span> amarillo para que las revises.</p>
+                <h2>Nueva entrada</h2>
+                <p class="ayuda">Escribe la matrícula o el nombre: si está en Datos, se rellena el resto, como la macro del Excel. Si es alguien nuevo, se guarda en Datos para la próxima vez.</p>
+                <form class="formulario" id="formEntrada" onsubmit="event.preventDefault(); ca.anadirEntrada()" style="margin-top:10px">
+                    <label>Fecha<input type="date" name="fecha" required></label>
+                    <label>Matrícula<input name="matricula" autocomplete="off" list="dl-matriculas" placeholder="1234-ABC"></label>
+                    <label>Nombre y apellidos<input name="nombre" autocomplete="off" list="dl-nombres"></label>
+                    <label>DNI<input name="dni" autocomplete="off"></label>
+                    <label>Marca y modelo<input name="marca" autocomplete="off"></label>
+                    <label>Empresa<input name="empresa" autocomplete="off" list="dl-empresas"></label>
+                    <label>H. Entrada<input type="time" name="entrada"></label>
+                    <label>H. Salida<input type="time" name="salida"></label>
+                    <label>Motivo de acceso<input name="motivo" autocomplete="off" list="dl-motivos"></label>
+                    <label>Observaciones<input name="obs" autocomplete="off"></label>
+                </form>
+                <div class="botones">
+                    <button class="btn" type="submit" form="formEntrada">Añadir al listado</button>
+                    <span class="estado-busqueda" id="estadoBusqueda"></span>
+                </div>
+            </div>
+            <div class="tabla-caja">
+                <table>
+                    <thead><tr><th>Fecha</th><th>Nombre y apellidos</th><th>DNI</th><th>Matrícula</th><th>Marca y modelo</th><th>Empresa</th><th>H. Entrada</th><th>H. Salida</th><th>Motivo de acceso</th><th>Observaciones</th><th></th></tr></thead>
+                    <tbody id="tablaListado"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ── HOJA A MANO ──────────────────────────────────────── -->
+        <section id="p-hoja" hidden>
+            <div class="tarjeta">
+                <h2>Pasar una hoja escrita a mano</h2>
+                <p class="ayuda">Haz una foto a la hoja. Con la foto delante vas completando las filas: al poner la matrícula se rellena el resto desde Datos. También puedes probar la lectura automática, que es gratis y se hace en el propio móvil (sin enviar la foto a ningún sitio): busca las matrículas y las horas, pero con letra a mano se equivoca a menudo, así que revisa cada fila.</p>
                 <div class="botones">
                     <button class="btn" type="button" onclick="document.getElementById('camara').click()">📷 Hacer foto</button>
-                    <button class="btn sec" type="button" onclick="document.getElementById('archivos').click()">🖼️ Elegir fotos o PDF</button>
+                    <button class="btn sec" type="button" onclick="document.getElementById('archivos').click()">🖼️ Elegir fotos</button>
                 </div>
-                <input type="file" id="camara" accept="image/*" capture="environment" hidden onchange="ca.leerArchivos(this.files); this.value=''">
-                <input type="file" id="archivos" accept="image/*,application/pdf" multiple hidden onchange="ca.leerArchivos(this.files); this.value=''">
-                <ul class="cola" id="cola"></ul>
-            </div>
-            <div class="tarjeta">
-                <h2>Cargar un Excel que ya tengas</h2>
-                <p class="ayuda">Un «Control acceso - Mes» de antes (.xlsx o .xlsm). Se toman las pestañas <b>Datos</b> y <b>Listado</b>, y así las personas que ya estaban registradas sirven para rellenar el listado.</p>
-                <div class="botones">
-                    <button class="btn sec" type="button" onclick="document.getElementById('excel').click()">📂 Cargar Excel</button>
+                <input type="file" id="camara" accept="image/*" capture="environment" hidden onchange="ca.anadirFotos(this.files); this.value=''">
+                <input type="file" id="archivos" accept="image/*" multiple hidden onchange="ca.anadirFotos(this.files); this.value=''">
+                <div class="fotos" id="fotos"></div>
+                <div class="visor" id="visor" hidden><img id="visorImg" alt="Hoja de registro" onclick="this.parentNode.classList.toggle('grande')"></div>
+                <div class="botones" id="accionesFoto" hidden>
+                    <button class="btn sec" type="button" id="btnOcr" onclick="ca.leerFoto()">🔎 Leer automáticamente</button>
+                    <span class="ayuda" id="estadoOcr">Toca la foto para ampliarla.</span>
                 </div>
-                <input type="file" id="excel" accept=".xlsx,.xlsm,.xls,.csv" multiple hidden onchange="ca.cargarExcels(this.files); this.value=''">
+                <div class="progreso" id="progresoOcr" hidden><div></div></div>
             </div>
+
             <div class="tarjeta">
-                <h2>Descargar el Excel del mes</h2>
-                <p class="ayuda">Sale con dos pestañas: <b>Datos</b> (todo lo registrado del mes) y <b>Listado</b>. En el Listado basta con escribir la matrícula: empresa y nombre se buscan solos en Datos, también en las filas vacías que vayas rellenando en el Excel.</p>
+                <h2>Filas de la hoja</h2>
+                <div class="formulario" style="grid-template-columns:repeat(auto-fit,minmax(160px,220px));margin-bottom:10px">
+                    <label>Fecha de la hoja<input type="date" id="fechaHoja" onchange="ca.fechaBorrador(this.value)"></label>
+                </div>
+                <p class="ayuda">En <span class="leyenda"></span> amarillo, las filas cuya matrícula no está en Datos (nueva o mal leída).</p>
+                <div class="tabla-caja" style="margin-top:10px">
+                    <table>
+                        <thead><tr><th>Leído</th><th>Nombre y apellidos</th><th>DNI</th><th>Matrícula</th><th>Marca y modelo</th><th>Empresa</th><th>H. Entrada</th><th>H. Salida</th><th>Motivo de acceso</th><th>Observaciones</th><th></th></tr></thead>
+                        <tbody id="tablaBorrador"></tbody>
+                    </table>
+                </div>
                 <div class="botones">
-                    <button class="btn" type="button" onclick="ca.descargarExcel()">⬇️ Descargar <span id="nombreExcel"></span></button>
+                    <button class="btn sec" type="button" onclick="ca.filaBorrador()">＋ Añadir fila</button>
+                    <button class="btn" type="button" onclick="ca.pasarBorrador()">✓ Pasar al listado</button>
+                    <button class="btn peligro" type="button" onclick="ca.descartarBorrador()">Descartar</button>
                 </div>
             </div>
         </section>
 
         <!-- ── DATOS ────────────────────────────────────────────── -->
         <section id="p-datos" hidden>
-            <div class="resumen" id="resumenDatos"></div>
-            <input class="filtro" id="filtroDatos" type="search" placeholder="Buscar por matrícula, empresa o nombre…" oninput="ca.pintarDatos()">
+            <p class="ayuda" style="margin-bottom:10px">Las personas que entran habitualmente. De aquí salen los datos al escribir una matrícula o un nombre en el listado. Es la misma para todos los meses.</p>
+            <input class="filtro" id="filtroDatos" type="search" placeholder="Buscar por nombre, matrícula, vehículo o empresa…" oninput="ca.pintarDatos()">
             <div class="tabla-caja">
                 <table>
-                    <thead><tr><th>Fecha</th><th>Hora</th><th>Matrícula</th><th>Empresa</th><th>Nombre</th><th></th></tr></thead>
+                    <thead><tr><th>Nombre y apellidos</th><th>Matrícula</th><th>Marca y modelo</th><th>Empresa</th><th>Motivo de acceso</th><th></th></tr></thead>
                     <tbody id="tablaDatos"></tbody>
                 </table>
             </div>
             <div class="botones">
-                <button class="btn sec" type="button" onclick="ca.nuevaFilaDatos()">＋ Añadir fila</button>
-                <button class="btn" type="button" onclick="ca.descargarExcel()">⬇️ Descargar Excel</button>
-                <button class="btn peligro" type="button" onclick="ca.vaciarMes()">Vaciar el mes</button>
+                <button class="btn sec" type="button" onclick="ca.filaDatos()">＋ Añadir persona</button>
             </div>
         </section>
 
-        <!-- ── LISTADO ──────────────────────────────────────────── -->
-        <section id="p-listado" hidden>
+        <!-- ── EXCEL ────────────────────────────────────────────── -->
+        <section id="p-excel" hidden>
             <div class="tarjeta">
-                <h2>Añadir al listado</h2>
-                <p class="ayuda">Escribe la matrícula y, si esa persona está en Datos (de este mes o de otros), se rellenan empresa y nombre.</p>
-                <form class="form-listado" onsubmit="event.preventDefault(); ca.anadirListado()">
-                    <label>Fecha<input type="date" id="lFecha" required></label>
-                    <label>Hora<input type="time" id="lHora"></label>
-                    <label>Matrícula<input id="lMatricula" autocomplete="off" required oninput="ca.buscarMatricula()" placeholder="1234ABC" list="matriculas"></label>
-                    <label>Empresa<input id="lEmpresa" autocomplete="off"></label>
-                    <label>Nombre<input id="lNombre" autocomplete="off"></label>
-                    <button class="btn ancho" type="submit">Añadir</button>
-                </form>
-                <datalist id="matriculas"></datalist>
-                <div class="aviso-busqueda" id="avisoBusqueda"></div>
+                <h2>Descargar el Excel del mes</h2>
+                <p class="ayuda">Sale igual que tu plantilla: pestañas <b>Datos</b> y <b>Listado</b>, con los mismos colores, la fecha solo en la primera fila de cada día y la raya al acabar el día. Lleva la macro, así que en el Excel sigues pudiendo escribir un nombre o una matrícula y se rellena el resto.</p>
+                <div class="resumen" id="resumenMes" style="margin-top:12px"></div>
+                <div class="botones">
+                    <button class="btn" type="button" onclick="ca.descargarExcel()">⬇️ Descargar <span id="nombreExcel"></span></button>
+                </div>
             </div>
-            <div class="tabla-caja">
-                <table>
-                    <thead><tr><th>Fecha</th><th>Hora</th><th>Matrícula</th><th>Empresa</th><th>Nombre</th><th></th></tr></thead>
-                    <tbody id="tablaListado"></tbody>
-                </table>
+            <div class="tarjeta">
+                <h2>Cargar un Excel que ya tengas</h2>
+                <p class="ayuda">Tus «Control acceso» de antes (.xlsm, .xlsx o .xls). Las personas de la pestaña Datos se añaden a Datos, y las filas del Listado van a su mes. Lo que ya estaba no se duplica.</p>
+                <div class="botones">
+                    <button class="btn sec" type="button" onclick="document.getElementById('excel').click()">📂 Cargar Excel</button>
+                </div>
+                <input type="file" id="excel" accept=".xlsx,.xlsm,.xls" multiple hidden onchange="ca.cargarExcels(this.files); this.value=''">
             </div>
-            <div class="botones">
-                <button class="btn" type="button" onclick="ca.descargarExcel()">⬇️ Descargar Excel</button>
+            <div class="tarjeta">
+                <h2>Vaciar el mes</h2>
+                <p class="ayuda">Borra el listado del mes que tienes abierto (Datos no se toca). Descarga antes el Excel si lo quieres conservar.</p>
+                <div class="botones"><button class="btn peligro" type="button" onclick="ca.vaciarMes()">Vaciar el listado del mes</button></div>
             </div>
         </section>
     </main>
 
+    <datalist id="dl-matriculas"></datalist>
+    <datalist id="dl-nombres"></datalist>
+    <datalist id="dl-empresas"></datalist>
+    <datalist id="dl-motivos"></datalist>
     <div class="toast" id="toast" hidden></div>
 
     <script src="vendor/xlsx.full.min.js"></script>

@@ -161,10 +161,5 @@
     "deploymentEnabled": {
       "datos": false
     }
-  },
-  "functions": {
-    "api/control-acceso.js": {
-      "maxDuration": 300
-    }
   }
 }
