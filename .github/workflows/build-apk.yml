@@ -988,24 +988,12 @@ jobs:
                           (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && nm != null) {
                           NotificationChannel ch = new NotificationChannel(CANAL_FIJO,
-                              "Pendiente de mensajes", NotificationManager.IMPORTANCE_MIN);
+                              "Tu jornada", NotificationManager.IMPORTANCE_MIN);
                           ch.setShowBadge(false);
                           ch.setSound(null, null);
                           nm.createNotificationChannel(ch);
                       }
-                      int flags = PendingIntent.FLAG_UPDATE_CURRENT
-                          | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
-                      Intent oi = new Intent(this, MainActivity.class);
-                      oi.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                      android.app.Notification fija = new NotificationCompat.Builder(this, CANAL_FIJO)
-                          .setSmallIcon(R.drawable.ic_stat_chat)
-                          .setContentTitle("Mensajes al día")
-                          .setContentText("Avisa en cuanto llega algo")
-                          .setPriority(NotificationCompat.PRIORITY_MIN)
-                          .setOngoing(true)
-                          .setShowWhen(false)
-                          .setContentIntent(PendingIntent.getActivity(this, 5, oi, flags))
-                          .build();
+                      android.app.Notification fija = construir(this);
                       try {
                           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                               startForeground(ID_FIJO, fija,
@@ -1018,9 +1006,83 @@ jobs:
                       new Thread(() -> {
                           while (vivo) {
                               try { ChatReceiver.repasar(getApplicationContext()); } catch (Exception ignored) {}
+                              // Y de paso se repinta el aviso fijo: la cuenta
+                              // atrás tiene que ir bajando sola.
+                              try {
+                                  NotificationManager n2 = (NotificationManager)
+                                      getSystemService(Context.NOTIFICATION_SERVICE);
+                                  if (n2 != null) n2.notify(ID_FIJO, construir(getApplicationContext()));
+                              } catch (Exception ignored) {}
                               try { Thread.sleep(60 * 1000L); } catch (InterruptedException e) { return; }
                           }
                       }).start();
+                  }
+
+                  // Lo que se ve en la barra mientras la app vigila. Antes ponía
+                  // "Mensajes al día", que no le dice nada a nadie: ahora lleva la
+                  // jornada de hoy y lo que queda para terminar, que es lo que se
+                  // mira veinte veces al día.
+                  static android.app.Notification construir(Context ctx) {
+                      String[] j = jornadaDeHoy(ctx);
+                      int flags = PendingIntent.FLAG_UPDATE_CURRENT
+                          | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0);
+                      Intent oi = new Intent(ctx, MainActivity.class);
+                      oi.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                      return new NotificationCompat.Builder(ctx, CANAL_FIJO)
+                          .setSmallIcon(R.drawable.ic_stat_chat)
+                          .setContentTitle(j[0])
+                          .setContentText(j[1])
+                          .setStyle(new NotificationCompat.BigTextStyle().bigText(j[1]))
+                          .setPriority(NotificationCompat.PRIORITY_MIN)
+                          .setOngoing(true)
+                          .setShowWhen(false)
+                          .setContentIntent(PendingIntent.getActivity(ctx, 5, oi, flags))
+                          .build();
+                  }
+
+                  static String duracion(int minutos) {
+                      int h = minutos / 60, m = minutos % 60;
+                      if (h > 0 && m > 0) return h + " h " + m + " min";
+                      if (h > 0) return h + " h";
+                      return m + " min";
+                  }
+
+                  // La jornada de hoy sale de lo mismo que ya se guarda para avisar
+                  // de los cambios: fecha|lugar|HH:MM-HH:MM|rev. La de ayer no dice
+                  // nada de hoy, así que si la fecha no es la de hoy no hay jornada.
+                  static String[] jornadaDeHoy(Context ctx) {
+                      SharedPreferences p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                      java.util.Calendar c = java.util.Calendar.getInstance();
+                      String hoy = String.format(java.util.Locale.US, "%04d%02d%02d",
+                          c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH) + 1,
+                          c.get(java.util.Calendar.DAY_OF_MONTH));
+                      String[] t = p.getString("jornadaVista", "").split("\\|", -1);
+                      if (t.length < 3 || !t[0].equals(hoy)) {
+                          return new String[]{ "Sin jornada para hoy",
+                                               "Aqu\u00ed ver\u00e1s la de hoy y lo que te queda" };
+                      }
+                      String lugar = t[1].trim();
+                      String horas = t[2].trim();
+                      String titulo = lugar.isEmpty() ? "Jornada de hoy" : lugar;
+                      // "09:00-12:30" son once caracteres contando el guion largo
+                      if (horas.length() < 11) return new String[]{ titulo, "Sin horario asignado" };
+                      int ini, fin;
+                      try {
+                          ini = Integer.parseInt(horas.substring(0, 2)) * 60
+                              + Integer.parseInt(horas.substring(3, 5));
+                          fin = Integer.parseInt(horas.substring(6, 8)) * 60
+                              + Integer.parseInt(horas.substring(9, 11));
+                      } catch (Exception e) {
+                          return new String[]{ titulo, "Sin horario asignado" };
+                      }
+                      // El turno que cruza la medianoche termina al día siguiente
+                      if (fin <= ini) fin += 24 * 60;
+                      int ahora = c.get(java.util.Calendar.HOUR_OF_DAY) * 60 + c.get(java.util.Calendar.MINUTE);
+                      String texto;
+                      if (ahora < ini)      texto = "Empiezas en " + duracion(ini - ahora);
+                      else if (ahora < fin) texto = "Te quedan " + duracion(fin - ahora);
+                      else                  texto = "Jornada terminada \u00b7 " + duracion(fin - ini);
+                      return new String[]{ titulo + " \u00b7 " + horas, texto };
                   }
               
                   @Override
