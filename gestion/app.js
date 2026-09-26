@@ -163,6 +163,8 @@ const app = {
         poner('authTitulo', 'Desarrollador EMT - Movilidad');
         poner('authSub', 'Pruebas y mantenimiento · EMT Palma');
         poner('splashRol', '⚙️ Desarrollador');
+        const btn = document.getElementById('tabBtnPartes');
+        if (btn) btn.style.display = '';
         const logo = document.getElementById('authLogo');
         if (logo) logo.src = 'icons/icon-dev-192.png';
         document.title = 'Desarrollador EMT - Movilidad';
@@ -1975,6 +1977,7 @@ const app = {
         if (idx === 1) this._cargarCuadrante();
         if (idx === 2) this._cargarNotasGestor();
         if (idx === 3) this._cargarConductores();
+        if (idx === 4) this._cargarPartes();
     },
 
     // El dedo puede arrastrar tanto sobre el orden visual de la barra
@@ -1995,7 +1998,11 @@ const app = {
             const t = e.changedTouches[0];
             const dx = t.clientX - x0, dy = t.clientY - y0;
             if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-            const btns = [...document.querySelectorAll('#tabBar .tab-btn')];
+            // Las escondidas no cuentan: la de control de acceso solo está
+            // en la app de desarrollador, y en la de gestión el dedo acababa
+            // llevando a una pestaña que no se ve.
+            const btns = [...document.querySelectorAll('#tabBar .tab-btn')]
+                .filter(b => b.style.display !== 'none');
             const actualIdx = btns.findIndex(b => b.classList.contains('active'));
             if (actualIdx === -1) return;
             const destino = dx < 0 ? actualIdx + 1 : actualIdx - 1;
@@ -2486,6 +2493,252 @@ const app = {
     // mismo hilo. Lo que firma gestión va con el nombre del gestor, que es lo
     // que ve el trabajador. Ya no se acepta ni se deniega nada: se da el visto,
     // y ese visto lo ven los dos.
+
+    // ── Partes del puesto de Control de acceso ───────────────────────────────
+    // Quien hace ese turno va apuntando lo que pasa en la garita —quién entra,
+    // quién sale, una incidencia, unas llaves— y queda un parte por día y
+    // turno. Aquí se leen todos, se corrigen y se borran. De momento solo en
+    // la app de desarrollador: hasta que el formulario no esté en la app de
+    // los trabajadores, los partes se escriben desde aquí.
+
+    PARTES_URL: 'https://registro-horario-emt.vercel.app/api/partes',
+    TURNOS_CONTROL: { M: 'Mañana · 07:00–14:00', T: 'Tarde · 14:00–21:00', N: 'Noche · 21:00–07:00' },
+    TIPOS_PARTE: { entrada: '🟢 Entrada', salida: '🔴 Salida', visita: '👤 Visita',
+                   incidencia: '⚠️ Incidencia', llaves: '🔑 Llaves', otro: '· Otro' },
+    // Por orden de reloj, que es como se leen: mañana, tarde y noche. Por la
+    // letra salían M, N, T —la noche antes de la tarde—.
+    ORDEN_TURNO: { M: 0, T: 1, N: 2 },
+    _partes: null,
+    _parteEdit: null,
+
+    // Del más reciente al más viejo, y dentro del día del último turno al
+    // primero: lo que acaba de pasar, arriba.
+    _ordenPartes(a, b) {
+        return (b.fecha || '').localeCompare(a.fecha || '')
+            || (this.ORDEN_TURNO[b.turno] ?? 9) - (this.ORDEN_TURNO[a.turno] ?? 9);
+    },
+
+    async _cargarPartes(forzar) {
+        if (!ES_APP_DEV || !this.usuarioActual?.email) return;
+        if (this._partes && !forzar) { this._renderPartes(); return; }
+        const cont = document.getElementById('paLista');
+        if (cont && !this._partes) cont.innerHTML = '<div class="pa-vacio">Cargando…</div>';
+        try {
+            const r = await fetch(this.PARTES_URL, { cache: 'no-store' });
+            if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status);
+            this._partes = await r.json();
+            localStorage.setItem('partesCache', JSON.stringify(this._partes));
+        } catch (e) {
+            // Sin red vale lo último que se vio: un parte cerrado no cambia solo
+            if (!this._partes) {
+                try { this._partes = JSON.parse(localStorage.getItem('partesCache') || '[]'); }
+                catch (__) { this._partes = []; }
+            }
+            if (forzar) this._mostrarToast('❌ ' + e.message, 4000);
+        }
+        this._renderPartes();
+    },
+
+    _diaLargo(fecha) {
+        const f = String(fecha || '');
+        if (f.length !== 8) return f;
+        const d = new Date(+f.slice(0, 4), +f.slice(4, 6) - 1, +f.slice(6, 8), 12);
+        return isNaN(d) ? f : d.toLocaleDateString('es-ES',
+            { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+    },
+
+    _renderPartes() {
+        const cont = document.getElementById('paLista');
+        if (!cont) return;
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const lista = Array.isArray(this._partes) ? this._partes : [];
+        if (!lista.length) {
+            cont.innerHTML = '<div class="pa-vacio">Todavía no hay ningún parte.<br>'
+                + 'Con ＋ se abre uno a mano.</div>';
+            return;
+        }
+        cont.innerHTML = lista.map(p => {
+            const n = (p.anotaciones || []).length;
+            // Lo primero que se apuntó, para hacerse una idea sin abrirlo
+            const primeras = (p.anotaciones || []).slice(0, 2)
+                .map(a => `${a.hora} ${esc(a.que || a.quien || a.obs)}`).join(' · ');
+            return `<div class="pa-card" onclick="app._abrirParte('${esc(p.id)}')">
+                <div class="pa-card-top">
+                    <span class="pa-dia">${esc(this._diaLargo(p.fecha))}</span>
+                    <span class="pa-turno">${esc(p.turno)}</span>
+                    <span class="pa-n">${n} anotaci${n === 1 ? 'ón' : 'ones'}</span>
+                </div>
+                <div class="pa-quien">${esc(p.nombre || p.email || 'Sin nombre')}</div>
+                ${primeras ? `<div class="pa-resumen">${primeras}${n > 2 ? ' …' : ''}</div>` : ''}
+                ${p.notas ? `<div class="pa-resumen">📝 ${esc(p.notas).slice(0, 120)}</div>` : ''}
+            </div>`;
+        }).join('');
+    },
+
+    // El día va en AAAAMMDD por dentro y con guiones en el campo de fecha
+    _aISO(f)  { const s = String(f || ''); return s.length === 8 ? `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}` : ''; },
+    _aClave(f) { return String(f || '').replace(/-/g, '').slice(0, 8); },
+
+    _nuevoParte() {
+        this._parteEdit = { id: '', fecha: this._aClave(this._hoyISO()), turno: 'M',
+                            nombre: '', notas: '', anotaciones: [] };
+        this._pintarParte(true);
+    },
+
+    _abrirParte(id) {
+        const p = (this._partes || []).find(x => x.id === id);
+        if (!p) return;
+        // Una copia: si al final cancela, la lista se queda como estaba
+        this._parteEdit = JSON.parse(JSON.stringify(p));
+        this._pintarParte(false);
+    },
+
+    _pintarParte(esNuevo) {
+        const p = this._parteEdit;
+        if (!p) return;
+        document.getElementById('parteTitulo').textContent = esNuevo ? '🛡️ Parte nuevo' : '🛡️ Parte';
+        document.getElementById('parteFecha').value = this._aISO(p.fecha) || this._hoyISO();
+        document.getElementById('parteTurno').value = p.turno || 'M';
+        document.getElementById('parteNombre').value = p.nombre || '';
+        document.getElementById('parteNotas').value = p.notas || '';
+        const borrar = document.getElementById('parteBorrar');
+        if (borrar) borrar.style.display = esNuevo ? 'none' : '';
+        const firma = document.getElementById('parteFirma');
+        if (firma) firma.textContent = p.actualizado
+            ? `Última corrección: ${this._fechaNota(p.actualizado)}${p.tocadoPor ? ' · ' + p.tocadoPor : ''}`
+            : '';
+        this._pintarAnotaciones();
+        const modal = document.getElementById('parteModal');
+        modal.classList.add('show');
+        if (this.darkMode) document.getElementById('parteModalContent').classList.add('dark');
+    },
+
+    _pintarAnotaciones() {
+        const cont = document.getElementById('parteAnotaciones');
+        if (!cont || !this._parteEdit) return;
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        const filas = this._parteEdit.anotaciones || [];
+        if (!filas.length) {
+            cont.innerHTML = '<div class="ops-field-sub">Todavía no hay nada apuntado en este turno.</div>';
+            return;
+        }
+        cont.innerHTML = filas.map((a, i) => `<div class="pa-fila">
+            <input class="pa-hora" type="time" value="${esc(a.hora)}" onchange="app._tocarAnotacion(${i},'hora',this.value)">
+            <div class="pa-fila-txt">
+                <select class="pa-tipo" style="width:100%" onchange="app._tocarAnotacion(${i},'tipo',this.value)">
+                    ${Object.entries(this.TIPOS_PARTE).map(([k, v]) =>
+                        `<option value="${k}"${a.tipo === k ? ' selected' : ''}>${v}</option>`).join('')}
+                </select>
+                <input type="text" value="${esc(a.que)}" maxlength="200" placeholder="Qué (bus 214, furgoneta, paquete…)"
+                       onchange="app._tocarAnotacion(${i},'que',this.value)">
+                <input type="text" value="${esc(a.quien)}" maxlength="200" placeholder="Quién (nombre o empresa)"
+                       onchange="app._tocarAnotacion(${i},'quien',this.value)">
+                <input type="text" value="${esc(a.obs)}" maxlength="400" placeholder="Observaciones"
+                       onchange="app._tocarAnotacion(${i},'obs',this.value)">
+            </div>
+            <button class="pa-quitar" onclick="app._quitarAnotacion(${i})" title="Quitar">✕</button>
+        </div>`).join('');
+    },
+
+    _tocarAnotacion(i, campo, valor) {
+        const a = this._parteEdit?.anotaciones?.[i];
+        if (a) a[campo] = valor;
+    },
+
+    _anadirAnotacion() {
+        if (!this._parteEdit) return;
+        const d = new Date();
+        this._parteEdit.anotaciones = this._parteEdit.anotaciones || [];
+        this._parteEdit.anotaciones.push({
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+            hora: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
+            tipo: 'entrada', que: '', quien: '', obs: '',
+        });
+        this._pintarAnotaciones();
+    },
+
+    _quitarAnotacion(i) {
+        if (!this._parteEdit?.anotaciones) return;
+        this._parteEdit.anotaciones.splice(i, 1);
+        this._pintarAnotaciones();
+    },
+
+    async _guardarParte() {
+        const p = this._parteEdit;
+        if (!p) return;
+        const fecha = this._aClave(document.getElementById('parteFecha').value);
+        if (fecha.length !== 8) { this._mostrarToast('❌ Falta el día', 3000); return; }
+        const cuerpo = {
+            fecha,
+            turno: document.getElementById('parteTurno').value,
+            nombre: document.getElementById('parteNombre').value,
+            notas: document.getElementById('parteNotas').value,
+            // Sin nada escrito no se guarda: el servidor las descarta igual,
+            // pero así no se manda de más.
+            anotaciones: (p.anotaciones || []).filter(a => a.que || a.quien || a.obs),
+        };
+        try {
+            const r = await fetch(this.PARTES_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cuerpo),
+            });
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.error || r.status);
+            document.getElementById('parteModal').classList.remove('show');
+            // El que vuelve manda: puede haber cambiado de clave si se le ha
+            // tocado el día o el turno.
+            this._partes = [data, ...(this._partes || []).filter(x => x.id !== data.id && x.id !== p.id)]
+                .sort((a, b) => this._ordenPartes(a, b));
+            localStorage.setItem('partesCache', JSON.stringify(this._partes));
+            this._renderPartes();
+            this._mostrarToast('✅ Parte guardado', 2500);
+        } catch (e) { this._mostrarToast('❌ ' + e.message, 4500); }
+    },
+
+    _borrarParte() {
+        const p = this._parteEdit;
+        if (!p?.id) return;
+        this.mostrarModal('Borrar el parte', `¿Seguro que quieres borrar el parte de `
+            + `${this._diaLargo(p.fecha)} (turno ${p.turno})? No se puede deshacer.`, async () => {
+            try {
+                const r = await fetch(`${this.PARTES_URL}?id=${encodeURIComponent(p.id)}`, { method: 'DELETE' });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || r.status);
+                document.getElementById('parteModal').classList.remove('show');
+                this._partes = (this._partes || []).filter(x => x.id !== p.id);
+                localStorage.setItem('partesCache', JSON.stringify(this._partes));
+                this._renderPartes();
+                this._mostrarToast('🗑️ Parte borrado', 2500);
+            } catch (e) { this._mostrarToast('❌ ' + e.message, 4500); }
+        });
+    },
+
+    CABECERAS_PARTES: ['Día', 'Turno', 'Quién', 'Hora', 'Tipo', 'Qué', 'Quién/empresa', 'Observaciones'],
+
+    exportarPartes() {
+        const lista = Array.isArray(this._partes) ? this._partes : [];
+        if (!lista.length) { this._mostrarToast('No hay partes que exportar', 3000); return; }
+        const filas = [];
+        lista.slice().sort((a, b) => this._ordenPartes(b, a)).forEach(p => {
+            const dia = this._aISO(p.fecha).split('-').reverse().join('/');
+            const quien = p.nombre || p.email || '';
+            if (!(p.anotaciones || []).length) {
+                filas.push([dia, p.turno, quien, '', '', '', '', p.notas || '']);
+                return;
+            }
+            p.anotaciones.forEach((a, i) => filas.push([
+                dia, p.turno, quien, a.hora, a.tipo, a.que, a.quien,
+                // Las observaciones del turno van una sola vez, en la primera
+                i === 0 && p.notas ? `${a.obs}${a.obs ? ' | ' : ''}${p.notas}` : a.obs,
+            ]));
+        });
+        const ok = this._descargarBinario(this._xlsxDe('Control de acceso', this.CABECERAS_PARTES, filas),
+            this._nombreExport('xlsx').replace('registro-emt', 'control-acceso'),
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        if (!ok) { this._mostrarToast('Actualiza la app para exportar a Excel', 4500); return; }
+        this._mostrarToast('📗 Partes exportados', 3500);
+    },
 
     NOTAS_URL: 'https://registro-horario-emt.vercel.app/api/notas',
     _notas: [],
