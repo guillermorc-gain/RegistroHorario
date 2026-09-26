@@ -97,9 +97,53 @@
           "value": "public, max-age=0, must-revalidate"
         }
       ]
+    },
+    {
+      "source": "/control-acceso",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/control-acceso/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/control-acceso/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/control-acceso/app.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
     }
   ],
   "rewrites": [
+    {
+      "source": "/control-acceso",
+      "destination": "/control-acceso/index.html"
+    },
+    {
+      "source": "/control-acceso/",
+      "destination": "/control-acceso/index.html"
+    },
     {
       "source": "/gestion",
       "destination": "/gestion/index.html"
@@ -109,13 +153,18 @@
       "destination": "/gestion/index.html"
     },
     {
-      "source": "/((?!api/|gestion/|icons/|screenshots/|manifest\\.json|service-worker\\.js|app\\.js).*)",
+      "source": "/((?!api/|gestion/|control-acceso/|icons/|screenshots/|manifest\\.json|service-worker\\.js|app\\.js).*)",
       "destination": "/index.html"
     }
   ],
   "git": {
     "deploymentEnabled": {
       "datos": false
+    }
+  },
+  "functions": {
+    "api/control-acceso.js": {
+      "maxDuration": 300
     }
   }
 }

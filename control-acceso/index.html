@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Control de acceso</title>
+    <meta name="theme-color" content="#003A99">
+    <link rel="icon" href="/icons/icon-192.png">
+    <style>
+        :root{
+            --azul:#1565C0;--azul-osc:#003A99;--fondo:#f3f6fb;--papel:#fff;--texto:#1c2533;--suave:#667085;
+            --borde:#dde3ec;--dudoso:#fff4cc;--dudoso-borde:#e8c547;--ok:#1b7f4b;--error:#c0392b;
+        }
+        @media (prefers-color-scheme: dark){
+            :root{--fondo:#0e1522;--papel:#162033;--texto:#e6ebf3;--suave:#98a3b5;--borde:#2a3850;--dudoso:#3b3316;--dudoso-borde:#8a7426;}
+        }
+        *{box-sizing:border-box;margin:0;padding:0;}
+        [hidden]{display:none !important;}
+        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--fondo);color:var(--texto);min-height:100vh;}
+        header{background:linear-gradient(135deg,var(--azul),var(--azul-osc));color:#fff;padding:14px 16px calc(12px) 16px;padding-top:calc(14px + env(safe-area-inset-top,0px));}
+        header h1{font-size:19px;font-weight:700;}
+        .cab{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between;max-width:1100px;margin:0 auto;}
+        .mes{display:flex;align-items:center;gap:6px;}
+        .mes button{background:rgba(255,255,255,.18);border:0;color:#fff;width:34px;height:34px;border-radius:8px;font-size:18px;cursor:pointer;}
+        .mes input{background:rgba(255,255,255,.95);border:0;border-radius:8px;padding:6px 8px;font-size:15px;color:#1c2533;}
+        .sesion{font-size:12px;opacity:.9;width:100%;max-width:1100px;margin:6px auto 0;}
+        .sesion a{color:#fff;}
+        nav{display:flex;gap:4px;max-width:1100px;margin:12px auto 0;}
+        nav button{flex:1;background:rgba(255,255,255,.14);color:#fff;border:0;border-radius:10px 10px 0 0;padding:10px 6px;font-size:15px;font-weight:600;cursor:pointer;}
+        nav button.activa{background:var(--fondo);color:var(--azul);}
+        @media (prefers-color-scheme: dark){nav button.activa{color:#8fb8ff;}}
+        main{max-width:1100px;margin:0 auto;padding:16px;}
+        .tarjeta{background:var(--papel);border:1px solid var(--borde);border-radius:14px;padding:16px;margin-bottom:14px;}
+        .tarjeta h2{font-size:16px;margin-bottom:8px;}
+        .ayuda{color:var(--suave);font-size:13px;line-height:1.45;}
+        .botones{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}
+        .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:10px;padding:11px 16px;font-size:15px;font-weight:600;cursor:pointer;background:var(--azul);color:#fff;}
+        .btn.sec{background:transparent;color:var(--azul);border:1.5px solid var(--azul);}
+        @media (prefers-color-scheme: dark){.btn.sec{color:#8fb8ff;border-color:#8fb8ff;}}
+        .btn.peligro{background:transparent;color:var(--error);border:1.5px solid var(--error);}
+        .btn:disabled{opacity:.5;cursor:default;}
+        .btn.chico{padding:6px 10px;font-size:13px;}
+        .cola{list-style:none;margin-top:12px;display:flex;flex-direction:column;gap:8px;}
+        .cola li{border:1px solid var(--borde);border-radius:10px;padding:10px 12px;font-size:14px;display:flex;gap:10px;align-items:flex-start;}
+        .cola .est{font-size:18px;line-height:1;}
+        .cola .det{color:var(--suave);font-size:12px;margin-top:2px;}
+        .resumen{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+        .dato{background:var(--papel);border:1px solid var(--borde);border-radius:12px;padding:10px 14px;min-width:120px;}
+        .dato b{display:block;font-size:22px;}
+        .dato span{font-size:12px;color:var(--suave);}
+        .filtro{width:100%;padding:10px 12px;border:1px solid var(--borde);border-radius:10px;font-size:15px;background:var(--papel);color:var(--texto);margin-bottom:10px;}
+        .tabla-caja{overflow-x:auto;border:1px solid var(--borde);border-radius:12px;background:var(--papel);}
+        table{border-collapse:collapse;width:100%;font-size:14px;min-width:640px;}
+        th{background:var(--azul);color:#fff;text-align:left;padding:8px;font-weight:600;position:sticky;top:0;white-space:nowrap;}
+        td{border-top:1px solid var(--borde);padding:2px 4px;vertical-align:middle;}
+        td input{width:100%;border:1px solid transparent;background:transparent;color:var(--texto);font-size:14px;padding:6px 4px;border-radius:6px;font-family:inherit;}
+        td input:focus{border-color:var(--azul);outline:none;background:var(--papel);}
+        td.acc{width:1%;white-space:nowrap;text-align:right;}
+        tr.dudoso td{background:var(--dudoso);}
+        tr.dudoso td:first-child{box-shadow:inset 4px 0 0 var(--dudoso-borde);}
+        .icono{background:none;border:0;cursor:pointer;font-size:16px;padding:4px 6px;border-radius:6px;color:var(--suave);}
+        .icono:hover{background:var(--borde);}
+        .vacio{text-align:center;color:var(--suave);padding:26px 10px;font-size:14px;}
+        .form-listado{display:grid;grid-template-columns:repeat(5,1fr) auto;gap:8px;align-items:end;}
+        .form-listado label{font-size:12px;color:var(--suave);display:flex;flex-direction:column;gap:4px;}
+        .form-listado input{padding:9px 10px;border:1px solid var(--borde);border-radius:8px;font-size:15px;background:var(--papel);color:var(--texto);width:100%;}
+        .form-listado input.auto{background:#e8f5ee;}
+        @media (prefers-color-scheme: dark){.form-listado input.auto{background:#15372a;}}
+        .aviso-busqueda{font-size:13px;margin-top:8px;min-height:18px;}
+        .aviso-busqueda.ok{color:var(--ok);}
+        .aviso-busqueda.no{color:var(--error);}
+        @media (max-width:760px){
+            .form-listado{grid-template-columns:1fr 1fr;}
+            .form-listado .ancho{grid-column:1 / -1;}
+        }
+        .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#1c2533;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;max-width:calc(100% - 32px);box-shadow:0 6px 24px rgba(0,0,0,.25);z-index:10;}
+        .toast.error{background:var(--error);}
+        .leyenda{display:inline-block;width:12px;height:12px;background:var(--dudoso);border:1px solid var(--dudoso-borde);border-radius:3px;vertical-align:-1px;}
+    </style>
+</head>
+<body>
+    <header>
+        <div class="cab">
+            <h1>📋 Control de acceso</h1>
+            <div class="mes">
+                <button type="button" onclick="ca.moverMes(-1)" aria-label="Mes anterior">‹</button>
+                <input type="month" id="mes" onchange="ca.cambiarMes(this.value)">
+                <button type="button" onclick="ca.moverMes(1)" aria-label="Mes siguiente">›</button>
+            </div>
+        </div>
+        <div class="sesion" id="sesion"></div>
+        <nav>
+            <button type="button" data-pestana="importar" class="activa" onclick="ca.pestana('importar')">Importar</button>
+            <button type="button" data-pestana="datos" onclick="ca.pestana('datos')">Datos <span id="nDatos"></span></button>
+            <button type="button" data-pestana="listado" onclick="ca.pestana('listado')">Listado <span id="nListado"></span></button>
+        </nav>
+    </header>
+
+    <main>
+        <!-- ── IMPORTAR ─────────────────────────────────────────── -->
+        <section id="p-importar">
+            <div class="tarjeta">
+                <h2>Leer hojas escritas a mano</h2>
+                <p class="ayuda">Haz una foto a la hoja de registros (o elige fotos o PDF). Se leen día, hora, matrícula, empresa y nombre, y cada fila va al mes que ponga en la hoja. Las filas que no se leen con seguridad salen en <span class="leyenda"></span> amarillo para que las revises.</p>
+                <div class="botones">
+                    <button class="btn" type="button" onclick="document.getElementById('camara').click()">📷 Hacer foto</button>
+                    <button class="btn sec" type="button" onclick="document.getElementById('archivos').click()">🖼️ Elegir fotos o PDF</button>
+                </div>
+                <input type="file" id="camara" accept="image/*" capture="environment" hidden onchange="ca.leerArchivos(this.files); this.value=''">
+                <input type="file" id="archivos" accept="image/*,application/pdf" multiple hidden onchange="ca.leerArchivos(this.files); this.value=''">
+                <ul class="cola" id="cola"></ul>
+            </div>
+            <div class="tarjeta">
+                <h2>Cargar un Excel que ya tengas</h2>
+                <p class="ayuda">Un «Control acceso - Mes» de antes (.xlsx o .xlsm). Se toman las pestañas <b>Datos</b> y <b>Listado</b>, y así las personas que ya estaban registradas sirven para rellenar el listado.</p>
+                <div class="botones">
+                    <button class="btn sec" type="button" onclick="document.getElementById('excel').click()">📂 Cargar Excel</button>
+                </div>
+                <input type="file" id="excel" accept=".xlsx,.xlsm,.xls,.csv" multiple hidden onchange="ca.cargarExcels(this.files); this.value=''">
+            </div>
+            <div class="tarjeta">
+                <h2>Descargar el Excel del mes</h2>
+                <p class="ayuda">Sale con dos pestañas: <b>Datos</b> (todo lo registrado del mes) y <b>Listado</b>. En el Listado basta con escribir la matrícula: empresa y nombre se buscan solos en Datos, también en las filas vacías que vayas rellenando en el Excel.</p>
+                <div class="botones">
+                    <button class="btn" type="button" onclick="ca.descargarExcel()">⬇️ Descargar <span id="nombreExcel"></span></button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── DATOS ────────────────────────────────────────────── -->
+        <section id="p-datos" hidden>
+            <div class="resumen" id="resumenDatos"></div>
+            <input class="filtro" id="filtroDatos" type="search" placeholder="Buscar por matrícula, empresa o nombre…" oninput="ca.pintarDatos()">
+            <div class="tabla-caja">
+                <table>
+                    <thead><tr><th>Fecha</th><th>Hora</th><th>Matrícula</th><th>Empresa</th><th>Nombre</th><th></th></tr></thead>
+                    <tbody id="tablaDatos"></tbody>
+                </table>
+            </div>
+            <div class="botones">
+                <button class="btn sec" type="button" onclick="ca.nuevaFilaDatos()">＋ Añadir fila</button>
+                <button class="btn" type="button" onclick="ca.descargarExcel()">⬇️ Descargar Excel</button>
+                <button class="btn peligro" type="button" onclick="ca.vaciarMes()">Vaciar el mes</button>
+            </div>
+        </section>
+
+        <!-- ── LISTADO ──────────────────────────────────────────── -->
+        <section id="p-listado" hidden>
+            <div class="tarjeta">
+                <h2>Añadir al listado</h2>
+                <p class="ayuda">Escribe la matrícula y, si esa persona está en Datos (de este mes o de otros), se rellenan empresa y nombre.</p>
+                <form class="form-listado" onsubmit="event.preventDefault(); ca.anadirListado()">
+                    <label>Fecha<input type="date" id="lFecha" required></label>
+                    <label>Hora<input type="time" id="lHora"></label>
+                    <label>Matrícula<input id="lMatricula" autocomplete="off" required oninput="ca.buscarMatricula()" placeholder="1234ABC" list="matriculas"></label>
+                    <label>Empresa<input id="lEmpresa" autocomplete="off"></label>
+                    <label>Nombre<input id="lNombre" autocomplete="off"></label>
+                    <button class="btn ancho" type="submit">Añadir</button>
+                </form>
+                <datalist id="matriculas"></datalist>
+                <div class="aviso-busqueda" id="avisoBusqueda"></div>
+            </div>
+            <div class="tabla-caja">
+                <table>
+                    <thead><tr><th>Fecha</th><th>Hora</th><th>Matrícula</th><th>Empresa</th><th>Nombre</th><th></th></tr></thead>
+                    <tbody id="tablaListado"></tbody>
+                </table>
+            </div>
+            <div class="botones">
+                <button class="btn" type="button" onclick="ca.descargarExcel()">⬇️ Descargar Excel</button>
+            </div>
+        </section>
+    </main>
+
+    <div class="toast" id="toast" hidden></div>
+
+    <script src="vendor/xlsx.full.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
