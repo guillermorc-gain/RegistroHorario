@@ -614,6 +614,14 @@ jobs:
                                       dlgRef[0] = dlg;
                                   }
                                   wv.setWebViewClient(new android.webkit.WebViewClient() {
+                                      // El sitio cambió de nombre —de registro-horario-emt a
+                                      // emt-palma-movilidad— y Google puede devolver la entrada
+                                      // por cualquiera de los dos mientras la dirección vieja
+                                      // siga apuntada allí. Valen los dos.
+                                      private boolean esNuestro(String host) {
+                                          return "emt-palma-movilidad.vercel.app".equals(host)
+                                              || "registro-horario-emt.vercel.app".equals(host);
+                                      }
                                       private void reportResult(final String queryOrFragment) {
                                           if (handled[0]) return;
                                           handled[0] = true;
@@ -653,7 +661,11 @@ jobs:
                                           // aviso de "aplicación no verificada" lo nombra: se
                                           // tragaba ese toque y cancelaba la entrada justo a
                                           // quien intentaba seguir adelante.
-                                          if ("registro-horario-emt.vercel.app".equals(host)
+                                          // Valen los dos dominios: el de ahora y el de antes,
+                                          // que Vercel sigue redirigiendo. Si solo valiera uno,
+                                          // quien tuviera la otra dirección guardada en Google se
+                                          // quedaría sin poder entrar.
+                                          if (esNuestro(host)
                                                   && (qry.contains("code=") || qry.contains("error="))) {
                                               reportResult(qry);
                                               return true;
@@ -666,7 +678,7 @@ jobs:
                                       @Override
                                       public void onPageFinished(android.webkit.WebView view, String pageUrl) {
                                           if (handled[0] || pageUrl == null) return;
-                                          if (!"registro-horario-emt.vercel.app".equals(android.net.Uri.parse(pageUrl).getHost())) return;
+                                          if (!esNuestro(android.net.Uri.parse(pageUrl).getHost())) return;
                                           view.evaluateJavascript(
                                               "(function(){var q=(window.location.search||'').replace(/^\\?/,'');return q.indexOf('code=')>=0?q:'';})();",
                                               new android.webkit.ValueCallback<String>() {
@@ -894,7 +906,7 @@ jobs:
                   if (token != null && expiry > System.currentTimeMillis() + 60000L) return token;
                   if (refresh == null) return token;
                   try {
-                      java.net.URL u = new java.net.URL("https://registro-horario-emt.vercel.app/api/auth/refresh");
+                      java.net.URL u = new java.net.URL("https://emt-palma-movilidad.vercel.app/api/auth/refresh");
                       java.net.HttpURLConnection c = (java.net.HttpURLConnection) u.openConnection();
                       c.setRequestMethod("POST");
                       c.setRequestProperty("Content-Type", "application/json");
