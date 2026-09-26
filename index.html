@@ -1754,6 +1754,9 @@
             <div class="pm-quien">Qué nóminas</div>
             <div id="expNomLista" class="exp-cols"></div>
             <div class="pm-quien">Formato</div>
+            <div class="pm-op" onclick="app.exportarNomPDF()">
+                <div style="flex:1;">📄 PDF · recibo de salarios<br><span class="pm-turnos">Con el diseño de una nómina, una hoja por mes</span></div>
+            </div>
             <div class="pm-op" onclick="app.exportarNomSheets()">
                 <div style="flex:1;">Google Sheets<br><span class="pm-turnos">Crea la hoja en tu Drive y la abre</span></div>
             </div>
@@ -1764,7 +1767,7 @@
                 <div style="flex:1;">CSV<br><span class="pm-turnos">Lo abre cualquier programa</span></div>
             </div>
             <div class="pm-op" onclick="app.prepararEmailNominas()">
-                <div style="flex:1;">✉️ Enviar por email<br><span class="pm-turnos">A un contacto guardado o a uno nuevo</span></div>
+                <div style="flex:1;">✉️ Enviar el PDF por email<br><span class="pm-turnos">A un contacto guardado o a uno nuevo</span></div>
             </div>
         </div>
     </div>
@@ -1901,7 +1904,7 @@
 </div>
 
 <script src="version.js"></script>
-<script src="app.js?v=34"></script>
+<script src="app.js?v=35"></script>
 <script>
 // Lo que hace que el navegador ofrezca instalar la aplicación es tener un
 // trabajador de servicio registrado. La aplicación dejó de registrarlo hace

@@ -3892,6 +3892,310 @@ const app = {
         return filas;
     },
 
+    // ── La nómina en PDF, con pinta de nómina ────────────────────────────────
+    // Un CSV o un Excel valen para cuadrar números, pero lo que uno enseña o
+    // archiva es un recibo: su cabecera, sus datos, los devengos y las
+    // deducciones cada uno en su tabla y el líquido destacado abajo. Se dibuja
+    // aquí mismo, sin librerías de fuera: un PDF es texto, y así la app no
+    // depende de nada que haya que bajarse ni deja de funcionar sin red.
+
+    // Anchos de Helvetica —milésimas de punto— de los caracteres 32 a 126.
+    // Hacen falta para alinear los importes a la derecha: sin medir el texto
+    // las columnas de la tabla bailan.
+    _PDF_ANCHOS: {
+        n: '278 278 355 556 556 889 667 191 333 333 389 584 278 333 278 278 556 556 556 556 556 556 556 556 556 556 278 278 584 584 584 556 1015 667 667 722 722 667 611 778 722 278 500 667 556 833 722 778 667 778 722 667 611 722 667 944 667 667 611 278 278 278 469 556 333 556 556 500 556 556 278 556 556 222 222 500 222 833 556 556 556 556 333 500 278 556 500 722 500 500 500 334 260 334 584',
+        b: '278 333 474 556 556 889 722 238 333 333 389 584 278 333 278 278 556 556 556 556 556 556 556 556 556 556 333 333 584 584 584 611 975 722 722 722 722 667 611 778 722 278 556 722 611 833 722 778 667 778 722 667 611 722 667 944 667 667 611 333 278 333 584 556 333 556 611 556 611 556 333 611 611 278 278 556 278 889 611 611 611 611 389 556 333 611 556 778 556 556 500 389 280 389 584',
+    },
+
+    // Para medir, una letra con tilde ocupa lo que la letra sin ella.
+    _PDF_LLANO: { 'á':'a','é':'e','í':'i','ó':'o','ú':'u','ü':'u','ñ':'n','Á':'A','É':'E',
+                  'Í':'I','Ó':'O','Ú':'U','Ü':'U','Ñ':'N','ç':'c','Ç':'C','€':'0','·':'.',
+                  'º':'o','ª':'a','¿':'?','¡':'!','–':'-','—':'-','“':'"','”':'"','‘':"'",'’':"'" },
+
+    // Lo que no es Latin-1 tiene su propio sitio en la tabla que entienden los
+    // lectores de PDF; el euro, sin ir más lejos.
+    _PDF_WINANSI: { '€':0x80,'‚':0x82,'„':0x84,'…':0x85,'†':0x86,'‡':0x87,'‰':0x89,'‹':0x8b,
+                    'Œ':0x8c,'‘':0x91,'’':0x92,'“':0x93,'”':0x94,'•':0x95,'–':0x96,'—':0x97,
+                    '™':0x99,'›':0x9b,'œ':0x9c,'Ÿ':0x9f },
+
+    _pdfTabla(negrita) {
+        const k = negrita ? 'b' : 'n';
+        this._pdfCache = this._pdfCache || {};
+        if (!this._pdfCache[k]) this._pdfCache[k] = this._PDF_ANCHOS[k].split(' ').map(Number);
+        return this._pdfCache[k];
+    },
+
+    _pdfMedir(t, tam, negrita) {
+        const tabla = this._pdfTabla(negrita);
+        let mil = 0;
+        for (const ch of String(t ?? '')) {
+            const c = (this._PDF_LLANO[ch] || ch).charCodeAt(0);
+            mil += (c >= 32 && c <= 126) ? tabla[c - 32] : 556;
+        }
+        return mil * tam / 1000;
+    },
+
+    // El texto, tal como va dentro del PDF: lo que no es ASCII se escapa en
+    // octal, así el fichero entero es ASCII y cuadrar la tabla de posiciones
+    // —que va en bytes— no tiene trampa.
+    _pdfTxt(t) {
+        let out = '';
+        for (const ch of String(t ?? '')) {
+            const c = ch.codePointAt(0);
+            if (c >= 32 && c <= 126) { out += '()\\'.includes(ch) ? '\\' + ch : ch; continue; }
+            const b = (c >= 0xA0 && c <= 0xFF) ? c : (this._PDF_WINANSI[ch] ?? null);
+            out += b === null ? '?' : '\\' + b.toString(8).padStart(3, '0');
+        }
+        return out;
+    },
+
+    _pdfNominas() {
+        const A = 595.28, AL = 841.89, M = 42, ANCHO = A - 2 * M;
+        const AZUL = [0.055, 0.396, 0.753], HONDO = [0.051, 0.278, 0.631];
+        const TINTA = [0.13, 0.16, 0.20], GRIS = [0.45, 0.50, 0.56];
+        const BLANCO = [1, 1, 1], CLARO = [0.82, 0.88, 0.95];
+        const FONDO = [0.965, 0.976, 0.988], CEBRA = [0.976, 0.984, 0.992];
+        const AMBAR = [0.85, 0.6, 0.08];
+
+        const paginas = [];
+        let ops = [];
+        const n3 = v => (Math.round(v * 1000) / 1000);
+        const rgb = c => c.map(n3).join(' ');
+        const caja = (x, arriba, w, h, c) => ops.push(
+            `${rgb(c)} rg ${x.toFixed(2)} ${(AL - arriba - h).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re f`);
+        const raya = (x1, x2, arriba, c, grosor) => ops.push(
+            `${rgb(c)} RG ${grosor} w ${x1.toFixed(2)} ${(AL - arriba).toFixed(2)} m `
+            + `${x2.toFixed(2)} ${(AL - arriba).toFixed(2)} l S`);
+        const txt = (t, x, base, tam, neg, c) => ops.push(
+            `BT /F${neg ? 2 : 1} ${tam} Tf ${rgb(c)} rg 1 0 0 1 ${x.toFixed(2)} `
+            + `${(AL - base).toFixed(2)} Tm (${this._pdfTxt(t)}) Tj ET`);
+        const der = (t, x, base, tam, neg, c) => txt(t, x - this._pdfMedir(t, tam, neg), base, tam, neg, c);
+
+        // Cortar un texto largo por palabras para que quepa a lo ancho
+        const partir = (t, ancho, tam) => {
+            const fuera = [];
+            let linea = '';
+            String(t || '').split(/\s+/).forEach(p => {
+                const prueba = linea ? linea + ' ' + p : p;
+                if (this._pdfMedir(prueba, tam, false) <= ancho) { linea = prueba; return; }
+                if (linea) fuera.push(linea);
+                linea = p;
+            });
+            if (linea) fuera.push(linea);
+            return fuera;
+        };
+
+        // Con el punto de los miles: en un papel, 2.468,58 € y no 2468,58 €.
+        const eur = v => this._eur(v)
+            .replace(/\d+(?=,)/, entera => entera.replace(/\B(?=(\d{3})+$)/g, '.'));
+        // Con coma, como el resto de la app: 3.5 h o 4.7 % desentonan en un
+        // papel donde todos los importes van con coma.
+        const num = v => String(v ?? '').replace('.', ',');
+        const hoy = new Date().toLocaleDateString('es-ES',
+            { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+        const claves = this._nomExportElegidas();
+        const yo = this.usuarioActual || {};
+
+        claves.forEach(clave => {
+            const g = this._misNominas[clave] || {};
+            const c = this._calcNomina(clave, g);
+            const anio = +clave.slice(0, 4), mesN = +clave.slice(4, 6);
+            const ultimo = new Date(anio, mesN, 0).getDate();
+            const dd = n => String(n).padStart(2, '0');
+
+            ops = [];
+            paginas.push(ops);
+            let y;
+
+            // Cabecera. Se repite igual si la nómina necesita una segunda hoja.
+            const cabecera = (sigue) => {
+                caja(0, 0, A, 92, AZUL);
+                caja(0, 92, A, 3, HONDO);
+                txt('EMT · Movilidad', M, 40, 19, true, BLANCO);
+                txt('Recibo individual de salarios', M, 58, 9.5, false, CLARO);
+                txt('Documento informativo del trabajador', M, 74, 7.5, false, CLARO);
+                der(this._nombreMes(clave) + (sigue ? ' (continúa)' : ''), A - M, 42, 15, true, BLANCO);
+                der(`${dd(1)}/${dd(mesN)}/${anio} — ${dd(ultimo)}/${dd(mesN)}/${anio}`,
+                    A - M, 58, 9, false, CLARO);
+                der(`${c.dias.base + c.dias.vacaciones + c.dias.permiso} días de salario`,
+                    A - M, 73, 8, false, CLARO);
+                y = 110;
+            };
+
+            const pie = () => {
+                raya(M, A - M, AL - 52, CLARO, 0.7);
+                txt(`Generado con EMT · Movilidad el ${hoy}. Copia del trabajador: no sustituye`
+                    + ' a la nómina que entrega la empresa.', M, AL - 38, 7.2, false, GRIS);
+                der(`Hoja ${paginas.length}`, A - M, AL - 38, 7.2, false, GRIS);
+            };
+
+            // Si lo que viene no cabe, hoja nueva con la misma cabecera
+            const sitio = alto => {
+                if (y + alto <= AL - 62) return;
+                pie();
+                ops = [];
+                paginas.push(ops);
+                cabecera(true);
+            };
+
+            cabecera(false);
+
+            // ── Quién y de cuándo ────────────────────────────────────────────
+            caja(M, y, ANCHO, 62, FONDO);
+            caja(M, y, 3.5, 62, AZUL);
+            const dato = (etiqueta, valor, x, fila) => {
+                txt(etiqueta.toUpperCase(), x, y + (fila ? 40 : 18), 6.8, true, GRIS);
+                txt(valor || '—', x, y + (fila ? 53 : 31), 10, false, TINTA);
+            };
+            const antig = c.pctBienios
+                ? `${c.anios || 0} año${(c.anios || 0) === 1 ? '' : 's'} · ${num(c.pctBienios)} %`
+                : 'Sin antigüedad';
+            dato('Trabajador',     yo.name || '—',            M + 16,  0);
+            dato('Nº de conductor', this.numConductor || '—', M + 250, 0);
+            dato('Días del mes',   String(this.DIAS_NOMINA),  M + 390, 0);
+            dato('Correo',         yo.email || '—',           M + 16,  1);
+            dato('Antigüedad',     antig,                     M + 250, 1);
+            dato('Alta',           c.desde ? c.desde.split('-').reverse().join('/') : '—', M + 390, 1);
+            y += 62 + 18;
+
+            // ── Una tabla ────────────────────────────────────────────────────
+            const xCant = M + 300, xPrecio = M + 402, xImporte = M + ANCHO - 12;
+            const tabla = (titulo, cabs, filas, total) => {
+                sitio(24 + 19 + filas.length * 15.4 + 22);
+                txt(titulo, M, y, 10.5, true, AZUL);
+                y += 10;
+                caja(M, y, ANCHO, 19, AZUL);
+                txt(cabs[0], M + 12, y + 13, 7.6, true, BLANCO);
+                der(cabs[1], xCant, y + 13, 7.6, true, BLANCO);
+                der(cabs[2], xPrecio, y + 13, 7.6, true, BLANCO);
+                der(cabs[3], xImporte, y + 13, 7.6, true, BLANCO);
+                y += 19;
+                filas.forEach((f, i) => {
+                    sitio(15.4);
+                    if (i % 2) caja(M, y, ANCHO, 15.4, CEBRA);
+                    txt(f[0], M + 12, y + 10.8, 8.6, false, TINTA);
+                    der(f[1], xCant, y + 10.8, 8.6, false, GRIS);
+                    der(f[2], xPrecio, y + 10.8, 8.6, false, GRIS);
+                    der(f[3], xImporte, y + 10.8, 8.6, true, TINTA);
+                    y += 15.4;
+                });
+                sitio(22);
+                caja(M, y, ANCHO, 22, [0.93, 0.95, 0.975]);
+                raya(M, A - M, y, CLARO, 0.8);
+                txt(total[0], M + 12, y + 14.5, 9.2, true, TINTA);
+                der(total[1], xImporte, y + 14.5, 10.5, true, TINTA);
+                y += 22 + 15;
+            };
+
+            tabla('Devengos', ['Concepto', 'Cantidad', 'Precio', 'Importe'],
+                c.devengos.map(l => [
+                    l.c,
+                    l.d ? `${num(l.d)}${l.horas ? ' h' : ''}` : '',
+                    l.p ? eur(l.p) : '',
+                    eur(l.i),
+                ]),
+                ['Total devengado', eur(c.devengado)]);
+
+            tabla('Deducciones', ['Concepto', 'Base', 'Tipo', 'Importe'],
+                c.deducciones.map(l => [
+                    l.c,
+                    l.base ? eur(l.base) : '',
+                    l.pct ? `${num(l.pct)} %` : '',
+                    '-' + eur(l.i),
+                ]),
+                ['Total a deducir', '-' + eur(c.aDeducir)]);
+
+            // ── Base de cotización y líquido ─────────────────────────────────
+            sitio(30 + 54);
+            caja(M, y, ANCHO, 26, FONDO);
+            txt(c.prorrata ? 'Base de cotización · devengado + prorrata de pagas extra'
+                           : 'Base de cotización · devengado',
+                M + 12, y + 17, 8.6, false, GRIS);
+            der(eur(c.base), xImporte, y + 17, 9.5, true, TINTA);
+            y += 26 + 10;
+
+            caja(M, y, ANCHO, 54, HONDO);
+            txt('LÍQUIDO A PERCIBIR', M + 16, y + 24, 11, true, BLANCO);
+            txt('Total devengado menos el total a deducir', M + 16, y + 39, 7.6, false, CLARO);
+            der(eur(c.liquido), xImporte, y + 35, 22, true, BLANCO);
+            y += 54 + 18;
+
+            // ── El detalle del mes, en letra pequeña ─────────────────────────
+            const detalle = [`${c.dias.base} días de salario base`];
+            if (c.dias.vacaciones) detalle.push(`${c.dias.vacaciones} de vacaciones`);
+            if (c.dias.permiso)    detalle.push(`${c.dias.permiso} de permiso retribuido`);
+            if (c.diasAsist)       detalle.push(`${c.diasAsist} con complemento de asistencia`);
+            if (c.hExtra)          detalle.push(`${num(c.hExtra)} h extras`);
+            if (c.hNoct)           detalle.push(`${num(c.hNoct)} h nocturnas`);
+            if (c.conPagaExtra)    detalle.push('incluye paga extra');
+            sitio(24);
+            txt('EL MES', M, y, 6.8, true, GRIS);
+            y += 13;
+            partir(detalle.join(' · '), ANCHO, 8.6).forEach(l => {
+                sitio(12);
+                txt(l, M, y, 8.6, false, TINTA);
+                y += 12;
+            });
+
+            if (g.nota) {
+                y += 10;
+                const lineas = partir(g.nota, ANCHO - 26, 8.6);
+                sitio(20 + lineas.length * 12);
+                caja(M, y, ANCHO, 14 + lineas.length * 12, [0.99, 0.97, 0.90]);
+                caja(M, y, 3.5, 14 + lineas.length * 12, AMBAR);
+                let yy = y + 15;
+                lineas.forEach(l => { txt(l, M + 14, yy, 8.6, false, TINTA); yy += 12; });
+                y += 14 + lineas.length * 12;
+            }
+
+            pie();
+        });
+
+        return this._pdfEnsamblar(paginas, A, AL);
+    },
+
+    _pdfEnsamblar(paginas, A, AL) {
+        const objs = [null, null];              // 1 catálogo, 2 índice de hojas
+        const add = cuerpo => { objs.push(cuerpo); return objs.length; };
+        const f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+        const f2 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+        const hojas = paginas.map(ops => {
+            const flujo = ops.join('\n');
+            const cont = add(`<< /Length ${flujo.length} >>\nstream\n${flujo}\nendstream`);
+            return add(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${A.toFixed(2)} ${AL.toFixed(2)}]`
+                + ` /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >> >> /Contents ${cont} 0 R >>`);
+        });
+        objs[0] = '<< /Type /Catalog /Pages 2 0 R >>';
+        objs[1] = `<< /Type /Pages /Kids [${hojas.map(n => n + ' 0 R').join(' ')}]`
+                + ` /Count ${hojas.length} >>`;
+
+        let pdf = '%PDF-1.4\n';
+        const donde = [];
+        objs.forEach((cuerpo, i) => {
+            donde.push(pdf.length);
+            pdf += `${i + 1} 0 obj\n${cuerpo}\nendobj\n`;
+        });
+        const xref = pdf.length;
+        pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`
+             + donde.map(o => String(o).padStart(10, '0') + ' 00000 n \n').join('')
+             + `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+        // Todo el PDF es ASCII a propósito, así que un carácter es un byte y
+        // las posiciones que acabamos de apuntar cuadran.
+        const bytes = new Uint8Array(pdf.length);
+        for (let i = 0; i < pdf.length; i++) bytes[i] = pdf.charCodeAt(i) & 0xff;
+        return bytes;
+    },
+
+    exportarNomPDF() {
+        if (!this._hayNomElegidas()) return;
+        document.getElementById('expNomModal').classList.remove('show');
+        const ok = this._descargarBinario(this._pdfNominas(),
+            this._nombreExport('pdf').replace('jornadas', 'nominas'), 'application/pdf');
+        if (!ok) { this._mostrarToast('Actualiza la app para exportar en PDF', 4500); return; }
+        this._mostrarToast('📄 Nóminas exportadas en PDF', 4000);
+    },
+
     mostrarExportarNominas() {
         if (!this._clavesNominasGuardadas().length) { this._mostrarToast('No hay nóminas que exportar', 3000); return; }
         this._nomExportSel = null;
@@ -3974,12 +4278,14 @@ const app = {
             'text/csv;charset=utf-8;', 'Mis jornadas');
     },
 
+    // Por correo va el PDF: es el que se puede enseñar. El CSV y el Excel
+    // siguen ahí para quien quiera cuadrar números en una hoja de cálculo.
     prepararEmailNominas() {
         if (!this._hayNomElegidas()) return;
         document.getElementById('expNomModal').classList.remove('show');
-        this.mostrarEnviarEmail(this._csvDe(this.CABECERAS_EXPORT_NOM, this._filasExportNom()),
-            this._nombreExport('csv').replace('jornadas', 'nominas'),
-            'text/csv;charset=utf-8;', 'Mis nóminas');
+        this.mostrarEnviarEmail(this._pdfNominas(),
+            this._nombreExport('pdf').replace('jornadas', 'nominas'),
+            'application/pdf', 'Mis nóminas');
     },
 
     mostrarEnviarEmail(contenido, nombre, tipo, asunto) {
