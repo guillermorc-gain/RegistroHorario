@@ -525,7 +525,12 @@ const app = {
 
     async login(silent = false, permisoExtra = '') {
         const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
-        const redirectUri = isAndroidNative ? RETORNO_APP : window.location.origin + '/';
+        // Dentro de la aplicación la página se sirve desde localhost, y ahí
+        // Google no puede devolver a nadie: si por lo que sea no se ha
+        // reconocido como aplicación, vale igual la dirección de retorno.
+        const enLocal = /^https?:\/\/localhost(:|$)/.test(window.location.origin);
+        const redirectUri = (isAndroidNative || enLocal) ? RETORNO_APP
+            : window.location.origin + '/';
         const email = this.usuarioActual?.email || localStorage.getItem('gUserEmail') || '';
         const verifier = this._generateVerifier();
         localStorage.setItem('pkceVerifier', verifier);
@@ -611,7 +616,12 @@ const app = {
         localStorage.removeItem('pkceVerifier');
         if (!verifier) { this.mostrarAuth(); return; }
         const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
-        const redirectUri = isAndroidNative ? RETORNO_APP : window.location.origin + '/';
+        // Dentro de la aplicación la página se sirve desde localhost, y ahí
+        // Google no puede devolver a nadie: si por lo que sea no se ha
+        // reconocido como aplicación, vale igual la dirección de retorno.
+        const enLocal = /^https?:\/\/localhost(:|$)/.test(window.location.origin);
+        const redirectUri = (isAndroidNative || enLocal) ? RETORNO_APP
+            : window.location.origin + '/';
         try {
             const resp = await fetch('https://emt-palma-movilidad.vercel.app/api/auth/exchange', {
                 method: 'POST',

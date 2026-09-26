@@ -1,4 +1,4 @@
-import { exigirAdmin } from './_auth.js';
+import { exigirAdmin, GESTOR_PRINCIPAL } from './_auth.js';
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const REPO         = 'guillermorc-gain/RegistroHorario';
@@ -65,7 +65,10 @@ export default async function handler(req, res) {
   }
 
   const cfg = appCfg(req);
-  if (!await exigirAdmin(req, res, cfg.admin)) return;
+  // Cada lista tiene su dueño, y el desarrollador puede con todas: es quien
+  // lleva las cuatro aplicaciones desde su app y sería absurdo que no pudiera
+  // dar de alta a nadie en la que no es suya.
+  if (!await exigirAdmin(req, res, cfg.admin, GESTOR_PRINCIPAL)) return;
 
   const { email } = req.body || {};
   if (!email || !email.includes('@')) return res.status(400).json({ error: 'Email inválido' });

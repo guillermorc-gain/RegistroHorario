@@ -132,14 +132,17 @@ export async function exigirGestor(req, res) {
 
 // Para lo que sigue siendo solo del gestor principal: quién tiene acceso a la
 // aplicación y qué versión se le ofrece a la gente.
-export async function exigirAdmin(req, res, adminEmail) {
+// Además del dueño de lo que se toca, se puede dar por bueno algún correo
+// más —el desarrollador, que lleva todas las aplicaciones—.
+export async function exigirAdmin(req, res, adminEmail, ...tambien) {
   const { email, motivo } = await revisarToken(tokenDe(req));
   if (!email) {
     const [texto, codigo] = MENSAJES[motivo] || MENSAJES.token_raro;
     res.status(codigo).json({ error: texto, motivo });
     return '';
   }
-  if (email !== String(adminEmail).toLowerCase()) {
+  const valen = [adminEmail, ...tambien].map(e => String(e || '').toLowerCase());
+  if (!valen.includes(email)) {
     res.status(403).json({ error: `Esta cuenta (${email}) no es la del gestor`, motivo: 'no_es_gestor' });
     return '';
   }
