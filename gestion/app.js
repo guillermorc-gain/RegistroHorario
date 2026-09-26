@@ -1814,8 +1814,14 @@ const app = {
     },
 
     _aplicarPermisosGestor() {
-        const soy = this._soyElGestor();
-        ['sectionVersiones', 'sectionVersionesGestion', 'sectionPrueba', 'sectionAcceso'].forEach(id => {
+        // En la app de desarrollador esto se ve siempre: esa aplicación es
+        // para administrar y no la instala nadie más, así que esconderle los
+        // apartados por entrar con otra de sus cuentas solo servía para
+        // dejarle la app a medias sin decir por qué. En la de gestión siguen
+        // siendo cosa del gestor. Quien manda de verdad es el servidor: cada
+        // escritura se comprueba allí con la sesión, no aquí.
+        const soy = ES_APP_DEV || this._soyElGestor();
+        ['sectionVersiones', 'sectionPrueba', 'sectionAcceso'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = soy ? '' : 'none';
         });
