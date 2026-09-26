@@ -11,6 +11,10 @@ const BRANCH       = 'datos';
 const APPS = {
   movilidad: { file: 'allowed-users.json',         admin: 'guillermo.rc82@gmail.com' },
   gestion:   { file: 'allowed-users-gestion.json', admin: 'g.rioscorrea@gmail.com'   },
+  // El puesto de control de acceso: los que hacen el turno en la garita y
+  // los que llevan ese puesto. Cada uno su lista, como las de arriba.
+  control:            { file: 'allowed-users-control.json',         admin: 'g.rioscorrea@gmail.com' },
+  'gestion-control':  { file: 'allowed-users-gestion-control.json', admin: 'g.rioscorrea@gmail.com' },
 };
 const appCfg = req => APPS[String((req.query?.app) || (req.body?.app) || '').toLowerCase()] || APPS.movilidad;
 

@@ -1477,6 +1477,54 @@
                 </div>
             </div>
 
+            <!-- Las dos aplicaciones del puesto de control. Solo en la de
+                 desarrollador: las enciende _pintarIdentidadApp. -->
+            <div class="ops-section" id="sectionAccesoControl" style="display:none;">
+                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._cargarAccesoControl('control')">🛡️ Cuentas · Control de acceso <span class="ops-chevron">›</span></button>
+                <div class="ops-body">
+                    <div style="font-size:11px;color:#7f8c8d;margin-bottom:10px;line-height:1.5;">Quién puede entrar en la aplicación de Control de acceso, la de quien hace el turno en la garita. Si la lista está vacía, cualquier cuenta puede entrar.</div>
+                    <div id="accesoControlList" style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;min-height:24px;"></div>
+                    <div style="display:flex;gap:6px;">
+                        <input type="email" id="accesoControlEmail" class="ops-input" placeholder="correo@gmail.com" style="flex:1;font-size:13px;" />
+                        <button onclick="app._addAccesoControl('control')" style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">Añadir</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ops-section" id="sectionAccesoGControl" style="display:none;">
+                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._cargarAccesoControl('gcontrol')">🗝️ Cuentas · Gestión de control de acceso <span class="ops-chevron">›</span></button>
+                <div class="ops-body">
+                    <div style="font-size:11px;color:#7f8c8d;margin-bottom:10px;line-height:1.5;">Quién puede entrar en la aplicación de Gestión de control de acceso, la de quien lleva ese puesto. Dar acceso aquí no da acceso a la otra.</div>
+                    <div id="accesoGControlList" style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;min-height:24px;"></div>
+                    <div style="display:flex;gap:6px;">
+                        <input type="email" id="accesoGControlEmail" class="ops-input" placeholder="correo@gmail.com" style="flex:1;font-size:13px;" />
+                        <button onclick="app._addAccesoControl('gcontrol')" style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">Añadir</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ops-section" id="sectionVersionesControl" style="display:none;">
+                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._cargarVersionesControl('control')">🛡️ Versión para control de acceso <span class="ops-chevron">›</span></button>
+                <div class="ops-body">
+                    <div class="ops-field">
+                        <span class="ops-field-sub">Qué versión reciben los de control de acceso. Tú siempre ves la más reciente, así que si una sale mal la pruebas tú y a ellos no les llega.</span>
+                        <div id="versionControlActual" class="ver-actual">Comprobando…</div>
+                    </div>
+                    <div id="versionesControlList"></div>
+                </div>
+            </div>
+
+            <div class="ops-section" id="sectionVersionesGControl" style="display:none;">
+                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._cargarVersionesControl('gcontrol')">🗝️ Versión para gestión de control de acceso <span class="ops-chevron">›</span></button>
+                <div class="ops-body">
+                    <div class="ops-field">
+                        <span class="ops-field-sub">Lo mismo para la de gestión del puesto. Cada aplicación lleva su número: publicar una no toca el reparto de las otras.</span>
+                        <div id="versionGControlActual" class="ver-actual">Comprobando…</div>
+                    </div>
+                    <div id="versionesGControlList"></div>
+                </div>
+            </div>
+
             <!-- Lugares de trabajo: turnos y ubicación -->
             <div class="ops-section" id="sectionLugares">
                 <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._renderLugares()">🧩 Lugares de trabajo <span class="ops-chevron">›</span></button>
@@ -2127,7 +2175,7 @@
 </div>
 
 <script src="version.js"></script>
-<script src="app.js?v=40"></script>
+<script src="app.js?v=41"></script>
 <script>
 // Lo que hace que el navegador ofrezca instalar la aplicación es tener un
 // trabajador de servicio registrado. La aplicación dejó de registrarlo hace

@@ -44,7 +44,8 @@ export default async function handler(req, res) {
       res.setHeader('Cache-Control', 'no-store');
       // null means "nothing published yet": the app then falls back to the
       // newest release, which is how it behaved before this existed.
-      return res.status(200).json(data || { worker: null, gestion: null });
+      return res.status(200).json(data
+        || { worker: null, gestion: null, control: null, gestionControl: null });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
@@ -59,8 +60,11 @@ export default async function handler(req, res) {
   // puede tocar el reparto de la otra: antes compartían un solo número y
   // publicar la del trabajador dejaba a gestión con el reparto de aquélla.
   const { app: cual, build } = req.body || {};
-  if (cual !== 'worker' && cual !== 'gestion') {
-    return res.status(400).json({ error: 'Falta indicar la app (worker o gestion)' });
+  // Cada aplicación lleva su propio número: publicar una no puede tocar el
+  // reparto de las otras.
+  const CUALES = ['worker', 'gestion', 'control', 'gestionControl'];
+  if (!CUALES.includes(cual)) {
+    return res.status(400).json({ error: 'Falta indicar la app (' + CUALES.join(', ') + ')' });
   }
   if (build !== null && !Number.isInteger(build)) {
     return res.status(400).json({ error: 'Build inválido' });
