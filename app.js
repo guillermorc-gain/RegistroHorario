@@ -5363,7 +5363,7 @@ const app = {
         const tit = document.getElementById('cabeceraTitulo');
         if (tit) {
             tit.textContent = this._soyElDesarrollador()
-                ? '⚙️ Desarrollador Movilidad EMT' : '🚌 EMT - Movilidad';
+                ? '⚙️ Desarrollador EMT - Movilidad' : '🚌 EMT - Movilidad';
         }
 
         const a = this._asignacionDeHoy();

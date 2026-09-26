@@ -1,6 +1,6 @@
 {
   "id": "/gestion/",
-  "name": "Gestión EMT Movilidad",
+  "name": "Gestión EMT - Movilidad",
   "short_name": "Gestión EMT",
   "description": "Control de horas de trabajo EMT",
   "start_url": "/gestion/",
