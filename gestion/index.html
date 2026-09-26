@@ -321,6 +321,11 @@
         .app-content.dark .cond-orden,.options-content.dark .cond-orden{background:#16202e;}
         .ops-orden{display:flex;align-items:center;gap:10px;padding:2px 14px 10px;}
         .ops-orden-t{flex:1;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#95a5a6;}
+        .grp-apps{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;background:#eef2f6;border-radius:9px;padding:4px;}
+        .options-content.dark .grp-apps{background:#16202c;}
+        .grp-app{border:none;background:transparent;color:#7f8c8d;font-size:11.5px;font-weight:700;padding:6px 9px;border-radius:7px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+        .grp-app.activo{background:white;color:var(--g1);box-shadow:0 1px 2px rgba(0,0,0,.08);}
+        .options-content.dark .grp-app.activo{background:#1e2a3a;}
         .orden-btn{border:none;background:transparent;color:#7f8c8d;font-size:11px;font-weight:700;padding:4px 8px;border-radius:6px;cursor:pointer;font-family:inherit;}
         .orden-btn.activo{background:white;color:var(--g1);box-shadow:0 1px 2px rgba(0,0,0,.08);}
         .app-content.dark .orden-btn.activo,.options-content.dark .orden-btn.activo{background:#1e2a3a;}
@@ -1454,76 +1459,41 @@
             </div>
 
                                     <!-- Versión publicada -->
+            <!-- Las cuatro aplicaciones, cada cosa en su apartado y dentro
+                 un botón por aplicación: antes eran siete apartados sueltos y
+                 había que bajar media pantalla para llegar a uno. -->
             <div class="ops-section" id="sectionVersiones">
-                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._cargarVersiones()">🚀 Versión para los usuarios <span class="ops-chevron">›</span></button>
+                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._verVersionesDe()">🚀 Versión de cada aplicación <span class="ops-chevron">›</span></button>
                 <div class="ops-body">
+                    <div class="grp-apps" id="grpVerApps"></div>
                     <div class="ops-field">
-                        <span class="ops-field-sub">Elige qué versión de la app de trabajadores reciben. Tú siempre ves la más reciente para poder probarla antes de publicarla.</span>
-                        <div id="versionActual" class="ver-actual">Comprobando…</div>
+                        <span class="ops-field-sub" id="grpVerSub"></span>
+                        <div id="grpVerActual" class="ver-actual">Comprobando…</div>
                     </div>
-                    <div id="versionesList"></div>
+                    <div id="grpVerLista"></div>
+                </div>
+            </div>
+
+            <div class="ops-section" id="sectionAcceso">
+                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open')){app._cargarConductores();app._verAccesoDe();}">👥 Usuarios autorizados <span class="ops-chevron">›</span></button>
+                <div class="ops-body">
+                    <div class="grp-apps" id="grpAccApps"></div>
+                    <div style="font-size:11px;color:#7f8c8d;margin:8px 0 10px;line-height:1.5;" id="grpAccSub"></div>
+                    <div id="grpAccLista" style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;min-height:24px;"></div>
+                    <div style="display:flex;gap:6px;">
+                        <input type="email" id="grpAccEmail" class="ops-input" placeholder="correo@gmail.com" style="flex:1;font-size:13px;" />
+                        <button onclick="app._addAcceso()" style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">Añadir</button>
+                    </div>
                 </div>
             </div>
 
             <!-- Versión publicada de esta misma app -->
-            <div class="ops-section" id="sectionVersionesGestion">
-                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._cargarVersionesGestion()">🛠️ Versión para gestión <span class="ops-chevron">›</span></button>
-                <div class="ops-body">
-                    <div class="ops-field">
-                        <span class="ops-field-sub">Lo mismo, pero para esta app. Los demás que entran en gestión reciben la que publiques aquí; tú siempre ves la más reciente, así que si una sale mal la pruebas tú y a ellos no les llega.</span>
-                        <div id="versionGestionActual" class="ver-actual">Comprobando…</div>
-                    </div>
-                    <div id="versionesGestionList"></div>
-                </div>
-            </div>
 
             <!-- Las dos aplicaciones del puesto de control. Solo en la de
                  desarrollador: las enciende _pintarIdentidadApp. -->
-            <div class="ops-section" id="sectionAccesoControl" style="display:none;">
-                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._cargarAccesoControl('control')">🛡️ Cuentas · Control de acceso <span class="ops-chevron">›</span></button>
-                <div class="ops-body">
-                    <div style="font-size:11px;color:#7f8c8d;margin-bottom:10px;line-height:1.5;">Quién puede entrar en la aplicación de Control de acceso, la de quien hace el turno en la garita. Si la lista está vacía, cualquier cuenta puede entrar.</div>
-                    <div id="accesoControlList" style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;min-height:24px;"></div>
-                    <div style="display:flex;gap:6px;">
-                        <input type="email" id="accesoControlEmail" class="ops-input" placeholder="correo@gmail.com" style="flex:1;font-size:13px;" />
-                        <button onclick="app._addAccesoControl('control')" style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">Añadir</button>
-                    </div>
-                </div>
-            </div>
 
-            <div class="ops-section" id="sectionAccesoGControl" style="display:none;">
-                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._cargarAccesoControl('gcontrol')">🗝️ Cuentas · Gestión de control de acceso <span class="ops-chevron">›</span></button>
-                <div class="ops-body">
-                    <div style="font-size:11px;color:#7f8c8d;margin-bottom:10px;line-height:1.5;">Quién puede entrar en la aplicación de Gestión de control de acceso, la de quien lleva ese puesto. Dar acceso aquí no da acceso a la otra.</div>
-                    <div id="accesoGControlList" style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;min-height:24px;"></div>
-                    <div style="display:flex;gap:6px;">
-                        <input type="email" id="accesoGControlEmail" class="ops-input" placeholder="correo@gmail.com" style="flex:1;font-size:13px;" />
-                        <button onclick="app._addAccesoControl('gcontrol')" style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">Añadir</button>
-                    </div>
-                </div>
-            </div>
 
-            <div class="ops-section" id="sectionVersionesControl" style="display:none;">
-                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._cargarVersionesControl('control')">🛡️ Versión para control de acceso <span class="ops-chevron">›</span></button>
-                <div class="ops-body">
-                    <div class="ops-field">
-                        <span class="ops-field-sub">Qué versión reciben los de control de acceso. Tú siempre ves la más reciente, así que si una sale mal la pruebas tú y a ellos no les llega.</span>
-                        <div id="versionControlActual" class="ver-actual">Comprobando…</div>
-                    </div>
-                    <div id="versionesControlList"></div>
-                </div>
-            </div>
 
-            <div class="ops-section" id="sectionVersionesGControl" style="display:none;">
-                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open'))app._cargarVersionesControl('gcontrol')">🗝️ Versión para gestión de control de acceso <span class="ops-chevron">›</span></button>
-                <div class="ops-body">
-                    <div class="ops-field">
-                        <span class="ops-field-sub">Lo mismo para la de gestión del puesto. Cada aplicación lleva su número: publicar una no toca el reparto de las otras.</span>
-                        <div id="versionGControlActual" class="ver-actual">Comprobando…</div>
-                    </div>
-                    <div id="versionesGControlList"></div>
-                </div>
-            </div>
 
             <!-- Lugares de trabajo: turnos y ubicación -->
             <div class="ops-section" id="sectionLugares">
@@ -1590,17 +1560,6 @@
             </div>
 
             <!-- Usuarios con acceso -->
-            <div class="ops-section" id="sectionAcceso">
-                <button class="ops-title" onclick="app.toggleSection(this);if(this.closest('.ops-section').classList.contains('open')){app._cargarConductores();app._cargarUsuariosAcceso();}">👥 Usuarios con acceso <span class="ops-chevron">›</span></button>
-                <div class="ops-body">
-                    <div style="font-size:11px;color:#7f8c8d;margin-bottom:10px;line-height:1.5;">Solo las cuentas de Google añadidas aquí podrán iniciar sesión. Si la lista está vacía, cualquier cuenta puede entrar.</div>
-                    <div id="allowedUsersList" style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;min-height:24px;"></div>
-                    <div style="display:flex;gap:6px;">
-                        <input type="email" id="newUserEmail" class="ops-input" placeholder="correo@gmail.com" style="flex:1;font-size:13px;" />
-                        <button onclick="app._addUserAcceso()" style="background:linear-gradient(135deg,var(--g1),var(--g2));color:white;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">Añadir</button>
-                    </div>
-                </div>
-            </div>
 
             <!-- Cuenta -->
             <div class="ops-section">
@@ -2175,7 +2134,7 @@
 </div>
 
 <script src="version.js"></script>
-<script src="app.js?v=41"></script>
+<script src="app.js?v=42"></script>
 <script>
 // Lo que hace que el navegador ofrezca instalar la aplicación es tener un
 // trabajador de servicio registrado. La aplicación dejó de registrarlo hace

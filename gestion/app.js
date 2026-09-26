@@ -170,13 +170,6 @@ const app = {
         poner('splashRol', '⚙️ Desarrollador');
         const btn = document.getElementById('tabBtnPartes');
         if (btn) btn.style.display = '';
-        // Y los apartados de las dos aplicaciones del puesto de control, que
-        // se llevan desde aquí y no desde gestión.
-        ['sectionAccesoControl', 'sectionAccesoGControl',
-         'sectionVersionesControl', 'sectionVersionesGControl'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.style.display = '';
-        });
         const logo = document.getElementById('authLogo');
         if (logo) logo.src = 'icons/icon-dev-192.png';
         document.title = 'Desarrollador EMT - Movilidad';
@@ -531,7 +524,12 @@ const app = {
 
     async login(silent = false, permisoExtra = '') {
         const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
-        const redirectUri = isAndroidNative ? RETORNO_APP : window.location.origin + '/';
+        // Dentro de la aplicación la página se sirve desde localhost, y ahí
+        // Google no puede devolver a nadie: si por lo que sea no se ha
+        // reconocido como aplicación, vale igual la dirección de retorno.
+        const enLocal = /^https?:\/\/localhost(:|$)/.test(window.location.origin);
+        const redirectUri = (isAndroidNative || enLocal) ? RETORNO_APP
+            : window.location.origin + '/';
         const email = this.usuarioActual?.email || localStorage.getItem('gUserEmail') || '';
         const verifier = this._generateVerifier();
         localStorage.setItem('pkceVerifier', verifier);
@@ -602,7 +600,12 @@ const app = {
         localStorage.removeItem('pkceVerifier');
         if (!verifier) { this.mostrarAuth(); return; }
         const isAndroidNative = !!(window.Capacitor?.isNativePlatform?.());
-        const redirectUri = isAndroidNative ? RETORNO_APP : window.location.origin + '/';
+        // Dentro de la aplicación la página se sirve desde localhost, y ahí
+        // Google no puede devolver a nadie: si por lo que sea no se ha
+        // reconocido como aplicación, vale igual la dirección de retorno.
+        const enLocal = /^https?:\/\/localhost(:|$)/.test(window.location.origin);
+        const redirectUri = (isAndroidNative || enLocal) ? RETORNO_APP
+            : window.location.origin + '/';
         try {
             const resp = await fetch('https://emt-palma-movilidad.vercel.app/api/auth/exchange', {
                 method: 'POST',
@@ -4563,109 +4566,59 @@ const app = {
 
     // ── Versión publicada a los trabajadores ──────────────────────────────────
 
-    // ── Las otras dos aplicaciones del puesto de control ─────────────────────
-    // Control de acceso es la de quien hace el turno en la garita; Gestión de
-    // control de acceso, la de quien lleva ese puesto. Cada una con su lista
-    // de cuentas y su propia versión publicada, igual que trabajadores y
-    // gestión: dar acceso a una no da acceso a la otra, y publicar una no
-    // toca el reparto de las demás.
-    APPS_CONTROL: {
-        control: {
-            app: 'control', prefijo: 'control-build-',
-            lista: 'accesoControlList', campo: 'accesoControlEmail',
-            versiones: 'versionesControlList', actual: 'versionControlActual',
-            clave: 'control', quien: 'los de control de acceso',
-        },
-        gcontrol: {
-            app: 'gestion-control', prefijo: 'gcontrol-build-',
-            lista: 'accesoGControlList', campo: 'accesoGControlEmail',
-            versiones: 'versionesGControlList', actual: 'versionGControlActual',
-            clave: 'gestionControl', quien: 'los de gestión de control de acceso',
-        },
-    },
-    _accesoControl: {},
+    // ── Las cuatro aplicaciones, desde un sitio ──────────────────────────────
+    // Trabajador, gestión y las dos del puesto de control. Cada una lleva su
+    // propia lista de cuentas —dar acceso a una no da acceso a otra— y su
+    // propio número de versión publicada: publicar una no toca el reparto de
+    // las demás. Antes era un apartado suelto por cada cosa y había que bajar
+    // media pantalla; ahora son dos, y dentro se elige de cuál.
+    APPS_TODAS: [
+        { id: 'worker',   rotulo: '💪 Trabajador', acceso: 'movilidad',
+          prefijo: 'build-',          clave: 'worker',
+          quien: 'los trabajadores',
+          deAcceso: 'Quién puede entrar en la app de los trabajadores.' },
+        { id: 'gestion',  rotulo: '✏️ Gestión',    acceso: 'gestion',
+          prefijo: 'gestion-build-',  clave: 'gestion',
+          quien: 'los demás de gestión',
+          deAcceso: 'Quién puede entrar en la app de gestión.' },
+        { id: 'control',  rotulo: '🛡️ Control',    acceso: 'control',
+          prefijo: 'control-build-',  clave: 'control',
+          quien: 'los de control de acceso',
+          deAcceso: 'Quién puede entrar en la app de Control de acceso, la de quien hace el turno en la garita.' },
+        { id: 'gcontrol', rotulo: '🗝️ Gestión control', acceso: 'gestion-control',
+          prefijo: 'gcontrol-build-', clave: 'gestionControl',
+          quien: 'los de gestión de control de acceso',
+          deAcceso: 'Quién puede entrar en la app de Gestión de control de acceso, la de quien lleva ese puesto.' },
+    ],
+    _appVer: 'worker',
+    _appAcc: 'worker',
+    _listasAcceso: {},
 
-    _cfgControl(cual) { return this.APPS_CONTROL[cual]; },
+    _appPorId(id) { return this.APPS_TODAS.find(a => a.id === id) || this.APPS_TODAS[0]; },
 
-    async _cargarAccesoControl(cual) {
-        const cfg = this._cfgControl(cual);
-        const el = cfg && document.getElementById(cfg.lista);
-        if (!el) return;
-        el.innerHTML = '<div style="color:#888;font-size:12px;padding:4px 0;">Cargando...</div>';
-        try {
-            const resp = await fetch(`${this.API_BASE}allowlist?app=${cfg.app}`, { cache: 'no-store' });
-            if (!resp.ok) throw new Error(resp.status);
-            this._accesoControl[cual] = await resp.json();
-            this._renderAccesoControl(cual);
-        } catch (e) {
-            el.innerHTML = '<div style="color:#e74c3c;font-size:12px;">Error al cargar la lista</div>';
-        }
-    },
-
-    _renderAccesoControl(cual) {
-        const cfg = this._cfgControl(cual);
-        const el = cfg && document.getElementById(cfg.lista);
-        if (!el) return;
-        const correos = this._accesoControl[cual] || [];
-        if (!correos.length) {
-            el.innerHTML = '<div style="color:#888;font-size:12px;padding:4px 0;">'
-                + 'Lista vacía — cualquier cuenta puede entrar</div>';
-            return;
-        }
-        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-        el.innerHTML = correos.map(correo => `<div class="access-user-item">
-            <span class="access-user-email">${esc(correo)}</span>
-            <button class="access-user-remove" title="Quitar"
-                    onclick="app._quitarAccesoControl('${cual}','${esc(correo).replace(/'/g, "\\'")}')">✕</button>
-        </div>`).join('');
+    _pintarBotonesApp(contenedor, activo, fn) {
+        const cont = document.getElementById(contenedor);
+        if (!cont) return;
+        cont.innerHTML = this.APPS_TODAS.map(a =>
+            `<button class="grp-app${a.id === activo ? ' activo' : ''}"
+                     onclick="app.${fn}('${a.id}')">${a.rotulo}</button>`).join('');
     },
 
-    async _addAccesoControl(cual) {
-        const cfg = this._cfgControl(cual);
-        const input = cfg && document.getElementById(cfg.campo);
-        const correo = (input?.value || '').trim().toLowerCase();
-        if (!correo || !correo.includes('@')) { this._mostrarToast('❌ Escribe un correo válido', 3000); return; }
-        try {
-            const resp = await fetch(`${this.API_BASE}allowlist?app=${cfg.app}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json',
-                           'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ email: correo, app: cfg.app }),
-            });
-            const data = await resp.json();
-            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
-            this._accesoControl[cual] = data.emails;
-            this._renderAccesoControl(cual);
-            if (input) input.value = '';
-            this._mostrarToast('✅ Añadido', 2500);
-        } catch (e) { this._mostrarToast('❌ ' + e.message, 4000); }
+    // ── Qué versión recibe cada una ─────────────────────────────────────────
+    _verVersionesDe(id) {
+        if (id) this._appVer = id;
+        this._pintarBotonesApp('grpVerApps', this._appVer, '_verVersionesDe');
+        const cfg = this._appPorId(this._appVer);
+        const sub = document.getElementById('grpVerSub');
+        if (sub) sub.textContent = `Qué versión reciben ${cfg.quien}. Tú siempre ves la más `
+            + 'reciente, así que si una sale mal la pruebas tú y a ellos no les llega.';
+        this._cargarVersionesDe(this._appVer);
     },
 
-    async _quitarAccesoControl(cual, correo) {
-        const cfg = this._cfgControl(cual);
-        if (!cfg) return;
-        try {
-            const resp = await fetch(`${this.API_BASE}allowlist?app=${cfg.app}`, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json',
-                           'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ email: correo, app: cfg.app }),
-            });
-            const data = await resp.json();
-            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
-            this._accesoControl[cual] = data.emails;
-            this._renderAccesoControl(cual);
-            this._mostrarToast('🗑️ Quitado', 2500);
-        } catch (e) { this._mostrarToast('❌ ' + e.message, 4000); }
-    },
-
-    // Qué versión reciben los de cada una de las dos. Mismo reparto escalonado
-    // que el de trabajadores y el de gestión: tú ves siempre la más reciente
-    // y ellos la que publiques aquí.
-    async _cargarVersionesControl(cual) {
-        const cfg = this._cfgControl(cual);
-        const cont = cfg && document.getElementById(cfg.versiones);
-        const act  = cfg && document.getElementById(cfg.actual);
+    async _cargarVersionesDe(id) {
+        const cfg  = this._appPorId(id);
+        const cont = document.getElementById('grpVerLista');
+        const act  = document.getElementById('grpVerActual');
         if (!cont) return;
         cont.innerHTML = '<div class="ops-field-sub" style="padding:8px 14px;">Cargando…</div>';
         try {
@@ -4673,6 +4626,8 @@ const app = {
                 this._releases(true),
                 fetch(VERSION_URL, { cache: 'no-store' }),
             ]);
+            // Mientras se cargaba puede haber cambiado de aplicación
+            if (this._appVer !== id) return;
             if (!res.ok) {
                 cont.innerHTML = `<div class="ops-field-sub" style="padding:10px 14px;color:#c0392b;">${
                     res.limite
@@ -4712,7 +4667,7 @@ const app = {
                 return `<div class="ver-item${activa ? ' activa' : ''}">
                     <span class="ver-n">${this._buildNumToVersion(b.n)}<br><span class="ver-fecha">${f}</span></span>
                     ${activa ? '<span class="ver-badge">Publicada</span>'
-                             : `<button class="ver-btn" onclick="app._publicarVersionControl('${cual}',${b.n})">Publicar</button>`}
+                             : `<button class="ver-btn" onclick="app._publicarVersionDe('${cfg.id}',${b.n})">Publicar</button>`}
                 </div>`;
             }).join('');
         } catch (e) {
@@ -4720,9 +4675,8 @@ const app = {
         }
     },
 
-    async _publicarVersionControl(cual, build) {
-        const cfg = this._cfgControl(cual);
-        if (!cfg) return;
+    async _publicarVersionDe(id, build) {
+        const cfg = this._appPorId(id);
         if (!confirm(`¿Publicar la ${this._buildNumToVersion(build)} para ${cfg.quien}?\n\n`
             + 'Solo recibirán esa versión hasta que publiques otra.')) return;
         try {
@@ -4735,152 +4689,106 @@ const app = {
             const data = await resp.json();
             if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
             this._mostrarToast('🚀 Publicada ' + this._buildNumToVersion(build), 3000);
-            this._cargarVersionesControl(cual);
+            this._cargarVersionesDe(id);
         } catch (e) { this._mostrarToast('❌ ' + e.message, 4000); }
     },
 
-    async _cargarVersiones() {
-        const cont = document.getElementById('versionesList');
-        const act  = document.getElementById('versionActual');
-        if (!cont) return;
-        cont.innerHTML = '<div class="ops-field-sub" style="padding:8px 14px;">Cargando…</div>';
+    // ── Quién puede entrar en cada una ──────────────────────────────────────
+    _verAccesoDe(id) {
+        if (id) this._appAcc = id;
+        this._pintarBotonesApp('grpAccApps', this._appAcc, '_verAccesoDe');
+        const cfg = this._appPorId(this._appAcc);
+        const sub = document.getElementById('grpAccSub');
+        if (sub) sub.textContent = cfg.deAcceso
+            + ' Si la lista está vacía, cualquier cuenta puede entrar.';
+        this._cargarAcceso(this._appAcc);
+    },
+
+    async _cargarAcceso(id) {
+        const cfg = this._appPorId(id);
+        const el = document.getElementById('grpAccLista');
+        if (!el) return;
+        el.innerHTML = '<div style="color:#888;font-size:12px;padding:4px 0;">Cargando…</div>';
         try {
-            const [res, rVer] = await Promise.all([
-                this._releases(true),
-                fetch(VERSION_URL, { cache: 'no-store' })
-            ]);
-            if (!res.ok) {
-                cont.innerHTML = `<div class="ops-field-sub" style="padding:10px 14px;color:#c0392b;">${
-                    res.limite
-                        ? 'GitHub ha limitado las consultas por hora. Prueba dentro de unos minutos.'
-                        : 'No se pudieron cargar las versiones (error ' + res.status + ').'}</div>`;
-                if (act) act.textContent = '';
-                return;
-            }
-            const releases = res.lista;
-            this._versionPublicada = rVer.ok ? ((await rVer.json())?.worker ?? null) : null;
-            // Solo las de la app de trabajadores
-            const re = /^build-(\d+)$/;
-            const builds = (Array.isArray(releases) ? releases : [])
-                .map(r => ({ r, m: re.exec(r.tag_name || '') }))
-                .filter(x => x.m)
-                .map(x => ({ n: parseInt(x.m[1], 10), fecha: x.r.published_at }))
-                .sort((a, b) => b.n - a.n);
-            // La publicada puede ser anterior a las descargadas: sin esto no
-            // aparecería marcada y no habría forma de ver cuál está activa.
-            if (this._versionPublicada !== null && !builds.some(b => b.n === this._versionPublicada)) {
-                builds.push({ n: this._versionPublicada, fecha: null });
-                builds.sort((a, b) => b.n - a.n);
-            }
-            if (act) {
-                act.textContent = this._versionPublicada === null
-                    ? 'Ahora mismo reciben la más reciente'
-                    : `Publicada: ${this._buildNumToVersion(this._versionPublicada)}`;
-            }
-            if (!builds.length) { cont.innerHTML = '<div class="ops-field-sub" style="padding:8px 14px;">Sin versiones</div>'; return; }
-            cont.innerHTML = builds.map(b => {
-                const activa = b.n === this._versionPublicada;
-                const f = b.fecha
-                    ? new Date(b.fecha).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })
-                    : 'versión publicada';
-                return `<div class="ver-item${activa ? ' activa' : ''}">
-                    <span class="ver-n">${this._buildNumToVersion(b.n)}<br><span class="ver-fecha">${f}</span></span>
-                    ${activa ? '<span class="ver-badge">Publicada</span>'
-                             : `<button class="ver-btn" onclick="app._publicarVersion(${b.n})">Publicar</button>`}
-                </div>`;
-            }).join('');
+            const resp = await fetch(`${this.API_BASE}allowlist?app=${cfg.acceso}`, { cache: 'no-store' });
+            if (!resp.ok) throw new Error(resp.status);
+            this._listasAcceso[id] = await resp.json();
+            if (this._appAcc !== id) return;   // ha cambiado de aplicación mientras cargaba
+            this._renderAcceso(id);
         } catch (e) {
-            cont.innerHTML = '<div style="color:#e74c3c;font-size:12px;padding:8px 14px;">Error al cargar versiones</div>';
+            if (this._appAcc === id) el.innerHTML = '<div style="color:#e74c3c;font-size:12px;">Error al cargar la lista</div>';
         }
     },
+
+    _renderAcceso(id) {
+        const el = document.getElementById('grpAccLista');
+        if (!el) return;
+        const correos = this._listasAcceso[id] || [];
+        if (!correos.length) {
+            el.innerHTML = '<div style="color:#888;font-size:12px;padding:4px 0;">'
+                + 'Lista vacía — cualquier cuenta puede entrar</div>';
+            return;
+        }
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        // A los trabajadores se les enseña con qué versión andan, que es la
+        // única lista de la que sabemos eso.
+        const porEmail = this._conductores || {};
+        el.innerHTML = correos.map(correo => {
+            const u = id === 'worker' ? porEmail[String(correo).toLowerCase()] : null;
+            const ver = u?.version
+                ? this._buildNumToVersion(parseInt(String(u.version).replace('build-', ''), 10) || 0)
+                : '';
+            return `<div class="access-user-item">
+                <span class="access-user-email">${esc(correo)}${ver ? `<br><span class="access-user-ver">${ver}</span>` : ''}</span>
+                <button class="access-user-remove" title="Quitar"
+                        onclick="app._quitarAcceso('${esc(correo).replace(/'/g, "\\'")}')">✕</button>
+            </div>`;
+        }).join('');
+    },
+
+    async _addAcceso() {
+        const cfg = this._appPorId(this._appAcc);
+        const input = document.getElementById('grpAccEmail');
+        const correo = (input?.value || '').trim().toLowerCase();
+        if (!correo || !correo.includes('@')) { this._mostrarToast('❌ Escribe un correo válido', 3000); return; }
+        try {
+            const resp = await fetch(`${this.API_BASE}allowlist?app=${cfg.acceso}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ email: correo, app: cfg.acceso }),
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._listasAcceso[cfg.id] = data.emails;
+            this._renderAcceso(cfg.id);
+            if (input) input.value = '';
+            this._mostrarToast('✅ Añadido a ' + cfg.rotulo, 2500);
+        } catch (e) { this._mostrarToast('❌ ' + e.message, 4000); }
+    },
+
+    async _quitarAcceso(correo) {
+        const cfg = this._appPorId(this._appAcc);
+        try {
+            const resp = await fetch(`${this.API_BASE}allowlist?app=${cfg.acceso}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ email: correo, app: cfg.acceso }),
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._listasAcceso[cfg.id] = data.emails;
+            this._renderAcceso(cfg.id);
+            this._mostrarToast('🗑️ Quitado', 2500);
+        } catch (e) { this._mostrarToast('❌ ' + e.message, 4000); }
+    },
+
 
     // Lo mismo que la de trabajadores, pero para esta app. Se mantiene
     // aparte a propósito: publicar una no puede tocar el reparto de la otra.
-    async _cargarVersionesGestion() {
-        const cont = document.getElementById('versionesGestionList');
-        const act  = document.getElementById('versionGestionActual');
-        if (!cont) return;
-        cont.innerHTML = '<div class="ops-field-sub" style="padding:8px 14px;">Cargando…</div>';
-        try {
-            const [res, rVer] = await Promise.all([
-                this._releases(true),
-                fetch(VERSION_URL, { cache: 'no-store' })
-            ]);
-            if (!res.ok) {
-                cont.innerHTML = `<div class="ops-field-sub" style="padding:10px 14px;color:#c0392b;">${
-                    res.limite
-                        ? 'GitHub ha limitado las consultas por hora. Prueba dentro de unos minutos.'
-                        : 'No se pudieron cargar las versiones (error ' + res.status + ').'}</div>`;
-                if (act) act.textContent = '';
-                return;
-            }
-            const publicada = rVer.ok ? ((await rVer.json())?.gestion ?? null) : null;
-            this._versionGestionPublicada = publicada;
-            const re = new RegExp('^' + RELEASE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
-            const builds = (Array.isArray(res.lista) ? res.lista : [])
-                .map(r => ({ r, m: re.exec(r.tag_name || '') }))
-                .filter(x => x.m)
-                .map(x => ({ n: parseInt(x.m[1], 10), fecha: x.r.published_at }))
-                .sort((a, b) => b.n - a.n);
-            // La publicada puede ser anterior a las que quedan listadas: sin
-            // esto no saldría marcada y no habría forma de ver cuál está.
-            if (publicada !== null && !builds.some(b => b.n === publicada)) {
-                builds.push({ n: publicada, fecha: null });
-                builds.sort((a, b) => b.n - a.n);
-            }
-            if (act) {
-                act.textContent = publicada === null
-                    ? 'Ahora mismo reciben la más reciente'
-                    : `Publicada: ${this._buildNumToVersion(publicada)}`;
-            }
-            if (!builds.length) { cont.innerHTML = '<div class="ops-field-sub" style="padding:8px 14px;">Sin versiones</div>'; return; }
-            cont.innerHTML = builds.map(b => {
-                const activa = b.n === publicada;
-                const f = b.fecha
-                    ? new Date(b.fecha).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })
-                    : 'versión publicada';
-                return `<div class="ver-item${activa ? ' activa' : ''}">
-                    <span class="ver-n">${this._buildNumToVersion(b.n)}<br><span class="ver-fecha">${f}</span></span>
-                    ${activa ? '<span class="ver-badge">Publicada</span>'
-                             : `<button class="ver-btn" onclick="app._publicarVersionGestion(${b.n})">Publicar</button>`}
-                </div>`;
-            }).join('');
-        } catch (e) {
-            cont.innerHTML = '<div style="color:#e74c3c;font-size:12px;padding:8px 14px;">Error al cargar versiones</div>';
-        }
-    },
 
-    async _publicarVersionGestion(build) {
-        if (!confirm(`¿Publicar la ${this._buildNumToVersion(build)} para los demás de gestión?\n\nSolo recibirán esa versión hasta que publiques otra. Tú seguirás viendo la más reciente.`)) return;
-        try {
-            const resp = await fetch(VERSION_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json',
-                           'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ app: 'gestion', build })
-            });
-            const data = await resp.json();
-            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
-            this._mostrarToast('🚀 Publicada ' + this._buildNumToVersion(build), 3000);
-            this._cargarVersionesGestion();
-        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
-    },
 
-    async _publicarVersion(build) {
-        if (!confirm(`¿Publicar la ${this._buildNumToVersion(build)} para los trabajadores?\n\nSolo recibirán esa versión hasta que publiques otra.`)) return;
-        try {
-            const resp = await fetch(VERSION_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json',
-                           'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ app: 'worker', build })
-            });
-            const data = await resp.json();
-            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
-            this._mostrarToast('🚀 Publicada ' + this._buildNumToVersion(build), 3000);
-            this._cargarVersiones();
-        } catch (e) { this._mostrarToast('❌ Error: ' + e.message, 4000); }
-    },
 
 
     // ── Trabajadores (gestión) ────────────────────────────────────────────────
@@ -8469,77 +8377,9 @@ const app = {
         } catch(e) { return false; }
     },
 
-    async _cargarUsuariosAcceso() {
-        const el = document.getElementById('allowedUsersList');
-        if (!el) return;
-        el.innerHTML = '<div style="color:#888;font-size:12px;padding:4px 0;">Cargando...</div>';
-        try {
-            const resp = await fetch('https://emt-palma-movilidad.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, { cache: 'no-store' });
-            if (!resp.ok) throw new Error(resp.status);
-            this._allowedUsersLocal = await resp.json();
-            this._renderAllowedUsers();
-        } catch(e) {
-            el.innerHTML = '<div style="color:#e74c3c;font-size:12px;">Error al cargar lista</div>';
-        }
-    },
 
-    _renderAllowedUsers() {
-        const el = document.getElementById('allowedUsersList');
-        if (!el) return;
-        const emails = this._allowedUsersLocal || [];
-        if (emails.length === 0) {
-            el.innerHTML = '<div style="color:#888;font-size:12px;padding:4px 0;">Lista vacía — cualquier cuenta puede entrar</div>';
-            return;
-        }
-        const porEmail = this._conductores || {};
-        el.innerHTML = emails.map(email => {
-            const u = porEmail[String(email).toLowerCase()];
-            const ver = u?.version
-                ? this._buildNumToVersion(parseInt(String(u.version).replace('build-',''),10) || 0)
-                : 'sin datos';
-            return `<div class="access-user-item">
-                <span class="access-user-email">${email}<br><span class="access-user-ver">${ver}</span></span>
-                <button class="access-user-remove" onclick="app._removeUserAcceso('${email.replace(/'/g,"\\'")}\')" title="Eliminar">✕</button>
-            </div>`;
-        }).join('');
-    },
 
-    async _addUserAcceso() {
-        const input = document.getElementById('newUserEmail');
-        const email = (input?.value || '').trim().toLowerCase();
-        if (!email || !email.includes('@')) { this._mostrarToast('❌ Introduce un correo válido'); return; }
-        const btn = document.querySelector('#sectionAcceso .ops-body button[onclick*="_addUserAcceso"]');
-        if (btn) btn.disabled = true;
-        try {
-            const resp = await fetch('https://emt-palma-movilidad.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ email, app: ALLOWLIST_APP })
-            });
-            const data = await resp.json();
-            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status)); return; }
-            this._allowedUsersLocal = data.emails;
-            this._renderAllowedUsers();
-            if (input) input.value = '';
-            this._mostrarToast('✅ Usuario añadido');
-        } catch(e) { this._mostrarToast('❌ Error: ' + e.message); }
-        finally { if (btn) btn.disabled = false; }
-    },
 
-    async _removeUserAcceso(email) {
-        try {
-            const resp = await fetch('https://emt-palma-movilidad.vercel.app/api/allowlist?app=' + ALLOWLIST_APP, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json', 'X-Admin-Email': this.usuarioActual?.email || '' },
-                body: JSON.stringify({ email, app: ALLOWLIST_APP })
-            });
-            const data = await resp.json();
-            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status)); return; }
-            this._allowedUsersLocal = data.emails;
-            this._renderAllowedUsers();
-            this._mostrarToast('Usuario eliminado');
-        } catch(e) { this._mostrarToast('❌ Error: ' + e.message); }
-    },
 
     // ────────────────────────────────────────────────────────────────────────────
 

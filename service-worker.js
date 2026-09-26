@@ -1,4 +1,4 @@
-const CACHE_NAME = 'horas-v41';
+const CACHE_NAME = 'horas-v42';
 // Detect base path dynamically so this works on GitHub Pages subdirectories
 // e.g. /Registro-horario-emt/ instead of just /
 const BASE_PATH = self.location.pathname.replace('service-worker.js', '');
