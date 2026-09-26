@@ -170,6 +170,13 @@ const app = {
         poner('splashRol', '⚙️ Desarrollador');
         const btn = document.getElementById('tabBtnPartes');
         if (btn) btn.style.display = '';
+        // Y los apartados de las dos aplicaciones del puesto de control, que
+        // se llevan desde aquí y no desde gestión.
+        ['sectionAccesoControl', 'sectionAccesoGControl',
+         'sectionVersionesControl', 'sectionVersionesGControl'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = '';
+        });
         const logo = document.getElementById('authLogo');
         if (logo) logo.src = 'icons/icon-dev-192.png';
         document.title = 'Desarrollador EMT - Movilidad';
@@ -4555,6 +4562,182 @@ const app = {
 
 
     // ── Versión publicada a los trabajadores ──────────────────────────────────
+
+    // ── Las otras dos aplicaciones del puesto de control ─────────────────────
+    // Control de acceso es la de quien hace el turno en la garita; Gestión de
+    // control de acceso, la de quien lleva ese puesto. Cada una con su lista
+    // de cuentas y su propia versión publicada, igual que trabajadores y
+    // gestión: dar acceso a una no da acceso a la otra, y publicar una no
+    // toca el reparto de las demás.
+    APPS_CONTROL: {
+        control: {
+            app: 'control', prefijo: 'control-build-',
+            lista: 'accesoControlList', campo: 'accesoControlEmail',
+            versiones: 'versionesControlList', actual: 'versionControlActual',
+            clave: 'control', quien: 'los de control de acceso',
+        },
+        gcontrol: {
+            app: 'gestion-control', prefijo: 'gcontrol-build-',
+            lista: 'accesoGControlList', campo: 'accesoGControlEmail',
+            versiones: 'versionesGControlList', actual: 'versionGControlActual',
+            clave: 'gestionControl', quien: 'los de gestión de control de acceso',
+        },
+    },
+    _accesoControl: {},
+
+    _cfgControl(cual) { return this.APPS_CONTROL[cual]; },
+
+    async _cargarAccesoControl(cual) {
+        const cfg = this._cfgControl(cual);
+        const el = cfg && document.getElementById(cfg.lista);
+        if (!el) return;
+        el.innerHTML = '<div style="color:#888;font-size:12px;padding:4px 0;">Cargando...</div>';
+        try {
+            const resp = await fetch(`${this.API_BASE}allowlist?app=${cfg.app}`, { cache: 'no-store' });
+            if (!resp.ok) throw new Error(resp.status);
+            this._accesoControl[cual] = await resp.json();
+            this._renderAccesoControl(cual);
+        } catch (e) {
+            el.innerHTML = '<div style="color:#e74c3c;font-size:12px;">Error al cargar la lista</div>';
+        }
+    },
+
+    _renderAccesoControl(cual) {
+        const cfg = this._cfgControl(cual);
+        const el = cfg && document.getElementById(cfg.lista);
+        if (!el) return;
+        const correos = this._accesoControl[cual] || [];
+        if (!correos.length) {
+            el.innerHTML = '<div style="color:#888;font-size:12px;padding:4px 0;">'
+                + 'Lista vacía — cualquier cuenta puede entrar</div>';
+            return;
+        }
+        const esc = t => String(t || '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+        el.innerHTML = correos.map(correo => `<div class="access-user-item">
+            <span class="access-user-email">${esc(correo)}</span>
+            <button class="access-user-remove" title="Quitar"
+                    onclick="app._quitarAccesoControl('${cual}','${esc(correo).replace(/'/g, "\\'")}')">✕</button>
+        </div>`).join('');
+    },
+
+    async _addAccesoControl(cual) {
+        const cfg = this._cfgControl(cual);
+        const input = cfg && document.getElementById(cfg.campo);
+        const correo = (input?.value || '').trim().toLowerCase();
+        if (!correo || !correo.includes('@')) { this._mostrarToast('❌ Escribe un correo válido', 3000); return; }
+        try {
+            const resp = await fetch(`${this.API_BASE}allowlist?app=${cfg.app}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ email: correo, app: cfg.app }),
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._accesoControl[cual] = data.emails;
+            this._renderAccesoControl(cual);
+            if (input) input.value = '';
+            this._mostrarToast('✅ Añadido', 2500);
+        } catch (e) { this._mostrarToast('❌ ' + e.message, 4000); }
+    },
+
+    async _quitarAccesoControl(cual, correo) {
+        const cfg = this._cfgControl(cual);
+        if (!cfg) return;
+        try {
+            const resp = await fetch(`${this.API_BASE}allowlist?app=${cfg.app}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ email: correo, app: cfg.app }),
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._accesoControl[cual] = data.emails;
+            this._renderAccesoControl(cual);
+            this._mostrarToast('🗑️ Quitado', 2500);
+        } catch (e) { this._mostrarToast('❌ ' + e.message, 4000); }
+    },
+
+    // Qué versión reciben los de cada una de las dos. Mismo reparto escalonado
+    // que el de trabajadores y el de gestión: tú ves siempre la más reciente
+    // y ellos la que publiques aquí.
+    async _cargarVersionesControl(cual) {
+        const cfg = this._cfgControl(cual);
+        const cont = cfg && document.getElementById(cfg.versiones);
+        const act  = cfg && document.getElementById(cfg.actual);
+        if (!cont) return;
+        cont.innerHTML = '<div class="ops-field-sub" style="padding:8px 14px;">Cargando…</div>';
+        try {
+            const [res, rVer] = await Promise.all([
+                this._releases(true),
+                fetch(VERSION_URL, { cache: 'no-store' }),
+            ]);
+            if (!res.ok) {
+                cont.innerHTML = `<div class="ops-field-sub" style="padding:10px 14px;color:#c0392b;">${
+                    res.limite
+                        ? 'GitHub ha limitado las consultas por hora. Prueba dentro de unos minutos.'
+                        : 'No se pudieron cargar las versiones (error ' + res.status + ').'}</div>`;
+                if (act) act.textContent = '';
+                return;
+            }
+            const publicada = rVer.ok ? ((await rVer.json())?.[cfg.clave] ?? null) : null;
+            const re = new RegExp('^' + cfg.prefijo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(\\d+)$');
+            const builds = (Array.isArray(res.lista) ? res.lista : [])
+                .map(r => ({ r, m: re.exec(r.tag_name || '') }))
+                .filter(x => x.m)
+                .map(x => ({ n: parseInt(x.m[1], 10), fecha: x.r.published_at }))
+                .sort((a, b) => b.n - a.n);
+            // La publicada puede ser anterior a las que quedan listadas: sin
+            // esto no saldría marcada y no habría forma de ver cuál está.
+            if (publicada !== null && !builds.some(b => b.n === publicada)) {
+                builds.push({ n: publicada, fecha: null });
+                builds.sort((a, b) => b.n - a.n);
+            }
+            if (act) {
+                act.textContent = publicada === null
+                    ? 'Ahora mismo reciben la más reciente'
+                    : `Publicada: ${this._buildNumToVersion(publicada)}`;
+            }
+            if (!builds.length) {
+                cont.innerHTML = '<div class="ops-field-sub" style="padding:8px 14px;">'
+                    + 'Todavía no hay ninguna versión de esta aplicación.</div>';
+                return;
+            }
+            cont.innerHTML = builds.map(b => {
+                const activa = b.n === publicada;
+                const f = b.fecha
+                    ? new Date(b.fecha).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })
+                    : 'versión publicada';
+                return `<div class="ver-item${activa ? ' activa' : ''}">
+                    <span class="ver-n">${this._buildNumToVersion(b.n)}<br><span class="ver-fecha">${f}</span></span>
+                    ${activa ? '<span class="ver-badge">Publicada</span>'
+                             : `<button class="ver-btn" onclick="app._publicarVersionControl('${cual}',${b.n})">Publicar</button>`}
+                </div>`;
+            }).join('');
+        } catch (e) {
+            cont.innerHTML = '<div style="color:#e74c3c;font-size:12px;padding:8px 14px;">Error al cargar versiones</div>';
+        }
+    },
+
+    async _publicarVersionControl(cual, build) {
+        const cfg = this._cfgControl(cual);
+        if (!cfg) return;
+        if (!confirm(`¿Publicar la ${this._buildNumToVersion(build)} para ${cfg.quien}?\n\n`
+            + 'Solo recibirán esa versión hasta que publiques otra.')) return;
+        try {
+            const resp = await fetch(VERSION_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json',
+                           'X-Admin-Email': this.usuarioActual?.email || '' },
+                body: JSON.stringify({ app: cfg.clave, build }),
+            });
+            const data = await resp.json();
+            if (!resp.ok) { this._mostrarToast('❌ ' + (data.error || resp.status), 4000); return; }
+            this._mostrarToast('🚀 Publicada ' + this._buildNumToVersion(build), 3000);
+            this._cargarVersionesControl(cual);
+        } catch (e) { this._mostrarToast('❌ ' + e.message, 4000); }
+    },
 
     async _cargarVersiones() {
         const cont = document.getElementById('versionesList');
